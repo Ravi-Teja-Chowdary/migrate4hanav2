@@ -1,0 +1,1552 @@
+# PRODUCTION READINESS GUIDE — Migrate4HANA
+
+## From Working Simulation → Production-Grade SAP ECC to S/4HANA Migration Tool
+
+**Document Version:** 1.0  
+**Date:** March 19, 2026  
+**Status:** Pre-Production Assessment & Deployment Playbook
+
+---
+
+## Table of Contents
+
+1. [Current State Assessment](#1-current-state-assessment)
+2. [Prerequisites & Accounts Required](#2-prerequisites--accounts-required)
+3. [Phase 1 — PyRFC Lambda Layer Build](#3-phase-1--pyrfc-lambda-layer-build)
+4. [Phase 2 — AWS Infrastructure Deployment](#4-phase-2--aws-infrastructure-deployment)
+5. [Phase 3 — SAP System Connectivity](#5-phase-3--sap-system-connectivity)
+6. [Phase 4 — API Server Hardening](#6-phase-4--api-server-hardening)
+7. [Phase 5 — Frontend Production Build](#7-phase-5--frontend-production-build)
+8. [Phase 6 — Security Hardening](#8-phase-6--security-hardening)
+9. [Phase 7 — Integration Testing Against Real SAP](#9-phase-7--integration-testing-against-real-sap)
+10. [Phase 8 — CI/CD Pipeline](#10-phase-8--cicd-pipeline)
+11. [Phase 9 — Monitoring & Observability](#11-phase-9--monitoring--observability)
+12. [Phase 10 — Production Deployment](#12-phase-10--production-deployment)
+13. [Phase 11 — Cutover Rehearsal](#13-phase-11--cutover-rehearsal)
+14. [Gap Closure Checklist](#14-gap-closure-checklist)
+15. [Risk Register](#15-risk-register)
+16. [Architecture Reference](#16-architecture-reference)
+
+---
+
+## 1. Current State Assessment
+
+### What Exists & Works (Simulation Mode)
+
+| Component | Count | Status |
+|-----------|-------|--------|
+| Lambda handlers | 18 functions (200–3800 lines each) | Structurally complete, mock-tested |
+| AST transform rules | 160 rules (AST-001 → AST-160) | Complete |
+| Country compliance rules | 710+ rules across 45+ countries | Complete |
+| Table transformations | 250+ ECC → S/4HANA mappings | Complete |
+| Fiori catalog mappings | 500+ T-code → Fiori app mappings | Complete |
+| OData service map | 400+ T-code → OData entries | Complete |
+| SUM known errors | 94 errors across all phases | Complete |
+| IDoc partner profiles | 225+ mock profiles | Complete |
+| Extended ABAP programs | 102 test programs | Complete |
+| Global config framework | 56 countries, 200+ compliance modules | Complete |
+| Terraform modules | 11 modules (VPC, Lambda, Step Functions, DMS, S3, etc.) | Written, never deployed |
+| Frontend | React SPA, 7 pages, WebSocket telemetry | Functional against mock API |
+| API server | 15 REST endpoints, JWT auth | Functional, not production-grade |
+| Step Functions pipeline | 20 states across 5 phases | Defined in Terraform |
+| PDF report generator | 10-section A4 reports | Working |
+| Mock RFC layer | 33 BAPI/RFC functions simulated | Comprehensive |
+
+### What Does NOT Exist Yet
+
+| Gap | Impact |
+|-----|--------|
+| Real SAP RFC connectivity (PyRFC never installed/deployed) | **Blocker** — tool has never talked to a real SAP system |
+| AWS deployment (no `.tfstate`, no deployed resources) | **Blocker** — infrastructure exists only as code |
+| Integration tests against real SAP | **Blocker** — zero confidence in real-world behavior |
+| HTTPS / TLS on API server | **Blocker** — credentials transmitted in plaintext |
+| Production API framework (currently stdlib `http.server`) | **High** — no async, no worker pool, no graceful shutdown |
+| CI/CD pipeline | **High** — manual deployment only |
+| Staging/Production Terraform environments | **High** — only `dev/` exists |
+| WAF / rate limiting / DDoS protection | **High** — exposed to abuse |
+| Audit trail / compliance logging (SOX, GxP) | **High** — required for enterprise SAP environments |
+| Disaster recovery / backup strategy | **Medium** — no documented DR plan |
+| Load testing results | **Medium** — unknown performance envelope |
+| Connection pooling / RFC session management | **Medium** — each call creates new Connection |
+| Multi-tenant isolation | **Low** — single-tenant design (acceptable for most SAP migrations) |
+
+---
+
+## 2. Prerequisites & Accounts Required
+
+### AWS Account
+
+```
+AWS Account with the following services enabled:
+├── Lambda (with VPC access)
+├── Step Functions
+├── S3
+├── DynamoDB
+├── Secrets Manager
+├── API Gateway (WebSocket)
+├── CloudWatch
+├── DMS (Database Migration Service)
+├── EC2 (for air-gapped LLM GPU instance)
+├── VPC (with VPN Gateway if connecting to on-prem SAP)
+├── KMS (for encryption)
+├── SNS (for alerting)
+├── IAM
+└── Entity Resolution (for BP deduplication)
+```
+
+**Estimated monthly cost (dev):** ~$500–800/mo (primarily DMS instance + GPU instance when running)  
+**Estimated monthly cost (prod):** ~$2,000–5,000/mo depending on migration volume
+
+### SAP Access
+
+| Requirement | Purpose |
+|-------------|---------|
+| **SAP S-User** (SAP Marketplace login) | Download SAP NW RFC SDK 7.50 (`nwrfc750P_*.zip`) |
+| **SAP ECC system** (IDES or sandbox) | Integration testing — RFC connectivity, BAPI testing |
+| **RFC user in ECC** | Authorizations: `S_RFC` (all RFC), `S_TABU_DIS` (table display), `S_DEVELOP` (developer), `S_BTCH_ADM` (batch), `S_USER_GRP` (user admin) |
+| **SAP S/4HANA system** (sandbox or CAL) | Target system testing — deployment, config, validation |
+| **RFC user in S/4HANA** | Same auth profile as ECC + `S_FIORI_ADM` (Fiori admin) |
+
+### Developer Workstation
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Docker | 20.10+ | Building PyRFC Lambda layer |
+| Terraform | >= 1.5.0 | Infrastructure deployment |
+| AWS CLI v2 | Latest | AWS resource management |
+| Python | 3.11 | Lambda runtime matching |
+| Node.js | 18+ | Frontend build |
+| Git | Latest | Version control |
+| SAP NW RFC SDK | 7.50 | PyRFC dependency (download from SAP) |
+
+### Network
+
+```
+Developer Machine ──→ AWS (HTTPS/443)
+AWS VPC (10.10.0.0/16) ──→ SAP ECC (RFC/3300) via:
+    Option A: AWS Site-to-Site VPN
+    Option B: AWS Direct Connect
+    Option C: SAP on EC2 (same VPC)
+AWS VPC ──→ SAP S/4HANA (RFC/3300, OData/443)
+```
+
+---
+
+## 3. Phase 1 — PyRFC Lambda Layer Build
+
+**This is the single most critical step.** Without PyRFC, every Lambda handler falls back to mock data.
+
+### Step 1.1 — Download SAP NW RFC SDK
+
+1. Log into [SAP Software Center](https://launchpad.support.sap.com/#/softwarecenter)
+2. Search for **"SAP NW RFC SDK 7.50"**
+3. Download `nwrfc750P_*-linux-x86_64.zip` (Linux x64 version)
+4. Place it in the project root: `migrate4hana-main/nwrfc750P_*.zip`
+
+### Step 1.2 — Build the Lambda Layer
+
+```bash
+cd migrate4hana-main
+
+# Ensure Docker is running
+docker info
+
+# Run the build script
+chmod +x scripts/setup-pyrfc.sh
+./scripts/setup-pyrfc.sh
+```
+
+**What this does:**
+1. Spins up `public.ecr.aws/lambda/python:3.11` Docker container (Amazon Linux 2)
+2. Extracts SAP NW RFC SDK to `/opt/sap/nwrfcsdk/`
+3. Installs `pyrfc` Python package
+4. Copies shared libraries (`.so` files) for RFC connectivity
+5. Packages everything into `pyrfc-layer.zip`
+6. Publishes as AWS Lambda Layer via `aws lambda publish-layer-version`
+
+### Step 1.3 — Record the Layer ARN
+
+The script outputs something like:
+```
+Layer ARN: arn:aws:lambda:us-east-1:123456789012:layer:migrate4hana-pyrfc:1
+```
+
+**Save this.** You'll need it in the next phase.
+
+### Step 1.4 — Verify Layer
+
+```bash
+# Quick verification: create a test Lambda
+aws lambda create-function \
+  --function-name pyrfc-test \
+  --runtime python3.11 \
+  --handler lambda_function.lambda_handler \
+  --role arn:aws:iam::YOUR_ACCOUNT:role/lambda-basic \
+  --zip-file fileb://test_pyrfc.zip \
+  --layers "arn:aws:lambda:us-east-1:YOUR_ACCOUNT:layer:migrate4hana-pyrfc:1"
+
+# Test function should contain:
+# def lambda_handler(event, context):
+#     from pyrfc import Connection
+#     return {"statusCode": 200, "body": "PyRFC imported successfully"}
+```
+
+---
+
+## 4. Phase 2 — AWS Infrastructure Deployment
+
+### Step 2.1 — Configure Terraform Backend (Remote State)
+
+Create the S3 backend for Terraform state **before** running Terraform:
+
+```bash
+# Create state bucket
+aws s3api create-bucket \
+  --bucket migrate4hana-tfstate \
+  --region us-east-1
+
+# Enable versioning
+aws s3api put-bucket-versioning \
+  --bucket migrate4hana-tfstate \
+  --versioning-configuration Status=Enabled
+
+# Enable encryption
+aws s3api put-bucket-encryption \
+  --bucket migrate4hana-tfstate \
+  --server-side-encryption-configuration '{
+    "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+  }'
+
+# Create DynamoDB lock table
+aws dynamodb create-table \
+  --table-name migrate4hana-tflock \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
+```
+
+### Step 2.2 — Uncomment Terraform Backend
+
+In `terraform/environments/dev/main.tf`, uncomment the backend block (lines 17–23):
+
+```hcl
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+  }
+  backend "s3" {
+    bucket         = "migrate4hana-tfstate"
+    key            = "dev/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "migrate4hana-tflock"
+    encrypt        = true
+  }
+}
+```
+
+### Step 2.3 — Configure terraform.tfvars
+
+Edit `terraform/environments/dev/terraform.tfvars`:
+
+```hcl
+aws_region           = "us-east-1"                              # Your preferred region
+environment          = "dev"                                     # Start with dev
+vpc_cidr             = "10.10.0.0/16"                            # Must not conflict with on-prem SAP network
+availability_zones   = ["us-east-1a", "us-east-1b"]
+private_subnet_cidrs = ["10.10.1.0/24", "10.10.2.0/24"]
+public_subnet_cidrs  = ["10.10.101.0/24", "10.10.102.0/24"]
+enable_vpn_gateway   = true                                      # Set true if SAP is on-prem
+on_prem_cidr         = "172.16.0.0/12"                           # Your SAP network CIDR
+s3_staging_bucket    = "migrate4hana-staging-dev"                # Unique bucket name
+pyrfc_layer_arn      = "arn:aws:lambda:us-east-1:ACCT:layer:migrate4hana-pyrfc:1"  # FROM PHASE 1
+alert_email          = "sap-migration-team@yourcompany.com"      # SNS alert recipient
+```
+
+### Step 2.4 — Deploy Infrastructure
+
+```bash
+cd terraform/environments/dev
+
+# Initialize Terraform
+terraform init
+
+# Review the plan (expect ~60-80 resources)
+terraform plan -out=tfplan
+
+# Expected resources created:
+#   - 1 VPC + subnets + NAT gateway + VPN gateway
+#   - 23 Lambda functions with IAM roles
+#   - 1 Step Functions state machine
+#   - 1 S3 bucket (KMS-encrypted, versioned)
+#   - 1 DynamoDB table (simplification rules)
+#   - 1 DMS replication instance + endpoints
+#   - 1 CloudWatch dashboard + alarms
+#   - 1 API Gateway WebSocket + Lambda handler
+#   - 2 Secrets Manager secrets (ECC + S/4HANA)
+#   - 1 Entity Resolution workflow
+#   - VPC endpoints for Bedrock PrivateLink
+
+# Apply (type 'yes' when prompted)
+terraform apply tfplan
+
+# Save outputs
+terraform output > ../../deployment_outputs.txt
+```
+
+### Step 2.5 — Store SAP Credentials in Secrets Manager
+
+```bash
+# ECC source system credentials
+aws secretsmanager put-secret-value \
+  --secret-id "migrate4hana/dev/sap-credentials" \
+  --secret-string '{
+    "host": "10.10.1.100",
+    "sysnr": "00",
+    "client": "100",
+    "user": "MIGRATE4HANA_RFC",
+    "passwd": "YOUR_SECURE_PASSWORD",
+    "lang": "EN"
+  }'
+
+# S/4HANA target system credentials
+aws secretsmanager put-secret-value \
+  --secret-id "migrate4hana/dev/s4hana-credentials" \
+  --secret-string '{
+    "host": "10.10.2.200",
+    "sysnr": "00",
+    "client": "100",
+    "user": "MIGRATE4HANA_S4",
+    "passwd": "YOUR_SECURE_PASSWORD",
+    "lang": "EN"
+  }'
+```
+
+### Step 2.6 — Configure VPN to SAP Network
+
+**Option A: Site-to-Site VPN (SAP on-premises)**
+
+```bash
+# Get VPN gateway ID from Terraform output
+VGW_ID=$(terraform output -raw vpn_gateway_id)
+
+# Create Customer Gateway (your SAP firewall's public IP)
+aws ec2 create-customer-gateway \
+  --type ipsec.1 \
+  --public-ip YOUR_SAP_FIREWALL_PUBLIC_IP \
+  --bgp-asn 65000
+
+# Create VPN connection
+aws ec2 create-vpn-connection \
+  --type ipsec.1 \
+  --customer-gateway-id cgw-xxxxxxxx \
+  --vpn-gateway-id $VGW_ID \
+  --options '{"StaticRoutesOnly": true}'
+
+# Add route to SAP network
+aws ec2 create-vpn-connection-route \
+  --vpn-connection-id vpn-xxxxxxxx \
+  --destination-cidr-block 172.16.0.0/12
+```
+
+**Option B: SAP on EC2 (same VPC)** — No VPN needed. Ensure SAP EC2 instances are in the private subnets.
+
+**Option C: AWS Direct Connect** — Work with your network team for dedicated 1Gbps/10Gbps link to AWS.
+
+### Step 2.7 — Verify Connectivity
+
+```bash
+# Test Lambda → SAP RFC connectivity
+aws lambda invoke \
+  --function-name migrate4hana-discovery-engine-dev \
+  --payload '{"action": "health_check"}' \
+  --cli-binary-format raw-in-base64-out \
+  response.json
+
+cat response.json
+# Should return SAP system info if connectivity works
+```
+
+---
+
+## 5. Phase 3 — SAP System Connectivity
+
+### Step 3.1 — Create RFC Users in SAP
+
+**In SAP ECC (SU01):**
+
+```
+User ID:    MIGRATE4HANA_RFC
+User Type:  System (type B) — non-dialog, for RFC only
+Password:   [Strong password, store in Secrets Manager]
+
+Roles assigned:
+├── SAP_BC_RFC_USER           (Basic RFC access)
+├── SAP_ALL_READ              (or custom read-only composite)
+└── Z_MIGRATE4HANA_RFC        (Custom role - see below)
+```
+
+**Custom role Z_MIGRATE4HANA_RFC (PFCG):**
+
+```
+Authorization Objects:
+├── S_RFC
+│   ├── RFC_TYPE = FUNC
+│   └── RFC_NAME = RFC_READ_TABLE, RPY_PROGRAM_READ, BAPI_*, RFC_*, DDIF_*
+├── S_TABU_DIS
+│   ├── ACTVT = 03 (Display)
+│   └── DICBERCLS = * (All table authorization groups)
+├── S_DEVELOP
+│   ├── ACTVT = 01, 02, 03 (Create, Change, Display)
+│   └── OBJTYPE = PROG, FUGR, TABL, VIEW
+├── S_TRANSPRT
+│   ├── ACTVT = 01, 02, 03
+│   └── TTYPE = TASK, DTRA, CUST
+├── S_USER_GRP
+│   ├── ACTVT = 03
+│   └── CLASS = * (for user role reads)
+└── S_BTCH_ADM
+    └── BTCADMIN = Y
+```
+
+**In SAP S/4HANA (SU01):**
+
+Same user with **additional** authorizations:
+```
+Additional Objects:
+├── S_SERVICE (OData service access)
+│   └── SRV_NAME = * (for /IWFND/MAINT_SERVICE)
+├── S_FIORI_ADM (Fiori space/page admin)
+└── S_RFC with write BAPIs:
+    └── RPY_PROGRAM_INSERT, RPY_PROGRAM_UPDATE, BAPI_ACC_DOCUMENT_POST,
+        BAPI_BUPA_CREATE_FROM_DATA, PRGN_RFC_ROLE_CREATE, NUMBER_RANGE_*
+```
+
+### Step 3.2 — Verify RFC Connectivity from Lambda
+
+After deployment, run a targeted connectivity test:
+
+```bash
+# Invoke discovery-engine with a minimal test
+aws lambda invoke \
+  --function-name migrate4hana-discovery-engine-dev \
+  --payload '{
+    "run_id": "connectivity-test-001",
+    "source_system": {"client": "100"},
+    "dry_run": false
+  }' \
+  --cli-binary-format raw-in-base64-out \
+  output.json
+
+# Check the output
+cat output.json | python -m json.tool
+
+# Expected: Real program count, role count, table list from ECC
+# If you see "mock_mode": true, PyRFC isn't loaded — revisit Phase 1
+```
+
+### Step 3.3 — Validate All 33 RFC/BAPI Functions
+
+Each of these functions is called by the tool and must work against your SAP systems. Test them in order of criticality:
+
+**READ operations (safe, test first):**
+
+| # | RFC/BAPI Function | Handler | What It Does |
+|---|---|---|---|
+| 1 | `RFC_READ_TABLE` | discovery-engine | Reads any SAP table (TRDIR, AGR_DEFINE, RFCDES, T001, etc.) |
+| 2 | `RPY_PROGRAM_READ` | code-analyzer | Reads ABAP source code |
+| 3 | `NUMBER_RANGE_INTERVAL_READ` | config-applier | Reads number range config |
+| 4 | `PRGN_RFC_ROLE_READ` | role-provisioner | Reads PFCG role |
+| 5 | `BAPI_GLACCOUNT_EXISTENCECHECK` | config-applier | Checks if GL account exists |
+
+**WRITE operations (test in sandbox only):**
+
+| # | RFC/BAPI Function | Handler | What It Does |
+|---|---|---|---|
+| 6 | `BAPI_CTREQUEST_CREATE` | code-deployer | Creates transport request |
+| 7 | `RPY_PROGRAM_UPDATE` | code-deployer | Updates ABAP program |
+| 8 | `RPY_PROGRAM_INSERT` | code-deployer | Inserts new ABAP program |
+| 9 | `RS_WORKING_OBJECTS_ACTIVATE` | code-deployer | Activates objects |
+| 10 | `RS_SYNTAX_CHECK` | code-deployer | Syntax-checks ABAP code |
+| 11 | `BAPI_CTREQUEST_RELEASE` | code-deployer | Releases transport |
+| 12 | `BAPI_ACC_DOCUMENT_POST` | data-loader | Posts FI document |
+| 13 | `BAPI_BUPA_CREATE_FROM_DATA` | data-loader | Creates Business Partner |
+| 14 | `BAPI_BUPA_ROLE_ADD_2` | data-loader | Adds BP role |
+| 15 | `BAPI_BUPA_GROUPING_CREATE` | data-loader | Creates BP grouping |
+| 16 | `BAPI_GOODSMVT_CREATE` | data-loader | Creates goods movement |
+| 17 | `BAPI_TRANSACTION_COMMIT` | All write handlers | Commits BAPI changes |
+| 18 | `NUMBER_RANGE_INTERVAL_CREATE` | config-applier | Creates number range |
+| 19 | `PRGN_RFC_ROLE_CREATE` | role-provisioner | Creates PFCG role |
+| 20 | `PRGN_RFC_ROLE_MENU_ADD` | role-provisioner | Adds menu to role |
+| 21 | `PRGN_RFC_ROLE_CATALOG_ADD` | role-provisioner | Adds Fiori catalog |
+| 22 | `PRGN_RFC_ROLE_PROFILE_GEN` | role-provisioner | Generates auth profile |
+| 23 | `PRGN_RFC_COMPOSITE_ADD` | role-provisioner | Adds to composite role |
+| 24 | `BAPI_USER_ACTGROUPS_ASSIGN` | role-provisioner | Assigns roles to user |
+| 25 | `RFC_MODIFY_R3_DESTINATION` | integration-activator | Creates RFC destination |
+| 26 | `RFC_PING` | integration-activator | Tests RFC destination |
+| 27 | `IDOC_PORT_CREATE` | integration-activator | Creates IDoc port |
+| 28 | `EDI_PARTNER_CREATE` | integration-activator | Creates EDI partner profile |
+| 29 | `EDI_PARTNER_ADD_MSGTYPE` | integration-activator | Adds IDoc message type |
+| 30 | `J_1IG_GSTIN_CREATE` | config-applier | India: GSTIN setup |
+| 31 | `J_1IEWT_SETUP` | config-applier | India: TDS setup |
+| 32 | `J_1IG_EINV_CONFIG` | config-applier | India: e-Invoice config |
+| 33 | `Z_FIORI_SPACE_CREATE` | config-applier | Custom: Fiori space setup |
+
+---
+
+## 6. Phase 4 — API Server Hardening
+
+The current API server (`api_server.py`) uses Python's stdlib `http.server` — unsuitable for production.
+
+### Step 4.1 — Replace with FastAPI
+
+Create `api_server_production.py`:
+
+```python
+# Key changes needed:
+# 1. Replace http.server with FastAPI + uvicorn
+# 2. Add HTTPS (TLS termination via ALB or direct)
+# 3. Add rate limiting (slowapi)
+# 4. Add proper CORS configuration
+# 5. Add request validation (Pydantic models)
+# 6. Add structured logging
+# 7. Add graceful shutdown
+# 8. Add health check endpoint for ALB
+```
+
+**Required packages:**
+```
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-jose[cryptography]>=3.3.0   # Proper JWT library
+slowapi>=0.1.9                       # Rate limiting
+pydantic>=2.5.0                      # Request validation
+python-multipart>=0.0.6              # Form data
+```
+
+**Key changes from current `api_server.py`:**
+
+| Current (stdlib) | Production (FastAPI) |
+|---|---|
+| `http.server.HTTPServer` | `uvicorn.run(app, ssl_keyfile=..., ssl_certfile=...)` |
+| Manual JWT with `hmac` | `python-jose` with RS256 (asymmetric keys) |
+| `Access-Control-Allow-Origin: *` | Explicit allowed origins list |
+| No rate limiting | `slowapi` at 100 req/min per IP |
+| No request validation | Pydantic models for all endpoints |
+| No async | Full async with `asyncio` |
+| Port 8000 HTTP | Port 443 HTTPS |
+| No worker pool | Uvicorn with 4 workers |
+
+### Step 4.2 — Add HTTPS
+
+**Option A: ALB termination (recommended for AWS)**
+
+```hcl
+# Add to Terraform: Application Load Balancer
+resource "aws_lb" "api" {
+  name               = "migrate4hana-api-${var.environment}"
+  internal           = true  # Internal only — no public access
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = module.vpc.private_subnet_ids
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.api.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate.api.arn
+  # ...
+}
+```
+
+**Option B: Direct TLS (for local/on-prem)**
+
+```bash
+# Generate self-signed cert (dev) or use Let's Encrypt (prod)
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+
+# Run with TLS
+uvicorn api_server_production:app --host 0.0.0.0 --port 443 \
+  --ssl-keyfile key.pem --ssl-certfile cert.pem --workers 4
+```
+
+### Step 4.3 — Migrate Existing Endpoints
+
+All 15 current endpoints must be preserved:
+
+```
+Public:
+  GET  /api/health              → Health check (ALB target group)
+  POST /api/auth/token          → JWT generation
+
+Authenticated:
+  GET  /api/connections         → Saved connection configs
+  POST /api/connections/ecc     → Save ECC connection
+  POST /api/connections/s4hana  → Save S/4HANA connection
+  POST /api/connections/ecc/test    → Test ECC RFC
+  POST /api/connections/s4hana/test → Test S/4HANA connection
+  POST /api/pipeline/assess     → Run Phases 1-2 (discovery + analysis)
+  POST /api/pipeline/convert    → Run Phase 3 (cutover + SUM)
+  POST /api/pipeline/complete   → Run Phases 4-5 (deploy + validate)
+  POST /api/pipeline/full       → Run all 5 phases end-to-end
+  GET  /api/status              → Pipeline run status
+  GET  /api/runs                → List completed runs
+  GET  /api/runs/{id}           → Get run results JSON
+  GET  /api/runs/{id}/pdf       → Download PDF report
+```
+
+---
+
+## 7. Phase 5 — Frontend Production Build
+
+### Step 5.1 — Configure API Base URL
+
+Update `frontend/src/api.js` to point to the production API:
+
+```javascript
+// Replace the development proxy URL with the production ALB URL
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.migrate4hana.internal';
+```
+
+Create `frontend/.env.production`:
+```
+VITE_API_URL=https://api.migrate4hana.internal
+VITE_WS_URL=wss://YOUR_API_GW_ID.execute-api.us-east-1.amazonaws.com/dev
+```
+
+### Step 5.2 — Build for Production
+
+```bash
+cd frontend
+npm ci
+npm run build
+# Output: frontend/dist/
+```
+
+### Step 5.3 — Serve via S3 + CloudFront (Recommended)
+
+```bash
+# Create S3 bucket for frontend
+aws s3 mb s3://migrate4hana-frontend-dev
+
+# Upload build
+aws s3 sync dist/ s3://migrate4hana-frontend-dev/ --delete
+
+# Create CloudFront distribution with:
+# - Origin: S3 bucket
+# - SSL: ACM certificate
+# - WAF: Attach WebACL
+# - SPA routing: Custom error page 403/404 → /index.html (200)
+```
+
+**Or serve from the same ALB** using a path-based rule (`/` → S3/frontend, `/api/*` → API target group).
+
+### Step 5.4 — Configure WebSocket Telemetry
+
+The WebSocket URL comes from Terraform output:
+
+```bash
+# Get the WebSocket URL
+terraform output websocket_url
+# e.g., wss://abc123def4.execute-api.us-east-1.amazonaws.com/dev
+```
+
+Set this in the frontend environment so the LogViewer component connects to real telemetry instead of generating mock events.
+
+---
+
+## 8. Phase 6 — Security Hardening
+
+### Step 6.1 — Network Security
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ AWS VPC (10.10.0.0/16)                                      │
+│                                                             │
+│  ┌──────────────┐   ┌──────────────┐                        │
+│  │ Public Subnet │   │ Public Subnet │  ← ALB, NAT Gateway  │
+│  │ 10.10.101.0   │   │ 10.10.102.0   │                      │
+│  └──────────────┘   └──────────────┘                        │
+│                                                             │
+│  ┌──────────────┐   ┌──────────────┐                        │
+│  │ Private Subnet│   │ Private Subnet│  ← Lambda, DMS, LLM  │
+│  │ 10.10.1.0     │   │ 10.10.2.0     │                      │
+│  └──────────────┘   └──────────────┘                        │
+│                                                             │
+│  VPN Gateway ─────────→ On-prem SAP (172.16.0.0/12)         │
+│  VPC Endpoints ───────→ Bedrock, S3, Secrets Manager        │
+│  Air-gapped LLM ─────→ No internet, VPC-only egress         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Security groups to validate:**
+- Lambda SG: Outbound to SAP (port 3300) + S3/Secrets Manager VPC endpoints
+- DMS SG: Outbound to SAP ECC (3200) + SAP HANA (30015)
+- LLM SG: Inbound from Lambda SG (8000) only, **no internet egress**
+- ALB SG: Inbound 443 from allowed CIDRs only
+
+### Step 6.2 — WAF Configuration
+
+```hcl
+# Add to Terraform
+resource "aws_wafv2_web_acl" "api" {
+  name  = "migrate4hana-api-waf"
+  scope = "REGIONAL"
+
+  default_action { allow {} }
+
+  # Rule 1: Rate limiting (1000 requests per 5 minutes per IP)
+  rule {
+    name     = "rate-limit"
+    priority = 1
+    action { block {} }
+    statement {
+      rate_based_statement { limit = 1000; aggregate_key_type = "IP" }
+    }
+    visibility_config { /* ... */ }
+  }
+
+  # Rule 2: AWS Managed Rules — Common exploits
+  rule {
+    name     = "aws-common-rules"
+    priority = 2
+    override_action { none {} }
+    statement {
+      managed_rule_group_statement {
+        vendor_name = "AWS"
+        name        = "AWSManagedRulesCommonRuleSet"
+      }
+    }
+    visibility_config { /* ... */ }
+  }
+
+  # Rule 3: SQL Injection protection
+  rule {
+    name     = "sql-injection"
+    priority = 3
+    override_action { none {} }
+    statement {
+      managed_rule_group_statement {
+        vendor_name = "AWS"
+        name        = "AWSManagedRulesSQLiRuleSet"
+      }
+    }
+    visibility_config { /* ... */ }
+  }
+}
+```
+
+### Step 6.3 — Secrets Rotation
+
+```hcl
+# Add automatic rotation for SAP credentials
+resource "aws_secretsmanager_secret_rotation" "sap_creds" {
+  secret_id           = aws_secretsmanager_secret.sap_credentials.id
+  rotation_lambda_arn = aws_lambda_function.secret_rotator.arn
+  rotation_rules {
+    automatically_after_days = 90
+  }
+}
+```
+
+### Step 6.4 — Audit Trail (SOX Compliance)
+
+Add CloudTrail logging for all API actions:
+
+```hcl
+resource "aws_cloudtrail" "migration_audit" {
+  name                          = "migrate4hana-audit-trail"
+  s3_bucket_name                = aws_s3_bucket.audit_logs.id
+  include_global_service_events = true
+  is_multi_region_trail         = false
+  enable_log_file_validation    = true
+
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = true
+
+    data_resource {
+      type   = "AWS::Lambda::Function"
+      values = ["arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:migrate4hana-*"]
+    }
+  }
+}
+```
+
+### Step 6.5 — Data Classification & PII Handling
+
+The tool already has `data_scrubber.py` for masking sensitive fields. Verify these are active:
+
+```
+Fields masked by data_scrubber.py:
+├── PERNR (employee number)
+├── BANKN (bank account)
+├── BANKL (bank key)
+├── SWIFT (SWIFT code)
+├── STCD1/STCD2 (tax numbers)
+├── NAME1-4 (names)
+├── SMTP_ADDR (email)
+├── TEL_NUMBER (phone)
+├── ICNUM (ID number)
+└── GBDAT (date of birth)
+```
+
+**Additional hardening needed:**
+- Enable S3 Object Lock for migration data (WORM — write once, read many)
+- Enable DynamoDB Point-in-Time Recovery
+- Encrypt all Lambda environment variables with KMS CMK
+
+---
+
+## 9. Phase 7 — Integration Testing Against Real SAP
+
+### Step 7.1 — SAP IDES/Sandbox Setup
+
+**Recommended:** Use SAP Cloud Appliance Library (CAL) to spin up:
+- **SAP ECC 6.0 EHP8** (IDES instance) — ~$2/hr on AWS
+- **SAP S/4HANA 2023** (Fully Activated Appliance) — ~$3/hr on AWS
+
+```
+SAP CAL: https://cal.sap.com
+1. Create CAL account (use S-User)
+2. Connect AWS account
+3. Launch "SAP S/4HANA 2023 Fully-Activated Appliance"
+4. Launch "SAP ECC 6.0 EhP8 - IDES"
+5. Note the private IPs (place in same VPC or peer)
+```
+
+### Step 7.2 — Create Integration Test Suite
+
+Create `tests/test_integration_real_sap.py`:
+
+```python
+"""
+Integration tests against a real SAP system.
+Requires:
+  - SAP ECC IDES accessible via RFC
+  - Environment variables: SAP_HOST, SAP_SYSNR, SAP_CLIENT, SAP_USER, SAP_PASSWD
+  - PyRFC installed locally: pip install pyrfc
+
+Run: pytest tests/test_integration_real_sap.py -v --tb=long
+"""
+
+import pytest
+import os
+
+# Skip entire module if no SAP credentials configured
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("SAP_HOST"),
+    reason="SAP_HOST not set — skipping real SAP integration tests"
+)
+
+
+class TestRFCConnectivity:
+    """Phase 1: Can we connect at all?"""
+
+    def test_rfc_connection(self):
+        from pyrfc import Connection
+        conn = Connection(
+            ashost=os.environ["SAP_HOST"],
+            sysnr=os.environ.get("SAP_SYSNR", "00"),
+            client=os.environ.get("SAP_CLIENT", "100"),
+            user=os.environ["SAP_USER"],
+            passwd=os.environ["SAP_PASSWD"],
+        )
+        result = conn.call("RFC_PING")
+        assert result is not None
+        conn.close()
+
+    def test_rfc_read_table(self):
+        from pyrfc import Connection
+        conn = Connection(...)
+        result = conn.call("RFC_READ_TABLE",
+            QUERY_TABLE="T001",
+            FIELDS=[{"FIELDNAME": "BUKRS"}, {"FIELDNAME": "BUTXT"}],
+            ROWCOUNT=5)
+        assert len(result["DATA"]) > 0
+        conn.close()
+
+
+class TestDiscoveryEngine:
+    """Phase 2: Does discovery return valid data?"""
+
+    def test_scan_custom_programs(self):
+        """Invoke discovery-engine Lambda against real SAP."""
+        pass  # Implement: call scan_custom_programs() with real connection
+
+    def test_scan_custom_tables(self):
+        pass
+
+    def test_scan_roles(self):
+        pass
+
+    def test_scan_rfc_destinations(self):
+        pass
+
+
+class TestCodeAnalysis:
+    """Phase 3: Does code analysis work on real ABAP?"""
+
+    def test_read_real_program(self):
+        """Read a known program (e.g., RSUSR002) and verify AST analysis."""
+        pass
+
+    def test_ast_rules_fire_correctly(self):
+        """Verify at least some AST rules trigger on real ECC code."""
+        pass
+
+
+class TestWriteOperations:
+    """Phase 4: Do write BAPIs work? TEST IN SANDBOX ONLY."""
+
+    def test_create_transport_request(self):
+        pass
+
+    def test_create_business_partner(self):
+        pass
+
+    def test_post_accounting_document(self):
+        pass
+
+    def test_create_role(self):
+        pass
+
+    def test_rollback_all(self):
+        """After write tests, verify rollback cleans up."""
+        pass
+```
+
+### Step 7.3 — Test Execution Order
+
+Run tests in this sequence (each stage validates safety before proceeding):
+
+```
+Stage 1: READ-ONLY tests (safe on any system)
+  ├── RFC connectivity
+  ├── RFC_READ_TABLE for key tables
+  ├── RPY_PROGRAM_READ for known programs
+  └── Discovery engine full scan
+
+Stage 2: ANALYSIS tests (safe, no writes)
+  ├── Code analysis on real ABAP programs
+  ├── Simplification check against real custom code
+  ├── Data hygiene assessment
+  └── Configuration replicator assessment
+
+Stage 3: WRITE tests (SANDBOX ONLY)
+  ├── Transport request create/release
+  ├── Program insert (Z_TEST_MIGRATE4HANA)
+  ├── Business Partner creation
+  ├── FI document posting
+  ├── Role creation
+  ├── Number range creation
+  └── RFC destination creation
+
+Stage 4: ROLLBACK tests (SANDBOX ONLY)
+  ├── Verify rollback-manager reverses Stage 3 writes
+  ├── Confirm transport deleted
+  ├── Confirm BP deactivated
+  └── Confirm test program removed
+
+Stage 5: END-TO-END (SANDBOX ONLY)
+  ├── Full pipeline execution via Step Functions
+  ├── Verify all 17 stages complete
+  ├── Verify PDF report generated
+  └── Verify S3 artifacts created
+```
+
+### Step 7.4 — Performance Baseline
+
+Run the pipeline against real SAP and measure:
+
+| Metric | Target | How to Measure |
+|--------|--------|----------------|
+| Discovery scan time | < 30 min for 5K programs | CloudWatch StageDuration metric |
+| Code analysis time | < 60 min for 5K programs | CloudWatch StageDuration metric |
+| BP conversion throughput | > 500 BPs/min | Count BAPI_BUPA_CREATE calls / duration |
+| FI document posting | > 200 docs/min | Count BAPI_ACC_DOCUMENT_POST / duration |
+| Full pipeline (Phases 1-2) | < 4 hours | Step Functions execution duration |
+| Full pipeline (all phases) | < 24 hours | Step Functions end-to-end |
+
+---
+
+## 10. Phase 8 — CI/CD Pipeline
+
+### Step 8.1 — GitHub Actions Workflow
+
+Create `.github/workflows/deploy.yml`:
+
+```yaml
+name: Migrate4HANA CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: 1.5.0
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
+
+jobs:
+  # ── Lint & Unit Tests ──────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}" }
+      - run: pip install pytest boto3 moto
+      - run: python -m pytest tests/ -v --tb=short
+
+  # ── Frontend Build ─────────────────────────────────────
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}" }
+      - run: cd frontend && npm ci && npm run build
+      - uses: actions/upload-artifact@v4
+        with: { name: frontend-dist, path: frontend/dist/ }
+
+  # ── Package Lambda Functions ───────────────────────────
+  package-lambdas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}" }
+      - name: Package all Lambda functions
+        run: |
+          for dir in lambda/*/; do
+            func_name=$(basename $dir)
+            cd $dir
+            [ -f requirements.txt ] && pip install -r requirements.txt -t .
+            zip -r ../../lambda-${func_name}.zip . -x "__pycache__/*" "*.pyc"
+            cd ../..
+          done
+      - uses: actions/upload-artifact@v4
+        with: { name: lambda-packages, path: "lambda-*.zip" }
+
+  # ── Terraform Plan (on PR) ────────────────────────────
+  terraform-plan:
+    needs: [test, frontend, package-lambdas]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "${{ env.TF_VERSION }}" }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: |
+          cd terraform/environments/dev
+          terraform init
+          terraform plan -no-color | tee plan.txt
+      - name: Post plan to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const plan = require('fs').readFileSync('terraform/environments/dev/plan.txt', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Terraform Plan\n\`\`\`\n${plan.slice(0, 60000)}\n\`\`\``
+            });
+
+  # ── Deploy (on merge to main) ─────────────────────────
+  deploy:
+    needs: [test, frontend, package-lambdas]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "${{ env.TF_VERSION }}" }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: actions/download-artifact@v4
+      - run: |
+          cd terraform/environments/dev
+          terraform init
+          terraform apply -auto-approve
+```
+
+### Step 8.2 — Create Staging & Production Environments
+
+```bash
+# Copy dev environment as template
+cp -r terraform/environments/dev terraform/environments/staging
+cp -r terraform/environments/dev terraform/environments/prod
+
+# Update each environment's terraform.tfvars:
+# staging: environment = "staging", different VPC CIDR, different bucket names
+# prod:    environment = "prod", production-grade instance sizes, multi-AZ
+```
+
+**Key differences per environment:**
+
+| Setting | Dev | Staging | Production |
+|---------|-----|---------|------------|
+| `environment` | `dev` | `staging` | `prod` |
+| DMS instance | `dms.t3.medium` | `dms.r5.large` | `dms.r5.2xlarge` |
+| Lambda memory | 512 MB | 1024 MB | 2048 MB |
+| Multi-AZ | `false` | `false` | `true` |
+| VPN | Optional | Required | Required |
+| WAF | Optional | Required | Required |
+| CloudTrail | Optional | Required | Required |
+| Backup retention | 7 days | 30 days | 90 days |
+
+---
+
+## 11. Phase 9 — Monitoring & Observability
+
+### Step 9.1 — CloudWatch Dashboard
+
+The Terraform already creates a dashboard. Verify these widgets after deployment:
+
+```
+Dashboard: migrate4hana-dashboard-dev
+├── Lambda Invocations (per function, 5-min intervals)
+├── Lambda Errors (per function, error rate %)
+├── Lambda Duration (p50, p90, p99)
+├── Step Functions Execution Status (succeeded/failed/running)
+├── DMS Replication Latency (seconds)
+├── DMS CDC throughput (rows/sec)
+├── S3 Bucket Size (staging bucket)
+└── Custom Metrics:
+    ├── ProgramsScanned (discovery-engine)
+    ├── IssuesDetected (code-analyzer)
+    ├── BPsConverted (data-loader)
+    └── DocumentsPosted (data-loader)
+```
+
+### Step 9.2 — Alarms
+
+```
+SNS Topic: migrate4hana-alerts-dev → your-email@company.com
+
+Alarms configured:
+├── Lambda error rate > 5% (any function) → ALARM
+├── Step Functions execution failed → ALARM
+├── DMS replication latency > 300s → ALARM
+├── Lambda duration > 80% of timeout → WARNING
+└── S3 bucket size > 100 GB → INFO
+```
+
+### Step 9.3 — Add X-Ray Tracing (Recommended)
+
+```hcl
+# Add to each Lambda function in Terraform
+resource "aws_lambda_function" "each_function" {
+  # ...existing config...
+  tracing_config {
+    mode = "Active"
+  }
+}
+```
+
+Then in Python handlers:
+```python
+from aws_xray_sdk.core import xray_recorder
+from aws_xray_sdk.core import patch_all
+patch_all()  # Auto-instruments boto3, requests, etc.
+```
+
+### Step 9.4 — Structured Log Queries
+
+The `logger.py` utility emits structured JSON. Use CloudWatch Insights:
+
+```
+# Find all failed stages in the last 24 hours
+fields @timestamp, stage, action, status
+| filter status = "ERROR" or status = "FAILED"
+| sort @timestamp desc
+| limit 50
+
+# Measure stage durations
+fields @timestamp, stage, duration_ms
+| filter action = "COMPLETE"
+| stats avg(duration_ms), max(duration_ms), count() by stage
+
+# Track BP conversion progress
+fields @timestamp, payload_snippet
+| filter stage = "data-loader" and action like /bp_convert/
+| sort @timestamp desc
+```
+
+---
+
+## 12. Phase 10 — Production Deployment
+
+### Pre-Deployment Checklist
+
+- [ ] Phase 1 complete: PyRFC Lambda Layer published and tested
+- [ ] Phase 2 complete: All Terraform resources deployed and healthy
+- [ ] Phase 3 complete: RFC connectivity to both ECC and S/4HANA verified
+- [ ] Phase 4 complete: API server running on HTTPS with proper auth
+- [ ] Phase 5 complete: Frontend built and served via CloudFront/ALB
+- [ ] Phase 6 complete: WAF, secrets rotation, CloudTrail active
+- [ ] Phase 7 complete: All 33 BAPI/RFC functions tested against real SAP
+- [ ] Phase 8 complete: CI/CD pipeline deploying to staging automatically
+- [ ] Phase 9 complete: Dashboard, alarms, and log queries configured
+- [ ] **Full pipeline dry-run completed against SAP sandbox** (non-negotiable)
+- [ ] **Rollback tested** — verify rollback-manager can undo all write operations
+- [ ] **PDF report reviewed** — sample report from real SAP data looks correct
+- [ ] **Sign-off from SAP Basis team** on RFC user authorizations
+- [ ] **Sign-off from Network team** on VPN/Direct Connect connectivity
+- [ ] **Sign-off from Security team** on WAF rules, encryption, audit trail
+
+### Deployment Steps
+
+```bash
+# 1. Merge to main → CI/CD triggers automatically
+git checkout main
+git merge develop
+git push origin main
+
+# 2. Verify deployment (CI/CD runs terraform apply)
+# Monitor GitHub Actions for green status
+
+# 3. Smoke test
+curl -k https://api.migrate4hana.internal/api/health
+# Expected: {"status": "ok", "version": "1.0.0", ...}
+
+# 4. Run assessment-only pipeline (Phases 1-2, read-only)
+curl -X POST https://api.migrate4hana.internal/api/pipeline/assess \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"phases": ["PREPARE", "EXPLORE"]}'
+
+# 5. Review results before proceeding to conversion
+```
+
+---
+
+## 13. Phase 11 — Cutover Rehearsal
+
+**This is the most critical phase.** Never go live without at least 2 rehearsals.
+
+### Rehearsal 1 — Technical Validation (Sandbox)
+
+```
+Environment: SAP IDES (ECC) → SAP S/4HANA CAL (target)
+Data volume: Full IDES dataset (~50K records)
+Objective: Verify all 17 stages complete without errors
+
+Steps:
+1. Run full pipeline: POST /api/pipeline/full
+2. Monitor WebSocket telemetry in real-time
+3. Verify each stage transitions correctly in Step Functions console
+4. Check S3 artifacts for each stage
+5. Review PDF report
+6. Run rollback to clean up sandbox
+7. Document all issues → fix → repeat
+```
+
+### Rehearsal 2 — Dress Rehearsal (Pre-Prod with Production-Scale Data)
+
+```
+Environment: Production ECC clone → S/4HANA pre-prod
+Data volume: Full production dataset
+Objective: Validate with real data, measure performance, train operations team
+
+Steps:
+1. Clone production ECC database to pre-prod
+2. Run full pipeline
+3. Measure:
+   - Total duration (target: < 48 hours for mega-client)
+   - Per-stage duration
+   - Error rate
+   - Rollback time
+4. Validate:
+   - Business Partner conversion accuracy
+   - FI document balances match
+   - Configuration completeness
+   - Role assignments correct
+   - Integration destinations active
+5. Generate GO-LIVE report
+6. Conduct operations team walkthrough
+```
+
+### Go-Live (Production)
+
+```
+T-minus checklist:
+├── T-7 days:  Final cutover plan approved by all stakeholders
+├── T-3 days:  Freeze ECC changes (no transports)
+├── T-1 day:   Final DMS full-load sync
+├── T-0:       Start cutover window
+│   ├── Lock ECC client (SCC4 → "No changes allowed")
+│   ├── Final DMS CDC catch-up (verify latency < 30s)
+│   ├── Stop DMS replication
+│   ├── Execute Phase 3: Conversion (SUM/DMO)
+│   ├── Execute Phase 4: Post-conversion (deploy, load, configure)
+│   ├── Execute Phase 5: Validate + DITL test
+│   ├── Generate GO-LIVE report
+│   └── Decision: GO or ROLLBACK?
+├── T+1 day:   User acceptance testing
+├── T+7 days:  Hypercare support
+└── T+30 days: Close migration project
+```
+
+---
+
+## 14. Gap Closure Checklist
+
+### Critical (Must fix before any real migration)
+
+| # | Gap | File(s) Affected | Effort | Fix Description |
+|---|-----|------------------|--------|-----------------|
+| 1 | PyRFC never installed | All handlers | Medium | Build Lambda layer (Phase 1), deploy, verify `from pyrfc import Connection` succeeds |
+| 2 | Never deployed to AWS | `terraform/` | Medium | Run `terraform apply` (Phase 2), verify all 60+ resources created |
+| 3 | No HTTPS on API server | `api_server.py` | Medium | Replace with FastAPI + ALB termination (Phase 4) |
+| 4 | Zero integration tests | `tests/` | High | Write test suite against real SAP IDES (Phase 7) |
+| 5 | Client lock uses wrong BAPI | `cutover-orchestrator/handler.py` | Low | `BAPI_TRANSACTION_COMMIT` doesn't lock client. Use `SCCR_LOCK_CLIENT` or RFC call to `SCC4` |
+| 6 | No retry logic in handlers | All handlers | Medium | Add exponential backoff: `@retry(max_retries=3, backoff_factor=2)` decorator |
+| 7 | No RFC connection pooling | All handlers | Medium | Create `RFCConnectionPool` class, reuse connections within Lambda execution |
+
+### High Priority (Should fix before production)
+
+| # | Gap | File(s) Affected | Effort | Fix Description |
+|---|-----|------------------|--------|-----------------|
+| 8 | No WAF | `terraform/` | Medium | Add `aws_wafv2_web_acl` resource (Phase 6) |
+| 9 | No CloudTrail audit | `terraform/` | Low | Add `aws_cloudtrail` resource (Phase 6) |
+| 10 | No CI/CD | `.github/workflows/` | Medium | Create GitHub Actions workflow (Phase 8) |
+| 11 | No staging/prod Terraform | `terraform/environments/` | Low | Copy dev/, adjust variables |
+| 12 | No X-Ray tracing | All handlers | Low | Add `aws_xray_sdk` and `tracing_config` |
+| 13 | API server stdlib HTTP | `api_server.py` | Medium | Rewrite with FastAPI + uvicorn |
+| 14 | Frontend hardcoded samples | `frontend/src/data/` | Low | Remove sample data fallbacks when API connected |
+| 15 | No Dockerfile | Project root | Low | Create Dockerfile for API server + frontend |
+
+### Medium Priority (Should fix before enterprise clients)
+
+| # | Gap | File(s) Affected | Effort | Fix Description |
+|---|-----|------------------|--------|-----------------|
+| 16 | No load testing | `tests/` | Medium | Create Locust/k6 test script for pipeline throughput |
+| 17 | No disaster recovery plan | Docs | Low | Document RTO/RPO, backup strategy, failover procedure |
+| 18 | No secrets rotation | `terraform/` | Medium | Add `aws_secretsmanager_secret_rotation` |
+| 19 | No multi-region support | `terraform/` | High | Cross-region replication for S3, DynamoDB global tables |
+| 20 | JWT uses HS256 symmetric | `api_server.py` | Low | Switch to RS256 with asymmetric key pair |
+| 21 | No API versioning | `api_server.py` | Low | Add `/api/v1/` prefix to all endpoints |
+| 22 | No OpenAPI/Swagger docs | `api_server.py` | Free with FastAPI | FastAPI auto-generates at `/docs` |
+
+### Low Priority (Nice to have)
+
+| # | Gap | File(s) | Effort | Description |
+|---|-----|---------|--------|-------------|
+| 23 | No progress percentage per stage | Handlers | Medium | Emit progress events (10%, 25%, 50%, 75%, 100%) |
+| 24 | No email notifications | `terraform/` | Low | SNS → SES for migration status emails |
+| 25 | No Slack/Teams integration | New Lambda | Low | SNS → Lambda → Webhook |
+| 26 | No cost estimation | Frontend | Medium | Estimate AWS costs based on discovered data volumes |
+| 27 | No multi-language support | Frontend | Medium | i18n for DE, FR, JA, ZH |
+
+---
+
+## 15. Risk Register
+
+| # | Risk | Likelihood | Impact | Mitigation |
+|---|------|-----------|--------|------------|
+| R1 | PyRFC incompatible with Lambda runtime | Low | Critical | Test in Docker first; fallback to EC2-based execution |
+| R2 | SAP RFC calls behave differently than mock | High | High | Integration testing (Phase 7); run discovery-only pass first |
+| R3 | Large customer data causes Lambda timeout (15 min) | Medium | High | Partition data, use Step Functions Map state for parallel processing |
+| R4 | SUM/DMO stage takes longer than expected | High | Critical | Monitor via DMS latency; have SAP Basis team on standby; set SUM timeout to 7200s |
+| R5 | Rollback fails to undo all changes | Medium | Critical | Test rollback in sandbox; maintain manual rollback runbook |
+| R6 | VPN latency degrades RFC performance | Medium | Medium | Use Direct Connect for production; benchmark with iperf before migration |
+| R7 | Secret Manager throttling under load | Low | Medium | Cache secrets in Lambda memory; use SecretsManager caching library |
+| R8 | Air-gapped LLM GPU instance unavailable | Low | Low | Fall back to Bedrock API route (already implemented in Step Functions Choice state) |
+| R9 | Customer has custom ABAP not covered by AST rules | High | Medium | 160 rules cover most patterns; manual review for unlisted patterns; add custom rules |
+| R10 | Data volume exceeds S3/Lambda limits | Low | High | Use S3 multipart upload; stream large datasets via DMS instead of Lambda |
+
+---
+
+## 16. Architecture Reference
+
+### Full Pipeline Flow (20 States)
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                        STEP FUNCTIONS PIPELINE                       │
+│                                                                      │
+│  ┌─────────┐   ┌──────────────┐   ┌────────────────┐                │
+│  │PreFlight│──→│ 1.Discovery  │──→│ 1A.ProcessMine │                │
+│  │ Checks  │   │   Engine     │   │    (ST03N)     │                │
+│  └─────────┘   └──────────────┘   └───────┬────────┘                │
+│                                            │                         │
+│  PHASE 1: PREPARE                          ▼                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │2.Maintenance │←─│ ReviewChoice │←─┤              │               │
+│  │  Planner     │  └──────────────┘  └──────────────┘               │
+│  └──────┬───────┘                                                    │
+│         ▼                                                            │
+│  ┌──────────────┐  ┌──────────────┐                                  │
+│  │3.Readiness   │─→│4.Simplific.  │                                  │
+│  │  Check       │  │  Check       │                                  │
+│  └──────────────┘  └──────┬───────┘                                  │
+│                           ▼                                          │
+│  PHASE 2: EXPLORE                                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │5.Code        │─→│  LLM Route   │─→│6.Data        │               │
+│  │  Analysis    │  │ (Choice:     │  │  Hygiene     │               │
+│  │  + AST(160)  │  │  GPU vs      │  │  (BP dedup)  │               │
+│  │              │  │  Bedrock)    │  │              │               │
+│  └──────────────┘  └──────────────┘  └──────┬───────┘               │
+│                                              ▼                       │
+│  ┌──────────────┐  ┌──────────────┐                                  │
+│  │7.Data        │─→│8.Config      │                                  │
+│  │  Assessment  │  │  Assessment  │                                  │
+│  └──────────────┘  └──────┬───────┘                                  │
+│                           ▼                                          │
+│  ┌─────────────────────────────────┐                                 │
+│  │    CONVERSION APPROVAL GATE     │ ← Human decision: proceed?      │
+│  └──────────────┬──────────────────┘                                 │
+│                 ▼                                                     │
+│  PHASE 3: REALIZE                                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │9.Pre-Convert │─→│ GO/NO-GO     │─→│10.SUM/DMO    │               │
+│  │  Gate        │  │  Decision    │  │  Execution   │               │
+│  │  (DMS CDC)   │  └──────────────┘  │  (7200s max) │               │
+│  └──────────────┘                    └──────┬───────┘               │
+│                                              ▼                       │
+│  PHASE 4: POST-CONVERSION                                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │11.Code       │─→│12.Data       │─→│13.Config     │               │
+│  │  Deploy      │  │  Load        │  │  Apply       │               │
+│  └──────────────┘  └──────────────┘  └──────┬───────┘               │
+│                                              ▼                       │
+│  ┌──────────────┐                                                    │
+│  │14.Role       │                                                    │
+│  │  Provision   │                                                    │
+│  └──────┬───────┘                                                    │
+│         ▼                                                            │
+│  PHASE 5: DEPLOY & RUN                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │15.Integration│─→│16.Migration  │─→│17.DITL Test  │               │
+│  │  Activate    │  │  Validation  │  │  Generation  │               │
+│  └──────────────┘  └──────────────┘  └──────┬───────┘               │
+│                                              ▼                       │
+│                                     ┌──────────────┐                 │
+│                                     │  COMPLETED   │                 │
+│                                     │  (PDF Report)│                 │
+│                                     └──────────────┘                 │
+│                                                                      │
+│  ON FAILURE (Phases 3-5):                                            │
+│  ┌──────────────┐  ┌──────────────┐                                  │
+│  │ExecutionFail │─→│  Rollback    │─→ Terminal Failure               │
+│  │              │  │  Manager     │                                  │
+│  └──────────────┘  └──────────────┘                                  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Environment Variables Reference (All Handlers)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `S3_STAGING_BUCKET` | Yes | `migrate4hana-staging-dev` | S3 bucket for all artifacts |
+| `SECRETS_ARN` | Yes | `""` | Secrets Manager ARN for ECC RFC credentials |
+| `S4_SECRETS_ARN` | Yes | Falls back to `SECRETS_ARN` | Secrets Manager ARN for S/4HANA credentials |
+| `DMS_REPLICATION_TASK_ARN` | Phase 3 | `""` | DMS task ARN for CDC monitoring |
+| `CDC_LATENCY_THRESHOLD_SEC` | Phase 3 | `30` | Max acceptable CDC latency |
+| `SNS_ALERT_TOPIC_ARN` | Alerting | `""` | SNS topic for failure alerts |
+| `CURRENT_RUN_ID` | Tracking | `manual-run` | Unique pipeline run identifier |
+| `TELEMETRY_WS_ENDPOINT` | Telemetry | `""` | WebSocket management URL |
+| `TELEMETRY_WS_CONNECTIONS_TABLE` | Telemetry | `""` | DynamoDB connections table |
+| `M4H_JWT_SECRET` | API | Auto-generated | JWT signing secret |
+| `M4H_API_KEY` | API | `""` | Alternative API key authentication |
+
+### File Structure Reference
+
+```
+migrate4hana-main/
+├── api_server.py                  ← HTTP API (replace with FastAPI)
+├── run_local_pipeline.py          ← Local mock execution
+├── run_10x_evaluation.py          ← 10x scale evaluation
+├── pdf_report_generator.py        ← ReportLab PDF generation
+├── lambda/
+│   ├── code-analyzer/             ← AST engine (160 rules), country rules (710+),
+│   │   │                            data scrubber, deep knowledge engine
+│   │   ├── handler.py
+│   │   ├── abap_ast_engine.py     ← 160 AST transform rules
+│   │   ├── country_rules.py       ← 710+ country compliance rules
+│   │   ├── data_scrubber.py       ← PII masking
+│   │   └── fixers/
+│   │       └── deep_knowledge_engine.py  ← 250+ table transformations
+│   ├── discovery-engine/          ← RFC_READ_TABLE scanner
+│   ├── process-miner/             ← ST03N analyzer (500+ Fiori maps)
+│   ├── maintenance-planner/       ← SAP Maintenance Planner integration
+│   ├── readiness-check/           ← Pre-migration readiness
+│   ├── simplification-check/      ← S/4HANA simplification items
+│   ├── data-hygiene/              ← BP dedup, MDM cleansing
+│   ├── data-migrator/             ← Data assessment
+│   ├── config-replicator/         ← Global config (56 countries)
+│   ├── role-migrator/             ← PFCG role assessment
+│   ├── integration-mapper/        ← RFC/IDoc mapping
+│   ├── cutover-orchestrator/      ← DMS CDC + client lock
+│   ├── sum-orchestrator/          ← SUM/DMO execution (94 known errors)
+│   ├── code-deployer/             ← Transport + ABAP deployment
+│   ├── data-loader/               ← BP creation, FI posting
+│   ├── config-applier/            ← SPRO config application
+│   ├── role-provisioner/          ← Role creation + assignment
+│   ├── integration-activator/     ← RFC dest + IDoc port creation
+│   ├── migration-validator/       ← Post-migration validation
+│   ├── test-generator/            ← DITL test generation (400+ OData maps)
+│   ├── rollback-manager/          ← 6-stage rollback
+│   └── utils/
+│       ├── logger.py              ← CloudWatch + WebSocket telemetry
+│       └── rule_router.py         ← Dynamic rule routing
+├── mock-ecc/
+│   ├── mock_data_generator.py     ← 225+ IDoc profiles, MockRFCConnection
+│   └── extended_abap_programs.py  ← 102 test ABAP programs
+├── frontend/                      ← React + Vite + Tailwind
+│   └── src/
+│       ├── App.jsx                ← Router (7 pages)
+│       ├── api.js                 ← JWT auth + API client
+│       ├── components/            ← Dashboard, Pipeline, Telemetry, etc.
+│       └── data/                  ← Sample data (remove for production)
+├── terraform/
+│   ├── environments/
+│   │   └── dev/                   ← Only environment (add staging/prod)
+│   └── modules/
+│       ├── vpc/                   ← VPC + subnets + VPN
+│       ├── lambda/                ← All 23 Lambda definitions
+│       ├── step-functions/        ← 20-state pipeline
+│       ├── s3-staging/            ← KMS-encrypted, versioned
+│       ├── dms/                   ← Oracle → HANA replication
+│       ├── dynamodb/              ← Rules table
+│       ├── cloudwatch/            ← Dashboard + alarms
+│       ├── airgapped-llm/        ← g5.2xlarge GPU (no internet)
+│       ├── entity-resolution/     ← ML BP dedup
+│       ├── websocket-telemetry/   ← Real-time streaming
+│       └── vpc-endpoints/         ← Bedrock PrivateLink
+├── scripts/
+│   ├── deploy.sh                  ← Package + build + terraform apply
+│   └── setup-pyrfc.sh             ← Build PyRFC Lambda layer
+├── tests/
+│   ├── test_execution_stages.py   ← ~30 mock tests (expand for integration)
+│   └── __init__.py
+└── docs/
+    └── SAP-CONCEPTS-FOR-DEVOPS.md
+```
+
+---
+
+## Summary
+
+This guide covers 11 phases to take Migrate4HANA from its current state (working simulation with exceptional SAP domain knowledge) to a production-ready migration tool. The single most important action is **Phase 1 (PyRFC Lambda Layer)** — without it, the tool cannot connect to any real SAP system.
+
+**Minimum viable production path** (Phases 1 + 2 + 3 + 7 = real SAP connectivity + AWS deployment + integration testing) would take an experienced team approximately 4-6 weeks. Full production hardening (all 11 phases) is a larger effort but the architectural foundation is solid.
+
+The SAP domain knowledge embedded in the codebase — 160 AST rules, 710+ country rules, 250+ table transformations, 500+ Fiori mappings, 94 SUM known errors, 400+ OData service maps — is the most valuable and difficult-to-replicate asset. The infrastructure and deployment gaps are standard engineering work that can be executed methodically using this guide.
