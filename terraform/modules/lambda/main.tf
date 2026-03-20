@@ -25,6 +25,21 @@ variable "entity_resolution_workflow_arn" {
   default = ""
   description = "ARN of the AWS Entity Resolution matching workflow for BP dedup"
 }
+variable "bedrock_model_id" {
+  type        = string
+  default     = "anthropic.claude-3-sonnet-20240229-v1:0"
+  description = "Bedrock foundation model ID for GenAI code analysis"
+}
+variable "local_llm_endpoint" {
+  type        = string
+  default     = ""
+  description = "HTTP endpoint for air-gapped local LLM (e.g., http://10.10.1.X:8000/v1/completions)"
+}
+variable "ast_change_threshold" {
+  type        = number
+  default     = 3
+  description = "If AST engine finds fewer changes than this, escalate to GenAI"
+}
 variable "lambda_functions" {
   type = map(object({
     description = string
@@ -103,6 +118,14 @@ resource "aws_iam_role_policy" "lambda" {
           "entityresolution:ListMatchingJobs"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = "arn:aws:bedrock:*::foundation-model/*"
       }
     ]
   })
@@ -176,6 +199,13 @@ resource "aws_lambda_function" "migration" {
       } : {},
       var.entity_resolution_workflow_arn != "" ? {
         ENTITY_RESOLUTION_WORKFLOW_ARN = var.entity_resolution_workflow_arn
+      } : {},
+      {
+        BEDROCK_MODEL_ID      = var.bedrock_model_id
+        AST_CHANGE_THRESHOLD  = tostring(var.ast_change_threshold)
+      },
+      var.local_llm_endpoint != "" ? {
+        LOCAL_LLM_ENDPOINT = var.local_llm_endpoint
       } : {}
     )
   }

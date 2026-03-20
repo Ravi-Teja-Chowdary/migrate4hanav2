@@ -83,6 +83,11 @@ module "lambda" {
   # Entity Resolution — ML-powered BP deduplication
   entity_resolution_workflow_arn = module.entity_resolution.matching_workflow_arn
 
+  # GenAI configuration — Bedrock + Air-Gapped LLM
+  bedrock_model_id     = var.bedrock_model_id
+  local_llm_endpoint   = var.local_llm_endpoint
+  ast_change_threshold = var.ast_change_threshold
+
   lambda_functions = {
     discovery-engine = {
       description = "Stage 1: Scan ECC system via RFC"
@@ -459,7 +464,9 @@ module "airgapped_llm" {
   vpc_cidr = var.vpc_cidr
   lambda_private_subnets_cidr = var.private_subnet_cidrs
   isolated_subnet_id = module.vpc.private_subnet_ids[0]
-  gpu_ami_id = "ami-0123456789abcdef0"
+  gpu_ami_id = var.gpu_ami_id
+  model_s3_path   = var.llm_model_s3_path
+  model_s3_bucket = var.llm_model_s3_bucket
 }
 
 # ---------------------------------------------

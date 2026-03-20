@@ -2,8 +2,8 @@
 
 ## From Working Simulation → Production-Grade SAP ECC to S/4HANA Migration Tool
 
-**Document Version:** 1.0  
-**Date:** March 19, 2026  
+**Document Version:** 2.0  
+**Date:** March 20, 2026  
 **Status:** Pre-Production Assessment & Deployment Playbook
 
 ---
@@ -14,18 +14,20 @@
 2. [Prerequisites & Accounts Required](#2-prerequisites--accounts-required)
 3. [Phase 1 — PyRFC Lambda Layer Build](#3-phase-1--pyrfc-lambda-layer-build)
 4. [Phase 2 — AWS Infrastructure Deployment](#4-phase-2--aws-infrastructure-deployment)
-5. [Phase 3 — SAP System Connectivity](#5-phase-3--sap-system-connectivity)
-6. [Phase 4 — API Server Hardening](#6-phase-4--api-server-hardening)
-7. [Phase 5 — Frontend Production Build](#7-phase-5--frontend-production-build)
-8. [Phase 6 — Security Hardening](#8-phase-6--security-hardening)
-9. [Phase 7 — Integration Testing Against Real SAP](#9-phase-7--integration-testing-against-real-sap)
-10. [Phase 8 — CI/CD Pipeline](#10-phase-8--cicd-pipeline)
-11. [Phase 9 — Monitoring & Observability](#11-phase-9--monitoring--observability)
-12. [Phase 10 — Production Deployment](#12-phase-10--production-deployment)
-13. [Phase 11 — Cutover Rehearsal](#13-phase-11--cutover-rehearsal)
-14. [Gap Closure Checklist](#14-gap-closure-checklist)
-15. [Risk Register](#15-risk-register)
-16. [Architecture Reference](#16-architecture-reference)
+5. [Phase 2A — AWS Bedrock Setup (GenAI — Standard Path)](#5-phase-2a--aws-bedrock-setup-genai--standard-path)
+6. [Phase 2B — Air-Gapped LLM Setup (GenAI — High-Security Path)](#6-phase-2b--air-gapped-llm-setup-genai--high-security-path)
+7. [Phase 3 — SAP System Connectivity](#7-phase-3--sap-system-connectivity)
+8. [Phase 4 — API Server Hardening](#8-phase-4--api-server-hardening)
+9. [Phase 5 — Frontend Production Build](#9-phase-5--frontend-production-build)
+10. [Phase 6 — Security Hardening](#10-phase-6--security-hardening)
+11. [Phase 7 — Integration Testing Against Real SAP](#11-phase-7--integration-testing-against-real-sap)
+12. [Phase 8 — CI/CD Pipeline](#12-phase-8--cicd-pipeline)
+13. [Phase 9 — Monitoring & Observability](#13-phase-9--monitoring--observability)
+14. [Phase 10 — Production Deployment](#14-phase-10--production-deployment)
+15. [Phase 11 — Cutover Rehearsal](#15-phase-11--cutover-rehearsal)
+16. [Gap Closure Checklist](#16-gap-closure-checklist)
+17. [Risk Register](#17-risk-register)
+18. [Architecture Reference](#18-architecture-reference)
 
 ---
 
@@ -370,7 +372,489 @@ cat response.json
 
 ---
 
-## 5. Phase 3 — SAP System Connectivity
+## 5. Phase 2A — AWS Bedrock Setup (GenAI — Standard Path)
+
+The code-analyzer Lambda uses a dual-path GenAI strategy: the deterministic AST engine runs first (160 rules), and when it finds fewer than `AST_CHANGE_THRESHOLD` changes, it escalates to a GenAI backend for deeper semantic analysis. **AWS Bedrock is the primary GenAI path** — it uses Anthropic Claude via VPC PrivateLink with zero internet egress.
+
+**Code reference:** `lambda/code-analyzer/genai_router.py` — `_invoke_bedrock()` calls `bedrock-runtime` via `boto3`.
+
+### Step 2A.1 — Enable Bedrock Model Access
+
+Bedrock models must be explicitly enabled per-region before any API call will work.
+
+1. Open the **AWS Console** → **Amazon Bedrock** → **Model access** (left sidebar)
+2. Click **"Manage model access"**
+3. Enable the following models:
+
+| Provider | Model | Model ID | Purpose |
+|----------|-------|----------|--------|
+| **Anthropic** | Claude 3 Sonnet | `anthropic.claude-3-sonnet-20240229-v1:0` | Primary analysis model (default) |
+| **Anthropic** | Claude 3 Haiku | `anthropic.claude-3-haiku-20240307-v1:0` | Faster/cheaper fallback |
+| **Amazon** | Titan Text Express | `amazon.titan-text-express-v1` | Alternative if Anthropic unavailable |
+
+4. Wait for status to change from "Available to request" → **"Access granted"** (usually instant for Anthropic, may take hours for some models)
+
+> **Region note:** Bedrock availability varies by region. Claude 3 Sonnet is available in `us-east-1`, `us-west-2`, `eu-west-1`, `ap-northeast-1`. Ensure your deployment region supports your chosen model.
+
+### Step 2A.2 — Verify VPC Endpoints for Bedrock
+
+The Terraform module `terraform/modules/vpc-endpoints/main.tf` already creates two VPC endpoints:
+
+```
+com.amazonaws.{region}.bedrock-runtime      ← Model invocation (InvokeModel API)
+com.amazonaws.{region}.bedrock-agent-runtime ← Agent runtime (optional)
+```
+
+**Verify after `terraform apply`:**
+
+```bash
+# List VPC endpoints
+aws ec2 describe-vpc-endpoints \
+  --filters "Name=tag:Name,Values=Bedrock-PrivateLink" \
+  --query "VpcEndpoints[*].{ID:VpcEndpointId,Service:ServiceName,State:State}" \
+  --output table
+
+# Expected output:
+# ┌──────────────────────┬──────────────────────────────────────────────────────┬───────────┐
+# │         ID           │                     Service                          │   State   │
+# ├──────────────────────┼──────────────────────────────────────────────────────┼───────────┤
+# │ vpce-0abc123def456   │ com.amazonaws.us-east-1.bedrock-runtime              │ available │
+# │ vpce-0def789abc012   │ com.amazonaws.us-east-1.bedrock-agent-runtime        │ available │
+# └──────────────────────┴──────────────────────────────────────────────────────┴───────────┘
+```
+
+**Security group requirement:** The VPC endpoint security group (`vpce_security_group_id` in `dev/main.tf`) must allow **inbound HTTPS (port 443)** from the Lambda security group. If you're using the VPC module's default SG, verify this:
+
+```bash
+# Check the SG allows Lambda → Bedrock traffic
+aws ec2 describe-security-groups \
+  --group-ids $(terraform output -raw vpce_security_group_id) \
+  --query "SecurityGroups[*].IpPermissions"
+
+# If missing, add the rule:
+aws ec2 authorize-security-group-ingress \
+  --group-id $VPCE_SG_ID \
+  --protocol tcp \
+  --port 443 \
+  --source-group $LAMBDA_SG_ID
+```
+
+### Step 2A.3 — Add Bedrock IAM Permissions to Lambda Role
+
+**IMPORTANT:** The current `terraform/modules/lambda/main.tf` is missing `bedrock:InvokeModel` permission. This must be added or Lambda calls to Bedrock will fail with `AccessDeniedException`.
+
+Add this statement to the Lambda IAM policy in `terraform/modules/lambda/main.tf`:
+
+```hcl
+# In the aws_iam_role_policy "lambda" resource, add to the Statement array:
+{
+  Effect = "Allow"
+  Action = [
+    "bedrock:InvokeModel",
+    "bedrock:InvokeModelWithResponseStream"
+  ]
+  Resource = "arn:aws:bedrock:*::foundation-model/*"
+}
+```
+
+> This has been applied to the Terraform code as part of this guide update.
+
+### Step 2A.4 — Configure Lambda Environment Variables for Bedrock
+
+The `genai_router.py` reads these environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BEDROCK_MODEL_ID` | `anthropic.claude-3-sonnet-20240229-v1:0` | Which Bedrock model to invoke |
+| `AST_CHANGE_THRESHOLD` | `3` | If AST finds fewer than this many changes, escalate to GenAI |
+| `LOCAL_LLM_ENDPOINT` | `""` (empty = disabled) | Air-gapped LLM URL (see Phase 2B) |
+
+These are now set in `terraform/modules/lambda/main.tf` via the Lambda environment block.
+
+To override the default model, set `BEDROCK_MODEL_ID` in `terraform/environments/dev/terraform.tfvars`:
+
+```hcl
+# Optional: override the Bedrock model
+bedrock_model_id = "anthropic.claude-3-sonnet-20240229-v1:0"  # Default
+# bedrock_model_id = "anthropic.claude-3-haiku-20240307-v1:0"  # Cheaper/faster
+# bedrock_model_id = "amazon.titan-text-express-v1"            # Amazon alternative
+```
+
+### Step 2A.5 — Test Bedrock Connectivity from Lambda
+
+```bash
+# Invoke the code-analyzer with a small ABAP snippet
+aws lambda invoke \
+  --function-name migrate4hana-code-analyzer-dev \
+  --payload '{
+    "action": "analyze",
+    "source_code": "REPORT ztest_bedrock.\nSELECT * FROM bseg INTO TABLE lt_bseg.",
+    "force_genai": true
+  }' \
+  --cli-binary-format raw-in-base64-out \
+  bedrock_test.json
+
+cat bedrock_test.json | python -m json.tool
+
+# Expected: backend_used = "bedrock" with findings array
+# If backend_used = "ast_engine", the AST found enough changes (working correctly)
+# If you see "Both Bedrock and Local LLM unavailable", check:
+#   1. IAM permissions (bedrock:InvokeModel)
+#   2. VPC endpoint state (should be "available")
+#   3. Model access (should be "Access granted" in console)
+#   4. Security group (Lambda SG → VPCE SG port 443)
+```
+
+### Step 2A.6 — Bedrock Cost Estimation
+
+| Model | Input Cost | Output Cost | Typical Migration Usage |
+|-------|-----------|-------------|------------------------|
+| Claude 3 Sonnet | $3.00 / 1M tokens | $15.00 / 1M tokens | 500-2,000 programs × ~2K tokens each = $3-15 per migration |
+| Claude 3 Haiku | $0.25 / 1M tokens | $1.25 / 1M tokens | Same volume = $0.25-1.25 per migration |
+| Titan Text Express | $0.20 / 1M tokens | $0.60 / 1M tokens | Same volume = $0.20-0.60 per migration |
+
+> **Note:** Most programs are handled by the deterministic AST engine (160 rules) and never reach Bedrock. In testing, only ~10-15% of programs escalate to GenAI. Actual Bedrock costs for a typical migration are **under $20**.
+
+### Step 2A.7 — Routing Logic Summary
+
+The `genai_router.py` follows this flow:
+
+```
+ABAP Source Code
+       │
+       ▼
+┌──────────────┐
+│  AST Engine  │ ← 160 deterministic rules (zero cost, instant)
+│  (always     │
+│   runs first)│
+└──────┬───────┘
+       │
+       ▼
+  Changes >= AST_CHANGE_THRESHOLD (default: 3)?
+       │
+  YES ─┘          NO
+  │                │
+  ▼                ▼
+  ┌────┐    ┌──────────────┐
+  │DONE│    │ PII Scrubber │ ← data_scrubber.py masks all sensitive data
+  └────┘    └──────┬───────┘
+                   │
+                   ▼
+            ┌──────────────┐
+            │  Try Bedrock  │ ← Via VPC PrivateLink (no internet)
+            └──────┬───────┘
+                   │
+              Success?        
+              │         │
+             YES        NO
+              │         │
+              ▼         ▼
+           ┌────┐  ┌──────────────┐
+           │DONE│  │ Try Local LLM│ ← Air-gapped GPU (Phase 2B)
+           └────┘  └──────┬───────┘
+                          │
+                     Success?
+                     │         │
+                    YES        NO
+                     │         │
+                     ▼         ▼
+                  ┌────┐  ┌──────────────┐
+                  │DONE│  │ Return AST   │ ← Graceful degradation
+                  └────┘  │ results only │
+                          └──────────────┘
+```
+
+---
+
+## 6. Phase 2B — Air-Gapped LLM Setup (GenAI — High-Security Path)
+
+The air-gapped LLM is an **optional, high-security alternative** to Bedrock for organizations that cannot send any data (even PII-scrubbed) to AWS-managed AI services. It runs a local LLM (e.g., Meta Llama 3 8B) on a GPU EC2 instance with **zero internet egress** — traffic is restricted to VPC-internal only.
+
+**Code reference:** `lambda/code-analyzer/genai_router.py` — `_invoke_local_llm()` sends HTTP POST to port 8000 on the GPU instance.
+
+**Terraform reference:** `terraform/modules/airgapped-llm/main.tf` — provisions g5.2xlarge with encrypted 500GB EBS, zero-egress security group.
+
+### When to Use Air-Gapped vs Bedrock
+
+| Criteria | Use Bedrock (Phase 2A) | Use Air-Gapped (Phase 2B) |
+|----------|----------------------|---------------------------|
+| Data sensitivity | PII-scrubbed code is acceptable to send to AWS | No data can leave your VPC, even scrubbed |
+| Compliance | Standard enterprise SOX/SOC2 | Government/defense (FedRAMP High, IL4+), classified |
+| Cost | Pay-per-token (~$3-15 per migration) | Fixed EC2 cost (~$1.21/hr while running) |
+| Quality | Claude 3 Sonnet (excellent) | Llama 3 8B (good, less nuanced) |
+| Setup effort | Low (enable model + VPC endpoint) | Medium (install model, configure server) |
+| Availability | Always on (serverless) | Must start/stop EC2 manually or via automation |
+
+> **Recommendation:** Use Bedrock for most deployments. Only deploy the air-gapped LLM if your security policy explicitly prohibits AWS-managed AI services.
+
+### Step 2B.1 — Choose Your GPU AMI
+
+The Terraform module uses a placeholder AMI (`ami-0123456789abcdef0`). Replace it with a real Deep Learning AMI:
+
+```bash
+# Find the latest AWS Deep Learning AMI (Amazon Linux 2, GPU)
+aws ec2 describe-images \
+  --owners amazon \
+  --filters \
+    "Name=name,Values=Deep Learning AMI GPU PyTorch*Amazon Linux 2*" \
+    "Name=state,Values=available" \
+  --query "Images | sort_by(@, &CreationDate) | [-1].{ID:ImageId,Name:Name}" \
+  --output table
+
+# Example output:
+# ┌──────────────────────┬──────────────────────────────────────────────────┐
+# │          ID          │                     Name                          │
+# ├──────────────────────┼──────────────────────────────────────────────────┤
+# │ ami-0a1b2c3d4e5f6789 │ Deep Learning AMI GPU PyTorch 2.2 (Amazon Linux 2)│
+# └──────────────────────┴──────────────────────────────────────────────────┘
+```
+
+Update `terraform/environments/dev/main.tf`:
+
+```hcl
+module "airgapped_llm" {
+  source                      = "../../modules/airgapped-llm"
+  vpc_id                      = module.vpc.vpc_id
+  vpc_cidr                    = var.vpc_cidr
+  lambda_private_subnets_cidr = var.private_subnet_cidrs
+  isolated_subnet_id          = module.vpc.private_subnet_ids[0]
+  gpu_ami_id                  = "ami-0a1b2c3d4e5f6789"  # ← Replace with your AMI ID from above
+}
+```
+
+### Step 2B.2 — Pre-Load the LLM Model onto the Instance
+
+Since the instance has **no internet access** (zero-egress security group), you must get model weights onto it via S3 or a pre-baked AMI.
+
+**Option A: Model via S3 (recommended)**
+
+```bash
+# 1. Download Llama 3 8B model weights to your workstation
+#    (Requires Meta license acceptance at https://llama.meta.com/)
+#    Or use HuggingFace: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct
+
+# 2. Upload to S3 (private bucket, KMS-encrypted)
+aws s3 mb s3://migrate4hana-llm-models-dev
+aws s3 cp ./Meta-Llama-3-8B-Instruct/ \
+  s3://migrate4hana-llm-models-dev/llama-3-8b/ \
+  --recursive --sse aws:kms
+
+# 3. Add S3 VPC endpoint so the EC2 instance can reach S3 without internet
+#    (The vpc-endpoints module should include this — verify)
+aws ec2 describe-vpc-endpoints \
+  --filters "Name=service-name,Values=com.amazonaws.*.s3" \
+  --query "VpcEndpoints[*].State"
+
+# 4. The instance user_data script (added to airgapped-llm/main.tf) handles:
+#    - Installing vLLM inference server
+#    - Downloading model from S3
+#    - Starting the server on port 8000
+```
+
+**Option B: Pre-baked AMI**
+
+```bash
+# 1. Launch a temporary EC2 with internet access
+# 2. Install vLLM + download model
+# 3. Create AMI from that instance
+# 4. Use that AMI ID in Terraform (no S3 download needed at boot)
+
+aws ec2 create-image \
+  --instance-id i-0abc123def456 \
+  --name "migrate4hana-llm-llama3-8b-vllm" \
+  --description "Pre-loaded Llama 3 8B with vLLM server"
+```
+
+### Step 2B.3 — Instance Bootstrap (User Data)
+
+The `terraform/modules/airgapped-llm/main.tf` now includes a `user_data` script that bootstraps the inference server on boot:
+
+```bash
+#!/bin/bash
+set -e
+
+# ── Configuration ──
+MODEL_S3_PATH="s3://migrate4hana-llm-models-dev/llama-3-8b/"
+MODEL_LOCAL_PATH="/opt/llm/models/llama-3-8b"
+SERVE_PORT=8000
+
+# ── Install vLLM inference server ──
+pip install vllm>=0.4.0
+
+# ── Download model from S3 (via VPC endpoint, no internet) ──
+mkdir -p $MODEL_LOCAL_PATH
+aws s3 cp $MODEL_S3_PATH $MODEL_LOCAL_PATH --recursive
+
+# ── Start vLLM OpenAI-compatible server ──
+nohup python -m vllm.entrypoints.openai.api_server \
+  --model $MODEL_LOCAL_PATH \
+  --host 0.0.0.0 \
+  --port $SERVE_PORT \
+  --max-model-len 4096 \
+  --gpu-memory-utilization 0.90 \
+  --dtype float16 \
+  > /var/log/vllm-server.log 2>&1 &
+
+# ── Health check loop ──
+for i in $(seq 1 60); do
+  if curl -s http://localhost:$SERVE_PORT/health | grep -q ok; then
+    echo "vLLM server healthy on port $SERVE_PORT"
+    break
+  fi
+  echo "Waiting for vLLM server... ($i/60)"
+  sleep 10
+done
+```
+
+> This script has been added to the Terraform module as part of this guide update.
+
+### Step 2B.4 — Configure Lambda to Use the Air-Gapped LLM
+
+Set the `LOCAL_LLM_ENDPOINT` environment variable on Lambda functions:
+
+```hcl
+# In terraform/environments/dev/terraform.tfvars:
+local_llm_endpoint = "http://10.10.1.X:8000/v1/completions"
+# Replace 10.10.1.X with the private IP of the GPU instance
+```
+
+After `terraform apply`, get the instance's private IP:
+
+```bash
+# Get the air-gapped LLM private IP
+aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=Migrate4HANA-AirGapped-LLM" \
+  --query "Reservations[*].Instances[*].{IP:PrivateIpAddress,State:State.Name}" \
+  --output table
+
+# Update the Lambda environment variable
+LLM_IP=$(aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=Migrate4HANA-AirGapped-LLM" \
+  --query "Reservations[0].Instances[0].PrivateIpAddress" \
+  --output text)
+
+echo "LOCAL_LLM_ENDPOINT=http://${LLM_IP}:8000/v1/completions"
+```
+
+The `genai_router.py` sends OpenAI-compatible POST requests:
+
+```json
+POST http://{LLM_IP}:8000/v1/completions
+{
+  "prompt": "<analysis prompt with PII-scrubbed ABAP>",
+  "max_tokens": 4096,
+  "temperature": 0.1
+}
+```
+
+### Step 2B.5 — Test Air-Gapped LLM Connectivity
+
+```bash
+# 1. Verify the instance is running
+aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=Migrate4HANA-AirGapped-LLM" \
+  --query "Reservations[*].Instances[*].State.Name"
+# Expected: "running"
+
+# 2. Check vLLM server health (from a Lambda or bastion in the same VPC)
+# The security group only allows traffic from Lambda subnets on port 8000
+
+# 3. Invoke code-analyzer with force_genai to bypass AST threshold
+aws lambda invoke \
+  --function-name migrate4hana-code-analyzer-dev \
+  --payload '{
+    "action": "analyze",
+    "source_code": "REPORT ztest_llm.\nSELECT * FROM bseg INTO TABLE lt_bseg.",
+    "force_genai": true,
+    "prefer_local_llm": true
+  }' \
+  --cli-binary-format raw-in-base64-out \
+  llm_test.json
+
+cat llm_test.json | python -m json.tool
+# Expected: backend_used = "local_llm"
+```
+
+### Step 2B.6 — Cost Optimization (Start/Stop Automation)
+
+The g5.2xlarge costs **~$1.21/hour**. Since it's only needed during code analysis (Phase 2 of the pipeline), automate start/stop:
+
+```bash
+# Start before pipeline execution
+aws ec2 start-instances --instance-ids $LLM_INSTANCE_ID
+
+# Wait for it to be healthy (vLLM needs ~3-5 min to load model)
+aws ec2 wait instance-running --instance-ids $LLM_INSTANCE_ID
+sleep 300  # Wait for vLLM to warm up
+
+# Run pipeline...
+
+# Stop after code analysis phase completes
+aws ec2 stop-instances --instance-ids $LLM_INSTANCE_ID
+```
+
+**Or automate via Step Functions:**
+
+Add start/stop states around the code-analyzer stage:
+
+```json
+"StartLLMInstance": {
+  "Type": "Task",
+  "Resource": "arn:aws:states:::aws-sdk:ec2:startInstances",
+  "Parameters": { "InstanceIds": ["i-LLM_INSTANCE_ID"] },
+  "Next": "WaitForLLMReady"
+},
+"WaitForLLMReady": {
+  "Type": "Wait",
+  "Seconds": 300,
+  "Next": "Stage5_CodeAnalysis"
+},
+"StopLLMInstance": {
+  "Type": "Task",
+  "Resource": "arn:aws:states:::aws-sdk:ec2:stopInstances",
+  "Parameters": { "InstanceIds": ["i-LLM_INSTANCE_ID"] },
+  "Next": "Stage6_DataHygiene"
+}
+```
+
+> Monthly cost with start/stop: ~$5-20/migration (vs ~$870/month if left running 24/7).
+
+### Step 2B.7 — Security Verification
+
+The air-gapped LLM's security posture must be verified:
+
+```bash
+# 1. Verify zero internet egress
+aws ec2 describe-security-groups \
+  --filters "Name=group-name,Values=airgapped-llm-sg" \
+  --query "SecurityGroups[*].IpPermissionsEgress"
+
+# Expected egress: ONLY to VPC CIDR (e.g., 10.10.0.0/16)
+# Must NOT contain 0.0.0.0/0
+
+# 2. Verify ingress restricted to Lambda subnets
+aws ec2 describe-security-groups \
+  --filters "Name=group-name,Values=airgapped-llm-sg" \
+  --query "SecurityGroups[*].IpPermissions"
+
+# Expected ingress: port 8000 from Lambda private subnet CIDRs only
+
+# 3. Verify instance has no public IP
+aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=Migrate4HANA-AirGapped-LLM" \
+  --query "Reservations[*].Instances[*].PublicIpAddress"
+# Expected: None/null
+
+# 4. Verify EBS encryption
+aws ec2 describe-volumes \
+  --filters "Name=attachment.instance-id,Values=$LLM_INSTANCE_ID" \
+  --query "Volumes[*].{Encrypted:Encrypted,KmsKeyId:KmsKeyId}"
+# Expected: Encrypted = true
+```
+
+---
+
+## 7. Phase 3 — SAP System Connectivity
 
 ### Step 3.1 — Create RFC Users in SAP
 
@@ -495,7 +979,7 @@ Each of these functions is called by the tool and must work against your SAP sys
 
 ---
 
-## 6. Phase 4 — API Server Hardening
+## 8. Phase 4 — API Server Hardening
 
 The current API server (`api_server.py`) uses Python's stdlib `http.server` — unsuitable for production.
 
@@ -600,7 +1084,7 @@ Authenticated:
 
 ---
 
-## 7. Phase 5 — Frontend Production Build
+## 9. Phase 5 — Frontend Production Build
 
 ### Step 5.1 — Configure API Base URL
 
@@ -658,7 +1142,7 @@ Set this in the frontend environment so the LogViewer component connects to real
 
 ---
 
-## 8. Phase 6 — Security Hardening
+## 10. Phase 6 — Security Hardening
 
 ### Step 6.1 — Network Security
 
@@ -801,7 +1285,7 @@ Fields masked by data_scrubber.py:
 
 ---
 
-## 9. Phase 7 — Integration Testing Against Real SAP
+## 11. Phase 7 — Integration Testing Against Real SAP
 
 ### Step 7.1 — SAP IDES/Sandbox Setup
 
@@ -973,7 +1457,7 @@ Run the pipeline against real SAP and measure:
 
 ---
 
-## 10. Phase 8 — CI/CD Pipeline
+## 12. Phase 8 — CI/CD Pipeline
 
 ### Step 8.1 — GitHub Actions Workflow
 
@@ -1112,7 +1596,7 @@ cp -r terraform/environments/dev terraform/environments/prod
 
 ---
 
-## 11. Phase 9 — Monitoring & Observability
+## 13. Phase 9 — Monitoring & Observability
 
 ### Step 9.1 — CloudWatch Dashboard
 
@@ -1190,7 +1674,7 @@ fields @timestamp, payload_snippet
 
 ---
 
-## 12. Phase 10 — Production Deployment
+## 14. Phase 10 — Production Deployment
 
 ### Pre-Deployment Checklist
 
@@ -1236,7 +1720,7 @@ curl -X POST https://api.migrate4hana.internal/api/pipeline/assess \
 
 ---
 
-## 13. Phase 11 — Cutover Rehearsal
+## 15. Phase 11 — Cutover Rehearsal
 
 **This is the most critical phase.** Never go live without at least 2 rehearsals.
 
@@ -1305,7 +1789,7 @@ T-minus checklist:
 
 ---
 
-## 14. Gap Closure Checklist
+## 16. Gap Closure Checklist
 
 ### Critical (Must fix before any real migration)
 
@@ -1332,6 +1816,20 @@ T-minus checklist:
 | 14 | Frontend hardcoded samples | `frontend/src/data/` | Low | Remove sample data fallbacks when API connected |
 | 15 | No Dockerfile | Project root | Low | Create Dockerfile for API server + frontend |
 
+### GenAI Infrastructure (Resolved in this update)
+
+| # | Gap | File(s) Affected | Status | Fix Applied |
+|---|-----|------------------|--------|-------------|
+| G1 | Lambda missing `bedrock:InvokeModel` IAM permission | `terraform/modules/lambda/main.tf` | ✅ **Fixed** | Added `bedrock:InvokeModel` + `bedrock:InvokeModelWithResponseStream` to Lambda IAM policy |
+| G2 | Lambda missing GenAI env vars (`BEDROCK_MODEL_ID`, `LOCAL_LLM_ENDPOINT`, `AST_CHANGE_THRESHOLD`) | `terraform/modules/lambda/main.tf` | ✅ **Fixed** | Added all three env vars to Lambda environment block with configurable Terraform variables |
+| G3 | Air-gapped LLM placeholder AMI (`ami-0123456789abcdef0`) | `terraform/environments/dev/main.tf` | ✅ **Fixed** | Parameterized as `var.gpu_ami_id` with instructions to find real Deep Learning AMI |
+| G4 | Air-gapped LLM has no `user_data` (boots to bare OS) | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added full bootstrap script: installs vLLM, downloads model from S3, starts inference server on port 8000 |
+| G5 | Air-gapped LLM EC2 has no S3 access for model download | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added `aws_iam_role_policy.llm_s3_access` with scoped S3 GetObject/ListBucket |
+| G6 | Air-gapped LLM has no outputs (instance ID, private IP, endpoint) | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added `instance_id`, `private_ip`, and `llm_endpoint` outputs |
+| G7 | No Bedrock setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2A with 7 steps: model access, VPC endpoints, IAM, env vars, testing, cost, routing |
+| G8 | No Air-Gapped LLM setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2B with 7 steps: AMI, model loading, bootstrap, Lambda config, testing, cost optimization, security |
+| G9 | Dev/main.tf GenAI variables not wired through to Lambda module | `terraform/environments/dev/main.tf`, `variables.tf` | ✅ **Fixed** | Added `bedrock_model_id`, `local_llm_endpoint`, `ast_change_threshold`, `gpu_ami_id`, `llm_model_s3_*` variables |
+
 ### Medium Priority (Should fix before enterprise clients)
 
 | # | Gap | File(s) Affected | Effort | Fix Description |
@@ -1343,20 +1841,22 @@ T-minus checklist:
 | 20 | JWT uses HS256 symmetric | `api_server.py` | Low | Switch to RS256 with asymmetric key pair |
 | 21 | No API versioning | `api_server.py` | Low | Add `/api/v1/` prefix to all endpoints |
 | 22 | No OpenAPI/Swagger docs | `api_server.py` | Free with FastAPI | FastAPI auto-generates at `/docs` |
+| 23 | DMS credentials hardcoded in dev/main.tf | `terraform/environments/dev/main.tf` | Low | Move `ecc_db_password`/`s4_db_password` to Secrets Manager references |
+| 24 | VPC module missing `default_security_group_id` output | `terraform/modules/vpc/main.tf` | Low | Add output or use `aws_vpc.main.default_security_group_id` |
 
 ### Low Priority (Nice to have)
 
 | # | Gap | File(s) | Effort | Description |
 |---|-----|---------|--------|-------------|
-| 23 | No progress percentage per stage | Handlers | Medium | Emit progress events (10%, 25%, 50%, 75%, 100%) |
-| 24 | No email notifications | `terraform/` | Low | SNS → SES for migration status emails |
-| 25 | No Slack/Teams integration | New Lambda | Low | SNS → Lambda → Webhook |
-| 26 | No cost estimation | Frontend | Medium | Estimate AWS costs based on discovered data volumes |
-| 27 | No multi-language support | Frontend | Medium | i18n for DE, FR, JA, ZH |
+| 25 | No progress percentage per stage | Handlers | Medium | Emit progress events (10%, 25%, 50%, 75%, 100%) |
+| 26 | No email notifications | `terraform/` | Low | SNS → SES for migration status emails |
+| 27 | No Slack/Teams integration | New Lambda | Low | SNS → Lambda → Webhook |
+| 28 | No cost estimation | Frontend | Medium | Estimate AWS costs based on discovered data volumes |
+| 29 | No multi-language support | Frontend | Medium | i18n for DE, FR, JA, ZH |
 
 ---
 
-## 15. Risk Register
+## 17. Risk Register
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|------|-----------|--------|------------|
@@ -1373,7 +1873,7 @@ T-minus checklist:
 
 ---
 
-## 16. Architecture Reference
+## 18. Architecture Reference
 
 ### Full Pipeline Flow (20 States)
 
