@@ -1,13 +1,13 @@
-"""
-Migrate4HANA — API Server
-==========================
-HTTP API for the migration platform.
+﻿"""
+Migrate4HANA - API Server (FastAPI)
+====================================
+Production-grade HTTP API for the migration platform.
 Handles SAP connections, pipeline execution, and PDF report generation.
 
 Usage:
-    python api_server.py
-
-Starts on port 8000. The Vite dev server proxies /api/* here.
+    uvicorn api_server:app --host 0.0.0.0 --port 8000
+    python api_server.py                     # starts uvicorn programmatically
+    python api_server.py --generate-token    # generate a JWT and exit
 
 Authentication:
     All endpoints except GET /api/health require a valid JWT Bearer token.
@@ -19,17 +19,23 @@ Authentication:
          or  X-API-Key: <api_key>
 """
 
-import http.server
 import json
 import os
 import sys
-import threading
-import time
+import asyncio
 import hashlib
 import hmac
 import base64
 import secrets
+import time
 from datetime import datetime, timezone
+from contextlib import asynccontextmanager
+from typing import Optional
+
+from fastapi import FastAPI, Request, HTTPException, Depends, Header
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "test-output")
@@ -37,7 +43,7 @@ CONNECTIONS_FILE = os.path.join(PROJECT_DIR, "connections.json")
 
 # Shared state for active runs
 _active_run = {"status": "idle", "results": None, "run_id": None}
-_lock = threading.Lock()
+_lock = asyncio.Lock()
 
 # =============================================================================
 # AUTHENTICATION
@@ -63,7 +69,7 @@ def _ensure_jwt_secret():
     _JWT_SECRET = secrets.token_hex(32)
     with open(secret_file, "w", encoding="utf-8") as f:
         f.write(_JWT_SECRET)
-    print(f"  [Auth] Generated JWT secret → .jwt_secret (keep this file secure)")
+    print(f"  [Auth] Generated JWT secret -> .jwt_secret (keep this file secure)")
 
 
 def _b64url_encode(data: bytes) -> str:
@@ -112,42 +118,48 @@ def verify_jwt(token: str) -> dict | None:
         return None
 
 
-def authenticate_request(handler) -> bool:
-    """
-    Check Authorization header for a valid JWT Bearer token or API key.
-    Returns True if authenticated, False otherwise.
-    """
-    path = handler.path.split("?")[0].rstrip("/")
+# =============================================================================
+# AUTH DEPENDENCY
+# =============================================================================
+async def require_auth(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    """FastAPI dependency for JWT/API-key authentication."""
+    path = request.url.path.rstrip("/")
     if path in _PUBLIC_PATHS:
         return True
 
     # Check Bearer token
-    auth_header = handler.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:].strip()
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
         if verify_jwt(token):
             return True
 
-    # Check query-string token (for links opened in new tabs, e.g. PDF downloads)
-    from urllib.parse import urlparse, parse_qs
-    qs = parse_qs(urlparse(handler.path).query)
-    qs_token = qs.get("token", [None])[0]
+    # Check query-string token (for PDF download links opened in new tabs)
+    qs_token = request.query_params.get("token")
     if qs_token and verify_jwt(qs_token):
         return True
 
     # Check API key
-    api_key = handler.headers.get("X-API-Key", "")
-    if _API_KEY and hmac.compare_digest(api_key, _API_KEY):
+    if _API_KEY and x_api_key and hmac.compare_digest(x_api_key, _API_KEY):
         return True
 
-    return False
+    raise HTTPException(
+        status_code=401,
+        detail={
+            "error": "Authentication required",
+            "hint": "Set Authorization: Bearer <jwt> or X-API-Key: <key>",
+        },
+        headers={"WWW-Authenticate": 'Bearer realm="migrate4hana"'},
+    )
 
 
 # =============================================================================
 # CONNECTION MANAGEMENT
 # =============================================================================
 def _load_connections():
-    """Load saved connections from disk."""
     if os.path.isfile(CONNECTIONS_FILE):
         with open(CONNECTIONS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -155,122 +167,76 @@ def _load_connections():
 
 
 def _save_connections(data):
-    """Save connections to disk."""
     with open(CONNECTIONS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
 def test_ecc_connection(params):
-    """Test SAP ECC RFC connection."""
     host = params.get("ashost", "")
     sysnr = params.get("sysnr", "")
     client = params.get("client", "")
     user = params.get("user", "")
-
     if not all([host, sysnr, client, user]):
         return {"status": "error", "message": "Missing required fields: ashost, sysnr, client, user"}
-
-    # Try real PyRFC connection if available
     try:
         import pyrfc
-        conn_params = {
-            "ashost": host,
-            "sysnr": sysnr,
-            "client": client,
-            "user": user,
-            "passwd": params.get("passwd", ""),
-        }
+        conn_params = {"ashost": host, "sysnr": sysnr, "client": client, "user": user, "passwd": params.get("passwd", "")}
         if params.get("saprouter"):
             conn_params["saprouter"] = params["saprouter"]
-
         conn = pyrfc.Connection(**conn_params)
         result = conn.call("RFC_SYSTEM_INFO")
         sys_info = result.get("RFCSI_EXPORT", {})
         conn.close()
-
         return {
-            "status": "connected",
-            "system_id": sys_info.get("RFCSYSID", ""),
-            "host": sys_info.get("RFCHOST", host),
-            "db_system": sys_info.get("RFCDBSYS", ""),
-            "sap_release": sys_info.get("RFCSAPRL", ""),
-            "kernel": sys_info.get("RFCKERNRL", ""),
+            "status": "connected", "system_id": sys_info.get("RFCSYSID", ""),
+            "host": sys_info.get("RFCHOST", host), "db_system": sys_info.get("RFCDBSYS", ""),
+            "sap_release": sys_info.get("RFCSAPRL", ""), "kernel": sys_info.get("RFCKERNRL", ""),
             "client": client,
             "message": f"Connected to {sys_info.get('RFCSYSID', host)} (ECC {sys_info.get('RFCSAPRL', '')})",
         }
     except ImportError:
-        # PyRFC not installed — use mock mode
-        return {
-            "status": "mock",
-            "system_id": "BIS",
-            "host": host,
-            "sap_release": "ECC 6.0 EHP8",
-            "client": client,
-            "message": f"PyRFC not installed — mock mode active. Connection to {host} will be simulated.",
-        }
+        return {"status": "mock", "system_id": "BIS", "host": host, "sap_release": "ECC 6.0 EHP8",
+                "client": client, "message": f"PyRFC not installed - mock mode active. Connection to {host} will be simulated."}
     except Exception as e:
         return {"status": "error", "message": f"Connection failed: {str(e)}"}
 
 
 def test_s4hana_connection(params):
-    """Test S/4HANA target connection."""
     host = params.get("ashost", "")
     conn_type = params.get("connection_type", "rfc")
-
     if not host:
         return {"status": "error", "message": "Missing required field: ashost (hostname)"}
-
     if conn_type == "rfc":
         sysnr = params.get("sysnr", "")
         client = params.get("client", "")
         user = params.get("user", "")
         if not all([sysnr, client, user]):
             return {"status": "error", "message": "Missing required fields for RFC: sysnr, client, user"}
-
         try:
             import pyrfc
-            conn = pyrfc.Connection(
-                ashost=host, sysnr=sysnr, client=client,
-                user=user, passwd=params.get("passwd", ""),
-            )
+            conn = pyrfc.Connection(ashost=host, sysnr=sysnr, client=client, user=user, passwd=params.get("passwd", ""))
             result = conn.call("RFC_SYSTEM_INFO")
             sys_info = result.get("RFCSI_EXPORT", {})
             conn.close()
-
-            return {
-                "status": "connected",
-                "system_id": sys_info.get("RFCSYSID", ""),
-                "host": host,
-                "sap_release": sys_info.get("RFCSAPRL", ""),
-                "message": f"Connected to S/4HANA {sys_info.get('RFCSYSID', host)}",
-            }
+            return {"status": "connected", "system_id": sys_info.get("RFCSYSID", ""), "host": host,
+                    "sap_release": sys_info.get("RFCSAPRL", ""),
+                    "message": f"Connected to S/4HANA {sys_info.get('RFCSYSID', host)}"}
         except ImportError:
-            return {
-                "status": "mock",
-                "system_id": "S4H",
-                "host": host,
-                "sap_release": "S/4HANA 2023 FPS02",
-                "message": f"PyRFC not installed — mock mode. Target {host} will be simulated.",
-            }
+            return {"status": "mock", "system_id": "S4H", "host": host, "sap_release": "S/4HANA 2023 FPS02",
+                    "message": f"PyRFC not installed - mock mode. Target {host} will be simulated."}
         except Exception as e:
             return {"status": "error", "message": f"Connection failed: {str(e)}"}
-
     elif conn_type == "odata":
-        # OData / API-based connection for S/4HANA Cloud
         api_url = params.get("api_url", host)
-        return {
-            "status": "mock",
-            "system_id": "S4HC",
-            "host": api_url,
-            "sap_release": "S/4HANA Cloud",
-            "message": f"OData endpoint {api_url} registered. Will use Communication Arrangements in target.",
-        }
-
+        return {"status": "mock", "system_id": "S4HC", "host": api_url, "sap_release": "S/4HANA Cloud",
+                "message": f"OData endpoint {api_url} registered. Will use Communication Arrangements in target."}
     return {"status": "error", "message": f"Unknown connection type: {conn_type}"}
 
 
+# =============================================================================
+# RUN MANAGEMENT
+# =============================================================================
 def list_runs():
-    """List all completed pipeline runs."""
     runs = []
     if not os.path.isdir(OUTPUT_DIR):
         return runs
@@ -280,17 +246,12 @@ def list_runs():
             if os.path.isfile(report_path):
                 with open(report_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                runs.append({
-                    "id": entry,
-                    "timestamp": entry.replace("run_", ""),
-                    "has_execution": "cutover" in data,
-                    "results": data,
-                })
+                runs.append({"id": entry, "timestamp": entry.replace("run_", ""),
+                             "has_execution": "cutover" in data, "results": data})
     return runs
 
 
 def get_run(run_id):
-    """Get a specific run's results."""
     report_path = os.path.join(OUTPUT_DIR, run_id, "final-report.json")
     if not os.path.isfile(report_path):
         return None
@@ -298,22 +259,11 @@ def get_run(run_id):
         return json.load(f)
 
 
-def start_pipeline_async(mode="full"):
-    """Start a pipeline run in a background thread.
-
-    5-Phase SAP Activate pipeline modes:
-        'assess'   - Phases 1-2 only (stages 1-8)
-        'convert'  - Phase 3 only (stages 9-10), requires Phase 2 complete
-        'complete' - Phases 4-5 (stages 11-17), requires Phase 3 complete
-        'full'     - All 5 phases (stages 1-17)
-    """
+async def start_pipeline_async(mode="full"):
     global _active_run
-
-    with _lock:
+    async with _lock:
         if _active_run["status"] == "running":
             return {"error": "Pipeline already running"}
-
-        # Validate prerequisites for phase-specific modes
         if mode == "convert":
             last_results = _active_run.get("results", {})
             if not last_results or not last_results.get("code_analysis"):
@@ -322,68 +272,52 @@ def start_pipeline_async(mode="full"):
             last_results = _active_run.get("results", {})
             if not last_results or not last_results.get("sum_dmo"):
                 return {"error": "Phase 3 must be completed before running Phases 4-5 (complete)"}
+        _active_run = {"status": "running", "results": None, "run_id": None,
+                       "started": time.time(), "mode": mode}
 
-        _active_run = {
-            "status": "running", "results": None, "run_id": None,
-            "started": time.time(), "mode": mode,
-        }
-
-    def _run():
+    async def _run():
         global _active_run
         try:
             import subprocess
             cmd = [sys.executable, os.path.join(PROJECT_DIR, "run_local_pipeline.py")]
             if mode == "assess":
                 cmd.append("--assess-only")
-            # For 'convert' and 'complete' modes, we run full pipeline
-            # (the pipeline internally handles phase gating)
             env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, cwd=PROJECT_DIR, timeout=600,
-                env=env,
-            )
-            if result.returncode != 0:
-                err_msg = (result.stderr or result.stdout or "Unknown error").strip()[-500:]
-                print(f"  [API] Pipeline subprocess failed (exit {result.returncode}): {err_msg}")
-            # Find the latest run directory
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                cwd=PROJECT_DIR, env=env)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
+            if proc.returncode != 0:
+                err_msg = (stderr.decode() or stdout.decode() or "Unknown error").strip()[-500:]
+                print(f"  [API] Pipeline subprocess failed (exit {proc.returncode}): {err_msg}")
             runs = list_runs()
             latest = runs[0] if runs else None
-            with _lock:
+            async with _lock:
                 if latest:
-                    _active_run = {
-                        "status": "completed",
-                        "run_id": latest["id"],
-                        "results": latest["results"],
-                        "mode": mode,
-                        "duration": time.time() - _active_run.get("started", time.time()),
-                    }
+                    _active_run = {"status": "completed", "run_id": latest["id"],
+                                   "results": latest["results"], "mode": mode,
+                                   "duration": time.time() - _active_run.get("started", time.time())}
                 else:
-                    err_msg = (result.stderr or result.stdout or "Pipeline produced no output").strip()[-500:]
-                    _active_run = {
-                        "status": "failed",
-                        "error": f"Pipeline failed: {err_msg}",
-                        "results": None,
-                    }
+                    err_msg = (stderr.decode() or stdout.decode() or "Pipeline produced no output").strip()[-500:]
+                    _active_run = {"status": "failed", "error": f"Pipeline failed: {err_msg}", "results": None}
+        except asyncio.TimeoutError:
+            async with _lock:
+                _active_run = {"status": "failed", "error": "Pipeline timed out after 600s", "results": None}
         except Exception as e:
-            with _lock:
+            async with _lock:
                 _active_run = {"status": "failed", "error": str(e), "results": None}
 
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
+    asyncio.create_task(_run())
     return {"status": "started", "mode": mode}
 
 
 def generate_pdf_for_run(run_id):
-    """Generate a PDF report for a given run, return the file path."""
     run_dir = os.path.join(OUTPUT_DIR, run_id)
     json_path = os.path.join(run_dir, "post-migration-report.json")
     pdf_path = os.path.join(run_dir, "post-migration-report.pdf")
-
     if os.path.isfile(pdf_path):
         return pdf_path
-
     if not os.path.isfile(json_path):
-        # Try to build from final-report.json
         final_path = os.path.join(run_dir, "final-report.json")
         if not os.path.isfile(final_path):
             return None
@@ -395,237 +329,245 @@ def generate_pdf_for_run(run_id):
     else:
         with open(json_path, "r", encoding="utf-8") as f:
             report_data = json.load(f)
-
     from pdf_report_generator import generate_pdf
     generate_pdf(report_data, pdf_path)
     return pdf_path
 
 
-class APIHandler(http.server.BaseHTTPRequestHandler):
+# =============================================================================
+# PYDANTIC MODELS
+# =============================================================================
+class ECCConnection(BaseModel):
+    ashost: str = ""
+    sysnr: str = "00"
+    client: str = "100"
+    user: str = ""
+    passwd: str = ""
+    saprouter: str = ""
 
-    def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
-
-    def _json_response(self, data, status=200):
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self._cors()
-        self.end_headers()
-        self.wfile.write(json.dumps(data, default=str).encode())
-
-    def _read_body(self):
-        length = int(self.headers.get("Content-Length", 0))
-        if length == 0:
-            return {}
-        raw = self.rfile.read(length)
-        return json.loads(raw.decode("utf-8"))
-
-    def _require_auth(self):
-        """Returns True if request is authenticated, sends 401 and returns False otherwise."""
-        if authenticate_request(self):
-            return True
-        self.send_response(401)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("WWW-Authenticate", 'Bearer realm="migrate4hana"')
-        self._cors()
-        self.end_headers()
-        self.wfile.write(json.dumps({
-            "error": "Authentication required",
-            "hint": "Set Authorization: Bearer <jwt> or X-API-Key: <key>",
-        }).encode())
-        return False
-
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self._cors()
-        self.end_headers()
-
-    def do_GET(self):
-        if not self._require_auth():
-            return
-        path = self.path.rstrip("/")
-
-        if path == "/api/health":
-            self._json_response({
-                "status": "ok", "version": "3.0", "stages": 17, "phases": 5,
-                "pipeline": "SAP Activate 5-Phase",
-                "phase_map": {
-                    "1_prepare": "Stages 1-4: Assessment & Pre-Checks",
-                    "2_explore": "Stages 5-8: Application Preparation",
-                    "3_realize": "Stages 9-10: Technical System Conversion (SUM/DMO)",
-                    "4_post_conversion": "Stages 11-14: Deploy, Configure & Validate",
-                    "5_deploy_and_run": "Stages 15-17: Integration, Validation & Go-Live",
-                },
-            })
-
-        elif path == "/api/connections":
-            self._json_response(_load_connections())
-
-        elif path == "/api/runs":
-            self._json_response(list_runs())
-
-        elif path.startswith("/api/runs/") and path.endswith("/pdf"):
-            # Download PDF
-            run_id = path.split("/api/runs/")[1].replace("/pdf", "")
-            if run_id == "latest":
-                runs = list_runs()
-                run_id = runs[0]["id"] if runs else None
-            if not run_id:
-                self._json_response({"error": "No runs found"}, 404)
-                return
-            pdf_path = generate_pdf_for_run(run_id)
-            if pdf_path and os.path.isfile(pdf_path):
-                self.send_response(200)
-                self.send_header("Content-Type", "application/pdf")
-                self.send_header("Content-Disposition",
-                                 f'attachment; filename="migration-report-{run_id}.pdf"')
-                self._cors()
-                self.end_headers()
-                with open(pdf_path, "rb") as f:
-                    self.wfile.write(f.read())
-            else:
-                self._json_response({"error": "Report not available for this run"}, 404)
-
-        elif path.startswith("/api/runs/"):
-            run_id = path.split("/api/runs/")[1]
-            if run_id == "latest":
-                runs = list_runs()
-                run_id = runs[0]["id"] if runs else None
-            data = get_run(run_id) if run_id else None
-            if data:
-                self._json_response(data)
-            else:
-                self._json_response({"error": "Run not found"}, 404)
-
-        elif path == "/api/status":
-            with _lock:
-                self._json_response(_active_run)
-
-        else:
-            self._json_response({"error": "Not found"}, 404)
-
-    def do_POST(self):
-        if not self._require_auth():
-            return
-        path = self.path.rstrip("/")
-        body = self._read_body()
-
-        if path == "/api/connections/ecc":
-            conns = _load_connections()
-            conns["ecc"] = {
-                "ashost": body.get("ashost", ""),
-                "sysnr": body.get("sysnr", "00"),
-                "client": body.get("client", "100"),
-                "user": body.get("user", ""),
-                "saprouter": body.get("saprouter", ""),
-                "saved_at": datetime.now().isoformat(),
-            }
-            _save_connections(conns)
-            self._json_response({"status": "saved", "connection": conns["ecc"]})
-
-        elif path == "/api/connections/s4hana":
-            conns = _load_connections()
-            conns["s4hana"] = {
-                "connection_type": body.get("connection_type", "rfc"),
-                "ashost": body.get("ashost", ""),
-                "sysnr": body.get("sysnr", "00"),
-                "client": body.get("client", "100"),
-                "user": body.get("user", ""),
-                "api_url": body.get("api_url", ""),
-                "saprouter": body.get("saprouter", ""),
-                "saved_at": datetime.now().isoformat(),
-            }
-            _save_connections(conns)
-            self._json_response({"status": "saved", "connection": conns["s4hana"]})
-
-        elif path == "/api/connections/ecc/test":
-            result = test_ecc_connection(body)
-            self._json_response(result)
-
-        elif path == "/api/connections/s4hana/test":
-            result = test_s4hana_connection(body)
-            self._json_response(result)
-
-        elif path in ("/api/pipeline/assess", "/api/start/assess"):
-            # Phases 1-2 (stages 1-8)
-            result = start_pipeline_async(mode="assess")
-            self._json_response(result)
-
-        elif path in ("/api/pipeline/convert", "/api/start/convert"):
-            # Phase 3 (stages 9-10) — requires Phase 2 complete
-            result = start_pipeline_async(mode="convert")
-            self._json_response(result)
-
-        elif path in ("/api/pipeline/complete", "/api/start/complete"):
-            # Phases 4-5 (stages 11-17) — requires Phase 3 complete
-            result = start_pipeline_async(mode="complete")
-            self._json_response(result)
-
-        elif path in ("/api/pipeline/full", "/api/start/full"):
-            # All 5 phases (stages 1-17)
-            result = start_pipeline_async(mode="full")
-            self._json_response(result)
-
-        elif path == "/api/auth/token":
-            # Public endpoint — generate a JWT for local/dev usage
-            token = generate_jwt()
-            self._json_response({"token": token, "expires_in": 86400, "type": "Bearer"})
-
-        elif path == "/api/pipeline/migrate":
-            # Legacy endpoint — runs full pipeline
-            result = start_pipeline_async(mode="full")
-            self._json_response(result)
-
-        elif path == "/api/run":
-            # Legacy endpoint
-            result = start_pipeline_async(mode="full")
-            self._json_response(result)
-
-        else:
-            self._json_response({"error": "Not found"}, 404)
-
-    def log_message(self, format, *args):
-        print(f"  [API] {args[0]}")
+class S4HANAConnection(BaseModel):
+    connection_type: str = "rfc"
+    ashost: str = ""
+    sysnr: str = "00"
+    client: str = "100"
+    user: str = ""
+    passwd: str = ""
+    api_url: str = ""
+    saprouter: str = ""
 
 
-def main():
-    import sys as _sys
-
+# =============================================================================
+# APP STARTUP
+# =============================================================================
+@asynccontextmanager
+async def lifespan(application: FastAPI):
     _ensure_jwt_secret()
+    print(f"\n  Migrate4HANA API Server (FastAPI)")
+    print(f"  {'='*35}")
+    print(f"  Auth: JWT Bearer token or X-API-Key header required")
+    print(f"  Pipeline: 17-stage, 5-phase SAP Activate\n")
+    yield
 
-    # CLI: generate a token and exit
-    if "--generate-token" in _sys.argv:
+
+app = FastAPI(
+    title="Migrate4HANA API",
+    version="3.0",
+    description="SAP ECC to S/4HANA Migration Platform",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.environ.get("M4H_CORS_ORIGINS", "*").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# =============================================================================
+# ROUTES - PUBLIC
+# =============================================================================
+@app.get("/api/health")
+async def health():
+    return {
+        "status": "ok", "version": "3.0", "stages": 17, "phases": 5,
+        "pipeline": "SAP Activate 5-Phase",
+        "phase_map": {
+            "1_prepare": "Stages 1-4: Assessment & Pre-Checks",
+            "2_explore": "Stages 5-8: Application Preparation",
+            "3_realize": "Stages 9-10: Technical System Conversion (SUM/DMO)",
+            "4_post_conversion": "Stages 11-14: Deploy, Configure & Validate",
+            "5_deploy_and_run": "Stages 15-17: Integration, Validation & Go-Live",
+        },
+    }
+
+
+@app.post("/api/auth/token")
+async def create_token():
+    token = generate_jwt()
+    return {"token": token, "expires_in": 86400, "type": "Bearer"}
+
+
+# =============================================================================
+# ROUTES - CONNECTIONS (authenticated)
+# =============================================================================
+@app.get("/api/connections", dependencies=[Depends(require_auth)])
+async def get_connections():
+    return _load_connections()
+
+
+@app.post("/api/connections/ecc", dependencies=[Depends(require_auth)])
+async def save_ecc_connection(body: ECCConnection):
+    conns = _load_connections()
+    conns["ecc"] = {"ashost": body.ashost, "sysnr": body.sysnr, "client": body.client,
+                    "user": body.user, "saprouter": body.saprouter, "saved_at": datetime.now().isoformat()}
+    _save_connections(conns)
+    return {"status": "saved", "connection": conns["ecc"]}
+
+
+@app.post("/api/connections/s4hana", dependencies=[Depends(require_auth)])
+async def save_s4hana_connection(body: S4HANAConnection):
+    conns = _load_connections()
+    conns["s4hana"] = {"connection_type": body.connection_type, "ashost": body.ashost,
+                       "sysnr": body.sysnr, "client": body.client, "user": body.user,
+                       "api_url": body.api_url, "saprouter": body.saprouter,
+                       "saved_at": datetime.now().isoformat()}
+    _save_connections(conns)
+    return {"status": "saved", "connection": conns["s4hana"]}
+
+
+@app.post("/api/connections/ecc/test", dependencies=[Depends(require_auth)])
+async def test_ecc(body: ECCConnection):
+    return test_ecc_connection(body.model_dump())
+
+
+@app.post("/api/connections/s4hana/test", dependencies=[Depends(require_auth)])
+async def test_s4(body: S4HANAConnection):
+    return test_s4hana_connection(body.model_dump())
+
+
+# =============================================================================
+# ROUTES - PIPELINE
+# =============================================================================
+@app.post("/api/pipeline/assess", dependencies=[Depends(require_auth)])
+async def pipeline_assess():
+    return await start_pipeline_async(mode="assess")
+
+@app.post("/api/pipeline/convert", dependencies=[Depends(require_auth)])
+async def pipeline_convert():
+    return await start_pipeline_async(mode="convert")
+
+@app.post("/api/pipeline/complete", dependencies=[Depends(require_auth)])
+async def pipeline_complete():
+    return await start_pipeline_async(mode="complete")
+
+@app.post("/api/pipeline/full", dependencies=[Depends(require_auth)])
+async def pipeline_full():
+    return await start_pipeline_async(mode="full")
+
+@app.post("/api/pipeline/migrate", dependencies=[Depends(require_auth)])
+async def pipeline_migrate():
+    return await start_pipeline_async(mode="full")
+
+@app.post("/api/start/assess", dependencies=[Depends(require_auth)])
+async def start_assess():
+    return await start_pipeline_async(mode="assess")
+
+@app.post("/api/start/convert", dependencies=[Depends(require_auth)])
+async def start_convert():
+    return await start_pipeline_async(mode="convert")
+
+@app.post("/api/start/complete", dependencies=[Depends(require_auth)])
+async def start_complete():
+    return await start_pipeline_async(mode="complete")
+
+@app.post("/api/start/full", dependencies=[Depends(require_auth)])
+async def start_full():
+    return await start_pipeline_async(mode="full")
+
+@app.post("/api/run", dependencies=[Depends(require_auth)])
+async def legacy_run():
+    return await start_pipeline_async(mode="full")
+
+
+# =============================================================================
+# ROUTES - RUNS & STATUS
+# =============================================================================
+@app.get("/api/status", dependencies=[Depends(require_auth)])
+async def pipeline_status():
+    return _active_run
+
+@app.get("/api/runs", dependencies=[Depends(require_auth)])
+async def get_runs():
+    return list_runs()
+
+@app.get("/api/runs/{run_id}", dependencies=[Depends(require_auth)])
+async def get_run_by_id(run_id: str):
+    if run_id == "latest":
+        runs = list_runs()
+        run_id = runs[0]["id"] if runs else None
+    data = get_run(run_id) if run_id else None
+    if data:
+        return data
+    raise HTTPException(status_code=404, detail="Run not found")
+
+@app.get("/api/runs/{run_id}/pdf", dependencies=[Depends(require_auth)])
+async def get_run_pdf(run_id: str):
+    if run_id == "latest":
+        runs = list_runs()
+        run_id = runs[0]["id"] if runs else None
+    if not run_id:
+        raise HTTPException(status_code=404, detail="No runs found")
+    pdf_path = generate_pdf_for_run(run_id)
+    if pdf_path and os.path.isfile(pdf_path):
+        return FileResponse(pdf_path, media_type="application/pdf",
+                            filename=f"migration-report-{run_id}.pdf")
+    raise HTTPException(status_code=404, detail="Report not available for this run")
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
+def main():
+    _ensure_jwt_secret()
+    if "--generate-token" in sys.argv:
         token = generate_jwt()
         print(f"Bearer token (valid 24h):\n{token}")
         return
 
-    port = 8000
-    server = http.server.HTTPServer(("", port), APIHandler)
-    print(f"\n  Migrate4HANA API Server")
-    print(f"  {'='*25}")
-    print(f"  Listening on http://localhost:{port}")
-    print(f"  Auth: JWT Bearer token or X-API-Key header required")
-    print(f"  Generate token: python api_server.py --generate-token")
-    print(f"  Pipeline: 17-stage, 5-phase SAP Activate")
+    import uvicorn
+    host = os.environ.get("M4H_HOST", "0.0.0.0")
+    port = int(os.environ.get("M4H_PORT", "8000"))
+    workers = int(os.environ.get("M4H_WORKERS", "1"))
+    ssl_keyfile = os.environ.get("M4H_SSL_KEY")
+    ssl_certfile = os.environ.get("M4H_SSL_CERT")
+
+    print(f"\n  Migrate4HANA API Server (FastAPI + Uvicorn)")
+    print(f"  {'='*45}")
+    print(f"  Listening on {'https' if ssl_certfile else 'http'}://{host}:{port}")
+    print(f"  Workers: {workers}")
+    if ssl_certfile:
+        print(f"  TLS: {ssl_certfile}")
     print(f"  Endpoints:")
-    print(f"    GET  /api/health             — Health check (public)")
-    print(f"    GET  /api/connections         — Saved connections")
-    print(f"    POST /api/connections/ecc     — Save ECC connection")
-    print(f"    POST /api/connections/s4hana  — Save S/4HANA connection")
-    print(f"    POST /api/connections/ecc/test    — Test ECC connection")
-    print(f"    POST /api/connections/s4hana/test — Test S/4HANA connection")
-    print(f"    POST /api/pipeline/assess     — Run Phases 1-2 (stages 1-8)")
-    print(f"    POST /api/pipeline/convert    — Run Phase 3 (stages 9-10, requires Phase 2)")
-    print(f"    POST /api/pipeline/complete   — Run Phases 4-5 (stages 11-17, requires Phase 3)")
-    print(f"    POST /api/pipeline/full       — Run all 5 phases (stages 1-17)")
-    print(f"    POST /api/pipeline/migrate    — Legacy: full migration")
-    print(f"    GET  /api/status              — Pipeline status")
-    print(f"    GET  /api/runs                — List all runs")
-    print(f"    GET  /api/runs/ID             — Get run results")
-    print(f"    GET  /api/runs/ID/pdf         — Download PDF report\n")
-    server.serve_forever()
+    print(f"    GET  /api/health             - Health check (public)")
+    print(f"    GET  /api/connections         - Saved connections")
+    print(f"    POST /api/connections/ecc     - Save ECC connection")
+    print(f"    POST /api/connections/s4hana  - Save S/4HANA connection")
+    print(f"    POST /api/connections/ecc/test    - Test ECC connection")
+    print(f"    POST /api/connections/s4hana/test - Test S/4HANA connection")
+    print(f"    POST /api/pipeline/assess     - Run Phases 1-2 (stages 1-8)")
+    print(f"    POST /api/pipeline/convert    - Run Phase 3 (stages 9-10)")
+    print(f"    POST /api/pipeline/complete   - Run Phases 4-5 (stages 11-17)")
+    print(f"    POST /api/pipeline/full       - Run all 5 phases (stages 1-17)")
+    print(f"    GET  /api/status              - Pipeline status")
+    print(f"    GET  /api/runs                - List all runs")
+    print(f"    GET  /api/runs/ID             - Get run results")
+    print(f"    GET  /api/runs/ID/pdf         - Download PDF report")
+    print(f"    GET  /docs                    - OpenAPI/Swagger documentation\n")
+
+    uvicorn.run("api_server:app", host=host, port=port, workers=workers,
+                ssl_keyfile=ssl_keyfile, ssl_certfile=ssl_certfile, access_log=True)
 
 
 if __name__ == "__main__":

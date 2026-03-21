@@ -15,9 +15,13 @@ frontend/dist/
 # Build / IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *.log
+
+# Backup files
+*.bak
 
 # Runtime artifacts
 connections.json
@@ -27,6 +31,17 @@ test-output/
 # Lambda deployment packages
 lambda/**/*.zip
 lambda/**/package/
+
+# Lambda layer builds (PyRFC)
+# lambda-layers/
+# pyrfc-layer.zip
+
+# # SAP NW RFC SDK (must not be committed — proprietary)
+# nwrfc750P_*.zip
+
+# TLS certificates
+# *.pem
+# *.key
 
 # OS
 Thumbs.db
@@ -40,6 +55,7 @@ terraform/environments/**/terraform.tfstate*
 *.tfplan
 .terraform.lock.hcl
 crash.log
+deployment_outputs.txt
 
 # Entity Resolution outputs
 entity-resolution-output/

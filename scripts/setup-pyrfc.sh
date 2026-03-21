@@ -124,16 +124,66 @@ LAYER_ARN=$(aws lambda publish-layer-version \
 
 echo "  ✓ Layer published!"
 echo ""
+echo "  Layer ARN: ${LAYER_ARN}"
+
+# ── Step 5: Validate the layer ──
+echo ""
+echo "Step 5: Validating the layer..."
+
+# Check layer size (Lambda limit = 250 MB unzipped)
+LAYER_SIZE=$(stat -f%z "${OUTPUT_DIR}/pyrfc-layer.zip" 2>/dev/null || stat -c%s "${OUTPUT_DIR}/pyrfc-layer.zip")
+LAYER_SIZE_MB=$((LAYER_SIZE / 1024 / 1024))
+echo "  Layer size: ${LAYER_SIZE_MB} MB"
+
+if [ ${LAYER_SIZE_MB} -gt 200 ]; then
+    echo "  ⚠ WARNING: Layer is ${LAYER_SIZE_MB} MB — close to Lambda's 250 MB limit"
+    echo "  Consider stripping debug symbols: strip lib/*.so"
+fi
+
+# Functional test: verify pyrfc can import inside a Lambda-like container
+echo "  Running import validation in Lambda container..."
+docker run --rm \
+    -v "${OUTPUT_DIR}/pyrfc-layer.zip:/tmp/layer.zip" \
+    public.ecr.aws/lambda/python:3.11 \
+    sh -c "cd /opt && unzip -q /tmp/layer.zip && \
+           export LD_LIBRARY_PATH=/opt/lib:\$LD_LIBRARY_PATH && \
+           python3 -c 'import pyrfc; print(f\"  ✓ pyrfc {pyrfc.__version__} imported successfully\")' 2>&1"
+
+if [ $? -eq 0 ]; then
+    echo "  ✓ Layer validation passed — pyrfc imports successfully"
+else
+    echo "  ✗ Layer validation FAILED — pyrfc cannot import"
+    echo "  Check that the SAP NW RFC SDK .so libraries are included in lib/"
+    exit 1
+fi
+
+# ── Step 6: Update Terraform variables ──
+echo ""
+echo "Step 6: Updating Terraform configuration..."
+
+TFVARS="${PROJECT_DIR}/terraform/environments/dev/terraform.tfvars"
+if [ -f "${TFVARS}" ]; then
+    # Update or add pyrfc_layer_arn
+    if grep -q "pyrfc_layer_arn" "${TFVARS}"; then
+        sed -i "s|pyrfc_layer_arn.*=.*|pyrfc_layer_arn = \"${LAYER_ARN}\"|" "${TFVARS}"
+        echo "  ✓ Updated pyrfc_layer_arn in terraform.tfvars"
+    else
+        echo "pyrfc_layer_arn = \"${LAYER_ARN}\"" >> "${TFVARS}"
+        echo "  ✓ Added pyrfc_layer_arn to terraform.tfvars"
+    fi
+else
+    mkdir -p "$(dirname ${TFVARS})"
+    echo "pyrfc_layer_arn = \"${LAYER_ARN}\"" > "${TFVARS}"
+    echo "  ✓ Created terraform.tfvars with pyrfc_layer_arn"
+fi
 echo "============================================="
 echo "  Layer ARN: ${LAYER_ARN}"
 echo "============================================="
 echo ""
 echo "NEXT STEPS:"
-echo "  1. Copy the Layer ARN above"
-echo "  2. Paste it into terraform.tfvars as pyrfc_layer_arn"
-echo "  3. Run: terraform plan && terraform apply"
-echo ""
-echo "  pyrfc_layer_arn = \"${LAYER_ARN}\""
+echo "  1. Verify the layer ARN above is correct"
+echo "  2. terraform.tfvars has been auto-updated with pyrfc_layer_arn"
+echo "  3. Run: cd terraform/environments/dev && terraform plan && terraform apply"
 echo ""
 
 # ── Cleanup ──

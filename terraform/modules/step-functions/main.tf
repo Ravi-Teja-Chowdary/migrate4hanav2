@@ -553,27 +553,102 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
         Next = "Stage12_DataLoad"
       }
 
-      # ── Stage 12: Data Loader ──
-      Stage12_DataLoad = {
+      # ── Stage 12: Data Loader — Distributed Map (Parallel Streams) ──
+      # SAP databases can be terabytes. Lambda has a 15-min timeout.
+      # We use a Distributed Map to chunk and parallelize data loads
+      # across 4 data streams: Finance, BP, Materials, Custom tables.
+      # Each stream runs its own Lambda, staying within timeout limits.
+      Stage12_DataLoad_Prepare = {
+        Type    = "Pass"
+        Comment = "Fan-out: prepare data load chunks for parallel processing"
+        Parameters = {
+          "data_streams" = [
+            { "stream_type" = "finance",       "description" = "ACDOCA via BAPI_ACC_DOCUMENT_POST" },
+            { "stream_type" = "business_partner", "description" = "BUT000 via BAPI_BUPA_CREATE_FROM_DATA" },
+            { "stream_type" = "material_documents", "description" = "MATDOC via BAPI_GOODSMVT_CREATE" },
+            { "stream_type" = "custom_tables",  "description" = "Z-tables via RFC_WRITE_TABLE" },
+          ]
+          "metadata.$"       = "$.metadata"
+          "data_migration.$" = "$.data_migration.Payload"
+        }
+        ResultPath = "$.data_load_input"
+        Next       = "Stage12_DataLoad_DistributedMap"
+      }
+
+      Stage12_DataLoad_DistributedMap = {
+        Type    = "Map"
+        Comment = "Parallel data loading across Finance/BP/Materials/Custom streams"
+        ItemsPath = "$.data_load_input.data_streams"
+        MaxConcurrency = 4
+        Parameters = {
+          "stream_type.$"    = "$$.Map.Item.Value.stream_type"
+          "description.$"    = "$$.Map.Item.Value.description"
+          "stage"            = "data-loader"
+          "metadata.$"       = "$.data_load_input.metadata"
+          "data_migration.$" = "$.data_load_input.data_migration"
+        }
+        Iterator = {
+          StartAt = "LoadDataStream"
+          States = {
+            LoadDataStream = {
+              Type     = "Task"
+              Resource = "arn:aws:states:::lambda:invoke"
+              Parameters = {
+                FunctionName = lookup(var.lambda_arns, "data-loader", "")
+                "Payload.$"  = "$"
+              }
+              TimeoutSeconds = 900
+              Retry = [{
+                ErrorEquals     = ["States.TaskFailed", "Lambda.ServiceException"]
+                IntervalSeconds = 60
+                MaxAttempts     = 2
+                BackoffRate     = 2.0
+              }]
+              End = true
+            }
+          }
+        }
+        ResultPath = "$.data_load_streams"
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          Next        = "ExecutionFailed"
+          ResultPath  = "$.error"
+        }]
+        Next = "Stage12_DataLoad_Aggregate"
+      }
+
+      # Aggregate parallel results into a single data_load result
+      Stage12_DataLoad_Aggregate = {
+        Type    = "Pass"
+        Comment = "Consolidate parallel data load results + trigger reconciliation"
+        Parameters = {
+          "Payload" = {
+            "status"       = "success"
+            "parallel"     = true
+            "streams.$"    = "$.data_load_streams"
+            "metadata.$"   = "$.data_load_input.metadata"
+          }
+        }
+        ResultPath = "$.data_load"
+        Next       = "Stage12A_Reconciliation"
+      }
+
+      # ── Stage 12A: Penny-Perfect Financial Reconciliation ──
+      Stage12A_Reconciliation = {
         Type     = "Task"
-        Comment  = "Load transformed data into S/4HANA (ACDOCA, BUT000, MATDOC)"
+        Comment  = "Post-load reconciliation: compare ECC GL balances with S/4HANA ACDOCA"
         Resource = "arn:aws:states:::lambda:invoke"
         Parameters = {
           FunctionName = lookup(var.lambda_arns, "data-loader", "")
           Payload = {
-            "stage"            = "data-loader"
+            "stage"            = "reconciliation"
             "metadata.$"       = "$.metadata"
             "data_migration.$" = "$.data_migration.Payload"
+            "data_load.$"      = "$.data_load.Payload"
           }
         }
-        ResultPath     = "$.data_load"
-        TimeoutSeconds = 7200
-        Retry = [{
-          ErrorEquals     = ["States.TaskFailed"]
-          IntervalSeconds = 120
-          MaxAttempts     = 1
-          BackoffRate     = 2.0
-        }]
+        ResultPath     = "$.reconciliation"
+        TimeoutSeconds = 1800
         Catch = [{
           ErrorEquals = ["States.ALL"]
           Next        = "ExecutionFailed"
