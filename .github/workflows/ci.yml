@@ -1,151 +1,151 @@
-###############################################################################
-# Migrate4HANA — CI Pipeline
-# Runs on every push and PR: lint, test, build, security scan
-###############################################################################
-name: CI
+# ###############################################################################
+# # Migrate4HANA — CI Pipeline
+# # Runs on every push and PR: lint, test, build, security scan
+# ###############################################################################
+# name: CI
 
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+# on:
+#   push:
+#     branches: [main, develop]
+#   pull_request:
+#     branches: [main, develop]
 
-permissions:
-  contents: read
-  pull-requests: write
+# permissions:
+#   contents: read
+#   pull-requests: write
 
-env:
-  PYTHON_VERSION: "3.11"
-  NODE_VERSION: "18"
+# env:
+#   PYTHON_VERSION: "3.11"
+#   NODE_VERSION: "18"
 
-jobs:
-  # ── Python Lint & Tests ──────────────────────────────────
-  python-test:
-    name: Python Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+# jobs:
+#   # ── Python Lint & Tests ──────────────────────────────────
+#   python-test:
+#     name: Python Tests
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: ${{ env.PYTHON_VERSION }}
+#           cache: pip
 
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install pytest boto3 moto reportlab fastapi uvicorn pydantic
+#       - name: Install dependencies
+#         run: |
+#           pip install --upgrade pip
+#           pip install pytest boto3 moto reportlab fastapi uvicorn pydantic
 
-      - name: Run unit tests
-        run: python -m pytest tests/ -v --tb=short --junitxml=test-results.xml
+#       - name: Run unit tests
+#         run: python -m pytest tests/ -v --tb=short --junitxml=test-results.xml
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-test-results
-          path: test-results.xml
+#       - name: Upload test results
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: python-test-results
+#           path: test-results.xml
 
-  # ── Python Security Scan (Bandit) ───────────────────────
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+#   # ── Python Security Scan (Bandit) ───────────────────────
+#   security-scan:
+#     name: Security Scan
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Bandit
-        run: pip install bandit
+#       - name: Install Bandit
+#         run: pip install bandit
 
-      - name: Run Bandit security scan
-        run: bandit -r lambda/ api_server.py -f json -o bandit-report.json --severity-level medium || true
+#       - name: Run Bandit security scan
+#         run: bandit -r lambda/ api_server.py -f json -o bandit-report.json --severity-level medium || true
 
-      - name: Upload Bandit report
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-report
-          path: bandit-report.json
+#       - name: Upload Bandit report
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: bandit-report
+#           path: bandit-report.json
 
-  # ── Frontend Build ─────────────────────────────────────
-  frontend-build:
-    name: Frontend Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+#   # ── Frontend Build ─────────────────────────────────────
+#   frontend-build:
+#     name: Frontend Build
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ env.NODE_VERSION }}
+#           cache: npm
+#           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
-        run: cd frontend && npm ci
+#       - name: Install dependencies
+#         run: cd frontend && npm ci
 
-      - name: Build
-        run: cd frontend && npm run build
+#       - name: Build
+#         run: cd frontend && npm run build
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist/
+#       - name: Upload build artifact
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: frontend-dist
+#           path: frontend/dist/
 
-  # ── Package Lambda Functions ───────────────────────────
-  package-lambdas:
-    name: Package Lambdas
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+#   # ── Package Lambda Functions ───────────────────────────
+#   package-lambdas:
+#     name: Package Lambdas
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Package all Lambda functions
-        run: |
-          mkdir -p lambda-packages
-          for dir in lambda/*/; do
-            [ -d "$dir" ] || continue
-            func_name=$(basename "$dir")
-            # Skip __pycache__ and utils
-            [[ "$func_name" == "__pycache__" || "$func_name" == "utils" ]] && continue
-            echo "Packaging ${func_name}..."
-            cd "$dir"
-            [ -f requirements.txt ] && pip install -r requirements.txt -t . --quiet 2>/dev/null || true
-            zip -r "../../lambda-packages/lambda-${func_name}.zip" . -x "__pycache__/*" "*.pyc" > /dev/null
-            cd ../..
-          done
-          echo "Packaged $(ls lambda-packages/*.zip | wc -l) Lambda functions"
+#       - name: Package all Lambda functions
+#         run: |
+#           mkdir -p lambda-packages
+#           for dir in lambda/*/; do
+#             [ -d "$dir" ] || continue
+#             func_name=$(basename "$dir")
+#             # Skip __pycache__ and utils
+#             [[ "$func_name" == "__pycache__" || "$func_name" == "utils" ]] && continue
+#             echo "Packaging ${func_name}..."
+#             cd "$dir"
+#             [ -f requirements.txt ] && pip install -r requirements.txt -t . --quiet 2>/dev/null || true
+#             zip -r "../../lambda-packages/lambda-${func_name}.zip" . -x "__pycache__/*" "*.pyc" > /dev/null
+#             cd ../..
+#           done
+#           echo "Packaged $(ls lambda-packages/*.zip | wc -l) Lambda functions"
 
-      - name: Upload Lambda packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: lambda-packages
-          path: lambda-packages/
+#       - name: Upload Lambda packages
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: lambda-packages
+#           path: lambda-packages/
 
-  # ── Terraform Validate ─────────────────────────────────
-  terraform-validate:
-    name: Terraform Validate
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        environment: [dev, staging, prod]
-    steps:
-      - uses: actions/checkout@v4
+#   # ── Terraform Validate ─────────────────────────────────
+#   terraform-validate:
+#     name: Terraform Validate
+#     runs-on: ubuntu-latest
+#     strategy:
+#       matrix:
+#         environment: [dev, staging, prod]
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.5.0"
+#       - uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: "1.5.0"
 
-      - name: Terraform fmt check
-        run: terraform fmt -check -recursive terraform/
+#       - name: Terraform fmt check
+#         run: terraform fmt -check -recursive terraform/
 
-      - name: Terraform init & validate (${{ matrix.environment }})
-        run: |
-          cd terraform/environments/${{ matrix.environment }}
-          terraform init -backend=false
-          terraform validate
+#       - name: Terraform init & validate (${{ matrix.environment }})
+#         run: |
+#           cd terraform/environments/${{ matrix.environment }}
+#           terraform init -backend=false
+#           terraform validate

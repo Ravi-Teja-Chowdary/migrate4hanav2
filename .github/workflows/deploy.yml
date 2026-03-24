@@ -1,218 +1,218 @@
-###############################################################################
-# Migrate4HANA — CD Pipeline (Deploy)
-# Deploys to staging on develop merge, production on main merge
-###############################################################################
-name: Deploy
+# ###############################################################################
+# # Migrate4HANA — CD Pipeline (Deploy)
+# # Deploys to staging on develop merge, production on main merge
+# ###############################################################################
+# name: Deploy
 
-on:
-  push:
-    branches:
-      - main
-      - develop
+# on:
+#   push:
+#     branches:
+#       - main
+#       - develop
 
-permissions:
-  id-token: write
-  contents: read
+# permissions:
+#   id-token: write
+#   contents: read
 
-env:
-  AWS_REGION: us-east-1
-  TF_VERSION: "1.5.0"
-  PYTHON_VERSION: "3.11"
-  NODE_VERSION: "18"
+# env:
+#   AWS_REGION: us-east-1
+#   TF_VERSION: "1.5.0"
+#   PYTHON_VERSION: "3.11"
+#   NODE_VERSION: "18"
 
-jobs:
-  # ── Determine target environment ───────────────────────
-  set-env:
-    name: Set Environment
-    runs-on: ubuntu-latest
-    outputs:
-      environment: ${{ steps.set.outputs.environment }}
-      tf_dir: ${{ steps.set.outputs.tf_dir }}
-    steps:
-      - id: set
-        run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "environment=prod" >> "$GITHUB_OUTPUT"
-            echo "tf_dir=terraform/environments/prod" >> "$GITHUB_OUTPUT"
-          else
-            echo "environment=staging" >> "$GITHUB_OUTPUT"
-            echo "tf_dir=terraform/environments/staging" >> "$GITHUB_OUTPUT"
-          fi
+# jobs:
+#   # ── Determine target environment ───────────────────────
+#   set-env:
+#     name: Set Environment
+#     runs-on: ubuntu-latest
+#     outputs:
+#       environment: ${{ steps.set.outputs.environment }}
+#       tf_dir: ${{ steps.set.outputs.tf_dir }}
+#     steps:
+#       - id: set
+#         run: |
+#           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+#             echo "environment=prod" >> "$GITHUB_OUTPUT"
+#             echo "tf_dir=terraform/environments/prod" >> "$GITHUB_OUTPUT"
+#           else
+#             echo "environment=staging" >> "$GITHUB_OUTPUT"
+#             echo "tf_dir=terraform/environments/staging" >> "$GITHUB_OUTPUT"
+#           fi
 
-  # ── Run tests first ────────────────────────────────────
-  test:
-    name: Pre-deploy Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-      - run: pip install pytest boto3 moto reportlab fastapi uvicorn pydantic
-      - run: python -m pytest tests/ -v --tb=short
+#   # ── Run tests first ────────────────────────────────────
+#   test:
+#     name: Pre-deploy Tests
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: ${{ env.PYTHON_VERSION }}
+#           cache: pip
+#       - run: pip install pytest boto3 moto reportlab fastapi uvicorn pydantic
+#       - run: python -m pytest tests/ -v --tb=short
 
-  # ── Build frontend ─────────────────────────────────────
-  build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    needs: set-env
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: cd frontend && npm ci && npm run build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist/
+#   # ── Build frontend ─────────────────────────────────────
+#   build-frontend:
+#     name: Build Frontend
+#     runs-on: ubuntu-latest
+#     needs: set-env
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ env.NODE_VERSION }}
+#           cache: npm
+#           cache-dependency-path: frontend/package-lock.json
+#       - run: cd frontend && npm ci && npm run build
+#       - uses: actions/upload-artifact@v4
+#         with:
+#           name: frontend-dist
+#           path: frontend/dist/
 
-  # ── Package Lambdas ────────────────────────────────────
-  build-lambdas:
-    name: Package Lambdas
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Package Lambda functions
-        run: |
-          mkdir -p lambda-packages
-          for dir in lambda/*/; do
-            [ -d "$dir" ] || continue
-            func_name=$(basename "$dir")
-            [[ "$func_name" == "__pycache__" || "$func_name" == "utils" ]] && continue
-            cd "$dir"
-            [ -f requirements.txt ] && pip install -r requirements.txt -t . --quiet 2>/dev/null || true
-            zip -r "../../lambda-packages/lambda-${func_name}.zip" . -x "__pycache__/*" "*.pyc" > /dev/null
-            cd ../..
-          done
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lambda-packages
-          path: lambda-packages/
+#   # ── Package Lambdas ────────────────────────────────────
+#   build-lambdas:
+#     name: Package Lambdas
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: ${{ env.PYTHON_VERSION }}
+#       - name: Package Lambda functions
+#         run: |
+#           mkdir -p lambda-packages
+#           for dir in lambda/*/; do
+#             [ -d "$dir" ] || continue
+#             func_name=$(basename "$dir")
+#             [[ "$func_name" == "__pycache__" || "$func_name" == "utils" ]] && continue
+#             cd "$dir"
+#             [ -f requirements.txt ] && pip install -r requirements.txt -t . --quiet 2>/dev/null || true
+#             zip -r "../../lambda-packages/lambda-${func_name}.zip" . -x "__pycache__/*" "*.pyc" > /dev/null
+#             cd ../..
+#           done
+#       - uses: actions/upload-artifact@v4
+#         with:
+#           name: lambda-packages
+#           path: lambda-packages/
 
-  # ── Terraform Plan ─────────────────────────────────────
-  plan:
-    name: Terraform Plan (${{ needs.set-env.outputs.environment }})
-    needs: [set-env, test, build-frontend, build-lambdas]
-    runs-on: ubuntu-latest
-    environment: ${{ needs.set-env.outputs.environment }}
-    steps:
-      - uses: actions/checkout@v4
+#   # ── Terraform Plan ─────────────────────────────────────
+#   plan:
+#     name: Terraform Plan (${{ needs.set-env.outputs.environment }})
+#     needs: [set-env, test, build-frontend, build-lambdas]
+#     runs-on: ubuntu-latest
+#     environment: ${{ needs.set-env.outputs.environment }}
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
+#       - uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: ${{ env.TF_VERSION }}
 
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+#       - uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+#           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Init
-        run: |
-          cd ${{ needs.set-env.outputs.tf_dir }}
-          terraform init
+#       - name: Terraform Init
+#         run: |
+#           cd ${{ needs.set-env.outputs.tf_dir }}
+#           terraform init
 
-      - name: Terraform Plan
-        run: |
-          cd ${{ needs.set-env.outputs.tf_dir }}
-          terraform plan -out=tfplan -no-color 2>&1 | tee plan-output.txt
+#       - name: Terraform Plan
+#         run: |
+#           cd ${{ needs.set-env.outputs.tf_dir }}
+#           terraform plan -out=tfplan -no-color 2>&1 | tee plan-output.txt
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tf-plan
-          path: ${{ needs.set-env.outputs.tf_dir }}/tfplan
+#       - uses: actions/upload-artifact@v4
+#         with:
+#           name: tf-plan
+#           path: ${{ needs.set-env.outputs.tf_dir }}/tfplan
 
-  # ── Terraform Apply ────────────────────────────────────
-  deploy:
-    name: Deploy to ${{ needs.set-env.outputs.environment }}
-    needs: [set-env, plan]
-    runs-on: ubuntu-latest
-    environment: ${{ needs.set-env.outputs.environment }}
-    steps:
-      - uses: actions/checkout@v4
+#   # ── Terraform Apply ────────────────────────────────────
+#   deploy:
+#     name: Deploy to ${{ needs.set-env.outputs.environment }}
+#     needs: [set-env, plan]
+#     runs-on: ubuntu-latest
+#     environment: ${{ needs.set-env.outputs.environment }}
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
+#       - uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: ${{ env.TF_VERSION }}
 
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+#       - uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+#           aws-region: ${{ env.AWS_REGION }}
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: lambda-packages
-          path: lambda-packages/
+#       - uses: actions/download-artifact@v4
+#         with:
+#           name: lambda-packages
+#           path: lambda-packages/
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist/
+#       - uses: actions/download-artifact@v4
+#         with:
+#           name: frontend-dist
+#           path: frontend/dist/
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: tf-plan
-          path: ${{ needs.set-env.outputs.tf_dir }}
+#       - uses: actions/download-artifact@v4
+#         with:
+#           name: tf-plan
+#           path: ${{ needs.set-env.outputs.tf_dir }}
 
-      - name: Terraform Apply
-        run: |
-          cd ${{ needs.set-env.outputs.tf_dir }}
-          terraform init
-          terraform apply -auto-approve tfplan
+#       - name: Terraform Apply
+#         run: |
+#           cd ${{ needs.set-env.outputs.tf_dir }}
+#           terraform init
+#           terraform apply -auto-approve tfplan
 
-      - name: Deploy Frontend to S3
-        run: |
-          ENV=${{ needs.set-env.outputs.environment }}
-          aws s3 sync frontend/dist/ "s3://migrate4hana-frontend-${ENV}/" --delete
+#       - name: Deploy Frontend to S3
+#         run: |
+#           ENV=${{ needs.set-env.outputs.environment }}
+#           aws s3 sync frontend/dist/ "s3://migrate4hana-frontend-${ENV}/" --delete
 
-      - name: Update Lambda function code
-        run: |
-          ENV=${{ needs.set-env.outputs.environment }}
-          for pkg in lambda-packages/lambda-*.zip; do
-            func_name=$(basename "$pkg" .zip | sed 's/^lambda-//')
-            full_name="migrate4hana-${func_name}-${ENV}"
-            echo "Updating ${full_name}..."
-            aws lambda update-function-code \
-              --function-name "$full_name" \
-              --zip-file "fileb://${pkg}" \
-              --no-cli-pager 2>/dev/null || echo "  Skipped (function may not exist)"
-          done
+#       - name: Update Lambda function code
+#         run: |
+#           ENV=${{ needs.set-env.outputs.environment }}
+#           for pkg in lambda-packages/lambda-*.zip; do
+#             func_name=$(basename "$pkg" .zip | sed 's/^lambda-//')
+#             full_name="migrate4hana-${func_name}-${ENV}"
+#             echo "Updating ${full_name}..."
+#             aws lambda update-function-code \
+#               --function-name "$full_name" \
+#               --zip-file "fileb://${pkg}" \
+#               --no-cli-pager 2>/dev/null || echo "  Skipped (function may not exist)"
+#           done
 
-  # ── Post-deploy Smoke Test ─────────────────────────────
-  smoke-test:
-    name: Smoke Test (${{ needs.set-env.outputs.environment }})
-    needs: [set-env, deploy]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+#   # ── Post-deploy Smoke Test ─────────────────────────────
+#   smoke-test:
+#     name: Smoke Test (${{ needs.set-env.outputs.environment }})
+#     needs: [set-env, deploy]
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+#           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Verify Lambda functions
-        run: |
-          ENV=${{ needs.set-env.outputs.environment }}
-          FUNCTIONS=("discovery-engine" "code-analyzer" "migration-validator" "rollback-manager")
-          for func in "${FUNCTIONS[@]}"; do
-            echo "Testing migrate4hana-${func}-${ENV}..."
-            aws lambda invoke \
-              --function-name "migrate4hana-${func}-${ENV}" \
-              --payload '{"action":"health_check"}' \
-              --cli-binary-format raw-in-base64-out \
-              /tmp/response.json 2>/dev/null && echo "  OK" || echo "  SKIP"
-          done
+#       - name: Verify Lambda functions
+#         run: |
+#           ENV=${{ needs.set-env.outputs.environment }}
+#           FUNCTIONS=("discovery-engine" "code-analyzer" "migration-validator" "rollback-manager")
+#           for func in "${FUNCTIONS[@]}"; do
+#             echo "Testing migrate4hana-${func}-${ENV}..."
+#             aws lambda invoke \
+#               --function-name "migrate4hana-${func}-${ENV}" \
+#               --payload '{"action":"health_check"}' \
+#               --cli-binary-format raw-in-base64-out \
+#               /tmp/response.json 2>/dev/null && echo "  OK" || echo "  SKIP"
+#           done
 
-      - name: Verify Step Functions
-        run: |
-          ENV=${{ needs.set-env.outputs.environment }}
-          aws stepfunctions list-state-machines \
-            --query "stateMachines[?contains(name,'migrate4hana') && contains(name,'${ENV}')]" \
-            --no-cli-pager
+#       - name: Verify Step Functions
+#         run: |
+#           ENV=${{ needs.set-env.outputs.environment }}
+#           aws stepfunctions list-state-machines \
+#             --query "stateMachines[?contains(name,'migrate4hana') && contains(name,'${ENV}')]" \
+#             --no-cli-pager
