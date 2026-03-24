@@ -89,10 +89,10 @@ Unlike manual migration approaches that take 2-4 years, **Migrate4HANA compresse
 |  SUPPORT         |  * rollback-manager    * data-hygiene (BP dedup)               |
 |  LAMBDAS         |  * process-miner       * test-generator (DITL)                 |
 |                  |                                                                |
-|  TERRAFORM       |  MODULES (11)                                                  |
+|  TERRAFORM       |  MODULES (13)                                                  |
 |                  |  vpc - lambda - step-functions - s3-staging - cloudwatch        |
 |                  |  dms - dynamodb - vpc-endpoints - airgapped-llm                |
-|                  |  entity-resolution - websocket-telemetry                       |
+|                  |  entity-resolution - websocket-telemetry - waf - audit         |
 |                  |                                                                |
 |                  VPN / Direct Connect                                             |
 |  -------------------------------------------------------------------------        |
@@ -228,7 +228,7 @@ Migrate4HANA does not bypass or replace any SAP tool. It orchestrates them, auto
 |--------|-------|
 | Pipeline Stages | 17 across 5 SAP Activate phases |
 | Lambda Functions | 21 |
-| Terraform Modules | 11 |
+| Terraform Modules | 13 |
 | Automated Validation Checks | 85 |
 | AST Transform Rules | 160 (AST-001 → AST-160) |
 | Table Transformations | 249 ECC → S/4HANA mappings |
@@ -248,6 +248,11 @@ Migrate4HANA does not bypass or replace any SAP tool. It orchestrates them, auto
 
 ```
 migrate4hana/
++-- .github/
+|   +-- workflows/
+|       +-- ci.yml                  # CI: test, scan, build, validate
+|       +-- deploy.yml              # CD: staging/prod deploy with OIDC
+|
 +-- frontend/                       # React web UI
 |   +-- src/
 |   |   +-- App.jsx                 # Main app with routing
@@ -301,10 +306,14 @@ migrate4hana/
 |       +-- rule_router.py          # DynamoDB rule routing
 |
 +-- mock-ecc/                        # Mock SAP ECC data generator
-+-- tests/                           # Unit & integration tests
++-- tests/                           # Unit, integration & load tests
+|   +-- load_test.py                 # Locust load testing (2 user profiles)
 |
-+-- terraform/                       # Infrastructure as Code (11 modules)
-|   +-- environments/dev/            # Dev environment config
++-- terraform/                       # Infrastructure as Code (13 modules)
+|   +-- environments/
+|   |   +-- dev/                     # Dev environment config
+|   |   +-- staging/                 # Staging (10.20/16, 2 AZ, WAF+Audit)
+|   |   +-- prod/                    # Production (10.30/16, 3 AZ, WAF+Audit)
 |   +-- modules/
 |       +-- vpc/                     # VPC with private subnets
 |       +-- lambda/                  # Lambda function deployment
@@ -317,6 +326,8 @@ migrate4hana/
 |       +-- airgapped-llm/          # Air-gapped GPU LLM instance
 |       +-- entity-resolution/      # AWS Entity Resolution for BP dedup
 |       +-- websocket-telemetry/    # API Gateway WebSocket for real-time logs
+|       +-- waf/                    # WAFv2: rate limiting, OWASP, SQLi, IP reputation
+|       +-- audit/                  # CloudTrail + S3 WORM (7-year) + compliance metrics
 |
 +-- scripts/                         # deploy.sh, setup-pyrfc.sh
 +-- run_local_pipeline.py            # Local 17-stage test runner
@@ -364,7 +375,7 @@ terraform init && terraform apply
 cd ../../../scripts && ./deploy.sh
 ```
 
-### Infrastructure Modules (11 Terraform Modules)
+### Infrastructure Modules (13 Terraform Modules)
 
 | Module | Description |
 |--------|-------------|
@@ -379,6 +390,8 @@ cd ../../../scripts && ./deploy.sh
 | `airgapped-llm` | Isolated GPU EC2 instance for local LLM (g5.2xlarge) |
 | `entity-resolution` | AWS Entity Resolution for ML-powered BP deduplication |
 | `websocket-telemetry` | API Gateway WebSocket for real-time log streaming |
+| `waf` | WAFv2 Web ACL: rate limiting, OWASP Core Rules, SQLi, IP reputation |
+| `audit` | CloudTrail + S3 WORM (7-year retention) + compliance metric alarms |
 
 ### Environment Variables
 
@@ -476,6 +489,17 @@ All 21 Lambda handlers have real SAP RFC/BAPI implementations with graceful mock
 
 For step-by-step AWS deployment instructions, security hardening, CI/CD setup, and production gap closure, see **[PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md)**.
 
+### Infrastructure Highlights (v4.0)
+
+| Capability | Implementation |
+|------------|----------------|
+| **CI/CD** | GitHub Actions CI (`ci.yml`) + CD (`deploy.yml`) with OIDC federation |
+| **Environments** | Dev, Staging (10.20/16), Production (10.30/16, 3 AZ) |
+| **WAF** | WAFv2 with rate limiting, OWASP Core Rules, SQLi, IP reputation |
+| **Audit & Compliance** | CloudTrail + S3 WORM (7-year) + metric alarms (SOX/GxP ready) |
+| **DR & Backup** | S3 cross-region replication, DynamoDB PITR, documented RTO/RPO |
+| **Load Testing** | Locust suite (`tests/load_test.py`) with 2 user profiles, CI integration |
+
 ### Component Readiness
 
 | Component | Status | Score | Notes |
@@ -501,7 +525,7 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **PDF Report Generator** | Ready | 90% | Professional 11-section branded report with ReportLab |
 | **React Frontend** | Ready | 85% | 6 pages, 5-phase pipeline view, real-time telemetry, scorecard visualization |
 | **API Server** | Ready | 90% | JWT + API key authentication, rate limiting, structured endpoints |
-| **Terraform (11 modules)** | Ready | 92% | VPC, Lambda, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM |
+| **Terraform (13 modules)** | Ready | 92% | VPC, Lambda, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM, WAF, Audit |
 | **Test Suite** | Ready | 90% | 46 tests: stages, rule router, ST03N analyzer, DITL generator, rollback manager, config applier, error handling |
 | **Mock Data Generator** | Excellent | 92% | Realistic Indian manufacturer, 1,247 programs, 226 IDoc profiles, 80 ABAP test templates, intentional ABAP bugs |
 
