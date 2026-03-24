@@ -64,3 +64,5 @@ entity-resolution-output/
 .env
 .env.local
 .env.production
+
+.github/
