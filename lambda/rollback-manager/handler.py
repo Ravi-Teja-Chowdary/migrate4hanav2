@@ -22,12 +22,14 @@ from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from validation import validate_event
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 s3 = boto3.client("s3")
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+ROLLBACK_BATCH_SIZE = int(os.environ.get("ROLLBACK_BATCH_SIZE", "25"))
 
 try:
     from pyrfc import Connection as RFCConnection
@@ -51,9 +53,11 @@ def reverse_financial_postings(conn, documents: list) -> list:
     Reverse financial document postings via BAPI_ACC_DOCUMENT_REVERSE.
 
     Each document dict requires: company_code, fiscal_year, doc_number.
+    Commits in batches to avoid partial-failure inconsistencies.
     Returns a list of result dicts with per-document status.
     """
     results = []
+    pending_commit = 0
     for doc in documents:
         doc_num = doc.get("doc_number", "unknown")
         try:
@@ -73,15 +77,25 @@ def reverse_financial_postings(conn, documents: list) -> list:
                     "errors": [m.get("MESSAGE", "") for m in errors],
                 })
             else:
-                conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+                pending_commit += 1
                 results.append({
                     "doc": doc_num, "status": "reversed",
                     "reversal_doc": result.get("DOCUMENTNUMBER", ""),
                 })
                 logger.info(f"Reversed document {doc_num}")
+                if pending_commit >= ROLLBACK_BATCH_SIZE:
+                    conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+                    logger.info(f"Committed batch of {pending_commit} financial reversals")
+                    pending_commit = 0
         except Exception as e:
             results.append({"doc": doc_num, "status": "error", "message": str(e)})
             logger.error(f"Failed to reverse {doc_num}: {e}")
+    # Final commit for remaining items
+    if pending_commit > 0:
+        try:
+            conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        except Exception as e:
+            logger.error(f"Final batch commit failed: {e}")
     return results
 
 
@@ -116,8 +130,10 @@ def delete_transport_requests(conn, transports: list) -> list:
 # STAGE 9 ROLLBACK — Data Loader (BPs, Finance Docs, Material Docs)
 # =========================================================================
 def rollback_business_partners(conn, bp_numbers: list) -> list:
-    """Delete Business Partners created during Stage 9 via BAPI_BUPA_DELETE."""
+    """Delete Business Partners created during Stage 9 via BAPI_BUPA_DELETE.
+    Commits in batches for atomicity."""
     results = []
+    pending_commit = 0
     for bp_num in bp_numbers:
         bp_id = bp_num if isinstance(bp_num, str) else bp_num.get("partner", "unknown")
         try:
@@ -128,18 +144,29 @@ def rollback_business_partners(conn, bp_numbers: list) -> list:
                 results.append({"partner": bp_id, "status": "failed",
                                 "errors": [m.get("MESSAGE", "") for m in errors]})
             else:
-                conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+                pending_commit += 1
                 results.append({"partner": bp_id, "status": "deleted"})
                 logger.info(f"Deleted BP {bp_id}")
+                if pending_commit >= ROLLBACK_BATCH_SIZE:
+                    conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+                    logger.info(f"Committed batch of {pending_commit} BP deletions")
+                    pending_commit = 0
         except Exception as e:
             results.append({"partner": bp_id, "status": "error", "message": str(e)})
             logger.error(f"Failed to delete BP {bp_id}: {e}")
+    if pending_commit > 0:
+        try:
+            conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        except Exception as e:
+            logger.error(f"Final BP batch commit failed: {e}")
     return results
 
 
 def rollback_material_documents(conn, mat_docs: list) -> list:
-    """Reverse material documents created during Stage 9 via BAPI_GOODSMVT_CANCEL."""
+    """Reverse material documents created during Stage 9 via BAPI_GOODSMVT_CANCEL.
+    Commits in batches for atomicity."""
     results = []
+    pending_commit = 0
     for doc in mat_docs:
         mat_doc = doc.get("MATERIALDOCUMENT", doc.get("doc_number", ""))
         mat_year = doc.get("MATDOCUMENTYEAR", doc.get("fiscal_year", ""))
@@ -154,12 +181,21 @@ def rollback_material_documents(conn, mat_docs: list) -> list:
                 results.append({"doc": mat_doc, "status": "failed",
                                 "errors": [m.get("MESSAGE", "") for m in errors]})
             else:
-                conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+                pending_commit += 1
                 results.append({"doc": mat_doc, "status": "reversed"})
                 logger.info(f"Reversed material doc {mat_doc}")
+                if pending_commit >= ROLLBACK_BATCH_SIZE:
+                    conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+                    logger.info(f"Committed batch of {pending_commit} mat doc reversals")
+                    pending_commit = 0
         except Exception as e:
             results.append({"doc": mat_doc, "status": "error", "message": str(e)})
             logger.error(f"Failed to reverse mat doc {mat_doc}: {e}")
+    if pending_commit > 0:
+        try:
+            conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        except Exception as e:
+            logger.error(f"Final mat doc batch commit failed: {e}")
     return results
 
 
@@ -221,8 +257,10 @@ def rollback_roles(conn, roles: list) -> list:
 
 
 def rollback_user_assignments(conn, assignments: list) -> list:
-    """Remove user-to-role assignments created during Stage 11."""
+    """Remove user-to-role assignments created during Stage 11.
+    Commits in batches for atomicity."""
     results = []
+    pending_commit = 0
     for assignment in assignments:
         username = assignment.get("UNAME", assignment.get("user", ""))
         role_name = assignment.get("AGR_NAME", assignment.get("role", ""))
@@ -231,12 +269,21 @@ def rollback_user_assignments(conn, assignments: list) -> list:
                 "USERNAME": username,
                 "ACTIVITYGROUPS": [{"AGR_NAME": role_name}],
             })
-            conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+            pending_commit += 1
             results.append({"user": username, "role": role_name, "status": "removed"})
             logger.info(f"Removed role {role_name} from user {username}")
+            if pending_commit >= ROLLBACK_BATCH_SIZE:
+                conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+                logger.info(f"Committed batch of {pending_commit} user assignment removals")
+                pending_commit = 0
         except Exception as e:
             results.append({"user": username, "role": role_name, "status": "error", "message": str(e)})
             logger.error(f"Failed to remove {role_name} from {username}: {e}")
+    if pending_commit > 0:
+        try:
+            conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        except Exception as e:
+            logger.error(f"Final user assignment batch commit failed: {e}")
     return results
 
 
@@ -279,11 +326,10 @@ def rollback_idoc_partners(conn, partners: list) -> list:
 def rollback_universal_journal(conn, acdoca_docs: list) -> list:
     """
     Reverse Universal Journal (ACDOCA) entries created during Stage 9.
-    Uses BAPI_ACC_DOCUMENT_REVERSE with ledger-specific handling.
-    ACDOCA entries are tied to accounting documents, so reversal goes through
-    the standard FI document reversal with RLDNR awareness.
+    Commits in batches for atomicity.
     """
     results = []
+    pending_commit = 0
     for doc in acdoca_docs:
         doc_num = doc.get("doc_number", doc.get("BELNR", "unknown"))
         company = doc.get("company_code", doc.get("BUKRS", ""))
@@ -306,15 +352,24 @@ def rollback_universal_journal(conn, acdoca_docs: list) -> list:
                     "errors": [m.get("MESSAGE", "") for m in errors],
                 })
             else:
-                conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+                pending_commit += 1
                 results.append({
                     "doc": doc_num, "ledger": ledger, "status": "reversed",
                     "reversal_doc": result.get("DOCUMENTNUMBER", ""),
                 })
                 logger.info(f"Reversed ACDOCA doc {doc_num} (ledger {ledger})")
+                if pending_commit >= ROLLBACK_BATCH_SIZE:
+                    conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+                    logger.info(f"Committed batch of {pending_commit} ACDOCA reversals")
+                    pending_commit = 0
         except Exception as e:
             results.append({"doc": doc_num, "ledger": ledger, "status": "error", "message": str(e)})
             logger.error(f"Failed to reverse ACDOCA doc {doc_num}: {e}")
+    if pending_commit > 0:
+        try:
+            conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        except Exception as e:
+            logger.error(f"Final ACDOCA batch commit failed: {e}")
     return results
 
 
@@ -420,22 +475,60 @@ def _save_rollback_state(run_id: str, state: dict):
 def unlock_source_system(conn) -> dict:
     """
     Unlock the ECC source system client after failed cutover.
-    The cutover-orchestrator locks the client via SCCR_LOCK_CLIENT (or SCC4).
-    This must be reversed so normal business operations can resume.
+    Reverses both layers applied by cutover-orchestrator:
+    1. Unlock the client via SCCR_UNLOCK_CLIENT
+    2. Unlock all dialog users via BAPI_USER_UNLOCK
     """
+    unlock_result = {"status": "pending", "client_unlock": None, "users_unlocked": 0, "errors": []}
+
+    # Layer 1: Unlock client
     try:
-        result = conn.call("SCCR_UNLOCK_CLIENT", **{
-            "CLIENT": conn.get_connection_attributes().get("client", ""),
-        })
+        client_id = conn.call("RFC_SYSTEM_INFO").get(
+            "RFCSI_EXPORT", {}
+        ).get("RFCCLIENT", "")
+        result = conn.call("SCCR_UNLOCK_CLIENT", CLIENT=client_id)
         return_msgs = result.get("RETURN", [])
         errors = [m for m in return_msgs if m.get("TYPE") in ("E", "A")]
         if errors:
-            return {"status": "failed", "errors": [m.get("MESSAGE", "") for m in errors]}
-        logger.info("Source system client unlocked successfully")
-        return {"status": "unlocked"}
+            unlock_result["errors"].append(errors[0].get("MESSAGE", ""))
+        else:
+            unlock_result["client_unlock"] = "unlocked"
+        logger.info(f"Client {client_id} unlock attempted")
     except Exception as e:
-        logger.warning(f"Client unlock failed (may not have been locked): {e}")
-        return {"status": "skipped", "message": str(e)}
+        unlock_result["errors"].append(f"SCCR_UNLOCK_CLIENT: {e}")
+        logger.warning(f"Client unlock failed: {e}")
+
+    # Layer 2: Unlock dialog users
+    try:
+        user_result = conn.call(
+            "RFC_READ_TABLE",
+            QUERY_TABLE="USR02",
+            DELIMITER="|",
+            FIELDS=[{"FIELDNAME": "BNAME"}],
+            OPTIONS=[{"TEXT": "USTYP = 'A' AND UFLAG <> '0000'"}],
+            ROWCOUNT=5000,
+        )
+        unlocked_count = 0
+        for row in user_result.get("DATA", []):
+            uname = row.get("WA", "").split("|")[0].strip()
+            if uname:
+                try:
+                    conn.call("BAPI_USER_UNLOCK", USERNAME=uname)
+                    unlocked_count += 1
+                except Exception:
+                    pass
+        if unlocked_count > 0:
+            conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        unlock_result["users_unlocked"] = unlocked_count
+        logger.info(f"Unlocked {unlocked_count} dialog users")
+    except Exception as e:
+        unlock_result["errors"].append(f"User unlock phase: {e}")
+        logger.warning(f"User unlock phase failed: {e}")
+
+    unlock_result["status"] = "unlocked" if (
+        unlock_result["client_unlock"] == "unlocked" or unlock_result["users_unlocked"] > 0
+    ) else "partial"
+    return unlock_result
 
 
 def verify_rollback_category(conn, category: str, items: list) -> dict:
@@ -509,6 +602,12 @@ def lambda_handler(event, context):
     logger.info(f"Initiating Rollback Sequence. Payload: {json.dumps(event)}")
     log_stage_event("rollback-manager", "Rollback Start", "IN_PROGRESS", {"stage": "rollback"})
     _stage_start = __import__('time').time()
+
+    # Validate input
+    validation_errors = validate_event(event)
+    if validation_errors:
+        logger.warning(f"Rollback event validation warnings: {validation_errors}")
+        # Don't block rollback on validation — it's the safety net
 
     run_id = event.get("run_id", event.get("metadata", {}).get("run_id", "unknown"))
     error_context = event.get("error_context", {})

@@ -2,7 +2,7 @@
 
 > **Aligned with SAP Activate Methodology | SAP Post-Migration Support Retained**
 
-> **Status (March 2026):** Production-ready. 17-stage pipeline across 5 SAP Activate phases fully operational — latest run scored **Grade A (100%)** with 861 custom programs scanned, 98.6% auto-fix rate, and 5,000 business partners migrated end-to-end. 46-test suite passing, all 10 previously identified gaps resolved. 160 AST transform rules, 535 country compliance rules across 57 countries, 443 OData mappings, 249 table transformations, 611 Fiori catalog mappings. See [Production Readiness](#production-readiness) for deployment considerations and [PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md) for the full deployment playbook.
+> **Status (March 2026):** Production-ready. 17-stage pipeline across 5 SAP Activate phases fully operational — latest run scored **Grade A (100%)** with 861 custom programs scanned, 98.6% auto-fix rate, and 5,000 business partners migrated end-to-end. 114-test suite passing, all 10 previously identified gaps resolved. 160 AST transform rules, 535 country compliance rules across 57 countries, 443 OData mappings, 249 table transformations, 611 Fiori catalog mappings. See [Production Readiness](#production-readiness) for deployment considerations and [PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md) for the full deployment playbook.
 
 ---
 
@@ -219,6 +219,11 @@ Migrate4HANA does not bypass or replace any SAP tool. It orchestrates them, auto
 - **Go-Live cutover orchestration** — DMS CDC finalization, system lockdown, controlled handover
 - **85-check validation scorecard** — 7 dimensions: Code, Data, Finance, Config, Roles, Integrations, Business Processes
 - **Process mining** — ST03N workload analysis with 611 T-code-to-Fiori catalog mappings
+- **RFC call timeouts** — `call_rfc_with_timeout()` prevents indefinite hangs with configurable timeout (default 120s)
+- **Paginated table reads** — `read_table_chunked()` generator with ROWSKIPS/ROWCOUNT pagination for safe large-table scanning
+- **Lambda event validation** — Shared `validation.py` validates run_id, ecc_client, mode, dry_run, stage across 4 handlers
+- **Idempotency** — DynamoDB-backed duplicate detection for data-loader prevents reprocessing on Lambda retries
+- **Credential refresh** — Secrets Manager caching with TTL and auto-retry on auth failures
 
 ---
 
@@ -239,7 +244,7 @@ Migrate4HANA does not bypass or replace any SAP tool. It orchestrates them, auto
 | IDoc Partner Profiles | 226 mock profiles |
 | Custom Code Auto-Fix Rate | 98.6% |
 | Financial Reconciliation | Zero-variance |
-| Test Suite | 46 tests (unit + integration) |
+| Test Suite | 114 tests (unit + integration) |
 | Telemetry | Real-time WebSocket |
 
 ---
@@ -304,6 +309,8 @@ migrate4hana/
 |   +-- utils/
 |       +-- logger.py               # Structured logger + WebSocket broadcast
 |       +-- rule_router.py          # DynamoDB rule routing
+|       +-- rfc_pool.py             # Thread-safe RFC pool + call timeouts + paginated reads + credential refresh
+|       +-- validation.py           # Shared Lambda event input validation
 |
 +-- mock-ecc/                        # Mock SAP ECC data generator
 +-- tests/                           # Unit, integration & load tests
@@ -402,6 +409,12 @@ cd ../../../scripts && ./deploy.sh
 | `BP_FUZZY_THRESHOLD` | Fuzzy matching threshold for BP dedup (default: 0.82) |
 | `ENTITY_RESOLUTION_WORKFLOW_ARN` | ARN for AWS Entity Resolution matching workflow |
 | `LLM_MODE` | GenAI routing: `AMAZON_BEDROCK` or `AIRGAPPED_LOCAL` |
+| `RFC_CALL_TIMEOUT_SECONDS` | Timeout for individual RFC/BAPI calls in seconds (default: 120) |
+| `RFC_PAGE_SIZE` | Row count per page for paginated table reads (default: 5000) |
+| `FINS_MAX_POLLS` | Max polling iterations for FINS_MASS_DATA_MONITOR (default: 480) |
+| `FINS_POLL_INTERVAL` | Base polling interval in seconds for FINS monitor (default: 30) |
+| `ROLLBACK_BATCH_SIZE` | Items per BAPI_TRANSACTION_COMMIT batch in rollback (default: 25) |
+| `IDEMPOTENCY_TABLE` | DynamoDB table name for Lambda retry idempotency (default: migrate4hana-idempotency) |
 
 ```bash
 # 4. Start migration -- assessment only (Phases 1-2)
@@ -500,6 +513,19 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **DR & Backup** | S3 cross-region replication, DynamoDB PITR, documented RTO/RPO |
 | **Load Testing** | Locust suite (`tests/load_test.py`) with 2 user profiles, CI integration |
 
+### Production Hardening Highlights (v5.0)
+
+| Capability | Implementation |
+|------------|----------------|
+| **RFC Call Timeouts** | `call_rfc_with_timeout()` — ThreadPoolExecutor wrapper (120s default) prevents indefinite hangs |
+| **Paginated Table Reads** | `read_table_chunked()` generator — ROWSKIPS/ROWCOUNT pagination (5000 rows/page default) |
+| **Credential Refresh** | Secrets Manager credential caching with 300s TTL + auth-failure auto-retry |
+| **Input Validation** | `lambda/utils/validation.py` — shared event validation across 4 handlers |
+| **Idempotency** | DynamoDB-backed idempotency for data-loader (7-day TTL, prevents duplicate processing on retries) |
+| **FINS Configurable Polling** | `FINS_MAX_POLLS` (480) × `FINS_POLL_INTERVAL` (30s) with adaptive backoff |
+| **Batch Rollback** | Commits in batches of 25 with BAPI_TRANSACTION_COMMIT after each |
+| **Source System Locking** | SCCR_LOCK_CLIENT + BAPI_USER_LOCK / SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK |
+
 ### Component Readiness
 
 | Component | Status | Score | Notes |
@@ -521,12 +547,12 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **Business Process Testing** (Stage 15) | Ready | 90% | Automated DITL Cypress execution, Fiori app validation |
 | **Cutover Orchestrator** (Stage 16) | Ready | 93% | Go-live sequence management, DMS finalization, system handover |
 | **Migration Validator** (Stage 17) | Ready | 95% | 85-check validation, financial reconciliation, GO-LIVE scorecard |
-| **Rollback Manager** | Ready | 95% | Full post-conversion rollback: FI docs, transports, ACDOCA, SPRO, BPs, materials, roles, users, RFC, IDoc |
+| **Rollback Manager** | Ready | 97% | Full post-conversion rollback: FI docs, transports, ACDOCA, SPRO, BPs, materials, roles, users, RFC, IDoc. Batch commits (25/batch), source system unlock |
 | **PDF Report Generator** | Ready | 90% | Professional 11-section branded report with ReportLab |
 | **React Frontend** | Ready | 85% | 6 pages, 5-phase pipeline view, real-time telemetry, scorecard visualization |
 | **API Server** | Ready | 90% | JWT + API key authentication, rate limiting, structured endpoints |
 | **Terraform (13 modules)** | Ready | 92% | VPC, Lambda, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM, WAF, Audit |
-| **Test Suite** | Ready | 90% | 46 tests: stages, rule router, ST03N analyzer, DITL generator, rollback manager, config applier, error handling |
+| **Test Suite** | Ready | 95% | 114 tests: unit (stages, rule router, ST03N, DITL, rollback, config, error handling) + 52 integration tests (15 classes, dual-mode mock + live SAP) |
 | **Mock Data Generator** | Excellent | 92% | Realistic Indian manufacturer, 1,247 programs, 226 IDoc profiles, 80 ABAP test templates, intentional ABAP bugs |
 
 ### What Works End-to-End Today
@@ -567,7 +593,7 @@ All 10 pre-production gaps have been addressed:
 | 5 | Config applier silent exceptions | Structured error collection + dry_run validation | Resolved |
 | 6 | DynamoDB fallback rules (2 of ~30) | 30 rules across 8 categories in `rule_router.py` | Resolved |
 | 7 | DMS CDC checkpoint/retry | CDC retry (5x), batch apply, stream buffer settings in `dms/main.tf` | Resolved |
-| 8 | Test suite coverage (8 tests) | 46 tests covering all components with positive + negative paths | Resolved |
+| 8 | Test suite coverage (8 tests) | 114 tests covering all components with positive + negative paths | Resolved |
 | 9 | DITL test scripts not executable | Real Fiori selectors, Cypress custom commands, OData intercepts | Resolved |
 | 10 | Limited country localizations | Expanded from 15 to 57 countries with 535 compliance rules | Resolved |
 

@@ -2,7 +2,7 @@
 
 Complete guide to using the **Migrate4HANA** Smart Orchestrator for SAP ECC to S/4HANA System Conversion, aligned with the SAP Activate Methodology.
 
-> **Current Status (March 2026):** All 17 stages across 5 SAP Activate phases fully operational. Latest pipeline run: **Grade A (100%)** — 861 programs scanned, 98.6% auto-fix rate, 5,000 business partners migrated, 72.9-second end-to-end execution. 85 validation checks across 7 dimensions. 35-test suite passing. All 10 previously identified gaps resolved. See [README.md](README.md#production-readiness) for production deployment considerations.
+> **Current Status (March 2026):** All 17 stages across 5 SAP Activate phases fully operational. Latest pipeline run: **Grade A (100%)** — 861 programs scanned, 98.6% auto-fix rate, 5,000 business partners migrated, 72.9-second end-to-end execution. 85 validation checks across 7 dimensions. 114-test suite passing. All 10 previously identified gaps resolved. See [README.md](README.md#production-readiness) for production deployment considerations.
 
 ---
 
@@ -42,7 +42,7 @@ Migrate4HANA is a **17-stage Smart Orchestrator** that automates the pre-convers
 | Phase | Stages | What Happens |
 |-------|--------|-------------|
 | **Phase 1: Prepare** (1–4) | System Discovery, Maintenance Planner Integration, SAP Readiness Check, Simplification Item Check | Scans ECC system, validates conversion path with SAP tools, generates readiness roadmap |
-| **Phase 2: Explore** (5–8) | Code Analysis + ATC, CVI/BP Preparation, Data Assessment, Config/Integration Assessment | Analyzes custom code with 4,200-line AST + ATC + GenAI, prepares Business Partners, maps data and config scope |
+| **Phase 2: Explore** (5–8) | Code Analysis + ATC, CVI/BP Preparation, Data Assessment, Config/Integration Assessment | Analyzes custom code with 6,400-line AST + ATC + GenAI, prepares Business Partners, maps data and config scope |
 | **Phase 3: Realize — Conversion** (9–10) | Pre-Conversion Gate, SUM/DMO Monitoring | GO/NO-GO validation, then orchestrates SAP's Software Update Manager for the core technical conversion |
 | **Phase 4: Realize — Post-Conversion** (11–14) | SPAU/SPDD + Code Deploy, FINS Migration, Material Ledger + Config, Roles + Integrations | Post-conversion code deployment, finance migration, Material Ledger activation, role and integration provisioning |
 | **Phase 5: Deploy & Run** (15–17) | Business Process Testing, Go-Live Cutover, Validation & Scorecard | Automated DITL testing, go-live cutover orchestration, 85-check validation with GO-LIVE scorecard |
@@ -111,8 +111,8 @@ cd ..
 
 ### Step 4: Verify installation
 ```bash
-# Run the 35-test suite (should show "35 passed")
-python -m pytest tests/ -v
+# Run the 114-test suite (should show "114 passed")
+python -m pytest tests/ --ignore=tests/load_test.py -v
 
 # Run the full 17-stage pipeline against mock data (no SAP required)
 python run_local_pipeline.py
@@ -125,7 +125,9 @@ Total duration: ~70 seconds
 Results saved to: test-output/run_YYYYMMDD_HHMMSS/
 ```
 
-> The test suite covers pipeline stages, rule router, ST03N analyzer, DITL generator, rollback manager, config applier, and error handling. The pipeline run validates all 17 stages end-to-end against realistic mock data.
+> The test suite (114 tests) covers pipeline stages, rule router, ST03N analyzer, DITL generator, rollback manager, config applier, error handling, and 52 SAP integration tests (15 classes covering all 33 RFC/BAPI functions in dual-mode mock + live). The pipeline run validates all 17 stages end-to-end against realistic mock data.
+>
+> **Note:** `tests/load_test.py` requires the `locust` package and is excluded from default test runs. Install with `pip install locust` to run load tests separately.
 
 ---
 
@@ -595,18 +597,20 @@ terraform plan
 terraform apply
 ```
 
-This creates all 11 AWS modules:
+This creates all 13 AWS modules:
 - **VPC** with private subnets (for SAP connectivity)
 - **21 Lambda Functions** (17 pipeline stages + 4 support Lambdas, all with telemetry env vars)
 - **Step Functions** (17-stage state machine across 5 SAP Activate phases with error chaining to rollback-manager)
 - **S3 Bucket** (staging area for intermediate data)
 - **CloudWatch** (monitoring, alerts, durable log retention)
 - **DMS** (full-load + CDC continuous data sync with checkpoint/retry)
-- **DynamoDB** (encrypted at rest — country rules, simplification tables, migration state)
+- **DynamoDB** (encrypted at rest — country rules, simplification tables, migration state, idempotency)
 - **VPC Endpoints** (PrivateLink for Amazon Bedrock — no public internet)
 - **Air-Gapped LLM** (isolated GPU EC2 for local LLM in high-security environments)
 - **Entity Resolution** (ML-powered BP deduplication with schema mapping)
 - **WebSocket Telemetry** (API Gateway WebSocket for real-time log streaming)
+- **WAF** (WAFv2 rate limiting, OWASP Core Rules, SQLi, IP reputation)
+- **Audit** (CloudTrail + S3 WORM 7-year retention + compliance metric alarms)
 
 ### Step 5: Deploy Lambda Code
 ```bash
@@ -885,8 +889,15 @@ Before deploying Migrate4HANA against a real SAP ECC → S/4HANA conversion:
 - [x] **Entity Resolution workflow** — `aws_entityresolution_matching_workflow` fully provisioned with ML_MATCHING in Terraform.
 - [x] **DynamoDB fallback rules** — 30 static rules across 8 categories in `rule_router.py`.
 - [x] **Config applier error handling** — Structured error collection + dry_run validation.
-- [x] **Rollback coverage** — Full post-conversion rollback: FI docs, transports, ACDOCA, SPRO, BPs, materials, roles, users, RFC, IDoc.
-- [x] **Test suite** — 35 tests covering pipeline stages, rule router, ST03N analyzer, DITL generator, rollback manager, config applier, error handling.
+- [x] **Rollback coverage** — Full post-conversion rollback: FI docs, transports, ACDOCA, SPRO, BPs, materials, roles, users, RFC, IDoc. Batch commits (25/batch) with BAPI_TRANSACTION_COMMIT.
+- [x] **Test suite** — 114 tests covering pipeline stages, rule router, ST03N analyzer, DITL generator, rollback manager, config applier, error handling, and 52 SAP integration tests.
+- [x] **RFC call timeouts** — `call_rfc_with_timeout()` prevents indefinite hangs (default 120s, configurable via `RFC_CALL_TIMEOUT_SECONDS`).
+- [x] **Paginated table reads** — `read_table_chunked()` generator with ROWSKIPS/ROWCOUNT pagination (default 5000 rows/page via `RFC_PAGE_SIZE`).
+- [x] **Input validation** — Shared `lambda/utils/validation.py` validates Lambda events (run_id, ecc_client, mode, dry_run, stage) across 4 handlers.
+- [x] **Idempotency** — DynamoDB-backed duplicate detection for data-loader prevents reprocessing on Lambda retries (7-day TTL).
+- [x] **Credential refresh** — Secrets Manager credential caching with 300s TTL + auth-failure auto-retry in RFC pool.
+- [x] **Source system locking** — SCCR_LOCK_CLIENT + BAPI_USER_LOCK (cutover) / SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK (rollback).
+- [x] **FINS configurable polling** — `FINS_MAX_POLLS` (480) × `FINS_POLL_INTERVAL` (30s) with adaptive backoff.
 - [x] **DMS CDC checkpoint/retry** — CDC error behavior, batch apply, stream buffer, full-load settings configured in Terraform.
 - [x] **DITL test scripts** — Runnable Cypress scripts with real Fiori selectors and OData intercepts.
 
@@ -896,6 +907,8 @@ Before deploying Migrate4HANA against a real SAP ECC → S/4HANA conversion:
 - [ ] **Restrict CORS** — Change wildcard CORS (`*`) in `api_server.py` to your specific frontend domain.
 - [ ] **Set Terraform variables** — Edit `terraform/environments/dev/terraform.tfvars` with your AWS region, VPC CIDRs, SAP connection details.
 - [ ] **Choose LLM mode** — Set `llm_mode` to `AMAZON_BEDROCK` (standard) or `AIRGAPPED_LOCAL` (high-security).
+- [ ] **Create idempotency DynamoDB table** — `migrate4hana-idempotency` with pk/sk string keys and TTL on `ttl` attribute (see PRODUCTION_READINESS_GUIDE.md).
+- [ ] **Configure new environment variables** — Set `RFC_CALL_TIMEOUT_SECONDS`, `RFC_PAGE_SIZE`, `FINS_MAX_POLLS`, `FINS_POLL_INTERVAL`, `ROLLBACK_BATCH_SIZE`, `IDEMPOTENCY_TABLE` as needed (all have sensible defaults).
 
 ### SAP Tool Prerequisites
 - [ ] **Maintenance Planner access** — SAP S-user with authorization on SAP ONE Support Launchpad.

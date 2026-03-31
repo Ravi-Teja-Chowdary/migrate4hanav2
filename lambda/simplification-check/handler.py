@@ -45,6 +45,12 @@ secrets = boto3.client("secretsmanager")
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
 SECRETS_ARN = os.environ.get("SECRETS_ARN", "")
 
+# Import extended simplification rule databases
+from rules_deprecated_tables import DEPRECATED_TABLE_RULES
+from rules_deprecated_fms import DEPRECATED_FM_RULES
+from rules_transactions_fiori_cds import DEPRECATED_TX_RULES, FIORI_REPLACEMENT_RULES, CDS_VIEW_RULES
+from rules_localization_processes import LOCALIZATION_RULES, PROCESS_LEVEL_RULES
+
 
 # =============================================================================
 # SIMPLIFICATION ITEMS DATABASE
@@ -481,7 +487,2668 @@ SIMPLIFICATION_ITEMS = {
         "responsible_team": "Basis",
         "sap_note": "2378962",
     },
+
+    # =========================================================================
+    # FINANCE — EXTENDED SIMPLIFICATION ITEMS
+    # =========================================================================
+    "FIN_007": {
+        "title": "Parallel Accounting / Ledger Group Changes",
+        "category": "Finance",
+        "description": (
+            "Leading and non-leading ledger logic is redesigned. Parallel "
+            "accounting must use ledger groups; BSEG-LDGRP mapping changes."
+        ),
+        "severity": "RED",
+        "affected_tables": ["ACDOCA", "FAGLFLEXT", "T881", "FINSC_LEDGER"],
+        "affected_transactions": ["FAGL_FC_TRANSLATION", "FAGL_FC_VAL"],
+        "remediation": "Review ledger group configuration. Define extension ledgers if needed.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2340450",
+    },
+    "FIN_008": {
+        "title": "Cash Management Redesign",
+        "category": "Finance",
+        "description": (
+            "Classic Cash Management (FF7A/FF7B) is replaced by SAP Cash Management "
+            "powered by HANA. Bank Account Management centralizes all bank master data."
+        ),
+        "severity": "RED",
+        "affected_tables": ["FDES", "FDSR", "FDSB", "BSEG"],
+        "affected_transactions": ["FF7A", "FF7B", "FF63", "FF67"],
+        "remediation": (
+            "Migrate to SAP Cash Management (new). Configure Bank Account Management "
+            "via FIBAM. Review cash position and liquidity forecast reports."
+        ),
+        "effort_hours": 60,
+        "responsible_team": "Functional",
+        "sap_note": "2290622",
+    },
+    "FIN_009": {
+        "title": "Profitability Analysis — CO-PA Redesign",
+        "category": "Finance",
+        "description": (
+            "Costing-based CO-PA (tables CE1xxxx/CE2xxxx/CE3xxxx/CE4xxxx) is replaced "
+            "by account-based CO-PA using ACDOCA. Margin Analysis is the new approach."
+        ),
+        "severity": "RED",
+        "affected_tables": ["CE1XXXX", "CE2XXXX", "CE3XXXX", "CE4XXXX", "ACDOCA"],
+        "affected_transactions": ["KE21N", "KE24", "KE30", "COPA"],
+        "remediation": (
+            "Migrate from costing-based to account-based CO-PA. Map operating concern "
+            "characteristics to Universal Journal fields. Use Margin Analysis."
+        ),
+        "effort_hours": 80,
+        "responsible_team": "Functional",
+        "sap_note": "2252821",
+    },
+    "FIN_010": {
+        "title": "Treasury and Risk Management Changes",
+        "category": "Finance",
+        "description": (
+            "Treasury transaction tables and flows are simplified in S/4HANA. "
+            "Classic TRM position management is replaced by SAP Treasury and Risk Management."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VTBFHA", "VTBFHAPO", "VTBBEWE", "VTIDERI"],
+        "affected_transactions": ["TBB1", "FWZZ", "JBRX"],
+        "remediation": "Review treasury positions and instrument types. Validate market risk analyzer config.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2305855",
+    },
+    "FIN_011": {
+        "title": "Financial Closing Cockpit Changes",
+        "category": "Finance",
+        "description": (
+            "Financial closing tasks are centralized in SAP S/4HANA Financial Closing Cockpit. "
+            "Classic FIKP-based closing is replaced."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["FIKP", "T001B"],
+        "affected_transactions": ["FCHI", "OB52"],
+        "remediation": "Configure Financial Closing Cockpit (CCLM). Migrate closing task lists.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2381106",
+    },
+    "FIN_012": {
+        "title": "Intercompany Reconciliation Simplification",
+        "category": "Finance",
+        "description": (
+            "Intercompany reconciliation uses real-time matching via ACDOCA. "
+            "Classic ICR processes must be adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ACDOCA", "BSEG", "GLFUNCT"],
+        "affected_transactions": ["FBICR1", "FBICR2"],
+        "remediation": "Configure ICR process in S/4HANA using real-time reconciliation.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2312384",
+    },
+    "FIN_013": {
+        "title": "Central Finance Integration",
+        "category": "Finance",
+        "description": (
+            "Central Finance (CFIN) receives financial postings from multiple "
+            "source systems via AIF/SLT. Custom posting logic must be validated."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ACDOCA", "CFIN_ACCHD", "CFIN_ACCIT"],
+        "affected_transactions": ["CFINIT", "CFIN_MAPPING"],
+        "remediation": "Review CFIN mapping rules and initial load procedures if CFIN is in scope.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2416970",
+    },
+    "FIN_014": {
+        "title": "Real Estate Management to RE-FX Migration",
+        "category": "Finance",
+        "description": (
+            "Classic RE (Real Estate) module is replaced by Flexible Real Estate "
+            "Management (RE-FX). All real estate contracts must be migrated."
+        ),
+        "severity": "RED",
+        "affected_tables": ["VIOB01", "VICN01", "VIBPOBJREL"],
+        "affected_transactions": ["RECN", "RECACONT", "RERAGREE"],
+        "remediation": "Migrate real estate contracts to RE-FX using SAP migration tools.",
+        "effort_hours": 60,
+        "responsible_team": "Functional",
+        "sap_note": "2267685",
+    },
+    "FIN_015": {
+        "title": "Travel Management Removal",
+        "category": "Finance",
+        "description": (
+            "SAP Travel Management (FI-TV) is removed from S/4HANA 2020+. "
+            "Must migrate to SAP Concur or third-party solution."
+        ),
+        "severity": "RED",
+        "affected_tables": ["PTRV_HEAD", "PTRV_PERIO", "PTRV_SCOS"],
+        "affected_transactions": ["PR01", "PR02", "PR03", "PR05"],
+        "remediation": "Migrate travel management to SAP Concur. Export historical data before conversion.",
+        "effort_hours": 80,
+        "responsible_team": "Functional",
+        "sap_note": "2596498",
+    },
+    "FIN_016": {
+        "title": "Extended Withholding Tax Migration",
+        "category": "Finance",
+        "description": (
+            "Classic withholding tax must be migrated to Extended Withholding Tax (EWT). "
+            "Tax codes and certificate numbering must be adapted."
+        ),
+        "severity": "RED",
+        "affected_tables": ["WITH_ITEM", "BSEG", "LFA1"],
+        "affected_transactions": ["S_P00_07000134", "J1INQEFILE"],
+        "remediation": "Activate Extended Withholding Tax. Migrate tax type/code configuration.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2297085",
+    },
+    "FIN_017": {
+        "title": "Budget Control System (BCS) Changes",
+        "category": "Finance",
+        "description": (
+            "Budgeting in S/4HANA uses SAP BPC Embedded or Universal Allocation. "
+            "Classic CO-OM budget processes adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["COBRB", "COBR", "KBUD"],
+        "affected_transactions": ["KO22", "KBUD", "KBPP"],
+        "remediation": "Review budget/availability control settings. Consider BPC Embedded for planning.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2286772",
+    },
+    "FIN_018": {
+        "title": "Funds Management Simplification (Public Sector)",
+        "category": "Finance",
+        "description": (
+            "Funds Management (FM) tables and commitment posting logic are changed. "
+            "Budget consumption goes through ACDOCA."
+        ),
+        "severity": "RED",
+        "affected_tables": ["FMIT", "FMIFI", "FMIOI", "FMFCTR"],
+        "affected_transactions": ["FMBB", "FMEDDW", "FM5I"],
+        "remediation": "Migrate FM budget data to new structures. Review availability control config.",
+        "effort_hours": 60,
+        "responsible_team": "Functional",
+        "sap_note": "2296990",
+    },
+    "FIN_019": {
+        "title": "Grant Management Simplification",
+        "category": "Finance",
+        "description": (
+            "Grant Management (GM) posting logic aligned with ACDOCA. "
+            "Sponsored program tracking changed."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["GMGRANT", "GMFUND", "GMFUNDUSAGE"],
+        "affected_transactions": ["GMGRANTD", "GMFUNDD"],
+        "remediation": "Review grants master data and posting rules against S/4HANA model.",
+        "effort_hours": 32,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "FIN_020": {
+        "title": "Payment Factory and In-House Cash Changes",
+        "category": "Finance",
+        "description": (
+            "Payment methods and payment medium formats adapted for S/4HANA. "
+            "Classic payment programs (RFFOUS_T, RFFOAVIS) may need replacement."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["REGUH", "REGUP", "PAYR"],
+        "affected_transactions": ["F110", "OBPM1", "FBPM"],
+        "remediation": "Test automatic payment programs. Review payment medium formats for compliance.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "FIN_021": {
+        "title": "Dunning Procedure Simplification",
+        "category": "Finance",
+        "description": (
+            "Dunning uses new output management framework. Classic dunning "
+            "notices may need adaptation to BRF+ output."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["MHNK", "KNB5", "LFB5"],
+        "affected_transactions": ["F150", "FBMP"],
+        "remediation": "Test dunning process end-to-end. Adapt dunning forms to new output framework.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2296888",
+    },
+    "FIN_022": {
+        "title": "Bank Communication Management Changes",
+        "category": "Finance",
+        "description": (
+            "Bank communication management (BCM) replaces classic DMEE-based "
+            "payment file generation for some formats."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["FCLM_BAM_BKACCT", "PAYR"],
+        "affected_transactions": ["FBPM", "FI_BCM_BSM"],
+        "remediation": "Review bank statement and payment file processing. Adopt BCM where applicable.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2305855",
+    },
+    "FIN_023": {
+        "title": "Lease Accounting (IFRS 16) Integration",
+        "category": "Finance",
+        "description": (
+            "S/4HANA includes SAP Contract and Lease Management for IFRS 16 compliance. "
+            "Classic lease processing must be adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["RECACONT", "RERAITEM"],
+        "affected_transactions": ["FAR_CLM", "RECN"],
+        "remediation": "Evaluate IFRS 16 / ASC 842 compliance requirements. Configure lease accounting.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2493827",
+    },
+    "FIN_024": {
+        "title": "Overhead Cost Controlling Changes",
+        "category": "Finance",
+        "description": (
+            "Internal orders and cost center accounting are simplified. "
+            "Settlement rules and allocation cycles change posting behavior to ACDOCA."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["COBK", "COEP", "COSP", "COSS"],
+        "affected_transactions": ["KSU1", "KSU2", "KO88"],
+        "remediation": "Test settlement and allocation cycle results versus ECC. Validate report reconciliation.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2295744",
+    },
+    "FIN_025": {
+        "title": "Product Costing Simplification",
+        "category": "Finance",
+        "description": (
+            "Cost component structure and product costing use ACDOCA for postings. "
+            "Actual costing runs leverage Material Ledger as single source of truth."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["CKMLHD", "CKMLCR", "KEKO", "KEPH"],
+        "affected_transactions": ["CK11N", "CK40N", "CKMLCP"],
+        "remediation": "Validate standard cost estimates and actual costing runs. Review cost component splits.",
+        "effort_hours": 32,
+        "responsible_team": "Functional",
+        "sap_note": "2267098",
+    },
+    "FIN_026": {
+        "title": "Activity-Based Costing Simplification",
+        "category": "Finance",
+        "description": (
+            "Activity types and activity price calculation changes in S/4HANA. "
+            "Splitting rules adapted for ACDOCA."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["CSSL", "CSLA", "COEP"],
+        "affected_transactions": ["KP26", "KP27", "KSPI"],
+        "remediation": "Validate activity price planning and actual activity allocation results.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2295744",
+    },
+    "FIN_027": {
+        "title": "Profit Center Accounting Integration",
+        "category": "Finance",
+        "description": (
+            "Standalone profit center accounting tables (GLPCA, GLPCT) are eliminated. "
+            "Profit center postings stored in ACDOCA via document splitting."
+        ),
+        "severity": "RED",
+        "affected_tables": ["GLPCA", "GLPCT", "ACDOCA"],
+        "affected_transactions": ["KE5Z", "1KEJ", "8KE4"],
+        "remediation": (
+            "Activate document splitting for profit center. Migrate historical PCA data "
+            "to ACDOCA. Adapt custom PCA reports."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2272189",
+    },
+    "FIN_028": {
+        "title": "Special Purpose Ledger Elimination",
+        "category": "Finance",
+        "description": (
+            "Special Purpose Ledger (FI-SL) is eliminated. All special ledger "
+            "functionality must be handled via extension ledgers on ACDOCA."
+        ),
+        "severity": "RED",
+        "affected_tables": ["GLFLEX", "GLREF", "GLPOS"],
+        "affected_transactions": ["GCL1", "GCL2", "GA11"],
+        "remediation": "Migrate special purpose ledger data and logic to extension ledgers.",
+        "effort_hours": 48,
+        "responsible_team": "Functional",
+        "sap_note": "2272189",
+    },
+    "FIN_029": {
+        "title": "Consolidation Preparation Changes",
+        "category": "Finance",
+        "description": (
+            "Group reporting in S/4HANA replaces classic EC-CS consolidation. "
+            "Consolidation staging tables and logic change."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ECMCA", "ECMCT"],
+        "affected_transactions": ["CX20", "CX2P"],
+        "remediation": "Evaluate SAP Group Reporting. Plan migration from EC-CS if applicable.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2485697",
+    },
+    "FIN_030": {
+        "title": "Joint Venture Accounting Changes",
+        "category": "Finance",
+        "description": (
+            "JVA postings go through ACDOCA. Venture/equity group assignment and "
+            "netting logic simplified."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["GJVA_ACCHD", "GJVA_ACCIT"],
+        "affected_transactions": ["GJVA1", "GJVA2"],
+        "remediation": "Review JVA configuration and posting rules for ACDOCA compatibility.",
+        "effort_hours": 32,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+
+    # =========================================================================
+    # SALES & DISTRIBUTION — EXTENDED SIMPLIFICATION ITEMS
+    # =========================================================================
+    "SD_003": {
+        "title": "Rebate Processing Removal",
+        "category": "Sales",
+        "description": (
+            "Classic rebate processing (VB01-VB03) is removed. Settlement Management "
+            "or Condition Contract Settlement replaces it."
+        ),
+        "severity": "RED",
+        "affected_tables": ["VBOX", "VBOH", "VBREVK", "KONH"],
+        "affected_transactions": ["VB01", "VB02", "VB03", "VBO1", "VBO2"],
+        "remediation": (
+            "Migrate rebate agreements to Condition Contract Settlement. "
+            "Settle all open rebate accruals before conversion."
+        ),
+        "effort_hours": 60,
+        "responsible_team": "Functional",
+        "sap_note": "2267308",
+    },
+    "SD_004": {
+        "title": "Sales Document Data Model Simplification",
+        "category": "Sales",
+        "description": (
+            "Sales document flow table VBFA enhanced with additional index structures. "
+            "VBAK/VBAP field-level changes affect custom reports."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBAK", "VBAP", "VBFA", "VBEP"],
+        "affected_transactions": ["VA01", "VA02", "VA03"],
+        "remediation": "Test custom sales order programs. Review field usage in VBAK/VBAP.",
+        "effort_hours": 24,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2267287",
+    },
+    "SD_005": {
+        "title": "Billing Plan Changes",
+        "category": "Sales",
+        "description": (
+            "Billing plan logic is adapted for ACDOCA integration. "
+            "Milestone billing and periodic billing plan behavior changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["FPLA", "FPLNR", "VBRK"],
+        "affected_transactions": ["VF01", "VF04"],
+        "remediation": "Test billing plan scenarios end-to-end in S/4HANA sandbox.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2267287",
+    },
+    "SD_006": {
+        "title": "Credit/Debit Memo Simplification",
+        "category": "Sales",
+        "description": (
+            "Credit and debit memo request processing adapted to work with "
+            "UKM-based credit management and PRCD_ELEMENTS pricing."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBRK", "VBRP", "PRCD_ELEMENTS"],
+        "affected_transactions": ["VA01", "VF01"],
+        "remediation": "Test credit/debit memo flows. Verify pricing determination with PRCD_ELEMENTS.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2267308",
+    },
+    "SD_007": {
+        "title": "Returnable Packaging Processing Changes",
+        "category": "Sales",
+        "description": (
+            "Returnable transport packaging (RTP) scenarios simplified. "
+            "Automatic posting logic for empties changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBAK", "VBAP", "LIPS"],
+        "affected_transactions": ["VA01", "VL01N"],
+        "remediation": "Test returnable packaging scenarios. Review automatic empties posting.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "SD_008": {
+        "title": "Variant Configuration — IPC Mandatory for Pricing",
+        "category": "Sales",
+        "description": (
+            "Internet Pricing Configurator (IPC) becomes mandatory for variant "
+            "configuration pricing. Classic ABAP pricing engine for VC is deprecated."
+        ),
+        "severity": "RED",
+        "affected_tables": ["CUVTAB", "CUVAL", "SDCOM"],
+        "affected_transactions": ["VA01", "CU50", "CU60"],
+        "remediation": (
+            "Activate IPC for variant configuration pricing. Migrate VC pricing "
+            "dependencies and test all configurable material scenarios."
+        ),
+        "effort_hours": 60,
+        "responsible_team": "Functional",
+        "sap_note": "2307771",
+    },
+    "SD_009": {
+        "title": "Third-Party Order Processing Changes",
+        "category": "Sales",
+        "description": (
+            "Third-party processing flow is simplified. Purchase requisition "
+            "creation and goods receipt logic adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBAK", "VBAP", "EBAN"],
+        "affected_transactions": ["VA01", "ME21N"],
+        "remediation": "Test third-party order flows end-to-end including automatic PO creation.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2267287",
+    },
+    "SD_010": {
+        "title": "Intercompany Sales Simplification",
+        "category": "Sales",
+        "description": (
+            "Intercompany billing uses stock transport order–based flows. "
+            "IC pricing logic adapted for PRCD_ELEMENTS."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBRK", "VBRP", "PRCD_ELEMENTS"],
+        "affected_transactions": ["VF01", "MIRO"],
+        "remediation": "Validate intercompany billing scenarios. Check IC pricing conditions.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2267308",
+    },
+    "SD_011": {
+        "title": "Available-to-Promise (ATP) → Advanced ATP",
+        "category": "Sales",
+        "description": (
+            "Classic ATP check logic is replaced by advanced Available-to-Promise (aATP). "
+            "Product availability check configuration changes."
+        ),
+        "severity": "RED",
+        "affected_tables": ["MARD", "MARC", "VBBE", "MDBS"],
+        "affected_transactions": ["CO09", "VA01", "MD04"],
+        "remediation": (
+            "Evaluate aATP activation. If not activating aATP, validate that basic ATP "
+            "checks work correctly with MATDOC-based inventory."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2356025",
+    },
+    "SD_012": {
+        "title": "Free Goods Determination Simplification",
+        "category": "Sales",
+        "description": (
+            "Free goods determination (inclusive/exclusive) uses revised condition "
+            "technique based on PRCD_ELEMENTS."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["KONH", "KONP", "PRCD_ELEMENTS"],
+        "affected_transactions": ["VBN1", "VBN2"],
+        "remediation": "Test free goods scenarios. Verify condition records are migrated.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2267308",
+    },
+    "SD_013": {
+        "title": "Incompleteness Procedure Changes",
+        "category": "Sales",
+        "description": (
+            "New mandatory fields in sales documents require incompleteness "
+            "procedure updates. Business Partner fields added."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBUV", "TVEPZ"],
+        "affected_transactions": ["VA01", "VA02", "VUA2"],
+        "remediation": "Review and update incompleteness procedures for BP-related fields.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "SD_014": {
+        "title": "Shipping and Transportation Simplification",
+        "category": "Sales",
+        "description": (
+            "Shipment processing (VT01N) is simplified. S/4HANA direction is SAP "
+            "Transportation Management (TM). Classic LE-TRA in compatibility mode."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VTTK", "VTTP", "VTTS"],
+        "affected_transactions": ["VT01N", "VT02N", "VT70"],
+        "remediation": "Test shipment processing. Evaluate SAP TM for future integration.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2326578",
+    },
+    "SD_015": {
+        "title": "Cross-Company Sales Changes",
+        "category": "Sales",
+        "description": (
+            "Cross-company code sales and billing flows adapted for BP model "
+            "and PRCD_ELEMENTS pricing."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBAK", "VBRK", "PRCD_ELEMENTS"],
+        "affected_transactions": ["VA01", "VF01"],
+        "remediation": "Test cross-company sales scenarios with Business Partner integration.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2267287",
+    },
+    "SD_016": {
+        "title": "Sales Returns Processing Changes",
+        "category": "Sales",
+        "description": (
+            "Returns processing includes Advanced Returns Management (ARM) as "
+            "the strategic direction. Classic returns remain in compatibility mode."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBAK", "VBAP", "LIPS"],
+        "affected_transactions": ["VA01", "VL01N"],
+        "remediation": "Test returns flows. Evaluate Advanced Returns Management for new scenarios.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2582592",
+    },
+    "SD_017": {
+        "title": "Backorder Processing Changes",
+        "category": "Sales",
+        "description": (
+            "Backorder processing and rescheduling logic adapted for aATP. "
+            "Classic CO06/V_RA rescheduling changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBBE", "VBEP"],
+        "affected_transactions": ["CO06", "V_RA", "V.15"],
+        "remediation": "Test backorder processing and rescheduling scenarios.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2267287",
+    },
+
+    # =========================================================================
+    # MATERIALS MANAGEMENT / PROCUREMENT — EXTENDED
+    # =========================================================================
+    "MM_002": {
+        "title": "Invoice Verification (MIRO) Simplification",
+        "category": "Procurement",
+        "description": (
+            "Logistics invoice verification adapted for MATDOC-based GR references. "
+            "ERS (Evaluated Receipt Settlement) logic changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["RBKP", "RSEG", "EKBE"],
+        "affected_transactions": ["MIRO", "MIR7", "MRRL"],
+        "remediation": "Test invoice verification with MATDOC references. Validate ERS scenarios.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+    "MM_003": {
+        "title": "Release Strategy Changes",
+        "category": "Procurement",
+        "description": (
+            "Release strategy for purchase orders and purchase requisitions uses "
+            "enhanced workflow integration. Classic release code behavior adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["CEKKO", "CEBAN", "T16FB"],
+        "affected_transactions": ["ME28", "ME29N", "ME54N"],
+        "remediation": "Test release strategies for POs and PRs. Validate workflow integration.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "MM_004": {
+        "title": "Source Determination Simplification",
+        "category": "Procurement",
+        "description": (
+            "Source determination and quota arrangement logic simplified. "
+            "Sourcing now supports SAP Ariba integration."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["EORD", "EORDI", "EQUK"],
+        "affected_transactions": ["ME01", "ME05", "MEQ1"],
+        "remediation": "Test source determination and quota arrangements. Evaluate Ariba sourcing.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "MM_005": {
+        "title": "Contract Management Changes",
+        "category": "Procurement",
+        "description": (
+            "Purchasing contracts (ME31K/ME32K) have data model changes. "
+            "Contract release order creation adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["EKKO", "EKPO", "EKAB"],
+        "affected_transactions": ["ME31K", "ME32K", "ME33K"],
+        "remediation": "Validate contract release order scenarios. Test contract utilization tracking.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "MM_006": {
+        "title": "Scheduling Agreement Simplification",
+        "category": "Procurement",
+        "description": (
+            "Scheduling agreements with release documentation adapted. "
+            "JIT delivery schedule processing changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["EKKO", "EKPO", "EKES"],
+        "affected_transactions": ["ME31L", "ME38"],
+        "remediation": "Test scheduling agreement and JIT release schedule creation.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "MM_007": {
+        "title": "Stock Transport Order Changes",
+        "category": "Procurement",
+        "description": (
+            "Stock transport orders (STO) between plants adapted for MATDOC. "
+            "Cross-company STO with billing changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["EKKO", "EKPO", "MATDOC"],
+        "affected_transactions": ["ME27", "ME21N", "MB1B"],
+        "remediation": "Test STO scenarios with MATDOC-based goods movements.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+    "MM_008": {
+        "title": "Vendor Evaluation Simplification",
+        "category": "Procurement",
+        "description": (
+            "Vendor evaluation now references Business Partner. Classic LFA1-based "
+            "evaluation criteria adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ELIFN", "LFA1", "BUT000"],
+        "affected_transactions": ["ME61", "ME62", "ME63"],
+        "remediation": "Test vendor evaluation with BP-based vendor records.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "MM_009": {
+        "title": "Consumption-Based Planning (CBP) Changes",
+        "category": "Procurement",
+        "description": (
+            "MRP-based consumption planning adapted for MRP Live. Forecast-based "
+            "planning and reorder point procedures use new engine."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["MDKP", "MDTB", "MARC"],
+        "affected_transactions": ["MD01", "MD02", "MD04"],
+        "remediation": "Test CBP scenarios with MRP Live. Validate forecast results.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2268085",
+    },
+    "MM_010": {
+        "title": "Subcontracting Process Changes",
+        "category": "Procurement",
+        "description": (
+            "Subcontracting with component provision uses MATDOC for goods movements. "
+            "SC stock posting logic adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["EKKO", "EKPO", "MATDOC"],
+        "affected_transactions": ["ME21N", "MB1B", "ME2O"],
+        "remediation": "Test subcontracting PO creation and component provision scenarios.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+    "MM_011": {
+        "title": "Service Procurement Simplification",
+        "category": "Procurement",
+        "description": (
+            "Service entry sheets and service POs simplified. Integration with "
+            "SAP Fieldglass for external workforce."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ESLL", "ESLH", "EKKO"],
+        "affected_transactions": ["ML81N", "ME23N"],
+        "remediation": "Test service procurement scenarios. Evaluate Fieldglass integration.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "MM_012": {
+        "title": "Inventory Management Simplification (MATDOC)",
+        "category": "Procurement",
+        "description": (
+            "All goods movements stored in MATDOC. MARD/MCHB become compatibility views. "
+            "Stock overview (MMBE) uses CDS views."
+        ),
+        "severity": "RED",
+        "affected_tables": ["MARD", "MCHB", "MSLB", "MSKU", "MATDOC"],
+        "affected_transactions": ["MMBE", "MB5B", "MB52"],
+        "remediation": (
+            "Replace custom inventory reports reading MARD/MCHB with MATDOC or stock "
+            "CDS views. Test all goods movement scenarios."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2253942",
+    },
+    "MM_013": {
+        "title": "Physical Inventory Changes",
+        "category": "Procurement",
+        "description": (
+            "Physical inventory processing (MI01-MI10) adapted for MATDOC. Count "
+            "documents and difference posting flow change."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["IKPF", "ISEG", "MATDOC"],
+        "affected_transactions": ["MI01", "MI04", "MI07", "MI20"],
+        "remediation": "Test physical inventory count and posting scenarios with MATDOC.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+    "MM_014": {
+        "title": "Central Procurement Integration",
+        "category": "Procurement",
+        "description": (
+            "Central Procurement Hub receives requisitions from multiple backends. "
+            "Integration APIs and replication flows change."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["EBAN", "EKKO"],
+        "affected_transactions": ["ME51N", "ME21N"],
+        "remediation": "Configure Central Procurement replication if applicable. Test requisition routing.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2416970",
+    },
+
+    # =========================================================================
+    # PRODUCTION PLANNING (PP) — NEW CATEGORY
+    # =========================================================================
+    "PP_001": {
+        "title": "MRP Live Replacing Classic MRP",
+        "category": "Production Planning",
+        "description": (
+            "Classic MRP (MD01/MD02) is replaced by MRP Live, which runs directly "
+            "on HANA for in-memory planning. Classic MRP available in compatibility mode."
+        ),
+        "severity": "RED",
+        "affected_tables": ["MDKP", "MDTB", "MDFD", "MARC"],
+        "affected_transactions": ["MD01", "MD02", "MD04", "MDBT"],
+        "remediation": (
+            "Activate and test MRP Live. Validate planning results match classic MRP. "
+            "Custom MRP exits (BAdi MD_CHANGE_MRP) must be adapted."
+        ),
+        "effort_hours": 60,
+        "responsible_team": "Functional",
+        "sap_note": "2268085",
+    },
+    "PP_002": {
+        "title": "Demand-Driven MRP (DDMRP)",
+        "category": "Production Planning",
+        "description": (
+            "S/4HANA introduces Demand-Driven MRP (DDMRP) as a strategic planning "
+            "method. Buffer profiles and decoupling points are new concepts."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["MARC", "MDKP"],
+        "affected_transactions": ["MD01", "MD04"],
+        "remediation": "Evaluate DDMRP for applicable materials. No mandatory change for conversion.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2268085",
+    },
+    "PP_003": {
+        "title": "Production Order Data Model Changes",
+        "category": "Production Planning",
+        "description": (
+            "Production order tables (AUFK/AFKO/AFPO) have field-level changes. "
+            "Order settlement goes through ACDOCA."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["AUFK", "AFKO", "AFPO", "AFFL"],
+        "affected_transactions": ["CO01", "CO02", "CO15", "CO11N"],
+        "remediation": "Test production order lifecycle. Validate settlement and confirmation posts.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PP_004": {
+        "title": "Process Order Simplification",
+        "category": "Production Planning",
+        "description": (
+            "Process orders in process industries (PI) have adapted batch assignment "
+            "and process message handling."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["AUFK", "AFKO", "CRHD"],
+        "affected_transactions": ["COR1", "COR2", "COR6N"],
+        "remediation": "Test process order scenarios including batch determination and process messages.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PP_005": {
+        "title": "Repetitive Manufacturing Changes",
+        "category": "Production Planning",
+        "description": (
+            "Repetitive manufacturing backflush uses MATDOC. Run schedule quantities "
+            "and cost collector logic adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["SAFK", "SAUF", "MATDOC"],
+        "affected_transactions": ["MF42", "MF50", "MFBF"],
+        "remediation": "Test repetitive manufacturing backflush and cost collector settlement.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+    "PP_006": {
+        "title": "Kanban Simplification",
+        "category": "Production Planning",
+        "description": (
+            "Kanban signal-based replenishment adapted. PKPS table changes. "
+            "Integration with MRP Live for kanban calculation."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["PKPS", "PKHD"],
+        "affected_transactions": ["PK01", "PK13N", "PK21"],
+        "remediation": "Test kanban control cycles and replenishment with MRP Live.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2268085",
+    },
+    "PP_007": {
+        "title": "Capacity Planning Simplification",
+        "category": "Production Planning",
+        "description": (
+            "Capacity planning and leveling tools simplified. New HANA-based "
+            "capacity evaluation replaces some classic reports."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["KBKO", "KBED", "CRHD"],
+        "affected_transactions": ["CM01", "CM21", "CM25"],
+        "remediation": "Test capacity evaluation and leveling. Validate dispatching scenarios.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PP_008": {
+        "title": "Engineering Change Management Simplification",
+        "category": "Production Planning",
+        "description": (
+            "Engineering change management (ECM) adapted for SAP Engineering "
+            "Control Center integration. Classic AENR/AEOI changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["AENR", "AEOI", "STKO"],
+        "affected_transactions": ["CC01", "CC02", "CC04"],
+        "remediation": "Test engineering change orders and revision levels.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PP_009": {
+        "title": "Bill of Material (BOM) Changes",
+        "category": "Production Planning",
+        "description": (
+            "BOM data model (STKO/STPO) has field-level changes. BOM explosion "
+            "uses HANA-optimized access."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["STKO", "STPO", "MAST", "STAS"],
+        "affected_transactions": ["CS01", "CS02", "CS03", "CS12"],
+        "remediation": "Test BOM creation, change, and explosion. Validate where-used reports.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PP_010": {
+        "title": "Routing / Recipe Simplification",
+        "category": "Production Planning",
+        "description": (
+            "Routing tables (PLKO/PLPO) and recipe data have field changes. "
+            "Operation-level costing adapted for ACDOCA."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["PLKO", "PLPO", "PLAS"],
+        "affected_transactions": ["CA01", "CA02", "CA03"],
+        "remediation": "Test routing/recipe creation and maintenance. Validate operation costing.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PP_011": {
+        "title": "PP/DS Integration Changes",
+        "category": "Production Planning",
+        "description": (
+            "PP/DS (Production Planning/Detailed Scheduling) from APO integrated "
+            "as embedded PP/DS in S/4HANA. Classic liveCache replaced by HANA."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["MARC", "MDKP"],
+        "affected_transactions": ["/SAPAPO/RRP3", "/SAPAPO/CDPSB"],
+        "remediation": "Evaluate embedded PP/DS. Migrate planning models from APO if applicable.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2356025",
+    },
+    "PP_012": {
+        "title": "Product Lifecycle Management Integration",
+        "category": "Production Planning",
+        "description": (
+            "PLM recipe development and specification management adapted. "
+            "Integration with Engineering Control Center simplified."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["MARA", "STKO", "AENR"],
+        "affected_transactions": ["PLM_AUDITTRAIL", "RCP1"],
+        "remediation": "Review PLM processes. Test recipe and specification flows.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+
+    # =========================================================================
+    # PLANT MAINTENANCE — EXTENDED
+    # =========================================================================
+    "PM_002": {
+        "title": "Maintenance Notification Changes",
+        "category": "Plant Maintenance",
+        "description": (
+            "Maintenance notifications (IW21) data model adapted. Integration "
+            "with Fiori-based maintenance apps."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["QMEL", "QMIH", "QMFE"],
+        "affected_transactions": ["IW21", "IW22", "IW28"],
+        "remediation": "Test maintenance notification creation and workflow. Evaluate Fiori apps.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PM_003": {
+        "title": "Maintenance Order Simplification",
+        "category": "Plant Maintenance",
+        "description": (
+            "PM order settlement goes through ACDOCA. Component reservation and "
+            "goods issue adapted for MATDOC."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["AUFK", "AFIH", "AFKO", "MATDOC"],
+        "affected_transactions": ["IW31", "IW32", "IW38"],
+        "remediation": "Test PM order lifecycle including settlement and goods issue.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+    "PM_004": {
+        "title": "Maintenance Planning Round Changes",
+        "category": "Plant Maintenance",
+        "description": (
+            "Preventive maintenance plans and measuring point processing "
+            "have enhanced Fiori-based UIs and scheduling logic changes."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["MHIS", "MPLA", "IMRG"],
+        "affected_transactions": ["IP10", "IP30", "IK11"],
+        "remediation": "Test maintenance plan scheduling and call object generation.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PM_005": {
+        "title": "Asset Performance Management",
+        "category": "Plant Maintenance",
+        "description": (
+            "S/4HANA integrates Asset Performance Management via SAP Asset Strategy "
+            "and Performance Management. Predictive maintenance as strategic direction."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["EQUI", "IFLOT", "EQUZ"],
+        "affected_transactions": ["IE01", "IL01"],
+        "remediation": "Evaluate SAP APM for predictive maintenance use cases. No mandatory change.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PM_006": {
+        "title": "Linear Asset Management Changes",
+        "category": "Plant Maintenance",
+        "description": (
+            "Linear asset management for utilities and transportation has data "
+            "model enhancements in S/4HANA."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["IFLOT", "EQUI", "ILOA"],
+        "affected_transactions": ["IL01", "IE01"],
+        "remediation": "Review linear reference patterns and functional location hierarchy.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PM_007": {
+        "title": "Mobile Maintenance Simplification",
+        "category": "Plant Maintenance",
+        "description": (
+            "SAP Asset Manager replaces SAP Work Manager for mobile maintenance. "
+            "Offline-capable Fiori apps for technicians."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["AUFK", "AFIH"],
+        "affected_transactions": ["IW31", "IW41"],
+        "remediation": "Evaluate SAP Asset Manager as mobile maintenance platform.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2660610",
+    },
+
+    # =========================================================================
+    # WAREHOUSE MANAGEMENT — EXTENDED
+    # =========================================================================
+    "WM_002": {
+        "title": "Embedded EWM Activation",
+        "category": "Warehouse Management",
+        "description": (
+            "S/4HANA includes Embedded EWM as the strategic warehouse solution. "
+            "Activation replaces classic WM module."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["/SCWM/AQUA", "/SCWM/ORDIM_C", "/SCWM/LAGP"],
+        "affected_transactions": ["/SCWM/MON", "/SCWM/PRDO"],
+        "remediation": "Plan Embedded EWM activation. Define warehouse structure and process migration.",
+        "effort_hours": 80,
+        "responsible_team": "Functional",
+        "sap_note": "2326578",
+    },
+    "WM_003": {
+        "title": "Stock Room Management",
+        "category": "Warehouse Management",
+        "description": (
+            "Stock Room Management as simplified EWM profile for basic warehouse "
+            "scenarios without full EWM complexity."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["/SCWM/AQUA", "MARD"],
+        "affected_transactions": ["/SCWM/MON"],
+        "remediation": "Evaluate Stock Room Management for simple warehouse scenarios.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2326578",
+    },
+    "WM_004": {
+        "title": "Yard Management Changes",
+        "category": "Warehouse Management",
+        "description": (
+            "Yard management integrated as part of EWM in S/4HANA. Classic "
+            "yard management (LM) scenarios adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["/SCWM/YARD_MAP", "/SCWM/YARDOBJ"],
+        "affected_transactions": ["/SCWM/YRD1", "/SCWM/YRD2"],
+        "remediation": "Test yard management scenarios within EWM framework.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2326578",
+    },
+    "WM_005": {
+        "title": "Handling Unit Management Changes",
+        "category": "Warehouse Management",
+        "description": (
+            "Handling unit management adapted for MATDOC-based goods movements. "
+            "HU-managed stock processing changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VEKP", "VEPO", "MATDOC"],
+        "affected_transactions": ["HUMO", "VL02N"],
+        "remediation": "Test handling unit scenarios with MATDOC integration.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+    "WM_006": {
+        "title": "Wave Management Simplification",
+        "category": "Warehouse Management",
+        "description": (
+            "Wave management for outbound processing simplified in EWM. "
+            "Wave assignment and release logic enhanced."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["/SCWM/WAVE", "/SCWM/WAVEITM"],
+        "affected_transactions": ["/SCWM/WAVE"],
+        "remediation": "Test wave-based pick/pack/ship scenarios in EWM.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2326578",
+    },
+
+    # =========================================================================
+    # QUALITY MANAGEMENT — EXTENDED
+    # =========================================================================
+    "QM_002": {
+        "title": "Inspection Lot Processing Changes",
+        "category": "Quality Management",
+        "description": (
+            "Inspection lot creation triggered from MATDOC-based goods receipt. "
+            "Results recording UIs adapted to Fiori."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["QALS", "QAVE", "QASR", "MATDOC"],
+        "affected_transactions": ["QA01", "QA11", "QA32"],
+        "remediation": "Test inspection lot creation on goods receipt. Validate results recording.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+    "QM_003": {
+        "title": "Quality Certificate Management",
+        "category": "Quality Management",
+        "description": (
+            "Quality certificates (CoA) generation uses new output management. "
+            "Classic QCERT processing adapted."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["QCPR", "QCPRP"],
+        "affected_transactions": ["QC21", "QC32"],
+        "remediation": "Test quality certificate generation with new output framework.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2296888",
+    },
+    "QM_004": {
+        "title": "Stability Study Simplification",
+        "category": "Quality Management",
+        "description": (
+            "Stability study (QST01) processing adapted for S/4HANA. "
+            "Sample management enhanced."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["QALS", "QAST"],
+        "affected_transactions": ["QST01", "QST04"],
+        "remediation": "Test stability study scenarios in S/4HANA.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "QM_005": {
+        "title": "Quality Notification Workflow Changes",
+        "category": "Quality Management",
+        "description": (
+            "Quality notifications (QM01/QM02) integrate with SAP Fiori apps. "
+            "Workflow and task routing enhanced."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["QMEL", "QMFE", "QMSM"],
+        "affected_transactions": ["QM01", "QM02", "QM03"],
+        "remediation": "Test notification workflow routing and Fiori-based quality apps.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+
+    # =========================================================================
+    # PROJECT SYSTEMS (PS) — NEW CATEGORY
+    # =========================================================================
+    "PS_001": {
+        "title": "Project Builder Changes",
+        "category": "Project Systems",
+        "description": (
+            "Project Builder (CJ20N) field-level changes. WBS element and "
+            "network activity data model adapted for ACDOCA settlement."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["PRPS", "PROJ", "AUFK"],
+        "affected_transactions": ["CJ20N", "CJ01", "CJ02"],
+        "remediation": "Test project creation and maintenance. Validate settlement to ACDOCA.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PS_002": {
+        "title": "WBS Element Simplification",
+        "category": "Project Systems",
+        "description": (
+            "WBS element (PRPS) hierarchy and budgeting adapted. Budget availability "
+            "control uses ACDOCA-based checking."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["PRPS", "BPGE", "BPJA"],
+        "affected_transactions": ["CJ30", "CJ40", "CJ41"],
+        "remediation": "Test WBS budgeting and availability control. Validate budget/actual reports.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PS_003": {
+        "title": "Network Activity Changes",
+        "category": "Project Systems",
+        "description": (
+            "Network activities (AFVU/AFVC) have field changes. Activity costing "
+            "and scheduling adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["AFVU", "AFVC", "AFVV"],
+        "affected_transactions": ["CN21", "CN22", "CN25"],
+        "remediation": "Test network scheduling and activity element assignment.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "PS_004": {
+        "title": "Project Progress Analysis Changes",
+        "category": "Project Systems",
+        "description": (
+            "Progress analysis and earned value management adapted for ACDOCA. "
+            "Cost forecast calculation uses new engine."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["EVBS", "EVPR", "PRPS"],
+        "affected_transactions": ["CNE1", "CNE2", "CNS44"],
+        "remediation": "Test progress analysis and earned value reports against ACDOCA.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2295744",
+    },
+    "PS_005": {
+        "title": "Commercial Project Management Integration",
+        "category": "Project Systems",
+        "description": (
+            "S/4HANA offers SAP Commercial Project Management as strategic "
+            "direction for project-based services."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["PRPS", "PROJ"],
+        "affected_transactions": ["CPM_PPM", "DPR_PROJECT"],
+        "remediation": "Evaluate CPM for project-based business scenarios. No mandatory change.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2455740",
+    },
+    "PS_006": {
+        "title": "Resource-Related Billing Changes",
+        "category": "Project Systems",
+        "description": (
+            "Resource-related billing (DP91) adapted for BP-based customer "
+            "integration and PRCD_ELEMENTS pricing."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["DPAY", "PRPS", "VBRK"],
+        "affected_transactions": ["DP91", "DP90"],
+        "remediation": "Test resource-related billing with BP customer records.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "PS_007": {
+        "title": "Project Cost Planning Simplification",
+        "category": "Project Systems",
+        "description": (
+            "Easy cost planning and detailed cost planning adapted. "
+            "Costing sheet and overhead calculation use ACDOCA."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["CKIS", "KEKO", "PRPS"],
+        "affected_transactions": ["CJ40", "CJ42"],
+        "remediation": "Test project cost planning scenarios. Validate overhead calculation.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2295744",
+    },
+
+    # =========================================================================
+    # HUMAN CAPITAL MANAGEMENT (HCM) — EXTENDED
+    # =========================================================================
+    "HR_002": {
+        "title": "Payroll Processing Simplification",
+        "category": "HR",
+        "description": (
+            "Payroll runs in compatibility mode. Payroll control record and cluster "
+            "tables unchanged but long-term direction is Employee Central Payroll."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["PCL1", "PCL2", "T549Q"],
+        "affected_transactions": ["PC00_M99_RUN", "PU01"],
+        "remediation": "Test payroll in S/4HANA. Plan Employee Central Payroll migration roadmap.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2269324",
+    },
+    "HR_003": {
+        "title": "Time Management Changes",
+        "category": "HR",
+        "description": (
+            "Time evaluation (RPTIME00) runs in compatibility mode. Time recording "
+            "direction is SAP SuccessFactors Time Tracking."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["PA2001", "PA2002", "TEVEN"],
+        "affected_transactions": ["PA61", "PA71", "PT60"],
+        "remediation": "Test time evaluation results. Evaluate SuccessFactors Time Tracking.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2269324",
+    },
+    "HR_004": {
+        "title": "Personnel Administration Changes",
+        "category": "HR",
+        "description": (
+            "PA infotypes run in compatibility mode. New hire, change, and "
+            "termination processes should be tested."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["PA0000", "PA0001", "PA0002", "PA0008"],
+        "affected_transactions": ["PA20", "PA30", "PA40"],
+        "remediation": "Test personnel actions in S/4HANA. Validate infotype maintenance.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2269324",
+    },
+    "HR_005": {
+        "title": "Organizational Management Simplification",
+        "category": "HR",
+        "description": (
+            "OM infotypes (HRP1000/HRP1001) run in compatibility mode. "
+            "Org structure maintenance uses Fiori apps."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["HRP1000", "HRP1001"],
+        "affected_transactions": ["PPOME", "PPOSE"],
+        "remediation": "Test org structure maintenance. Evaluate Fiori-based org management apps.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2269324",
+    },
+    "HR_006": {
+        "title": "Employee Central Integration",
+        "category": "HR",
+        "description": (
+            "S/4HANA supports hybrid deployment with SAP SuccessFactors Employee Central "
+            "as core HR. Replication via CPI middleware."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["PA0001", "PA0002", "BUT000"],
+        "affected_transactions": ["PA30", "HRSFI_EC"],
+        "remediation": "Evaluate EC integration if SuccessFactors is in roadmap.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2269324",
+    },
+    "HR_007": {
+        "title": "Benefits Management Changes",
+        "category": "HR",
+        "description": (
+            "Benefits administration runs in compatibility mode. Strategic direction "
+            "is SAP SuccessFactors Employee Central Benefits."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["PA0167", "PA0169", "PA0171"],
+        "affected_transactions": ["HRBEN0001", "HRBEN0074"],
+        "remediation": "Test benefits enrollment and eligibility. Plan SuccessFactors migration.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2269324",
+    },
+    "HR_008": {
+        "title": "Recruitment Simplification",
+        "category": "HR",
+        "description": (
+            "Classic SAP E-Recruiting is removed from S/4HANA 2020+. "
+            "Must migrate to SAP SuccessFactors Recruiting."
+        ),
+        "severity": "RED",
+        "affected_tables": ["HRPAD_PBUSOBJ", "HRP5125"],
+        "affected_transactions": ["PB10", "PB30", "PB80"],
+        "remediation": "Migrate recruitment to SAP SuccessFactors Recruiting before conversion.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2596498",
+    },
+    "HR_009": {
+        "title": "Training and Event Management Removal",
+        "category": "HR",
+        "description": (
+            "SAP Training and Event Management (PE) is removed from S/4HANA 2020+. "
+            "Must migrate to SAP SuccessFactors Learning."
+        ),
+        "severity": "RED",
+        "affected_tables": ["HRPAD_PBUSOBJ", "HRP1000", "HRP1001"],
+        "affected_transactions": ["PSV1", "PSV2", "PV00"],
+        "remediation": "Migrate training management to SuccessFactors Learning. Export historical data.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2596498",
+    },
+    "HR_010": {
+        "title": "Manager Self-Service to Fiori Migration",
+        "category": "HR",
+        "description": (
+            "Classic MSS/ESS Web Dynpro applications replaced by Fiori apps. "
+            "Custom MSS/ESS scenarios must be adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["PA0001", "PA0002"],
+        "affected_transactions": ["HRESS", "HRMSS"],
+        "remediation": "Deploy Fiori-based MSS/ESS apps. Adapt custom self-service scenarios.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2269324",
+    },
+    "HR_011": {
+        "title": "Compensation Management Changes",
+        "category": "HR",
+        "description": (
+            "Compensation management runs in compatibility mode. Long-term direction "
+            "is SAP SuccessFactors Compensation."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["PA0008", "PA0014", "PA0015"],
+        "affected_transactions": ["PA30", "PECM_DISPLAY_BUDGETS"],
+        "remediation": "Test compensation processes in S/4HANA.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2269324",
+    },
+
+    # =========================================================================
+    # CUSTOMER SERVICE (CS) — NEW CATEGORY
+    # =========================================================================
+    "CS_001": {
+        "title": "Service Order Simplification",
+        "category": "Customer Service",
+        "description": (
+            "Service orders (IW31-type) settlement goes through ACDOCA. "
+            "Service confirmation flow adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["AUFK", "AFIH", "ILOA"],
+        "affected_transactions": ["IW31", "IW32", "IW34"],
+        "remediation": "Test service order lifecycle and settlement in S/4HANA.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "CS_002": {
+        "title": "Service Contract Changes",
+        "category": "Customer Service",
+        "description": (
+            "Service contracts adapted for Business Partner integration. "
+            "Contract-based service level tracking enhanced."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["VBAK", "VBAP", "BUT000"],
+        "affected_transactions": ["VA41", "VA42", "VA43"],
+        "remediation": "Test service contracts with BP records. Validate SLA tracking.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "CS_003": {
+        "title": "Installed Base Changes",
+        "category": "Customer Service",
+        "description": (
+            "Installed base management (IBase) enhanced in S/4HANA. "
+            "Technical objects linked to Business Partner."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["IBAP", "IBHE", "IBCP"],
+        "affected_transactions": ["IB51", "IB52", "IB53"],
+        "remediation": "Test installed base maintenance and BP linkage.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "CS_004": {
+        "title": "Warranty Management Changes",
+        "category": "Customer Service",
+        "description": (
+            "Warranty claims processing adapted for S/4HANA. Warranty counter "
+            "and coverage determination enhanced."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["BGMK", "BGML", "BGMS"],
+        "affected_transactions": ["BGMW", "IW65"],
+        "remediation": "Test warranty claim processing in S/4HANA.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "CS_005": {
+        "title": "Resource Planning for Service",
+        "category": "Customer Service",
+        "description": (
+            "Service resource planning and dispatching adapted. Integration "
+            "with SAP Field Service Management as strategic direction."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["AUFK", "AFIH"],
+        "affected_transactions": ["IW31", "IW37N"],
+        "remediation": "Evaluate SAP Field Service Management for field service scenarios.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+
+    # =========================================================================
+    # ENVIRONMENT, HEALTH & SAFETY (EHS) — NEW CATEGORY
+    # =========================================================================
+    "EHS_001": {
+        "title": "EHS Management Simplification",
+        "category": "EHS",
+        "description": (
+            "SAP EHS Management adapted for S/4HANA. Product safety, dangerous goods, "
+            "and waste management have data model changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ESTCR", "ESTML", "ESTCV"],
+        "affected_transactions": ["CG02", "CG12"],
+        "remediation": "Test EHS scenarios. Review dangerous goods and product safety master data.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "EHS_002": {
+        "title": "Incident Management Changes",
+        "category": "EHS",
+        "description": (
+            "Incident/accident management (EHSM_INC) adapted. "
+            "Integration with SAP Environment, Health, and Safety Management."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["QMEL", "QMFE"],
+        "affected_transactions": ["QM01", "EHSM_INC"],
+        "remediation": "Test incident reporting and tracking. Evaluate cloud EHS solution.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "EHS_003": {
+        "title": "Chemical Compliance Changes",
+        "category": "EHS",
+        "description": (
+            "Chemical compliance and substance volume tracking adapted. "
+            "SDS (Safety Data Sheet) generation uses new output framework."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["ESTCR", "ESTML"],
+        "affected_transactions": ["CG02", "CG50"],
+        "remediation": "Test chemical compliance workflows and SDS generation.",
+        "effort_hours": 12,
+        "responsible_team": "Functional",
+        "sap_note": "2296888",
+    },
+
+    # =========================================================================
+    # MASTER DATA — EXTENDED
+    # =========================================================================
+    "MD_002": {
+        "title": "Customer Master to Business Partner Migration",
+        "category": "Master Data",
+        "description": (
+            "All customer master transactions (XD01/XD02/VD01) replaced by BP. "
+            "Customer-specific data accessible via BP role."
+        ),
+        "severity": "RED",
+        "affected_tables": ["KNA1", "KNB1", "KNVV", "BUT000"],
+        "affected_transactions": ["XD01", "XD02", "VD01", "BP"],
+        "remediation": "Run CVI synchronization for all customers. Replace XD/VD transactions with BP.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "MD_003": {
+        "title": "Vendor Master to Business Partner Migration",
+        "category": "Master Data",
+        "description": (
+            "All vendor master transactions (XK01/XK02/MK01) replaced by BP. "
+            "Vendor-specific data accessible via BP role."
+        ),
+        "severity": "RED",
+        "affected_tables": ["LFA1", "LFB1", "LFM1", "BUT000"],
+        "affected_transactions": ["XK01", "XK02", "MK01", "BP"],
+        "remediation": "Run CVI synchronization for all vendors. Replace XK/MK transactions with BP.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "MD_004": {
+        "title": "Contact Person to BP Migration",
+        "category": "Master Data",
+        "description": (
+            "Contact persons (KNVK) must be migrated to Business Partner contact "
+            "persons. Relationship types defined in CVI."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["KNVK", "BUT051", "BUT000"],
+        "affected_transactions": ["XD01", "BP"],
+        "remediation": "Migrate contact persons via CVI. Validate BP relationships.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "MD_005": {
+        "title": "Material Master Field-Level Changes",
+        "category": "Master Data",
+        "description": (
+            "Material master has new fields (e.g., product group, segmentation) and "
+            "removed fields. Material type controls adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["MARA", "MARC", "MARD", "MVKE"],
+        "affected_transactions": ["MM01", "MM02", "MM03"],
+        "remediation": "Review custom material master programs for field changes. Test material creation.",
+        "effort_hours": 20,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2253942",
+    },
+    "MD_006": {
+        "title": "Bank Master Data to Business Partner",
+        "category": "Master Data",
+        "description": (
+            "Bank master data (BNKA) integration with Business Partner enhanced. "
+            "Bank Account Management centralizes bank data."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["BNKA", "BUT000", "FCLM_BAM_BKACCT"],
+        "affected_transactions": ["FI01", "FI02", "FIBAM"],
+        "remediation": "Review bank master data. Test Bank Account Management configuration.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2290622",
+    },
+    "MD_007": {
+        "title": "Product Master Hierarchy Changes",
+        "category": "Master Data",
+        "description": (
+            "Product hierarchy and product group structures adapted. "
+            "Classification system (CT04) field-level changes."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["MARA", "T179", "T179T"],
+        "affected_transactions": ["V/76", "MM01"],
+        "remediation": "Review product hierarchy assignments and classification.",
+        "effort_hours": 8,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+
+    # =========================================================================
+    # INDUSTRY-SPECIFIC SOLUTIONS
+    # =========================================================================
+    # --- Retail ---
+    "IND_RET_001": {
+        "title": "Retail: Article Master Changes",
+        "category": "Industry - Retail",
+        "description": (
+            "SAP Retail article master adapted for S/4HANA. Article category "
+            "and site-specific data model changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["MARA", "WRF_MATSITE_DATA", "MARC"],
+        "affected_transactions": ["MM41", "MM42", "MM43"],
+        "remediation": "Test article creation and maintenance. Validate site-specific data.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "IND_RET_002": {
+        "title": "Retail: POS Integration Changes",
+        "category": "Industry - Retail",
+        "description": (
+            "POS inbound/outbound processing adapted. SAP Customer Activity Repository "
+            "(CAR) as strategic direction for POS data."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["WPOJ", "WP01"],
+        "affected_transactions": ["WPMA", "WPV1"],
+        "remediation": "Test POS integration. Evaluate SAP CAR for POS data processing.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "IND_RET_003": {
+        "title": "Retail: Merchandise Distribution Changes",
+        "category": "Industry - Retail",
+        "description": (
+            "Allocation table and merchandise distribution adapted for MATDOC. "
+            "Cross-docking scenarios change."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["WMAL", "WMBP", "MATDOC"],
+        "affected_transactions": ["WMB1", "WMB2"],
+        "remediation": "Test merchandise distribution scenarios with MATDOC.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+    # --- Utilities ---
+    "IND_UTL_001": {
+        "title": "Utilities: IS-U Device Management Changes",
+        "category": "Industry - Utilities",
+        "description": (
+            "IS-U device management and meter reading adapted for S/4HANA Utilities. "
+            "Strategic direction is SAP S/4HANA Utilities."
+        ),
+        "severity": "RED",
+        "affected_tables": ["EGERH", "EGERS", "ETTIFN"],
+        "affected_transactions": ["EG30", "EG31", "EG33"],
+        "remediation": "Test device management and meter reading processes. Plan S/4HANA Utilities adoption.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2452005",
+    },
+    "IND_UTL_002": {
+        "title": "Utilities: Billing and Invoicing Changes",
+        "category": "Industry - Utilities",
+        "description": (
+            "IS-U billing (ERCH/DBERCHZ) adapted. Move-in/move-out processes "
+            "and billing simulation changed."
+        ),
+        "severity": "RED",
+        "affected_tables": ["ERCH", "DBERCHZ", "ERDK"],
+        "affected_transactions": ["EA00", "EA10", "EC50"],
+        "remediation": "Test billing runs and invoicing. Validate rate determination and tax calculation.",
+        "effort_hours": 60,
+        "responsible_team": "Functional",
+        "sap_note": "2452005",
+    },
+    "IND_UTL_003": {
+        "title": "Utilities: Contract Account Changes",
+        "category": "Industry - Utilities",
+        "description": (
+            "Contract accounts (FI-CA/FI-CD) adapted. Payment processing and "
+            "dunning for utilities simplified."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["DFKKKO", "DFKKOP"],
+        "affected_transactions": ["FPE1", "FP04", "FP16"],
+        "remediation": "Test FI-CA posting and payment processing.",
+        "effort_hours": 32,
+        "responsible_team": "Functional",
+        "sap_note": "2452005",
+    },
+    # --- Oil & Gas ---
+    "IND_OG_001": {
+        "title": "Oil & Gas: Hydrocarbon Management Changes",
+        "category": "Industry - Oil and Gas",
+        "description": (
+            "Hydrocarbon product management and quantity conversion adapted. "
+            "Nomination and scheduling changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["OIHC_QTYMOV", "OIHC_MATDOC"],
+        "affected_transactions": ["/OIH/QCI1", "/OIH/NOM1"],
+        "remediation": "Test hydrocarbon quantity movements and nomination processing.",
+        "effort_hours": 32,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "IND_OG_002": {
+        "title": "Oil & Gas: Joint Venture Accounting (JVA)",
+        "category": "Industry - Oil and Gas",
+        "description": (
+            "JVA posting logic adapted for ACDOCA. Equity group determination "
+            "and netting simplified."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["GJVA_ACCHD", "GJVA_ACCIT", "ACDOCA"],
+        "affected_transactions": ["GJVA1", "GJVA2"],
+        "remediation": "Test JVA posting and joint interest billing scenarios.",
+        "effort_hours": 32,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    # --- Insurance ---
+    "IND_INS_001": {
+        "title": "Insurance: FS-CD Collections/Disbursements",
+        "category": "Industry - Insurance",
+        "description": (
+            "Collections and Disbursements (FS-CD) for insurance adapted. "
+            "Premium posting and claims payment changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["DFKKKO", "DFKKOP"],
+        "affected_transactions": ["FPCD", "FPE1"],
+        "remediation": "Test FS-CD premium posting and claims disbursement.",
+        "effort_hours": 40,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    "IND_INS_002": {
+        "title": "Insurance: Claims Management Changes",
+        "category": "Industry - Insurance",
+        "description": (
+            "Claims management (FS-CM) adapted for S/4HANA. Claims processing "
+            "and reserves calculation changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ICL_CLAIM", "ICL_CLMITM"],
+        "affected_transactions": ["ICLA", "ICLM"],
+        "remediation": "Test claims creation, processing and settlement.",
+        "effort_hours": 32,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    # --- Public Sector ---
+    "IND_PS_001": {
+        "title": "Public Sector: Budgetary Ledger Changes",
+        "category": "Industry - Public Sector",
+        "description": (
+            "Budgetary ledger integrated with ACDOCA. Commitment and "
+            "actual posting consolidated in Universal Journal."
+        ),
+        "severity": "RED",
+        "affected_tables": ["ACDOCA", "FMIT", "FMIOI"],
+        "affected_transactions": ["FMBB", "FMEDDW"],
+        "remediation": "Configure budgetary ledger on ACDOCA. Migrate budget master data.",
+        "effort_hours": 48,
+        "responsible_team": "Functional",
+        "sap_note": "2296990",
+    },
+    "IND_PS_002": {
+        "title": "Public Sector: Grants Management Changes",
+        "category": "Industry - Public Sector",
+        "description": (
+            "Public sector grants management adapted for ACDOCA. "
+            "Sponsored programs and grants tracking enhanced."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["GMGRANT", "GMFUND"],
+        "affected_transactions": ["GMGRANTD", "GM_GRANT_MAINT"],
+        "remediation": "Test grants lifecycle and budget consumption against ACDOCA.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    # --- Healthcare ---
+    "IND_HC_001": {
+        "title": "Healthcare: Patient Accounting Changes",
+        "category": "Industry - Healthcare",
+        "description": (
+            "IS-H Patient Accounting adapted for S/4HANA. DRG billing and "
+            "insurance claims processing changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["NFAL", "NFPZ", "NRIV"],
+        "affected_transactions": ["NR01", "NR02"],
+        "remediation": "Test patient accounting and billing scenarios.",
+        "effort_hours": 32,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    # --- Defense ---
+    "IND_DEF_001": {
+        "title": "Defense: Force Elements and Readiness",
+        "category": "Industry - Defense",
+        "description": (
+            "SAP Defense Forces & Public Security adapted for S/4HANA. "
+            "Force element management and readiness tracking enhanced."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["EQUI", "IFLOT"],
+        "affected_transactions": ["IE01", "IL01"],
+        "remediation": "Test defense-specific processes in S/4HANA sandbox.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2270138",
+    },
+    # --- Mining ---
+    "IND_MIN_001": {
+        "title": "Mining: Operational Management Changes",
+        "category": "Industry - Mining",
+        "description": (
+            "SAP Mining operations adapted. Stockpile management and "
+            "commodity tracking aligned with MATDOC."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["MATDOC", "EQUI"],
+        "affected_transactions": ["MIGO", "MM01"],
+        "remediation": "Test mining-specific material movements with MATDOC.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2253942",
+    },
+
+    # =========================================================================
+    # TECHNICAL / ABAP PLATFORM — EXTENDED
+    # =========================================================================
+    "BAS_003": {
+        "title": "CDS View Replacement for Classic Reports",
+        "category": "Basis",
+        "description": (
+            "Hundreds of classic ABAP reports are replaced by CDS view–based analytics. "
+            "Custom reports reading replaced tables must be adapted."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["SE38", "SE80", "RSRT"],
+        "remediation": (
+            "Inventory custom Z-reports. Map to replacement CDS views. "
+            "Use Virtual Data Model (VDM) catalog for mapping."
+        ),
+        "effort_hours": 60,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_004": {
+        "title": "BOPF Framework Changes",
+        "category": "Basis",
+        "description": (
+            "Business Object Processing Framework (BOPF) introduces changes. "
+            "Custom BOPF objects must be reviewed for compatibility."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["/BOBF/D_CONF", "/BOBF/OBM_ASSOC"],
+        "affected_transactions": ["/BOBF/CONF_UI", "/BOBF/TEST_UI"],
+        "remediation": "Review custom BOPF objects. Test BOPF-based transactions.",
+        "effort_hours": 16,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_005": {
+        "title": "RAP (RESTful ABAP Programming Model) Adoption",
+        "category": "Basis",
+        "description": (
+            "RAP is the strategic development model for S/4HANA extensions. "
+            "Classic dynpro/Web Dynpro should be evaluated for RAP migration."
+        ),
+        "severity": "GREEN",
+        "affected_tables": [],
+        "affected_transactions": ["SE80", "ADT"],
+        "remediation": "Evaluate RAP for new developments. No mandatory change for existing code.",
+        "effort_hours": 8,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_006": {
+        "title": "Gateway/OData Service Changes",
+        "category": "Basis",
+        "description": (
+            "SAP Gateway OData services have model changes for S/4HANA. "
+            "Custom OData services may need regeneration."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["/IWBEP/I_V4_MSRV", "/IWFND/I_MED_SRH"],
+        "affected_transactions": ["/IWFND/MAINT_SERVICE", "SEGW"],
+        "remediation": "Test custom OData services. Regenerate models if underlying tables changed.",
+        "effort_hours": 24,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_007": {
+        "title": "Job Scheduling Changes",
+        "category": "Basis",
+        "description": (
+            "Classic job scheduling (SM36/SM37) available but SAP Job Scheduling "
+            "Service is strategic direction for cloud scenarios."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["TBTCO", "TBTCP"],
+        "affected_transactions": ["SM36", "SM37"],
+        "remediation": "Test scheduled jobs post-conversion. Evaluate Job Scheduling Service.",
+        "effort_hours": 8,
+        "responsible_team": "Basis",
+        "sap_note": "2270138",
+    },
+    "BAS_008": {
+        "title": "Print/Spool System Changes",
+        "category": "Basis",
+        "description": (
+            "Print and spool processing adapted. SAP Print Service by Kofax or "
+            "Adobe Document Services for form output."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["TSP01", "TSP02"],
+        "affected_transactions": ["SP01", "SP02", "SPAD"],
+        "remediation": "Test print output for SAPscript, SmartForms, and Adobe forms.",
+        "effort_hours": 16,
+        "responsible_team": "Basis",
+        "sap_note": "2296888",
+    },
+    "BAS_009": {
+        "title": "ALE/IDoc Distribution Model Changes",
+        "category": "Basis",
+        "description": (
+            "ALE distribution model and IDoc processing available but API-based "
+            "integration is strategic direction."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["EDIDC", "EDID4", "EDIDS"],
+        "affected_transactions": ["BD64", "WE19", "WE20"],
+        "remediation": "Test IDoc-based interfaces. Plan API migration for new integrations.",
+        "effort_hours": 24,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_010": {
+        "title": "Transport Management Changes",
+        "category": "Basis",
+        "description": (
+            "Transport management (CTS/CTS+) enhanced for S/4HANA. gCTS (git-enabled "
+            "CTS) available for ABAP developments."
+        ),
+        "severity": "GREEN",
+        "affected_tables": ["E070", "E071"],
+        "affected_transactions": ["SE09", "SE10", "STMS"],
+        "remediation": "Test transport workflows. Evaluate gCTS for ABAP version control.",
+        "effort_hours": 8,
+        "responsible_team": "Basis",
+        "sap_note": "2270138",
+    },
+    "BAS_011": {
+        "title": "Deprecated Transaction Codes",
+        "category": "Basis",
+        "description": (
+            "200+ transaction codes are deprecated or removed in S/4HANA. "
+            "Custom menu configurations and variants must be reviewed."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["TSTC", "TSTCA"],
+        "affected_transactions": ["SE93"],
+        "remediation": (
+            "Run transaction usage analysis. Map deprecated transactions to S/4HANA "
+            "replacements or Fiori apps. Key removals: F-28→F-28(Fiori), "
+            "KA01→FS00, XD01→BP, XK01→BP, VB01→removed."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_012": {
+        "title": "Deprecated Function Modules (Comprehensive)",
+        "category": "Basis",
+        "description": (
+            "500+ function modules are deprecated or have signature changes. "
+            "Critical FMs include: BAPI_CUSTOMER_CREATEFROMDATA1→BAPI still works "
+            "but BP is preferred, CALCULATE_TAX_FROM_NET_AMOUNT, SD_SALESDOCUMENT_CREATE."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["SE37"],
+        "remediation": (
+            "Run custom code analysis via SAP Fiori app 'Custom Code Migration'. "
+            "Replace deprecated FMs with released APIs. Key replacements: "
+            "BAPI_ACC_DOCUMENT_POST→ACDOCA APIs, GUI_UPLOAD/DOWNLOAD→CL_GUI_FRONTEND."
+        ),
+        "effort_hours": 80,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_013": {
+        "title": "Removed/Changed Database Tables (Comprehensive)",
+        "category": "Basis",
+        "description": (
+            "300+ database tables are removed, replaced, or become compatibility views. "
+            "Key removals: BSEG→view, MKPF/MSEG→MATDOC, GLPCA→ACDOCA, KONV→PRCD_ELEMENTS, "
+            "KNA1/LFA1→BP views, COEP→ACDOCA."
+        ),
+        "severity": "RED",
+        "affected_tables": [],
+        "affected_transactions": ["SE11", "SE16N"],
+        "remediation": (
+            "Run SAP Custom Code Migration Fiori app for table usage analysis. "
+            "Map all Z-program table access to S/4HANA equivalents."
+        ),
+        "effort_hours": 120,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_014": {
+        "title": "ABAP Dictionary Changes (Data Element/Domain)",
+        "category": "Basis",
+        "description": (
+            "Several data elements and domains changed. Field length increases "
+            "for material number (MATNR 18→40 chars), BP number, document number."
+        ),
+        "severity": "RED",
+        "affected_tables": ["MARA", "VBAK", "EKKO"],
+        "affected_transactions": ["SE11"],
+        "remediation": (
+            "Review custom code for hardcoded field lengths. Adapt for extended "
+            "material number (40 chars) if activated."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2253942",
+    },
+    "BAS_015": {
+        "title": "Fiori Launchpad Mandatory for UI",
+        "category": "Basis",
+        "description": (
+            "SAP Fiori is the primary UI framework for S/4HANA. SAP GUI available "
+            "but Fiori Launchpad required for new functionality."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["/UI2/FLP", "/UI2/FLPD_CUST"],
+        "remediation": (
+            "Deploy Fiori Launchpad. Configure tile catalogs and groups. "
+            "Assign Fiori apps to users based on role mapping."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "Basis",
+        "sap_note": "2270689",
+    },
+    "BAS_016": {
+        "title": "SLT-Based Replication Changes",
+        "category": "Basis",
+        "description": (
+            "SLT (SAP Landscape Transformation) replication configurations must "
+            "account for table structure changes in S/4HANA."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["IUUC_REPL_HDR", "IUUC_REPL_ITEM"],
+        "affected_transactions": ["LTRS", "LTRC"],
+        "remediation": "Review SLT replication configurations. Adapt for changed/removed tables.",
+        "effort_hours": 16,
+        "responsible_team": "Basis",
+        "sap_note": "2270138",
+    },
+    "BAS_017": {
+        "title": "Authorization Object Changes",
+        "category": "Basis",
+        "description": (
+            "Several authorization objects changed for S/4HANA. F_BKPF_BUK "
+            "extended with ACDOCA fields. New Fiori-specific auth objects added."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["AGR_1251", "USR02"],
+        "affected_transactions": ["SU01", "PFCG", "SU53"],
+        "remediation": "Run authorization trace analysis. Adapt roles for S/4HANA changes.",
+        "effort_hours": 32,
+        "responsible_team": "Basis",
+        "sap_note": "2270689",
+    },
+    "BAS_018": {
+        "title": "SAP HANA Database Optimization Requirements",
+        "category": "Basis",
+        "description": (
+            "S/4HANA requires specific HANA DB optimizations: table partitioning, "
+            "memory allocation, backup strategy, and column store settings."
+        ),
+        "severity": "RED",
+        "affected_tables": [],
+        "affected_transactions": ["DBACOCKPIT", "HANA Studio"],
+        "remediation": (
+            "Configure HANA sizing based on SAP Quick Sizer. Set up table partitioning "
+            "for large tables (ACDOCA, MATDOC). Configure backup and recovery."
+        ),
+        "effort_hours": 24,
+        "responsible_team": "Basis",
+        "sap_note": "2378962",
+    },
+    "BAS_019": {
+        "title": "Embedded Analytics / BW Extraction Changes",
+        "category": "Basis",
+        "description": (
+            "S/4HANA includes embedded analytics via CDS views. BW extractors "
+            "for changed tables (BSEG, MKPF/MSEG, KONV) need adaptation."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ROOSOURCE", "RSOLTPSOURCE"],
+        "affected_transactions": ["RSA5", "RSA6"],
+        "remediation": (
+            "Review BW extractor configuration for changed tables. Adapt custom "
+            "extractors. Evaluate embedded analytics for real-time reporting."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_020": {
+        "title": "Workflow / Business Rules Framework Changes",
+        "category": "Basis",
+        "description": (
+            "SAP Business Workflow adapted for Fiori inbox. BRFplus decision "
+            "tables used for output management and business rules."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["SWWWIHEAD", "SWW_WI2OBJ"],
+        "affected_transactions": ["SWIA", "SWI5", "SBWP"],
+        "remediation": "Test workflow scenarios. Deploy Fiori My Inbox for workflow approvals.",
+        "effort_hours": 16,
+        "responsible_team": "Basis",
+        "sap_note": "2270138",
+    },
+    "BAS_021": {
+        "title": "Custom Code Adaptation — SELECT INTO TABLE Pattern",
+        "category": "Basis",
+        "description": (
+            "SELECT...INTO TABLE patterns must use inline declarations or typed "
+            "internal tables. Legacy untyped patterns may cause dumps."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["SE38", "SE80"],
+        "remediation": "Run ATC check for obsolete SQL patterns. Adopt ABAP 7.40+ syntax.",
+        "effort_hours": 24,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2268780",
+    },
+    "BAS_022": {
+        "title": "Custom Code Adaptation — READ TABLE ... BINARY SEARCH",
+        "category": "Basis",
+        "description": (
+            "On HANA, READ TABLE ... BINARY SEARCH is often inefficient. "
+            "Use sorted/hashed tables or table expressions instead."
+        ),
+        "severity": "GREEN",
+        "affected_tables": [],
+        "affected_transactions": ["SE38"],
+        "remediation": "Optimize READ TABLE patterns for HANA. Use sorted/hashed table types.",
+        "effort_hours": 16,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_023": {
+        "title": "Custom Code Adaptation — SELECT FOR ALL ENTRIES",
+        "category": "Basis",
+        "description": (
+            "FOR ALL ENTRIES can cause performance issues on HANA. Replace with "
+            "CDS views with associations or inner joins where possible."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["SE38", "SE80"],
+        "remediation": "Identify FOR ALL ENTRIES patterns. Replace with JOINs or CDS associations.",
+        "effort_hours": 32,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "BAS_024": {
+        "title": "Custom Code Adaptation — Nested SELECTs",
+        "category": "Basis",
+        "description": (
+            "Nested SELECT loops (SELECT inside LOOP/SELECT) cause major performance "
+            "issues on HANA. Must be refactored to JOINs or buffered reads."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["SE38", "ST05"],
+        "remediation": "Identify nested SELECT patterns via SQL trace. Refactor to JOINs.",
+        "effort_hours": 40,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+
+    # =========================================================================
+    # INTEGRATION & EXTENSION — NEW CATEGORY
+    # =========================================================================
+    "INT_001": {
+        "title": "SAP BTP Integration Simplification",
+        "category": "Integration",
+        "description": (
+            "S/4HANA integrates with SAP BTP via API-first approach. Side-by-side "
+            "extensions use BTP services and SAP Event Mesh."
+        ),
+        "severity": "GREEN",
+        "affected_tables": [],
+        "affected_transactions": [],
+        "remediation": "Evaluate BTP for side-by-side extensions. Configure communication arrangements.",
+        "effort_hours": 16,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270138",
+    },
+    "INT_002": {
+        "title": "API-Based Integration Replacing RFC/BAPI",
+        "category": "Integration",
+        "description": (
+            "S/4HANA emphasizes OData/REST APIs over RFC/BAPI for integration. "
+            "SAP API Business Hub provides released API catalog."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["SOAMANAGER", "/IWFND/MAINT_SERVICE"],
+        "remediation": (
+            "Inventory RFC/BAPI-based integrations. Map to released S/4HANA APIs. "
+            "Plan API migration for external system connections."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "INT_003": {
+        "title": "SAP Event Mesh Integration",
+        "category": "Integration",
+        "description": (
+            "S/4HANA supports event-driven architecture via SAP Event Mesh. "
+            "Business events published for key transactions."
+        ),
+        "severity": "GREEN",
+        "affected_tables": [],
+        "affected_transactions": ["/IWXBE/CONFIG"],
+        "remediation": "Evaluate Event Mesh for event-driven integration patterns.",
+        "effort_hours": 8,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270138",
+    },
+    "INT_004": {
+        "title": "Integration Suite / CPI Changes",
+        "category": "Integration",
+        "description": (
+            "SAP Integration Suite (Cloud Platform Integration) as strategic "
+            "middleware. PI/PO interfaces should be evaluated for migration."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["SXMB_MONI", "SXI_MONITOR"],
+        "remediation": "Inventory PI/PO integration flows. Plan migration to Integration Suite.",
+        "effort_hours": 40,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270138",
+    },
+    "INT_005": {
+        "title": "Master Data Integration (MDI/MDG) Changes",
+        "category": "Integration",
+        "description": (
+            "Master Data Integration service and Master Data Governance adapted "
+            "for BP-centric master data in S/4HANA."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["BUT000", "MDGR_OBJECT"],
+        "affected_transactions": ["MDGIMG", "USMD_RULE"],
+        "remediation": "Configure MDG for BP-based master data governance if applicable.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "INT_006": {
+        "title": "EDI/IDoc Interface Adaptation",
+        "category": "Integration",
+        "description": (
+            "EDI interfaces using IDocs for ORDERS, INVOIC, DESADV must be tested "
+            "for S/4HANA data model changes in segments."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["EDIDC", "EDID4"],
+        "affected_transactions": ["WE19", "WE20", "BD64"],
+        "remediation": "Test all EDI/IDoc scenarios for segment-level data changes.",
+        "effort_hours": 24,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "INT_007": {
+        "title": "RFC Destination Validation",
+        "category": "Integration",
+        "description": (
+            "RFC destinations to external systems must be validated post-conversion. "
+            "Trusted/trusting system relationships may need reconfiguration."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["RFCDES"],
+        "affected_transactions": ["SM59"],
+        "remediation": "Test all RFC destinations post-conversion. Validate trust relationships.",
+        "effort_hours": 8,
+        "responsible_team": "Basis",
+        "sap_note": "2270138",
+    },
+
+    # =========================================================================
+    # DATA MIGRATION — NEW CATEGORY
+    # =========================================================================
+    "DM_001": {
+        "title": "Migration Cockpit Replacing LSMW",
+        "category": "Data Migration",
+        "description": (
+            "SAP Migration Cockpit replaces LSMW as primary migration tool. "
+            "Pre-built migration objects for S/4HANA master and transactional data."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["LTMOM", "LTMC"],
+        "remediation": "Use Migration Cockpit for data loads. LSMW available but not enhanced.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2501109",
+    },
+    "DM_002": {
+        "title": "Data Archiving Simplification",
+        "category": "Data Migration",
+        "description": (
+            "Data archiving objects adapted for S/4HANA table changes. ACDOCA-based "
+            "archiving objects replace BSEG-based ones."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ACDOCA", "ARCH_OBJ"],
+        "affected_transactions": ["SARA", "AOBJ"],
+        "remediation": "Review archiving objects. Update custom archiving programs for new tables.",
+        "effort_hours": 24,
+        "responsible_team": "Basis",
+        "sap_note": "2270138",
+    },
+    "DM_003": {
+        "title": "Data Volume Management for ACDOCA",
+        "category": "Data Migration",
+        "description": (
+            "ACDOCA is the single largest table in S/4HANA. Data volume management "
+            "strategy required including partitioning and archiving."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ACDOCA"],
+        "affected_transactions": ["DBACOCKPIT", "DB02"],
+        "remediation": (
+            "Implement ACDOCA table partitioning by fiscal year. Plan archiving "
+            "strategy for historical periods."
+        ),
+        "effort_hours": 16,
+        "responsible_team": "Basis",
+        "sap_note": "2332030",
+    },
+    "DM_004": {
+        "title": "Custom Migration Object Validation",
+        "category": "Data Migration",
+        "description": (
+            "Custom migration objects using BAPIs or direct inserts must account "
+            "for S/4HANA table changes (BP, MATDOC, ACDOCA)."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["LTMC"],
+        "remediation": "Validate custom migration programs against S/4HANA data model.",
+        "effort_hours": 24,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2501109",
+    },
+    "DM_005": {
+        "title": "Historical Data Migration Strategy",
+        "category": "Data Migration",
+        "description": (
+            "Decision required: migrate historical data into S/4HANA tables or "
+            "archive/keep in near-line storage. Affects conversion downtime."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["ACDOCA", "MATDOC"],
+        "affected_transactions": ["FINS_MIG_STATUS"],
+        "remediation": (
+            "Define data retention policy. Plan historical data scope for ACDOCA/MATDOC "
+            "migration. Use SUM TDMS for selective data transfer if needed."
+        ),
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2332030",
+    },
+
+    # =========================================================================
+    # BUSINESS PARTNER — EXTENDED
+    # =========================================================================
+    "BP_003": {
+        "title": "BP Role Configuration",
+        "category": "Business Partner",
+        "description": (
+            "Business Partner roles must be configured for customer (FLCU00/FLCU01) "
+            "and vendor (FLVN00/FLVN01) scenarios. Role category mapping is critical."
+        ),
+        "severity": "RED",
+        "affected_tables": ["BUT000", "BUT100", "TBZ9A"],
+        "affected_transactions": ["BP", "BUP3"],
+        "remediation": "Configure BP roles and role categories. Map to account groups.",
+        "effort_hours": 24,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "BP_004": {
+        "title": "BP Duplicate Check Configuration",
+        "category": "Business Partner",
+        "description": (
+            "Duplicate check for Business Partners must be configured to prevent "
+            "duplicate creation during CVI synchronization."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["BUT000", "BUT0BK"],
+        "affected_transactions": ["BP", "BUPA_DUPL"],
+        "remediation": "Configure duplicate check rules. Run de-duplication before conversion.",
+        "effort_hours": 16,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+    "BP_005": {
+        "title": "BP Tax Number and ID Mapping",
+        "category": "Business Partner",
+        "description": (
+            "Tax numbers from KNA1 (STCD1-4) and LFA1 must be mapped to BP tax "
+            "number categories. Country-specific tax ID handling."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": ["DFKKBPTAXNUM", "BUT0ID"],
+        "affected_transactions": ["BP"],
+        "remediation": "Map tax number types. Configure BP identification categories per country.",
+        "effort_hours": 20,
+        "responsible_team": "Functional",
+        "sap_note": "2265093",
+    },
+
+    # =========================================================================
+    # CUSTOM CODE — EXTENDED
+    # =========================================================================
+    "CODE_004": {
+        "title": "Custom Code Migration Fiori App",
+        "category": "Custom Code",
+        "description": (
+            "SAP provides Fiori app 'Custom Code Migration' for automated analysis "
+            "of custom ABAP code against S/4HANA compatibility."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["ATC", "/UI2/FLP"],
+        "remediation": (
+            "Run Custom Code Migration Fiori app. Prioritize findings by usage frequency. "
+            "Focus on code accessing changed tables and deprecated APIs."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2436688",
+    },
+    "CODE_005": {
+        "title": "ABAP Unit Test Compatibility",
+        "category": "Custom Code",
+        "description": (
+            "ABAP Unit test framework enhanced in S/4HANA. Existing unit tests "
+            "may need adaptation for changed table structures."
+        ),
+        "severity": "GREEN",
+        "affected_tables": [],
+        "affected_transactions": ["SE38", "ATC"],
+        "remediation": "Run ABAP Unit tests post-conversion. Fix failures from data model changes.",
+        "effort_hours": 16,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "CODE_006": {
+        "title": "SAP Screen Personas Compatibility",
+        "category": "Custom Code",
+        "description": (
+            "SAP Screen Personas scripts may need adaptation for changed transactions. "
+            "Validate personas for S/4HANA screen changes."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["/PERSONAS/ADMIN"],
+        "remediation": "Test and update Screen Personas flavors for S/4HANA transactions.",
+        "effort_hours": 16,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "CODE_007": {
+        "title": "Enhancement Implementation Review",
+        "category": "Custom Code",
+        "description": (
+            "Customer exits, BADIs, and enhancement implementations must be reviewed. "
+            "Some enhancement spots changed or removed in S/4HANA."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["SE18", "SE19", "SMOD", "CMOD"],
+        "remediation": (
+            "Inventory all active enhancement implementations. Verify enhancement spots "
+            "exist in S/4HANA. Adapt or replace removed enhancements."
+        ),
+        "effort_hours": 40,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2270689",
+    },
+    "CODE_008": {
+        "title": "SAPscript / SmartForms Compatibility",
+        "category": "Custom Code",
+        "description": (
+            "SAPscript forms run in compatibility mode. SmartForms supported. "
+            "Adobe Forms is strategic direction. New output uses BRFplus."
+        ),
+        "severity": "YELLOW",
+        "affected_tables": [],
+        "affected_transactions": ["SE71", "SMARTFORMS", "SFP"],
+        "remediation": "Test form output. Plan migration to Adobe Forms for new requirements.",
+        "effort_hours": 24,
+        "responsible_team": "ABAP dev",
+        "sap_note": "2296888",
+    },
 }
+
+# Merge all extended rule databases into the master dictionary
+SIMPLIFICATION_ITEMS.update(DEPRECATED_TABLE_RULES)
+SIMPLIFICATION_ITEMS.update(DEPRECATED_FM_RULES)
+SIMPLIFICATION_ITEMS.update(DEPRECATED_TX_RULES)
+SIMPLIFICATION_ITEMS.update(FIORI_REPLACEMENT_RULES)
+SIMPLIFICATION_ITEMS.update(CDS_VIEW_RULES)
+SIMPLIFICATION_ITEMS.update(LOCALIZATION_RULES)
+SIMPLIFICATION_ITEMS.update(PROCESS_LEVEL_RULES)
 
 
 # =============================================================================
@@ -1175,26 +3842,31 @@ def lambda_handler(event, context):
     except ImportError:
         # PyRFC not installed — return mock data for testing
         logger.warning("PyRFC not available — returning mock simplification check data")
+        # Dynamically compute mock counts from SIMPLIFICATION_ITEMS
+        _red = sum(1 for v in SIMPLIFICATION_ITEMS.values() if v["severity"] == "RED")
+        _yellow = sum(1 for v in SIMPLIFICATION_ITEMS.values() if v["severity"] == "YELLOW")
+        _green = sum(1 for v in SIMPLIFICATION_ITEMS.values() if v["severity"] == "GREEN")
+        _total_effort = sum(v.get("effort_hours", 0) for v in SIMPLIFICATION_ITEMS.values())
         mock_summary = {
             "target_release": target_release,
             "total_si_items": len(SIMPLIFICATION_ITEMS),
-            "relevant_si_items": 18,
-            "red_items": 9,
-            "yellow_items": 13,
-            "green_items": 4,
-            "total_remediation_tasks": 22,
-            "total_remediation_effort_hours": 624,
-            "p1_blocking_tasks": 9,
+            "relevant_si_items": _red + _yellow,
+            "red_items": _red,
+            "yellow_items": _yellow,
+            "green_items": _green,
+            "total_remediation_tasks": _red + _yellow,
+            "total_remediation_effort_hours": _total_effort,
+            "p1_blocking_tasks": _red,
             "prerequisite_notes_applied": 6,
             "prerequisite_notes_missing": 4,
             "conversion_decision": "NO-GO",
-            "blocking_items": 9,
+            "blocking_items": _red,
             "mode": "MOCK_DATA",
         }
         return {
             "status": "success",
             "conversion_decision": "NO-GO",
-            "blocking_items": 9,
+            "blocking_items": _red,
             "summary": mock_summary,
             "s3_prefix": f"migrations/{run_id}/simplification-check",
             "run_id": run_id,

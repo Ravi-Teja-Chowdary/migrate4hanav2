@@ -24,6 +24,7 @@ from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from validation import validate_event
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -67,23 +68,80 @@ def check_s4_connectivity(conn_params):
 def lock_source_system(conn, lock=True):
     """
     Lock ECC source system to prevent new postings during migration.
-    Uses SM01 (transaction lock) and SCC4 (client settings).
 
-    In real SAP:
-    - BAPI_USER_LOCK locks individual users
-    - SCC4 changes client to 'not modifiable'
-    - T000-CCCORACTIV = 0 means 'no changes allowed'
+    Strategy (three layers):
+    1. SCCR_LOCK_CLIENT — sets client to 'not modifiable' (T000-CCCORACTIV=0)
+       This is the SAP-supported way to freeze a client during conversion.
+    2. Lock critical transactions (FB01, VA01, ME21N, MM01, etc.) via SM01
+       using BAPI_USER_LOCK on dialog users as a safety net.
+    3. Record lock state so rollback-manager can reverse it.
     """
-    if lock:
-        try:
-            # Set client to read-only via RFC
-            result = conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
-            logger.info("Source system locked for cutover")
-            return {"locked": True, "timestamp": datetime.utcnow().isoformat()}
-        except Exception as e:
-            logger.warning(f"Could not lock source system: {e}")
-            return {"locked": False, "error": str(e)}
-    return {"locked": False, "reason": "lock_not_requested"}
+    if not lock:
+        return {"locked": False, "reason": "lock_not_requested"}
+
+    lock_result = {
+        "locked": False,
+        "timestamp": datetime.utcnow().isoformat(),
+        "client_lock": None,
+        "users_locked": 0,
+        "errors": [],
+    }
+
+    # --- Layer 1: Lock the client via SCCR_LOCK_CLIENT ---
+    try:
+        client_id = conn.call("RFC_SYSTEM_INFO").get(
+            "RFCSI_EXPORT", {}
+        ).get("RFCCLIENT", "")
+        result = conn.call("SCCR_LOCK_CLIENT", CLIENT=client_id)
+        return_msgs = result.get("RETURN", [])
+        errors = [m for m in return_msgs if m.get("TYPE") in ("E", "A")]
+        if errors:
+            lock_result["errors"].append(
+                f"SCCR_LOCK_CLIENT: {errors[0].get('MESSAGE', 'unknown error')}"
+            )
+            logger.warning(f"Client lock warning: {errors}")
+        else:
+            lock_result["client_lock"] = "locked"
+            logger.info(f"Client {client_id} locked via SCCR_LOCK_CLIENT")
+    except Exception as e:
+        lock_result["errors"].append(f"SCCR_LOCK_CLIENT failed: {e}")
+        logger.warning(f"SCCR_LOCK_CLIENT failed: {e}")
+
+    # --- Layer 2: Lock dialog users to prevent any slip-through ---
+    try:
+        user_result = conn.call(
+            "RFC_READ_TABLE",
+            QUERY_TABLE="USR02",
+            DELIMITER="|",
+            FIELDS=[{"FIELDNAME": "BNAME"}],
+            OPTIONS=[{"TEXT": "USTYP = 'A'"}],  # A = Dialog users only
+            ROWCOUNT=5000,
+        )
+        dialog_users = []
+        for row in user_result.get("DATA", []):
+            uname = row.get("WA", "").split("|")[0].strip()
+            if uname:
+                dialog_users.append(uname)
+
+        locked_count = 0
+        for uname in dialog_users:
+            try:
+                conn.call("BAPI_USER_LOCK", USERNAME=uname)
+                locked_count += 1
+            except Exception:
+                pass  # Some service users may not be lockable
+        if locked_count > 0:
+            conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        lock_result["users_locked"] = locked_count
+        logger.info(f"Locked {locked_count} dialog users")
+    except Exception as e:
+        lock_result["errors"].append(f"User lock phase failed: {e}")
+        logger.warning(f"User lock phase failed: {e}")
+
+    lock_result["locked"] = (
+        lock_result["client_lock"] == "locked" or lock_result["users_locked"] > 0
+    )
+    return lock_result
 
 
 # =============================================================================
@@ -217,6 +275,16 @@ def lambda_handler(event, context):
     logger.info("Cutover Orchestrator started")
     log_stage_event("cutover-orchestrator", "Pipeline Start", "IN_PROGRESS", {"stage": 7, "dry_run": event.get("metadata", {}).get("input", {}).get("dry_run", False)})
     _stage_start = __import__('time').time()
+
+    # Validate input at system boundary
+    validation_errors = validate_event(event, required_fields=["metadata.run_id"])
+    if validation_errors:
+        return {
+            "status": "error",
+            "stage": "cutover-orchestrator",
+            "errors": validation_errors,
+            "message": "Input validation failed",
+        }
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     mode = event.get("metadata", {}).get("input", {}).get("mode", "full")

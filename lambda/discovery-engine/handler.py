@@ -23,6 +23,8 @@ from datetime import datetime
 # Structured telemetry logger for real-time UI streaming
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from validation import validate_event
+from rfc_pool import read_table_chunked
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -98,24 +100,18 @@ def scan_custom_programs(conn):
     """
     logger.info("Scanning custom ABAP programs...")
 
-    # Call RFC_READ_TABLE to read TRDIR (program directory)
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="TRDIR",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "NAME"},      # Program name
-            {"FIELDNAME": "SUBC"},      # Program type
-            {"FIELDNAME": "CDAT"},      # Creation date
-            {"FIELDNAME": "UDAT"},      # Last changed date
-            {"FIELDNAME": "UNAM"},      # Last changed by
-            {"FIELDNAME": "RSTAT"},     # Status (K=active, S=saved)
-        ],
-        OPTIONS=[
-            {"TEXT": "NAME LIKE 'Z%' OR NAME LIKE 'Y%'"},  # Custom namespace
-        ],
-        ROWCOUNT=99999,
-    )
+    # Paginated read of TRDIR (program directory) to handle large custom codebases
+    fields = [
+        {"FIELDNAME": "NAME"},      # Program name
+        {"FIELDNAME": "SUBC"},      # Program type
+        {"FIELDNAME": "CDAT"},      # Creation date
+        {"FIELDNAME": "UDAT"},      # Last changed date
+        {"FIELDNAME": "UNAM"},      # Last changed by
+        {"FIELDNAME": "RSTAT"},     # Status (K=active, S=saved)
+    ]
+    options = [
+        {"TEXT": "NAME LIKE 'Z%' OR NAME LIKE 'Y%'"},  # Custom namespace
+    ]
 
     programs = []
     type_map = {
@@ -128,18 +124,19 @@ def scan_custom_programs(conn):
         "J": "interface_pool",
     }
 
-    for row in result["DATA"]:
-        fields = row["WA"].split("|")
-        if len(fields) >= 6:
-            programs.append({
-                "name": fields[0].strip(),
-                "type": type_map.get(fields[1].strip(), fields[1].strip()),
-                "type_code": fields[1].strip(),
-                "created": fields[2].strip(),
-                "modified": fields[3].strip(),
-                "modified_by": fields[4].strip(),
-                "status": "active" if fields[5].strip() == "K" else "inactive",
-            })
+    for page in read_table_chunked(conn, "TRDIR", fields, options, max_rows=50000):
+        for row in page:
+            fields_data = row["WA"].split("|")
+            if len(fields_data) >= 6:
+                programs.append({
+                    "name": fields_data[0].strip(),
+                    "type": type_map.get(fields_data[1].strip(), fields_data[1].strip()),
+                    "type_code": fields_data[1].strip(),
+                    "created": fields_data[2].strip(),
+                    "modified": fields_data[3].strip(),
+                    "modified_by": fields_data[4].strip(),
+                    "status": "active" if fields_data[5].strip() == "K" else "inactive",
+                })
 
     logger.info(f"Found {len(programs)} custom programs")
     return programs
@@ -164,34 +161,29 @@ def scan_custom_tables(conn):
     """
     logger.info("Scanning custom tables...")
 
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="DD02L",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "TABNAME"},
-            {"FIELDNAME": "TABCLASS"},
-            {"FIELDNAME": "AS4DATE"},
-            {"FIELDNAME": "AS4LOCAL"},  # A=active, M=modified
-        ],
-        OPTIONS=[
-            {"TEXT": "TABNAME LIKE 'Z%' OR TABNAME LIKE 'Y%'"},
-            {"TEXT": "AND TABCLASS IN ('TRANSP','CLUSTER','POOL')"},
-        ],
-        ROWCOUNT=99999,
-    )
+    fields = [
+        {"FIELDNAME": "TABNAME"},
+        {"FIELDNAME": "TABCLASS"},
+        {"FIELDNAME": "AS4DATE"},
+        {"FIELDNAME": "AS4LOCAL"},  # A=active, M=modified
+    ]
+    options = [
+        {"TEXT": "TABNAME LIKE 'Z%' OR TABNAME LIKE 'Y%'"},
+        {"TEXT": "AND TABCLASS IN ('TRANSP','CLUSTER','POOL')"},
+    ]
 
     tables = []
-    for row in result["DATA"]:
-        fields = row["WA"].split("|")
-        if len(fields) >= 4:
-            table_name = fields[0].strip()
-            tables.append({
-                "name": table_name,
-                "type": fields[1].strip(),
-                "last_changed": fields[2].strip(),
-                "status": "active" if fields[3].strip() == "A" else "modified",
-            })
+    for page in read_table_chunked(conn, "DD02L", fields, options, max_rows=50000):
+        for row in page:
+            fields_data = row["WA"].split("|")
+            if len(fields_data) >= 4:
+                table_name = fields_data[0].strip()
+                tables.append({
+                    "name": table_name,
+                    "type": fields_data[1].strip(),
+                    "last_changed": fields_data[2].strip(),
+                    "status": "active" if fields_data[3].strip() == "A" else "modified",
+                })
 
     # Get row counts for each table (critical for sizing the migration)
     for table in tables[:100]:  # Limit to avoid timeout
@@ -222,30 +214,25 @@ def scan_function_modules(conn):
     """
     logger.info("Scanning custom function modules...")
 
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="TFDIR",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "FUNCNAME"},
-            {"FIELDNAME": "PNAME"},     # Program name (function group)
-            {"FIELDNAME": "FMODE"},     # RFC enabled?
-        ],
-        OPTIONS=[
-            {"TEXT": "FUNCNAME LIKE 'Z%' OR FUNCNAME LIKE 'Y%'"},
-        ],
-        ROWCOUNT=99999,
-    )
+    fields = [
+        {"FIELDNAME": "FUNCNAME"},
+        {"FIELDNAME": "PNAME"},     # Program name (function group)
+        {"FIELDNAME": "FMODE"},     # RFC enabled?
+    ]
+    options = [
+        {"TEXT": "FUNCNAME LIKE 'Z%' OR FUNCNAME LIKE 'Y%'"},
+    ]
 
     func_modules = []
-    for row in result["DATA"]:
-        fields = row["WA"].split("|")
-        if len(fields) >= 3:
-            func_modules.append({
-                "name": fields[0].strip(),
-                "function_group": fields[1].strip(),
-                "is_rfc_enabled": fields[2].strip() == "R",
-            })
+    for page in read_table_chunked(conn, "TFDIR", fields, options, max_rows=50000):
+        for row in page:
+            fields_data = row["WA"].split("|")
+            if len(fields_data) >= 3:
+                func_modules.append({
+                    "name": fields_data[0].strip(),
+                    "function_group": fields_data[1].strip(),
+                    "is_rfc_enabled": fields_data[2].strip() == "R",
+                })
 
     logger.info(f"Found {len(func_modules)} custom function modules")
     return func_modules
@@ -386,58 +373,48 @@ def scan_user_roles(conn):
     logger.info("Scanning user roles and authorizations...")
 
     # Role definitions
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="AGR_DEFINE",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "AGR_NAME"},  # Role name
-            {"FIELDNAME": "PARENT_AGR"},# Parent (for composite roles)
-            {"FIELDNAME": "CREATE_USR"},# Created by
-            {"FIELDNAME": "CREATE_DAT"},# Created date
-        ],
-        OPTIONS=[
-            {"TEXT": "AGR_NAME LIKE 'Z%' OR AGR_NAME LIKE 'Y%'"},
-        ],
-        ROWCOUNT=99999,
-    )
+    fields = [
+        {"FIELDNAME": "AGR_NAME"},  # Role name
+        {"FIELDNAME": "PARENT_AGR"},# Parent (for composite roles)
+        {"FIELDNAME": "CREATE_USR"},# Created by
+        {"FIELDNAME": "CREATE_DAT"},# Created date
+    ]
+    options = [
+        {"TEXT": "AGR_NAME LIKE 'Z%' OR AGR_NAME LIKE 'Y%'"},
+    ]
 
     roles = []
-    for row in result["DATA"]:
-        fields = row["WA"].split("|")
-        if len(fields) >= 4:
-            roles.append({
-                "name": fields[0].strip(),
-                "parent_role": fields[1].strip() if fields[1].strip() else None,
-                "is_composite": bool(fields[1].strip()),
-                "created_by": fields[2].strip(),
-                "created_date": fields[3].strip(),
-            })
+    for page in read_table_chunked(conn, "AGR_DEFINE", fields, options, max_rows=50000):
+        for row in page:
+            fields_data = row["WA"].split("|")
+            if len(fields_data) >= 4:
+                roles.append({
+                    "name": fields_data[0].strip(),
+                    "parent_role": fields_data[1].strip() if fields_data[1].strip() else None,
+                    "is_composite": bool(fields_data[1].strip()),
+                    "created_by": fields_data[2].strip(),
+                    "created_date": fields_data[3].strip(),
+                })
 
     # Get user counts per role
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="AGR_USERS",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "AGR_NAME"},
-            {"FIELDNAME": "UNAME"},
-        ],
-        OPTIONS=[
-            {"TEXT": "AGR_NAME LIKE 'Z%' OR AGR_NAME LIKE 'Y%'"},
-        ],
-        ROWCOUNT=99999,
-    )
+    user_fields = [
+        {"FIELDNAME": "AGR_NAME"},
+        {"FIELDNAME": "UNAME"},
+    ]
+    user_options = [
+        {"TEXT": "AGR_NAME LIKE 'Z%' OR AGR_NAME LIKE 'Y%'"},
+    ]
 
     role_user_counts = {}
     unique_users = set()
-    for row in result["DATA"]:
-        fields = row["WA"].split("|")
-        if len(fields) >= 2:
-            role_name = fields[0].strip()
-            user = fields[1].strip()
-            role_user_counts[role_name] = role_user_counts.get(role_name, 0) + 1
-            unique_users.add(user)
+    for page in read_table_chunked(conn, "AGR_USERS", user_fields, user_options, max_rows=50000):
+        for row in page:
+            fields_data = row["WA"].split("|")
+            if len(fields_data) >= 2:
+                role_name = fields_data[0].strip()
+                user = fields_data[1].strip()
+                role_user_counts[role_name] = role_user_counts.get(role_name, 0) + 1
+                unique_users.add(user)
 
     for role in roles:
         role["user_count"] = role_user_counts.get(role["name"], 0)
@@ -466,18 +443,12 @@ def scan_integrations(conn):
 
     integrations = {"rfc_destinations": [], "idoc_partners": []}
 
-    # RFC Destinations (SM59 equivalent)
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="RFCDES",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "RFCDEST"},   # Destination name
-            {"FIELDNAME": "RFCTYPE"},   # Type (3=RFC, H=HTTP, G=External)
-            {"FIELDNAME": "RFCOPTIONS"},# Connection options
-        ],
-        ROWCOUNT=99999,
-    )
+    # RFC Destinations (SM59 equivalent) — paginated
+    rfc_fields = [
+        {"FIELDNAME": "RFCDEST"},   # Destination name
+        {"FIELDNAME": "RFCTYPE"},   # Type (3=RFC, H=HTTP, G=External)
+        {"FIELDNAME": "RFCOPTIONS"},# Connection options
+    ]
 
     type_map = {
         "3": "ABAP_connection",
@@ -488,39 +459,35 @@ def scan_integrations(conn):
         "L": "logical_destination",
     }
 
-    for row in result["DATA"]:
-        fields = row["WA"].split("|")
-        if len(fields) >= 2:
-            integrations["rfc_destinations"].append({
-                "name": fields[0].strip(),
-                "type": type_map.get(fields[1].strip(), fields[1].strip()),
-                "type_code": fields[1].strip(),
-            })
-
-    # IDoc Partner Profiles
-    try:
-        result = conn.call(
-            "RFC_READ_TABLE",
-            QUERY_TABLE="EDPP1",    # Partner profiles
-            DELIMITER="|",
-            FIELDS=[
-                {"FIELDNAME": "RCVPRN"},    # Partner number
-                {"FIELDNAME": "RCVPRT"},    # Partner type
-                {"FIELDNAME": "MESTYP"},    # Message type
-                {"FIELDNAME": "RCVPOR"},    # Receiver port
-            ],
-            ROWCOUNT=99999,
-        )
-
-        for row in result["DATA"]:
+    for page in read_table_chunked(conn, "RFCDES", rfc_fields, max_rows=10000):
+        for row in page:
             fields = row["WA"].split("|")
-            if len(fields) >= 4:
-                integrations["idoc_partners"].append({
-                    "partner": fields[0].strip(),
-                    "partner_type": fields[1].strip(),
-                    "message_type": fields[2].strip(),
-                    "port": fields[3].strip(),
+            if len(fields) >= 2:
+                integrations["rfc_destinations"].append({
+                    "name": fields[0].strip(),
+                    "type": type_map.get(fields[1].strip(), fields[1].strip()),
+                    "type_code": fields[1].strip(),
                 })
+
+    # IDoc Partner Profiles — paginated
+    try:
+        idoc_fields = [
+            {"FIELDNAME": "RCVPRN"},    # Partner number
+            {"FIELDNAME": "RCVPRT"},    # Partner type
+            {"FIELDNAME": "MESTYP"},    # Message type
+            {"FIELDNAME": "RCVPOR"},    # Receiver port
+        ]
+
+        for page in read_table_chunked(conn, "EDPP1", idoc_fields, max_rows=10000):
+            for row in page:
+                fields = row["WA"].split("|")
+                if len(fields) >= 4:
+                    integrations["idoc_partners"].append({
+                        "partner": fields[0].strip(),
+                        "partner_type": fields[1].strip(),
+                        "message_type": fields[2].strip(),
+                        "port": fields[3].strip(),
+                    })
     except Exception as e:
         logger.warning(f"Could not read IDoc partners: {e}")
 
@@ -644,6 +611,16 @@ def lambda_handler(event, context):
     logger.info(f"Discovery Engine started: {json.dumps(event)}")
     log_stage_event("discovery-engine", "Pipeline Start", "IN_PROGRESS", {"mode": event.get("input", {}).get("mode", "full")})
     _stage_start = __import__('time').time()
+
+    # Validate input at system boundary
+    validation_errors = validate_event(event, required_fields=["metadata.run_id"])
+    if validation_errors:
+        return {
+            "status": "error",
+            "stage": "discovery",
+            "errors": validation_errors,
+            "message": "Input validation failed",
+        }
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     mode = event.get("input", {}).get("mode", "full")

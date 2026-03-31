@@ -29,6 +29,7 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data-hygiene')))
 from logger import log_stage_event
+from validation import validate_event
 from bp_crosswalk_engine import execute_repointing
 
 logger = logging.getLogger()
@@ -37,9 +38,53 @@ logger.setLevel(logging.INFO)
 s3 = boto3.client("s3")
 
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+IDEMPOTENCY_TABLE = os.environ.get("IDEMPOTENCY_TABLE", "migrate4hana-idempotency")
 
 # Commit checkpoint every N records
 BATCH_COMMIT_SIZE = 500
+
+# FINS polling: configurable via env vars to handle large systems (4+ hours)
+FINS_MAX_POLLS = int(os.environ.get("FINS_MAX_POLLS", "480"))       # default ~4h at 30s base
+FINS_BASE_POLL_INTERVAL = int(os.environ.get("FINS_POLL_INTERVAL", "30"))  # seconds
+
+
+# =============================================================================
+# IDEMPOTENCY HELPER
+# =============================================================================
+_dynamodb_table = None
+
+
+def _get_idempotency_table():
+    """Lazy-init DynamoDB table to avoid import-time AWS calls."""
+    global _dynamodb_table
+    if _dynamodb_table is None:
+        _dynamodb_table = boto3.resource("dynamodb").Table(IDEMPOTENCY_TABLE)
+    return _dynamodb_table
+
+
+def _check_idempotency(run_id: str, item_key: str) -> bool:
+    """Return True if this item was already processed (skip it)."""
+    try:
+        table = _get_idempotency_table()
+        resp = table.get_item(Key={"pk": f"{run_id}#dataload", "sk": item_key})
+        return "Item" in resp
+    except Exception:
+        return False
+
+
+def _mark_processed(run_id: str, item_key: str, result_status: str):
+    """Record that this item was successfully processed."""
+    try:
+        table = _get_idempotency_table()
+        table.put_item(Item={
+            "pk": f"{run_id}#dataload",
+            "sk": item_key,
+            "status": result_status,
+            "timestamp": datetime.utcnow().isoformat(),
+            "ttl": int(datetime.utcnow().timestamp()) + 7 * 86400,  # 7-day TTL
+        })
+    except Exception as e:
+        logger.warning(f"Idempotency write failed for {item_key}: {e}")
 
 
 # =============================================================================
@@ -89,13 +134,14 @@ def orchestrate_fins_migration(connection):
         fins_result["job_id"] = job_id
         logger.info(f"FINS_MASS_DATA_MONITOR started: job_id={job_id}")
 
-        # Monitor execution progress
-        max_polls = 60  # Max polling iterations
+        # Monitor execution progress with adaptive polling
         poll_count = 0
         import time
 
-        while poll_count < max_polls:
+        while poll_count < FINS_MAX_POLLS:
             poll_count += 1
+            # Adaptive backoff: start at base interval, increase up to 2x after 30 polls
+            sleep_secs = min(FINS_BASE_POLL_INTERVAL * (1 + poll_count // 30), FINS_BASE_POLL_INTERVAL * 2)
             try:
                 status_result = connection.call("FINS_MASS_DATA_MONITOR", **{
                     "IV_ACTION": "STATUS",
@@ -125,7 +171,9 @@ def orchestrate_fins_migration(connection):
                     })
                     break
 
-                time.sleep(30)  # Poll every 30 seconds
+                if poll_count % 10 == 0:
+                    logger.info(f"FINS poll #{poll_count}: status={overall_status}, progress={fins_result['progress']}")
+                time.sleep(sleep_secs)
 
             except Exception as e:
                 logger.warning(f"FINS status poll failed: {e}")
@@ -358,6 +406,11 @@ def load_finance_data(conn, acdoca_records, run_id):
 
     for doc_key, lines in documents.items():
         try:
+            # Idempotency: skip if already loaded in a prior Lambda attempt
+            if _check_idempotency(run_id, f"finance#{doc_key}"):
+                loaded += 1
+                continue
+
             header = lines[0]  # Use first line for header fields
 
             # Build BAPI_ACC_DOCUMENT_POST parameters
@@ -402,6 +455,7 @@ def load_finance_data(conn, acdoca_records, run_id):
                 errors.append({"doc_key": doc_key, "errors": err_msgs[:3]})
             else:
                 loaded += 1
+                _mark_processed(run_id, f"finance#{doc_key}", "loaded")
                 # Commit every batch
                 if loaded % BATCH_COMMIT_SIZE == 0:
                     conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
@@ -449,6 +503,12 @@ def load_business_partners(conn, bp_records, run_id):
 
     for bp in bp_records:
         try:
+            bp_key = bp.get("PARTNER", str(bp_records.index(bp)))
+            # Idempotency: skip if already created in a prior Lambda attempt
+            if _check_idempotency(run_id, f"bp#{bp_key}"):
+                created += 1
+                continue
+
             # Build BAPI parameters
             header = {
                 "PARTN_CAT": bp.get("TYPE", "2"),  # 1=Person, 2=Organization
@@ -483,6 +543,7 @@ def load_business_partners(conn, bp_records, run_id):
                 errors.append({"partner": bp.get("PARTNER"), "errors": err_msgs[:3]})
             else:
                 created += 1
+                _mark_processed(run_id, f"bp#{bp_key}", "created")
                 # Assign roles
                 roles = bp.get("BP_ROLE", "").split(",")
                 for role in roles:
@@ -545,6 +606,11 @@ def load_material_documents(conn, matdoc_records, run_id):
 
     for doc_key, lines in documents.items():
         try:
+            # Idempotency: skip if already loaded in a prior Lambda attempt
+            if _check_idempotency(run_id, f"matdoc#{doc_key}"):
+                loaded += 1
+                continue
+
             header = lines[0]
 
             goodsmvt_header = {
@@ -581,6 +647,7 @@ def load_material_documents(conn, matdoc_records, run_id):
                 errors.append({"doc_key": doc_key, "errors": err_msgs[:3]})
             else:
                 loaded += 1
+                _mark_processed(run_id, f"matdoc#{doc_key}", "loaded")
                 if loaded % BATCH_COMMIT_SIZE == 0:
                     conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
 
@@ -878,6 +945,16 @@ def lambda_handler(event, context):
     """
     logger.info("Data Loader started")
     _stage_start = __import__('time').time()
+
+    # Validate input at system boundary
+    validation_errors = validate_event(event)
+    if validation_errors:
+        return {
+            "status": "error",
+            "stage": "data-loader",
+            "errors": validation_errors,
+            "message": "Input validation failed",
+        }
 
     stage = event.get("stage", "data-loader")
     stream_type = event.get("stream_type")

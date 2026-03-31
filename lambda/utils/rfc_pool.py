@@ -24,6 +24,7 @@ import json
 import os
 from collections import deque
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 logger = logging.getLogger(__name__)
 
@@ -125,22 +126,35 @@ class RFCConnectionPool:
         self._available: dict[str, deque] = {}
         self._in_use: dict[str, set] = {}
         self._params_cache: dict[str, dict] = {}
+        self._secret_cache: dict[str, tuple] = {}  # secret_arn → (params, fetched_at)
         self._stats = {"connections_created": 0, "connections_reused": 0,
                        "connections_recycled": 0, "health_check_failures": 0}
 
     def _resolve_params(self, secret_arn: str = "", conn_params: dict = None) -> dict:
-        """Resolve connection parameters from Secrets Manager or direct dict."""
+        """Resolve connection parameters from Secrets Manager or direct dict.
+        
+        Caches secrets for up to max_age seconds, then re-fetches to pick up
+        rotated credentials automatically.
+        """
         if conn_params:
             return conn_params
 
         if not secret_arn:
             raise ValueError("Either secret_arn or conn_params must be provided")
 
+        # Check cache — re-fetch if older than max_age
+        cached = self._secret_cache.get(secret_arn)
+        if cached:
+            params, fetched_at = cached
+            if time.monotonic() - fetched_at < self._max_age:
+                return params
+
         import boto3
         secrets_client = boto3.client("secretsmanager")
         secret = json.loads(
             secrets_client.get_secret_value(SecretId=secret_arn)["SecretString"]
         )
+        self._secret_cache[secret_arn] = (secret, time.monotonic())
         return secret
 
     def _params_hash(self, params: dict) -> str:
@@ -174,6 +188,7 @@ class RFCConnectionPool:
 
         The connection is automatically returned to the pool on exit.
         If the connection raises an exception, it is discarded (not returned).
+        On auth failure, credentials are re-fetched and a fresh connection is tried once.
         """
         params = self._resolve_params(secret_arn, conn_params)
         params_key = self._params_hash(params)
@@ -186,9 +201,25 @@ class RFCConnectionPool:
             yield pooled_conn.connection
             # Return healthy connection to pool
             self._return(pooled_conn)
-        except Exception:
+        except Exception as exc:
             # Connection may be broken — discard it
             self._discard(pooled_conn)
+            # On auth failure, invalidate cached secret and retry once
+            exc_msg = str(exc).upper()
+            if secret_arn and ("LOGON" in exc_msg or "PASSWORD" in exc_msg or "AUTHORIZATION" in exc_msg):
+                logger.warning("Auth failure detected — refreshing credentials and retrying")
+                self._secret_cache.pop(secret_arn, None)
+                fresh_params = self._resolve_params(secret_arn)
+                fresh_key = self._params_hash(fresh_params)
+                self._params_cache[fresh_key] = fresh_params
+                fresh_conn = self._borrow(fresh_key, fresh_params)
+                try:
+                    yield fresh_conn.connection
+                    self._return(fresh_conn)
+                    return
+                except Exception:
+                    self._discard(fresh_conn)
+                    raise
             raise
 
     def _borrow(self, params_key: str, params: dict) -> _PooledConnection:
@@ -303,3 +334,117 @@ def get_pool(max_connections: int = 5) -> RFCConnectionPool:
     if _DEFAULT_POOL is None:
         _DEFAULT_POOL = RFCConnectionPool(max_connections=max_connections)
     return _DEFAULT_POOL
+
+
+# =============================================================================
+# RFC CALL TIMEOUT WRAPPER
+# =============================================================================
+# pyrfc has no native per-call timeout. This uses a thread pool future
+# so that a hanging RFC call (e.g. SAP Gateway overload) doesn't consume
+# the entire Lambda execution window.
+
+# Default timeout in seconds — overridable via env var
+RFC_CALL_TIMEOUT = int(os.environ.get("RFC_CALL_TIMEOUT_SECONDS", "120"))
+
+_rfc_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="rfc_timeout")
+
+
+def call_rfc_with_timeout(conn, func_name: str, timeout: int = None, **kwargs):
+    """
+    Call an RFC function with a timeout guard.
+
+    Args:
+        conn: pyrfc Connection (or mock).
+        func_name: SAP function module name.
+        timeout: Seconds to wait before aborting (default: RFC_CALL_TIMEOUT).
+        **kwargs: Parameters forwarded to conn.call().
+
+    Returns:
+        The RFC call result dict.
+
+    Raises:
+        TimeoutError: If the call exceeds the timeout.
+    """
+    if timeout is None:
+        timeout = RFC_CALL_TIMEOUT
+
+    future = _rfc_executor.submit(conn.call, func_name, **kwargs)
+    try:
+        return future.result(timeout=timeout)
+    except FuturesTimeout:
+        logger.error(f"RFC call {func_name} timed out after {timeout}s")
+        raise TimeoutError(f"RFC call {func_name} exceeded {timeout}s timeout")
+
+
+# =============================================================================
+# PAGINATED RFC_READ_TABLE
+# =============================================================================
+# SAP RFC_READ_TABLE returns all rows in one shot. For large tables this
+# can OOM the application server or hit the 512 KB response limit.
+# This helper paginates via ROWSKIPS / ROWCOUNT.
+
+DEFAULT_PAGE_SIZE = int(os.environ.get("RFC_PAGE_SIZE", "5000"))
+
+
+def read_table_chunked(conn, query_table: str, fields: list, options: list = None,
+                       delimiter: str = "|", page_size: int = None,
+                       max_rows: int = 0, timeout: int = None):
+    """
+    Paginated RFC_READ_TABLE reader.
+
+    Yields pages of rows (list[dict]) so callers can stream-process
+    without loading the full result set into memory.
+
+    Args:
+        conn: RFC connection.
+        query_table: SAP table name.
+        fields: List of FIELDNAME dicts, e.g. [{"FIELDNAME": "MATNR"}].
+        options: WHERE clause dicts, e.g. [{"TEXT": "MATNR LIKE 'Z%'"}].
+        delimiter: Field delimiter (default "|").
+        page_size: Rows per RFC call (default DEFAULT_PAGE_SIZE).
+        max_rows: Stop after this many total rows (0 = unlimited).
+        timeout: Per-call timeout in seconds.
+
+    Yields:
+        list[dict]: Each element is {"WA": "<delimited row>"} — same as
+        RFC_READ_TABLE DATA output.
+    """
+    if page_size is None:
+        page_size = DEFAULT_PAGE_SIZE
+    if options is None:
+        options = []
+
+    offset = 0
+    total_fetched = 0
+
+    while True:
+        effective_count = page_size
+        if max_rows > 0:
+            remaining = max_rows - total_fetched
+            if remaining <= 0:
+                break
+            effective_count = min(page_size, remaining)
+
+        result = call_rfc_with_timeout(
+            conn, "RFC_READ_TABLE",
+            timeout=timeout,
+            QUERY_TABLE=query_table,
+            DELIMITER=delimiter,
+            FIELDS=fields,
+            OPTIONS=options,
+            ROWSKIPS=offset,
+            ROWCOUNT=effective_count,
+        )
+
+        rows = result.get("DATA", [])
+        if not rows:
+            break
+
+        yield rows
+
+        total_fetched += len(rows)
+        offset += len(rows)
+
+        # If we got fewer rows than requested, we've reached the end
+        if len(rows) < effective_count:
+            break
