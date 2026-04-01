@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+.git
+node_modules
+test-output
+frontend
+terraform
+docs
+*.md
+mock-ecc
+tests
+scripts

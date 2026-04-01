@@ -89,16 +89,9 @@ module "lambda" {
   ast_change_threshold = var.ast_change_threshold
 
   lambda_functions = {
-    discovery-engine = {
-      description = "Stage 1: Scan ECC system via RFC"
-      handler     = "handler.lambda_handler"
-      runtime     = "python3.11"
-      timeout     = 900     # 15 min  discovery can take a while
-      memory      = 1024
-      source_dir  = "${path.root}/../../../lambda/discovery-engine"
-      layers      = [var.pyrfc_layer_arn]
-    }
-    # ── Phase 1: PREPARE — Stages 2-4 (new SAP Activate stages) ──
+    # NOTE: discovery-engine removed — now runs on ECS Fargate (Stage 1)
+
+    # ── Phase 1: PREPARE — Stages 2-4 ──
     maintenance-planner = {
       description = "Stage 2: SAP Maintenance Planner Validation"
       handler     = "handler.lambda_handler"
@@ -128,15 +121,8 @@ module "lambda" {
     }
 
     # ── Phase 2: EXPLORE — Stages 5-8 ──
-    code-analyzer = {
-      description = "Stage 5: Analyze ABAP custom code"
-      handler     = "handler.lambda_handler"
-      runtime     = "python3.11"
-      timeout     = 900
-      memory      = 2048    # ABAP parsing needs more memory
-      source_dir  = "${path.root}/../../../lambda/code-analyzer"
-      layers      = []
-    }
+    # NOTE: code-analyzer removed — now runs on ECS Fargate (Stage 5)
+
     data-migrator = {
       description = "Stage 7: Assess & plan data migration"
       handler     = "handler.lambda_handler"
@@ -204,15 +190,8 @@ module "lambda" {
       source_dir  = "${path.root}/../../../lambda/code-deployer"
       layers      = [var.pyrfc_layer_arn]
     }
-    data-loader = {
-      description = "Stage 12: Load transformed data into S/4HANA"
-      handler     = "handler.lambda_handler"
-      runtime     = "python3.11"
-      timeout     = 900
-      memory      = 3008
-      source_dir  = "${path.root}/../../../lambda/data-loader"
-      layers      = [var.pyrfc_layer_arn]
-    }
+    # NOTE: data-loader removed — now runs on ECS Fargate (Stage 12 & 12A)
+
     config-applier = {
       description = "Stage 13: Apply SPRO config to S/4HANA"
       handler     = "handler.lambda_handler"
@@ -310,25 +289,50 @@ module "lambda" {
   }
 }
 
-# 
-# Step Functions  Pipeline orchestrator
-# 
+# ─────────────────────────────────────────────
+# ECS — Fargate compute for heavy migration stages
+# ─────────────────────────────────────────────
+module "ecs" {
+  source = "../../modules/ecs"
+
+  environment       = var.environment
+  aws_region        = var.aws_region
+  vpc_id            = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
+  secrets_arn       = aws_secretsmanager_secret.sap_credentials.arn
+  s3_staging_bucket = module.s3_staging.bucket_name
+  s3_staging_arn    = module.s3_staging.bucket_arn
+  bedrock_model_id  = var.bedrock_model_id
+}
+
+# ─────────────────────────────────────────────
+# Step Functions — Pipeline orchestrator
+# ─────────────────────────────────────────────
 module "step_functions" {
   source = "../../modules/step-functions"
 
   environment  = var.environment
   lambda_arns  = module.lambda.function_arns
 
+  # ECS Fargate — heavy-compute stages (1, 5, 12, 12A)
+  ecs_cluster_arn         = module.ecs.cluster_arn
+  ecs_task_definition_arn = module.ecs.task_definition_arn
+  ecs_security_group_id   = module.ecs.security_group_id
+  private_subnet_ids      = module.vpc.private_subnet_ids
+  ecs_task_role_arn       = module.ecs.task_role_arn
+  ecs_execution_role_arn  = module.ecs.execution_role_arn
+
   # Pipeline stage order — 17 stages across 5 SAP Activate phases
+  # Stages marked [ECS] run on Fargate, all others on Lambda
   pipeline_stages = [
     # Phase 1: PREPARE (Stages 1-4)
-    "discovery-engine",
+    "discovery-engine",       # [ECS Fargate]
     "process-miner",
     "maintenance-planner",
     "readiness-check",
     "simplification-check",
     # Phase 2: EXPLORE (Stages 5-8)
-    "code-analyzer",
+    "code-analyzer",          # [ECS Fargate]
     "data-hygiene",
     "data-migrator",
     "config-replicator",
@@ -339,7 +343,7 @@ module "step_functions" {
     "sum-orchestrator",
     # Phase 4: POST-CONVERSION (Stages 11-14)
     "code-deployer",
-    "data-loader",
+    "data-loader",            # [ECS Fargate — 4x parallel + reconciliation]
     "config-applier",
     "role-provisioner",
     # Phase 5: DEPLOY & RUN (Stages 15-17)
@@ -423,6 +427,16 @@ output "s3_staging_bucket" {
 output "lambda_functions" {
   value       = module.lambda.function_arns
   description = "Map of Lambda function ARNs"
+}
+
+output "ecs_cluster_arn" {
+  value       = module.ecs.cluster_arn
+  description = "ECS cluster for Fargate migration tasks"
+}
+
+output "ecr_repository_url" {
+  value       = module.ecs.ecr_repository_url
+  description = "ECR repo — push the Fargate worker image here"
 }
 
 output "start_migration_command" {

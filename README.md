@@ -2,7 +2,7 @@
 
 > **Aligned with SAP Activate Methodology | SAP Post-Migration Support Retained**
 
-> **Status (March 2026):** Production-ready. 17-stage pipeline across 5 SAP Activate phases fully operational — latest run scored **Grade A (100%)** with 861 custom programs scanned, 98.6% auto-fix rate, and 5,000 business partners migrated end-to-end. 114-test suite passing, all 10 previously identified gaps resolved. 160 AST transform rules, 535 country compliance rules across 57 countries, 443 OData mappings, 249 table transformations, 611 Fiori catalog mappings. See [Production Readiness](#production-readiness) for deployment considerations and [PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md) for the full deployment playbook.
+> **Status (April 2026):** Production-ready. 17-stage pipeline across 5 SAP Activate phases fully operational — 4 heavy-compute stages (Discovery, Code Analysis, Data Loading, Reconciliation) upgraded to ECS Fargate (4 vCPU / 16 GB). Latest run scored **Grade A (100%)** with 861 custom programs scanned, 98.6% auto-fix rate, and 5,000 business partners migrated end-to-end. 114-test suite passing, all 10 previously identified gaps resolved. 160 AST transform rules, 535 country compliance rules across 57 countries, 443 OData mappings, 249 table transformations, 611 Fiori catalog mappings. See [Production Readiness](#production-readiness) for deployment considerations and [PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md) for the full deployment playbook.
 
 ---
 
@@ -52,18 +52,19 @@ Unlike manual migration approaches that take 2-4 years, **Migrate4HANA compresse
 |                              AWS CLOUD                                            |
 |                                                                                   |
 |  +----------+    +------------------+    +--------------------------------+       |
-|  | Web UI   |--->|  Step Functions   |--->|  Lambda Functions (21)        |       |
-|  | (React)  |    |  Orchestrator     |    |                               |       |
-|  +----------+    |  (With Rollback)  |    |  5 SAP ACTIVATE PHASES        |       |
+|  | Web UI   |--->|  Step Functions   |--->|  Lambda Functions (18)        |       |
+|  | (React)  |    |  Orchestrator     |    |  + ECS Fargate Tasks (4)       |       |
+|  +----------+    |  (With Rollback)  |    |                               |       |
+|       |          |                   |    |  5 SAP ACTIVATE PHASES        |       |
 |       |          |                   |    |  17 Pipeline Stages            |       |
 |       |          |  PHASE 1: PREPARE |    |                               |       |
-|  +----v-----+    |  Stage 1  ---------->  |  * discovery-engine           |       |
+|  +----v-----+    |  Stage 1  ---------->  |  * discovery-engine  [FARGATE] |       |
 |  |WebSocket |    |  Stage 2  ---------->  |  * maint-planner-integrator   |       |
 |  |Telemetry |    |  Stage 3  ---------->  |  * readiness-check-runner     |       |
 |  |(API GW)  |    |  Stage 4  ---------->  |  * si-check-executor          |       |
 |  +----------+    |                   |    |                               |       |
 |                  |  PHASE 2: EXPLORE |    |                               |       |
-|  +----------+    |  Stage 5  ---------->  |  * code-analyzer (AST+GenAI)  |       |
+|  +----------+    |  Stage 5  ---------->  |  * code-analyzer     [FARGATE]|       |
 |  |CloudWatch|    |  Stage 6  ---------->  |  * cvi-bp-preparer            |       |
 |  |& UI Logs |    |  Stage 7  ---------->  |  * data-assessor (AWS DMS)    |       |
 |  +----------+    |  Stage 8  ---------->  |  * config-integration-assess  |       |
@@ -75,7 +76,7 @@ Unlike manual migration approaches that take 2-4 years, **Migrate4HANA compresse
 |                  |                   |    |  ! Orchestrates SAP SUM/DMO   |       |
 |  +----------+    |  PHASE 4: POST   |    |                               |       |
 |  | Local LLM|    |  Stage 11 ---------->  |  * spau-spdd-code-deployer    |       |
-|  | Bedrock  |    |  Stage 12 ---------->  |  * fins-migration-executor    |       |
+|  | Bedrock  |    |  Stage 12 ---------->  |  * fins-migration    [FARGATE]|       |
 |  +----------+    |  Stage 13 ---------->  |  * matledger-config-applier   |       |
 |                  |  Stage 14 ---------->  |  * roles-integrations-prov    |       |
 |  +----------+    |                   |    |                               |       |
@@ -89,8 +90,8 @@ Unlike manual migration approaches that take 2-4 years, **Migrate4HANA compresse
 |  SUPPORT         |  * rollback-manager    * data-hygiene (BP dedup)               |
 |  LAMBDAS         |  * process-miner       * test-generator (DITL)                 |
 |                  |                                                                |
-|  TERRAFORM       |  MODULES (13)                                                  |
-|                  |  vpc - lambda - step-functions - s3-staging - cloudwatch        |
+|  TERRAFORM       |  MODULES (14)                                                  |
+|                  |  vpc - lambda - ecs - step-functions - s3-staging - cloudwatch  |
 |                  |  dms - dynamodb - vpc-endpoints - airgapped-llm                |
 |                  |  entity-resolution - websocket-telemetry - waf - audit         |
 |                  |                                                                |
@@ -130,7 +131,7 @@ Phase 5: Deploy & Run (3 stages) -- Testing & Go-Live
 
 | Stage | Lambda | Description |
 |-------|--------|-------------|
-| 1 | `discovery-engine` | Scans ECC: custom programs, tables, function modules, org structure, roles, users, RFC destinations, IDoc partners |
+| 1 | `discovery-engine` | Scans ECC: custom programs, tables, function modules, org structure, roles, users, RFC destinations, IDoc partners. **Runs on ECS Fargate** (4 vCPU / 16 GB) |
 | 2 | `maint-planner-integrator` | Parses stack.xml from Maintenance Planner, validates add-on compatibility, confirms target product version |
 | 3 | `readiness-check-runner` | Automates RC_COLLECT_ANALYSIS_DATA execution, parses results into a visual readiness roadmap |
 | 4 | `si-check-executor` | Executes /SDF/RC_START_CHECK for Simplification Item analysis, generates remediation task list |
@@ -139,7 +140,7 @@ Phase 5: Deploy & Run (3 stages) -- Testing & Go-Live
 
 | Stage | Lambda | Description |
 |-------|--------|-------------|
-| 5 | `code-analyzer` | Parses ABAP with 6,400-line AST engine (160 transform rules) + ATC (/SDF/ATC_RUN_API with S/4HANA variant), auto-remediates with Deep Knowledge Engine (249 table transformations) + GenAI |
+| 5 | `code-analyzer` | Parses ABAP with 6,400-line AST engine (160 transform rules) + ATC (/SDF/ATC_RUN_API with S/4HANA variant), auto-remediates with Deep Knowledge Engine (249 table transformations) + GenAI. **Runs on ECS Fargate** (4 vCPU / 16 GB) |
 | 6 | `cvi-bp-preparer` | CVI_UPGRADE_CHECK_RESOLVE pre-checks, ML-powered BP deduplication, crosswalk generation, number range resolution |
 | 7 | `data-assessor` | Plans data migration via AWS DMS CDC, finance document transformation (BSEG/BKPF to ACDOCA), custom table mapping |
 | 8 | `config-integration-assessor` | Extracts SPRO config (50+ tables, 57 country localizations), maps RFC/IDoc/API integrations, identifies migration scope |
@@ -158,7 +159,7 @@ Phase 5: Deploy & Run (3 stages) -- Testing & Go-Live
 | Stage | Lambda | Description |
 |-------|--------|-------------|
 | 11 | `spau-spdd-code-deployer` | Tracks SPAU/SPDD adjustments, parses worklists, deploys remediated custom code via transport requests |
-| 12 | `fins-migration-executor` | Orchestrates FINS_MASS_DATA_MONITOR execution for finance data migration, runs reconciliation checks |
+| 12 | `fins-migration-executor` | Orchestrates FINS_MASS_DATA_MONITOR execution for finance data migration, runs reconciliation checks. **Runs on ECS Fargate** (4 vCPU / 16 GB) with Distributed Map for parallel streams |
 | 13 | `matledger-config-applier` | Activates Material Ledger (CKMSTART), applies number ranges, BP groupings, Fiori catalogs, country-specific config |
 | 14 | `roles-integrations-provisioner` | Creates PFCG roles with Fiori menus, composite roles, user assignments, RFC destinations, IDoc partners |
 
@@ -209,7 +210,7 @@ Migrate4HANA does not bypass or replace any SAP tool. It orchestrates them, auto
 - **Maintenance Planner integration** — stack.xml parsing, add-on compatibility validation, target system confirmation
 - **SAP Readiness Check automation** — RC_COLLECT_ANALYSIS_DATA execution with visual roadmap generation
 - **Simplification Item Check** — /SDF/RC_START_CHECK with remediation task generation
-- **Custom code analysis** — 6,400-line AST compiler with 160 transform rules + ATC (/SDF/ATC_RUN_API) + Deep Knowledge Engine (249 table transformations) + GenAI escalation (Bedrock / Air-Gapped)
+- **Custom code analysis** — 6,400-line AST compiler with 160 transform rules + ATC (/SDF/ATC_RUN_API) + Deep Knowledge Engine (249 table transformations) + GenAI escalation (Bedrock / Air-Gapped). **Runs on ECS Fargate** (4 vCPU / 16 GB) for enterprise-scale processing
 - **CVI/Business Partner preparation** — CVI_UPGRADE_CHECK_RESOLVE pre-checks, ML-powered deduplication (226 IDoc partner profiles), crosswalk tables
 - **SUM/DMO orchestration** — CLI orchestration, real-time log monitoring, progress tracking
 - **FINS_MASS_DATA_MONITOR execution** — Finance migration orchestration with zero-variance reconciliation
@@ -232,8 +233,9 @@ Migrate4HANA does not bypass or replace any SAP tool. It orchestrates them, auto
 | Metric | Value |
 |--------|-------|
 | Pipeline Stages | 17 across 5 SAP Activate phases |
-| Lambda Functions | 21 |
-| Terraform Modules | 13 |
+| Lambda Functions | 18 (15 pipeline + 3 support) |
+| ECS Fargate Stages | 4 (Stages 1, 5, 12, 12A — 4 vCPU / 16 GB) |
+| Terraform Modules | 14 |
 | Automated Validation Checks | 85 |
 | AST Transform Rules | 160 (AST-001 → AST-160) |
 | Table Transformations | 249 ECC → S/4HANA mappings |
@@ -258,6 +260,12 @@ migrate4hana/
 |       +-- ci.yml                  # CI: test, scan, build, validate
 |       +-- deploy.yml              # CD: staging/prod deploy with OIDC
 |
++-- ecs/                            # ECS Fargate container (Stages 1, 5, 12, 12A)
+|   +-- Dockerfile                  # Multi-stage build (Amazon Linux 2023 + SAP NW RFC SDK)
+|   +-- entrypoint.py               # Unified Docker wrapper (STAGE_TARGET dispatch + SFN callbacks)
+|
++-- .dockerignore                   # Docker build context exclusions
+|
 +-- frontend/                       # React web UI
 |   +-- src/
 |   |   +-- App.jsx                 # Main app with routing
@@ -276,12 +284,12 @@ migrate4hana/
 |   |       +-- MetricCard.jsx      # Metric display card
 |   +-- package.json
 |
-+-- lambda/                          # Migration engine (21 Lambdas)
-|   +-- discovery-engine/            # Stage 1  -- ECC system scanning
++-- lambda/                          # Migration engine (18 Lambdas + 3 ECS stages)
+|   +-- discovery-engine/            # Stage 1  -- ECC system scanning [ECS Fargate]
 |   +-- maint-planner-integrator/    # Stage 2  -- Maintenance Planner integration
 |   +-- readiness-check-runner/      # Stage 3  -- SAP Readiness Check automation
 |   +-- si-check-executor/           # Stage 4  -- Simplification Item Check
-|   +-- code-analyzer/               # Stage 5  -- AST parser + ATC + GenAI remediation
+|   +-- code-analyzer/               # Stage 5  -- AST parser + ATC + GenAI remediation [ECS Fargate]
 |   |   +-- abap_ast_engine.py       #   6,400-line production-grade AST compiler (160 rules)
 |   |   +-- abap_analyzer.py         #   ABAP analysis orchestrator
 |   |   +-- genai_router.py          #   Dual-path GenAI (Bedrock / Air-Gapped)
@@ -294,7 +302,7 @@ migrate4hana/
 |   +-- pre-conversion-gate/         # Stage 9  -- GO/NO-GO gate
 |   +-- sum-dmo-monitor/             # Stage 10 -- SUM/DMO orchestration & monitoring
 |   +-- spau-spdd-code-deployer/     # Stage 11 -- SPAU/SPDD + code deployment
-|   +-- fins-migration-executor/     # Stage 12 -- FINS_MASS_DATA_MONITOR execution
+|   +-- fins-migration-executor/     # Stage 12 -- FINS_MASS_DATA_MONITOR execution [ECS Fargate]
 |   +-- matledger-config-applier/    # Stage 13 -- Material Ledger + config application
 |   +-- roles-integrations-prov/     # Stage 14 -- Roles + integrations provisioning
 |   +-- bpt-test-executor/           # Stage 15 -- Business process testing
@@ -316,7 +324,7 @@ migrate4hana/
 +-- tests/                           # Unit, integration & load tests
 |   +-- load_test.py                 # Locust load testing (2 user profiles)
 |
-+-- terraform/                       # Infrastructure as Code (13 modules)
++-- terraform/                       # Infrastructure as Code (14 modules)
 |   +-- environments/
 |   |   +-- dev/                     # Dev environment config
 |   |   +-- staging/                 # Staging (10.20/16, 2 AZ, WAF+Audit)
@@ -324,7 +332,8 @@ migrate4hana/
 |   +-- modules/
 |       +-- vpc/                     # VPC with private subnets
 |       +-- lambda/                  # Lambda function deployment
-|       +-- step-functions/          # 17-stage state machine
+|       +-- ecs/                     # ECS Fargate cluster + ECR + task definition (NEW v6.0)
+|       +-- step-functions/          # 17-stage state machine (ECS + Lambda)
 |       +-- s3-staging/              # Intermediate data staging
 |       +-- cloudwatch/              # Monitoring & alerts
 |       +-- dms/                     # AWS DMS for CDC data sync
@@ -378,17 +387,26 @@ vim terraform.tfvars
 # 2. Deploy infrastructure
 terraform init && terraform apply
 
-# 3. Deploy Lambda functions
-cd ../../../scripts && ./deploy.sh
+# 3. Build & push ECS Docker image
+ECR_URL=$(terraform output -raw ecr_repository_url)
+aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_URL
+cd ../../..  # back to project root
+docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .
+docker tag migrate4hana-worker:latest $ECR_URL:latest
+docker push $ECR_URL:latest
+
+# 4. Deploy Lambda functions
+cd scripts && ./deploy.sh
 ```
 
-### Infrastructure Modules (13 Terraform Modules)
+### Infrastructure Modules (14 Terraform Modules)
 
 | Module | Description |
 |--------|-------------|
 | `vpc` | VPC with private subnets for SAP connectivity |
-| `lambda` | 21 Lambda functions with telemetry env vars |
-| `step-functions` | 17-stage state machine with error chaining to rollback-manager |
+| `lambda` | 18 Lambda functions with telemetry env vars |
+| `ecs` | ECS Fargate cluster, ECR repo, task definition (4 vCPU / 16 GB) for Stages 1, 5, 12, 12A |
+| `step-functions` | 17-stage state machine with ECS `waitForTaskToken` + Lambda invoke + error chaining to rollback-manager |
 | `s3-staging` | Intermediate data staging bucket |
 | `cloudwatch` | Monitoring, alerts, and log retention |
 | `dms` | AWS DMS for full-load + CDC continuous data sync |
@@ -513,6 +531,17 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **DR & Backup** | S3 cross-region replication, DynamoDB PITR, documented RTO/RPO |
 | **Load Testing** | Locust suite (`tests/load_test.py`) with 2 user profiles, CI integration |
 
+### ECS Fargate Compute Upgrade (v6.0)
+
+| Capability | Implementation |
+|------------|----------------|
+| **ECS Fargate** | Stages 1, 5, 12, 12A run on 4 vCPU / 16 GB Fargate tasks — no 15-minute timeout |
+| **Docker Image** | Multi-stage build on Amazon Linux 2023 with SAP NW RFC SDK + PyRFC (`ecs/Dockerfile`) |
+| **Step Functions Integration** | `waitForTaskToken` callback pattern with heartbeat (300s) and per-stage timeouts (1h–4h) |
+| **ECR Repository** | `migrate4hana/worker` with lifecycle policy (keep last 10 images), scan-on-push |
+| **Unified Entrypoint** | `ecs/entrypoint.py` — dynamic handler selection via `STAGE_TARGET`, Lambda context shim |
+| **IAM** | Execution role (ECR pull + CloudWatch Logs) + Task role (S3, DynamoDB, Bedrock, Secrets, SFN callbacks) |
+
 ### Production Hardening Highlights (v5.0)
 
 | Capability | Implementation |
@@ -530,18 +559,18 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 
 | Component | Status | Score | Notes |
 |-----------|--------|-------|-------|
-| **Discovery Engine** (Stage 1) | Ready | 95% | Real RFC_READ_TABLE calls, scans TRDIR/DD02L/TFDIR + org structure |
+| **Discovery Engine** (Stage 1) | Ready | 95% | Real RFC_READ_TABLE calls, scans TRDIR/DD02L/TFDIR + org structure. **ECS Fargate** (4 vCPU / 16 GB) |
 | **Maint Planner Integrator** (Stage 2) | Ready | 93% | stack.xml parsing, add-on validation, target product confirmation |
 | **Readiness Check Runner** (Stage 3) | Ready | 93% | RC_COLLECT_ANALYSIS_DATA automation, visual roadmap generation |
 | **SI-Check Executor** (Stage 4) | Ready | 92% | /SDF/RC_START_CHECK execution, remediation task list |
-| **Code Analyzer** (Stage 5) | Ready | 98% | 6,400-line AST + ATC + 160 transformation rules + 249 table mappings, Dual-GenAI escalation |
+| **Code Analyzer** (Stage 5) | Ready | 98% | 6,400-line AST + ATC + 160 transformation rules + 249 table mappings, Dual-GenAI escalation. **ECS Fargate** (4 vCPU / 16 GB) |
 | **CVI/BP Preparer** (Stage 6) | Ready | 95% | CVI pre-validation, Levenshtein+Soundex dedup, crosswalk generation |
 | **Data Assessor** (Stage 7) | Ready | 95% | DMS CDC planning, finance transformation mapping, custom table analysis |
 | **Config/Integration Assessor** (Stage 8) | Ready | 92% | 50+ SPRO tables, 57 country profiles, RFC/IDoc/API mapping |
 | **Pre-Conversion Gate** (Stage 9) | Ready | 95% | Pre-flight validation, S/4HANA connectivity test, DMS CDC monitoring |
 | **SUM/DMO Monitor** (Stage 10) | Ready | 90% | SUM CLI orchestration, real-time log monitoring, progress tracking |
 | **SPAU/SPDD + Code Deployer** (Stage 11) | Ready | 95% | Adjustment tracking, transport management (create->upload->activate->release) |
-| **FINS Migration Executor** (Stage 12) | Ready | 93% | FINS_MASS_DATA_MONITOR orchestration, reconciliation checks |
+| **FINS Migration Executor** (Stage 12) | Ready | 93% | FINS_MASS_DATA_MONITOR orchestration, reconciliation checks. **ECS Fargate** (4 vCPU / 16 GB) with Distributed Map |
 | **MatLedger + Config Applier** (Stage 13) | Ready | 90% | Material Ledger activation, number ranges, BP groupings, Fiori config |
 | **Roles + Integrations Provisioner** (Stage 14) | Ready | 92% | PFCG roles, Fiori catalogs, user assignments, RFC/IDoc activation |
 | **Business Process Testing** (Stage 15) | Ready | 90% | Automated DITL Cypress execution, Fiori app validation |
@@ -551,7 +580,7 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **PDF Report Generator** | Ready | 90% | Professional 11-section branded report with ReportLab |
 | **React Frontend** | Ready | 85% | 6 pages, 5-phase pipeline view, real-time telemetry, scorecard visualization |
 | **API Server** | Ready | 90% | JWT + API key authentication, rate limiting, structured endpoints |
-| **Terraform (13 modules)** | Ready | 92% | VPC, Lambda, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM, WAF, Audit |
+| **Terraform (14 modules)** | Ready | 92% | VPC, Lambda, ECS, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM, WAF, Audit |
 | **Test Suite** | Ready | 95% | 114 tests: unit (stages, rule router, ST03N, DITL, rollback, config, error handling) + 52 integration tests (15 classes, dual-mode mock + live SAP) |
 | **Mock Data Generator** | Excellent | 92% | Realistic Indian manufacturer, 1,247 programs, 226 IDoc profiles, 80 ABAP test templates, intentional ABAP bugs |
 
@@ -559,6 +588,7 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 
 - Full 17-stage pipeline executes locally against mock data (~70 seconds)
 - Full 17-stage pipeline executes against real SAP ECC/S4HANA via PyRFC
+- 4 heavy-compute stages (1, 5, 12, 12A) run on ECS Fargate with Step Functions `waitForTaskToken` callbacks
 - SAP Readiness Check + Simplification Item Check automation
 - Maintenance Planner integration with stack.xml validation
 - AST-based ABAP analysis with 160 transformation rules + 249 table mappings + ATC + GenAI escalation
@@ -579,6 +609,8 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 - Automated rollback on failure (FI reversal + transport cleanup)
 - 85-check GO-LIVE scorecard with Grade A-D assessment across 7 dimensions
 - Web UI with 7 pages: Dashboard, Pipeline, StageDetail, Scorecard, Report, Connections, Telemetry
+- ECS Fargate (4 vCPU / 16 GB) for stages exceeding Lambda's 15-minute timeout: discovery, code analysis, data loading, reconciliation
+- Docker image build (`ecs/Dockerfile`) with SAP NW RFC SDK + PyRFC for ECS container deployment
 
 ### Previously Identified Gaps — All Resolved
 

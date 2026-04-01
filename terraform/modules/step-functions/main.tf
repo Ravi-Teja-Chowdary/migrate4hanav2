@@ -7,6 +7,32 @@ variable "environment" { type = string }
 variable "lambda_arns" { type = map(string) }
 variable "pipeline_stages" { type = list(string) }
 
+# ── ECS / Fargate variables (heavy-compute stages) ──
+variable "ecs_cluster_arn" {
+  type        = string
+  description = "ARN of the ECS cluster for Fargate tasks"
+}
+variable "ecs_task_definition_arn" {
+  type        = string
+  description = "ARN of the Fargate task definition (4 vCPU / 16 GB)"
+}
+variable "ecs_security_group_id" {
+  type        = string
+  description = "Security group for Fargate ENIs"
+}
+variable "private_subnet_ids" {
+  type        = list(string)
+  description = "VPC subnets for Fargate tasks (same as Lambda)"
+}
+variable "ecs_task_role_arn" {
+  type        = string
+  description = "Task role ARN (for iam:PassRole)"
+}
+variable "ecs_execution_role_arn" {
+  type        = string
+  description = "Execution role ARN (for iam:PassRole)"
+}
+
 # ── IAM Role for Step Functions ──────────────
 resource "aws_iam_role" "step_functions" {
   name = "migrate4hana-sfn-${var.environment}"
@@ -37,6 +63,34 @@ resource "aws_iam_role_policy" "step_functions" {
         Effect   = "Allow"
         Action   = ["logs:*"]
         Resource = "*"
+      },
+      # ── ECS Fargate permissions (Stages 1, 5, 12, 12A) ──
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:RunTask",
+          "ecs:StopTask",
+          "ecs:DescribeTasks"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          var.ecs_task_role_arn,
+          var.ecs_execution_role_arn
+        ]
+      },
+      # EventBridge — required for .sync and .waitForTaskToken ECS integration
+      {
+        Effect = "Allow"
+        Action = [
+          "events:PutTargets",
+          "events:PutRule",
+          "events:DescribeRule"
+        ]
+        Resource = "arn:aws:events:*:*:rule/StepFunctionsGetEventsForECSTaskRule"
       }
     ]
   })
@@ -74,26 +128,56 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
         Comment = "Phase 1: PREPARE — Assessment & Pre-Checks"
         Result  = { phase = 1, phase_name = "PREPARE", description = "Assessment & Pre-Checks" }
         ResultPath = "$.phase_telemetry"
+        Next       = "Stage1_Discovery_Prep"
+      }
+
+      # ── Stage 1: Discovery & Landscape Analysis  [ECS Fargate] ──
+      # Prep state constructs the handler payload so it can be
+      # serialised into the SFN_INPUT environment variable.
+      Stage1_Discovery_Prep = {
+        Type    = "Pass"
+        Comment = "Construct discovery payload for ECS container"
+        Parameters = {
+          "stage"      = "discovery"
+          "metadata.$" = "$.metadata"
+          "input.$"    = "$.metadata.input"
+        }
+        ResultPath = "$.stage_payload"
         Next       = "Stage1_Discovery"
       }
 
-      # ── Stage 1: Discovery & Landscape Analysis ──
       Stage1_Discovery = {
         Type     = "Task"
-        Comment  = "Scan ECC: custom code, tables, org structure, roles, integrations"
-        Resource = "arn:aws:states:::lambda:invoke"
+        Comment  = "ECS Fargate — Scan ECC: custom code, tables, org structure, roles"
+        Resource = "arn:aws:states:::ecs:runTask.waitForTaskToken"
         Parameters = {
-          FunctionName = lookup(var.lambda_arns, "discovery-engine", "")
-          Payload = {
-            "stage"      = "discovery"
-            "metadata.$" = "$.metadata"
-            "input.$"    = "$.metadata.input"
+          LaunchType      = "FARGATE"
+          Cluster         = var.ecs_cluster_arn
+          TaskDefinition  = var.ecs_task_definition_arn
+          NetworkConfiguration = {
+            AwsvpcConfiguration = {
+              Subnets        = var.private_subnet_ids
+              SecurityGroups = [var.ecs_security_group_id]
+              AssignPublicIp = "DISABLED"
+            }
+          }
+          Overrides = {
+            ContainerOverrides = [{
+              Name = "migration-worker"
+              Environment = [
+                { Name = "STAGE_TARGET",    Value = "discovery-engine" },
+                { "Name" = "SFN_TASK_TOKEN", "Value.$" = "$$.Task.Token" },
+                { "Name" = "SFN_INPUT",      "Value.$" = "States.JsonToString($.stage_payload)" },
+              ]
+            }]
           }
         }
-        ResultPath = "$.discovery"
+        HeartbeatSeconds = 300
+        TimeoutSeconds   = 3600
+        ResultPath       = "$.discovery"
         Retry = [{
           ErrorEquals     = ["States.TaskFailed"]
-          IntervalSeconds = 30
+          IntervalSeconds = 60
           MaxAttempts     = 2
           BackoffRate     = 2.0
         }]
@@ -238,26 +322,54 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
         Comment = "Phase 2: EXPLORE — Application Preparation"
         Result  = { phase = 2, phase_name = "EXPLORE", description = "Application Preparation" }
         ResultPath = "$.phase_telemetry"
+        Next       = "Stage5_CodeAnalysis_Prep"
+      }
+
+      # ── Stage 5: Code Analysis & Extraction  [ECS Fargate] ──
+      Stage5_CodeAnalysis_Prep = {
+        Type    = "Pass"
+        Comment = "Construct code-analysis payload for ECS container"
+        Parameters = {
+          "stage"       = "code-analysis"
+          "metadata.$"  = "$.metadata"
+          "discovery.$" = "$.discovery.Payload"
+        }
+        ResultPath = "$.stage_payload"
         Next       = "Stage5_CodeAnalysis"
       }
 
-      # ── Stage 5: Code Analysis & Extraction ──
       Stage5_CodeAnalysis = {
         Type     = "Task"
-        Comment  = "Extract AST from ABAP, scrub PII, prepare for LLM GenAI routing"
-        Resource = "arn:aws:states:::lambda:invoke"
+        Comment  = "ECS Fargate — AST extraction, PII scrub, GenAI prep (15 K+ programs)"
+        Resource = "arn:aws:states:::ecs:runTask.waitForTaskToken"
         Parameters = {
-          FunctionName = lookup(var.lambda_arns, "code-analyzer", "")
-          Payload = {
-            "stage"       = "code-analysis"
-            "metadata.$"  = "$.metadata"
-            "discovery.$" = "$.discovery.Payload"
+          LaunchType      = "FARGATE"
+          Cluster         = var.ecs_cluster_arn
+          TaskDefinition  = var.ecs_task_definition_arn
+          NetworkConfiguration = {
+            AwsvpcConfiguration = {
+              Subnets        = var.private_subnet_ids
+              SecurityGroups = [var.ecs_security_group_id]
+              AssignPublicIp = "DISABLED"
+            }
+          }
+          Overrides = {
+            ContainerOverrides = [{
+              Name = "migration-worker"
+              Environment = [
+                { Name = "STAGE_TARGET",    Value = "code-analyzer" },
+                { "Name" = "SFN_TASK_TOKEN", "Value.$" = "$$.Task.Token" },
+                { "Name" = "SFN_INPUT",      "Value.$" = "States.JsonToString($.stage_payload)" },
+              ]
+            }]
           }
         }
-        ResultPath = "$.code_analysis"
+        HeartbeatSeconds = 300
+        TimeoutSeconds   = 7200
+        ResultPath       = "$.code_analysis"
         Retry = [{
           ErrorEquals     = ["States.TaskFailed"]
-          IntervalSeconds = 30
+          IntervalSeconds = 60
           MaxAttempts     = 2
           BackoffRate     = 2.0
         }]
@@ -550,17 +662,15 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
           Next        = "ExecutionFailed"
           ResultPath  = "$.error"
         }]
-        Next = "Stage12_DataLoad"
+        Next = "Stage12_DataLoad_Prepare"
       }
 
-      # ── Stage 12: Data Loader — Distributed Map (Parallel Streams) ──
-      # SAP databases can be terabytes. Lambda has a 15-min timeout.
-      # We use a Distributed Map to chunk and parallelize data loads
-      # across 4 data streams: Finance, BP, Materials, Custom tables.
-      # Each stream runs its own Lambda, staying within timeout limits.
+      # ── Stage 12: Data Loader — Distributed Map  [ECS Fargate] ──
+      # SAP databases can be terabytes. Each of the 4 data streams
+      # fans out into its own Fargate container (no 15-min limit).
       Stage12_DataLoad_Prepare = {
         Type    = "Pass"
-        Comment = "Fan-out: prepare data load chunks for parallel processing"
+        Comment = "Fan-out: prepare data load chunks for parallel ECS processing"
         Parameters = {
           "data_streams" = [
             { "stream_type" = "finance",       "description" = "ACDOCA via BAPI_ACC_DOCUMENT_POST" },
@@ -577,7 +687,7 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
 
       Stage12_DataLoad_DistributedMap = {
         Type    = "Map"
-        Comment = "Parallel data loading across Finance/BP/Materials/Custom streams"
+        Comment = "Parallel data loading — 4 concurrent Fargate tasks"
         ItemsPath = "$.data_load_input.data_streams"
         MaxConcurrency = 4
         Parameters = {
@@ -588,18 +698,51 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
           "data_migration.$" = "$.data_load_input.data_migration"
         }
         Iterator = {
-          StartAt = "LoadDataStream"
+          StartAt = "PrepDataStreamPayload"
           States = {
-            LoadDataStream = {
-              Type     = "Task"
-              Resource = "arn:aws:states:::lambda:invoke"
+            # Capture the full map-item input so we can stringify it for SFN_INPUT
+            PrepDataStreamPayload = {
+              Type       = "Pass"
               Parameters = {
-                FunctionName = lookup(var.lambda_arns, "data-loader", "")
-                "Payload.$"  = "$"
+                "stream_type.$"    = "$.stream_type"
+                "description.$"    = "$.description"
+                "stage.$"          = "$.stage"
+                "metadata.$"       = "$.metadata"
+                "data_migration.$" = "$.data_migration"
               }
-              TimeoutSeconds = 900
+              ResultPath = "$.sfn_payload"
+              Next       = "LoadDataStreamECS"
+            }
+            LoadDataStreamECS = {
+              Type     = "Task"
+              Comment  = "ECS Fargate — load one data stream into S/4HANA"
+              Resource = "arn:aws:states:::ecs:runTask.waitForTaskToken"
+              Parameters = {
+                LaunchType      = "FARGATE"
+                Cluster         = var.ecs_cluster_arn
+                TaskDefinition  = var.ecs_task_definition_arn
+                NetworkConfiguration = {
+                  AwsvpcConfiguration = {
+                    Subnets        = var.private_subnet_ids
+                    SecurityGroups = [var.ecs_security_group_id]
+                    AssignPublicIp = "DISABLED"
+                  }
+                }
+                Overrides = {
+                  ContainerOverrides = [{
+                    Name = "migration-worker"
+                    Environment = [
+                      { Name = "STAGE_TARGET",    Value = "data-loader" },
+                      { "Name" = "SFN_TASK_TOKEN", "Value.$" = "$$.Task.Token" },
+                      { "Name" = "SFN_INPUT",      "Value.$" = "States.JsonToString($.sfn_payload)" },
+                    ]
+                  }]
+                }
+              }
+              HeartbeatSeconds = 300
+              TimeoutSeconds   = 14400
               Retry = [{
-                ErrorEquals     = ["States.TaskFailed", "Lambda.ServiceException"]
+                ErrorEquals     = ["States.TaskFailed"]
                 IntervalSeconds = 60
                 MaxAttempts     = 2
                 BackoffRate     = 2.0
@@ -630,25 +773,52 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
           }
         }
         ResultPath = "$.data_load"
+        Next       = "Stage12A_Reconciliation_Prep"
+      }
+
+      # ── Stage 12A: Penny-Perfect Financial Reconciliation  [ECS Fargate] ──
+      Stage12A_Reconciliation_Prep = {
+        Type    = "Pass"
+        Comment = "Construct reconciliation payload for ECS container"
+        Parameters = {
+          "stage"            = "reconciliation"
+          "metadata.$"       = "$.metadata"
+          "data_migration.$" = "$.data_migration.Payload"
+          "data_load.$"      = "$.data_load.Payload"
+        }
+        ResultPath = "$.stage_payload"
         Next       = "Stage12A_Reconciliation"
       }
 
-      # ── Stage 12A: Penny-Perfect Financial Reconciliation ──
       Stage12A_Reconciliation = {
         Type     = "Task"
-        Comment  = "Post-load reconciliation: compare ECC GL balances with S/4HANA ACDOCA"
-        Resource = "arn:aws:states:::lambda:invoke"
+        Comment  = "ECS Fargate — post-load reconciliation: ECC GL vs S/4HANA ACDOCA"
+        Resource = "arn:aws:states:::ecs:runTask.waitForTaskToken"
         Parameters = {
-          FunctionName = lookup(var.lambda_arns, "data-loader", "")
-          Payload = {
-            "stage"            = "reconciliation"
-            "metadata.$"       = "$.metadata"
-            "data_migration.$" = "$.data_migration.Payload"
-            "data_load.$"      = "$.data_load.Payload"
+          LaunchType      = "FARGATE"
+          Cluster         = var.ecs_cluster_arn
+          TaskDefinition  = var.ecs_task_definition_arn
+          NetworkConfiguration = {
+            AwsvpcConfiguration = {
+              Subnets        = var.private_subnet_ids
+              SecurityGroups = [var.ecs_security_group_id]
+              AssignPublicIp = "DISABLED"
+            }
+          }
+          Overrides = {
+            ContainerOverrides = [{
+              Name = "migration-worker"
+              Environment = [
+                { Name = "STAGE_TARGET",    Value = "data-loader" },
+                { "Name" = "SFN_TASK_TOKEN", "Value.$" = "$$.Task.Token" },
+                { "Name" = "SFN_INPUT",      "Value.$" = "States.JsonToString($.stage_payload)" },
+              ]
+            }]
           }
         }
-        ResultPath     = "$.reconciliation"
-        TimeoutSeconds = 1800
+        HeartbeatSeconds = 300
+        TimeoutSeconds   = 7200
+        ResultPath       = "$.reconciliation"
         Catch = [{
           ErrorEquals = ["States.ALL"]
           Next        = "ExecutionFailed"
