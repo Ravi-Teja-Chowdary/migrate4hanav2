@@ -111,11 +111,7 @@ variable "ecc_db_user" {
   type    = string
   default = "SAPSR3"
 }
-variable "ecc_db_password" {
-  type      = string
-  default   = ""
-  sensitive = true
-}
+# ecc_db_password removed — now fetched from Secrets Manager (see main.tf)
 variable "s4_db_host" {
   type    = string
   default = ""
@@ -132,8 +128,4 @@ variable "s4_db_user" {
   type    = string
   default = "SAPHANADB"
 }
-variable "s4_db_password" {
-  type      = string
-  default   = ""
-  sensitive = true
-}
+# s4_db_password removed — now fetched from Secrets Manager (see main.tf)

@@ -484,6 +484,33 @@ module "airgapped_llm" {
 }
 
 # ---------------------------------------------
+# Secrets Manager — DMS Database Credentials
+# Store passwords via CLI, NOT in Terraform/Git:
+#   aws secretsmanager put-secret-value \
+#     --secret-id migrate4hana/dev/ecc-db-password \
+#     --secret-string '{"password":"<REAL_PASSWORD>"}'
+# ---------------------------------------------
+resource "aws_secretsmanager_secret" "ecc_db_password" {
+  name        = "migrate4hana/${var.environment}/ecc-db-password"
+  description = "ECC source database password for DMS replication"
+  tags        = { Component = "DMS" }
+}
+
+resource "aws_secretsmanager_secret" "s4_db_password" {
+  name        = "migrate4hana/${var.environment}/s4-db-password"
+  description = "S/4HANA target database password for DMS replication"
+  tags        = { Component = "DMS" }
+}
+
+data "aws_secretsmanager_secret_version" "ecc_db_password" {
+  secret_id = aws_secretsmanager_secret.ecc_db_password.id
+}
+
+data "aws_secretsmanager_secret_version" "s4_db_password" {
+  secret_id = aws_secretsmanager_secret.s4_db_password.id
+}
+
+# ---------------------------------------------
 # AWS DMS (Database Migration Service)
 # ---------------------------------------------
 module "dms" {
@@ -495,12 +522,12 @@ module "dms" {
   ecc_db_port        = 3200
   ecc_db_name        = "ECC"
   ecc_db_user        = "SAPSR3"
-  ecc_db_password    = "mock_password"
+  ecc_db_password    = jsondecode(data.aws_secretsmanager_secret_version.ecc_db_password.secret_string)["password"]
   s4_db_host         = "10.10.2.200"
   s4_db_port         = 30015
   s4_db_name         = "S4H"
   s4_db_user         = "SAPHANADB"
-  s4_db_password     = "mock_password"
+  s4_db_password     = jsondecode(data.aws_secretsmanager_secret_version.s4_db_password.secret_string)["password"]
 }
 
 # ─────────────────────────────────────────────

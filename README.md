@@ -258,7 +258,7 @@ migrate4hana/
 +-- .github/
 |   +-- workflows/
 |       +-- ci.yml                  # CI: test, scan, build, validate
-|       +-- deploy.yml              # CD: staging/prod deploy with OIDC
+|       +-- deploy.yml              # CD: staging/prod deploy with OIDC + SAP SDK S3 download + ECS image build
 |
 +-- ecs/                            # ECS Fargate container (Stages 1, 5, 12, 12A)
 |   +-- Dockerfile                  # Multi-stage build (Amazon Linux 2023 + SAP NW RFC SDK)
@@ -524,12 +524,13 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 
 | Capability | Implementation |
 |------------|----------------|
-| **CI/CD** | GitHub Actions CI (`ci.yml`) + CD (`deploy.yml`) with OIDC federation |
+| **CI/CD** | GitHub Actions CI (`ci.yml`) + CD (`deploy.yml`) with OIDC federation, SAP SDK S3 download, ECS image build/push |
 | **Environments** | Dev, Staging (10.20/16), Production (10.30/16, 3 AZ) |
 | **WAF** | WAFv2 with rate limiting, OWASP Core Rules, SQLi, IP reputation |
 | **Audit & Compliance** | CloudTrail + S3 WORM (7-year) + metric alarms (SOX/GxP ready) |
 | **DR & Backup** | S3 cross-region replication, DynamoDB PITR, documented RTO/RPO |
 | **Load Testing** | Locust suite (`tests/load_test.py`) with 2 user profiles, CI integration |
+| **DMS Credentials** | AWS Secrets Manager for all environments (dev/staging/prod) |
 
 ### ECS Fargate Compute Upgrade (v6.0)
 
@@ -541,6 +542,16 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **ECR Repository** | `migrate4hana/worker` with lifecycle policy (keep last 10 images), scan-on-push |
 | **Unified Entrypoint** | `ecs/entrypoint.py` — dynamic handler selection via `STAGE_TARGET`, Lambda context shim |
 | **IAM** | Execution role (ECR pull + CloudWatch Logs) + Task role (S3, DynamoDB, Bedrock, Secrets, SFN callbacks) |
+| **Bootstrap Strategy** | Terraform uses `alpine:latest` placeholder image with `lifecycle { ignore_changes }` — CI/CD deploys real image |
+
+### Architectural Fixes (v6.1)
+
+| Capability | Implementation |
+|------------|----------------|
+| **CI/CD SAP SDK** | `deploy.yml` downloads SAP NW RFC SDK from private S3 bucket at build time — SDK never committed to Git |
+| **ECS Bootstrap** | Terraform uses `alpine:latest` placeholder image; CI/CD deploys real image via `lifecycle { ignore_changes }` |
+| **Streamed Reconciliation** | Stage 12A uses chunked reads (50K rows) with running aggregation — prevents OOM on 500M+ row tables |
+| **DMS Secrets Manager** | All 3 environments fetch DMS database passwords from AWS Secrets Manager — no hardcoded credentials |
 
 ### Production Hardening Highlights (v5.0)
 
@@ -570,7 +581,7 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **Pre-Conversion Gate** (Stage 9) | Ready | 95% | Pre-flight validation, S/4HANA connectivity test, DMS CDC monitoring |
 | **SUM/DMO Monitor** (Stage 10) | Ready | 90% | SUM CLI orchestration, real-time log monitoring, progress tracking |
 | **SPAU/SPDD + Code Deployer** (Stage 11) | Ready | 95% | Adjustment tracking, transport management (create->upload->activate->release) |
-| **FINS Migration Executor** (Stage 12) | Ready | 93% | FINS_MASS_DATA_MONITOR orchestration, reconciliation checks. **ECS Fargate** (4 vCPU / 16 GB) with Distributed Map |
+| **FINS Migration Executor** (Stage 12) | Ready | 93% | FINS_MASS_DATA_MONITOR orchestration, reconciliation checks. **ECS Fargate** (4 vCPU / 16 GB) with Distributed Map. Stage 12A uses streamed aggregation (`_read_table_chunked()` generator, 50K rows/chunk) to prevent OOM on large data volumes |
 | **MatLedger + Config Applier** (Stage 13) | Ready | 90% | Material Ledger activation, number ranges, BP groupings, Fiori config |
 | **Roles + Integrations Provisioner** (Stage 14) | Ready | 92% | PFCG roles, Fiori catalogs, user assignments, RFC/IDoc activation |
 | **Business Process Testing** (Stage 15) | Ready | 90% | Automated DITL Cypress execution, Fiori app validation |
@@ -580,7 +591,7 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **PDF Report Generator** | Ready | 90% | Professional 11-section branded report with ReportLab |
 | **React Frontend** | Ready | 85% | 6 pages, 5-phase pipeline view, real-time telemetry, scorecard visualization |
 | **API Server** | Ready | 90% | JWT + API key authentication, rate limiting, structured endpoints |
-| **Terraform (14 modules)** | Ready | 92% | VPC, Lambda, ECS, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM, WAF, Audit |
+| **Terraform (14 modules)** | Ready | 92% | VPC, Lambda, ECS, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM, WAF, Audit. DMS credentials via Secrets Manager across all environments |
 | **Test Suite** | Ready | 95% | 114 tests: unit (stages, rule router, ST03N, DITL, rollback, config, error handling) + 52 integration tests (15 classes, dual-mode mock + live SAP) |
 | **Mock Data Generator** | Excellent | 92% | Realistic Indian manufacturer, 1,247 programs, 226 IDoc profiles, 80 ABAP test templates, intentional ABAP bugs |
 
@@ -595,7 +606,7 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 - Business Partner CVI migration with fuzzy dedup and crosswalk tables
 - Finance document migration (BKPF/BSEG -> ACDOCA Universal Journal)
 - SUM/DMO orchestration and real-time log monitoring
-- FINS_MASS_DATA_MONITOR execution with reconciliation
+- FINS_MASS_DATA_MONITOR execution with streamed reconciliation (OOM-safe for 500M+ rows)
 - Material Ledger (CKMSTART) activation and validation
 - SPAU/SPDD adjustment tracking and code deployment
 - SPRO configuration extraction and application (50+ tables)
@@ -611,6 +622,8 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 - Web UI with 7 pages: Dashboard, Pipeline, StageDetail, Scorecard, Report, Connections, Telemetry
 - ECS Fargate (4 vCPU / 16 GB) for stages exceeding Lambda's 15-minute timeout: discovery, code analysis, data loading, reconciliation
 - Docker image build (`ecs/Dockerfile`) with SAP NW RFC SDK + PyRFC for ECS container deployment
+- CI/CD automated SAP SDK download from S3 + ECS image build/push (SDK never in Git)
+- DMS credentials managed via AWS Secrets Manager across all environments (dev/staging/prod)
 
 ### Previously Identified Gaps — All Resolved
 

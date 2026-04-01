@@ -85,6 +85,15 @@
 | ~~Dead Lambda definitions for ECS stages~~ | **RESOLVED** — Removed Lambda function definitions for `discovery-engine`, `code-analyzer`, and `data-loader` from all 3 environments (dev/staging/prod). Python source code preserved in `lambda/` for ECS Docker image and `run_local_pipeline.py` |
 | ~~Step Functions not wired to ECS~~ | **RESOLVED** — `terraform/modules/step-functions/main.tf` updated: 4 stages replaced with `ecs:RunTask` using `waitForTaskToken` pattern, ContainerOverrides pass `STAGE_TARGET`, `SFN_TASK_TOKEN`, and `SFN_INPUT` env vars. IAM expanded with `ecs:RunTask/StopTask/DescribeTasks` + `iam:PassRole` for both ECS roles. HeartbeatSeconds=300, configurable TimeoutSeconds per stage (1h–4h) |
 
+### What Was Built in v6.1 (Architectural Fixes)
+
+| Improvement | What Changed |
+|-------------|-------------|
+| ~~CI/CD SAP License Paradox~~ | **RESOLVED** — `deploy.yml` now downloads the proprietary SAP NW RFC SDK from a private S3 bucket (`s3://migrate4hana-sap-binaries-prod/nwrfc750P_linux_x86_64.zip`) at build time via `aws s3 cp`, injects it into `ecs/` before `docker build`, and cleans up post-build. SDK never committed to Git |
+| ~~Terraform ECS Chicken-and-Egg~~ | **RESOLVED** — ECS task definition in `terraform/modules/ecs/main.tf` now uses `alpine:latest` as a placeholder image with `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infrastructure only; CI/CD deploys the real image to ECR and updates the task definition |
+| ~~Data Gravity OOM Risk~~ | **RESOLVED** — Stage 12A reconciliation in `lambda/data-loader/handler.py` rewritten with streamed aggregation. New `_read_table_chunked()` generator (50K rows/chunk via ROWSKIPS/ROWCOUNT pagination) aggregates running totals in-flight — only one chunk in memory at a time. Prevents OOM on large data volumes (500M+ BSEG rows on 16 GB Fargate). Aggregated totals persisted to S3 for audit trail via `_persist_aggregated_totals()` |
+| ~~DMS Credentials Hardcoded~~ | **RESOLVED** — All 3 environments (dev/staging/prod) now fetch DMS database passwords from AWS Secrets Manager via `data.aws_secretsmanager_secret_version`. Hardcoded `"mock_password"` in dev and `var.ecc_db_password` / `var.s4_db_password` in staging/prod replaced. Password variables removed from staging/prod `variables.tf` |
+
 ### What Was Built in v5.0 (Production Hardening Pass)
 
 | Improvement | What Changed |
@@ -114,6 +123,7 @@
 | ~~Disaster recovery / backup strategy~~ | ~~**Medium**~~ → **RESOLVED** — Documented DR plan with RTO/RPO targets, S3 cross-region replication, DynamoDB PITR, automated backup strategy (see Phase 12) |
 | ~~Load testing results~~ | ~~**Medium**~~ → **RESOLVED** — Locust load test suite (`tests/load_test.py`) with API user simulation, performance targets documented (see Phase 13) |
 | ~~Connection pooling / RFC session management~~ | ~~**Medium**~~ → **RESOLVED** — `lambda/utils/rfc_pool.py` with thread-safe pool |
+| ~~DMS credentials hardcoded~~ | ~~**Medium**~~ → **RESOLVED** — All 3 environments use `aws_secretsmanager_secret_version` data sources for DMS database passwords |
 | Multi-tenant isolation | **Low** — single-tenant design (acceptable for most SAP migrations) |
 
 ---
@@ -358,6 +368,9 @@ aws ecr get-login-password --region $AWS_REGION | \
   docker login --username AWS --password-stdin $ECR_URL
 
 # Build the image (run from project root — requires SAP NW RFC SDK zip in ecs/)
+# NOTE: The CI/CD pipeline (deploy.yml) automates this — it downloads the SAP NW RFC
+# SDK from a private S3 bucket before building. For local builds, manually place the
+# SDK zip in ecs/ first.
 cd ../../..  # back to project root
 docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .
 
@@ -367,6 +380,8 @@ docker push $ECR_URL:latest
 ```
 
 > **Note:** The Dockerfile expects the SAP NW RFC SDK zip file. Without it, PyRFC compilation will fail and the container will fall back to mock mode.
+>
+> **CI/CD Automation:** The `deploy.yml` pipeline handles this automatically — it downloads the SDK from a private S3 bucket, builds the image, and pushes to ECR. For initial bootstrap, Terraform uses an `alpine:latest` placeholder image with `lifecycle { ignore_changes = [container_definitions] }` so that `terraform apply` succeeds before the first CI/CD image push.
 
 ### Step 2.5b — Store SAP Credentials in Secrets Manager
 
@@ -1619,8 +1634,11 @@ Runs on merge to `develop` (→ staging) and `main` (→ production):
 |------|-------------|
 | `set-env` | Routes to `staging` (develop branch) or `prod` (main branch) |
 | `test` | Pre-deploy test gate — must pass before any deployment |
+| `download-sap-sdk` | Downloads SAP NW RFC SDK from private S3 bucket (`s3://migrate4hana-sap-binaries-prod/`) into `ecs/` — SDK is never committed to Git |
+| `build-ecs-image` | Builds Docker image with SDK present, pushes to ECR, updates ECS task definition with new image |
 | `plan` | `terraform plan` against target environment |
 | `deploy` | `terraform apply` + S3 frontend sync + Lambda function code updates |
+| `cleanup` | Removes SAP SDK zip from runner to prevent artifact leakage |
 | `smoke-test` | Invokes key Lambda functions with `health_check` payload |
 
 ### Prerequisites — GitHub Secrets
@@ -1660,7 +1678,7 @@ Both staging and production environments include the WAF and Audit modules (not 
 | WAF module | Not included | ✅ Included (2K req/5min) | ✅ Included (1K req/5min) |
 | Audit module | Not included | ✅ Included | ✅ Included |
 | Terraform backend key | `dev/terraform.tfstate` | `staging/terraform.tfstate` | `prod/terraform.tfstate` |
-| DMS credentials | Hardcoded mock | Variables (sensitive) | Variables (sensitive) |
+| DMS credentials | Secrets Manager | Secrets Manager | Secrets Manager |
 
 ---
 
@@ -2080,7 +2098,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | 20 | JWT uses HS256 symmetric | `api_server.py` | Low | **Acceptable for now** — Switch to RS256 if multi-service JWT verification needed |
 | 21 | No API versioning | `api_server.py` | Low | **Pending** — Add `/api/v1/` prefix when breaking changes needed |
 | 22 | No OpenAPI/Swagger docs | `api_server.py` | Free with FastAPI | ✅ **RESOLVED** — FastAPI auto-generates at `/docs` and `/redoc` |
-| 23 | DMS credentials hardcoded in dev/main.tf | `terraform/environments/dev/main.tf` | Low | **Pending** — Move to Secrets Manager references |
+| 23 | ~~DMS credentials hardcoded in dev/main.tf~~ | `terraform/environments/*/main.tf` | Low | ✅ **RESOLVED** — DMS passwords now fetched from AWS Secrets Manager via `data.aws_secretsmanager_secret_version` across all 3 environments (dev/staging/prod). Password variables removed from staging/prod `variables.tf` |
 | 24 | VPC module missing `default_security_group_id` output | `terraform/modules/vpc/main.tf` | Low | **Pending** — Add output or use `aws_vpc.main.default_security_group_id` |
 
 ### Code Hardening (Resolved in v3.0)
@@ -2124,7 +2142,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 |---|------|-----------|--------|------------|
 | R1 | PyRFC incompatible with Lambda runtime | Low | Critical | Test in Docker first; fallback to EC2-based execution |
 | R2 | SAP RFC calls behave differently than mock | High | High | Integration testing (Phase 7); run discovery-only pass first |
-| R3 | Large customer data causes Lambda timeout (15 min) | Medium | High | ✅ **Mitigated** — Distributed Map fans out to 4 parallel streams, each with its own 15-min window + retry |
+| R3 | Large customer data causes Lambda timeout (15 min) | Medium | High | ✅ **Mitigated** — Distributed Map fans out to 4 parallel streams, each with its own 15-min window + retry. Stage 12A reconciliation uses streamed aggregation (`_read_table_chunked()` generator with running totals) to prevent OOM on large data volumes (500M+ BSEG rows) |
 | R4 | SUM/DMO stage takes longer than expected | High | Critical | Monitor via DMS latency; have SAP Basis team on standby; set SUM timeout to 7200s |
 | R5 | Rollback fails to undo all changes | Medium | Critical | ✅ **Mitigated** — Rollback now has S3 state persistence, resume support, post-rollback verification, batch commits (25/batch), and client unlock via SCCR_UNLOCK_CLIENT |
 | R6 | VPN latency degrades RFC performance | Medium | Medium | ✅ **Mitigated** — `call_rfc_with_timeout()` prevents indefinite hangs (120s default). Use Direct Connect for production; benchmark with iperf before migration |
@@ -2336,6 +2354,15 @@ migrate4hana-main/
 
 This guide covers 13 phases to take Migrate4HANA from its current state to a production-ready migration tool.
 
+### v6.1 Architectural Fixes (April 2026) — What Changed
+
+| Component | Change |
+|-----------|--------|
+| **CI/CD SAP SDK Download** | `deploy.yml` updated — downloads SAP NW RFC SDK from private S3 bucket (`aws s3 cp`) at build time, injects into `ecs/` before `docker build`, cleans up post-build. SDK never committed to Git |
+| **ECS Placeholder Bootstrap** | `terraform/modules/ecs/main.tf` — task definition uses `alpine:latest` placeholder image + `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infra; CI/CD deploys real image |
+| **Streamed Reconciliation** | `lambda/data-loader/handler.py` — Stage 12A `generate_reconciliation_report()` rewritten with `_read_table_chunked()` generator (50K rows/chunk) and running aggregation. Prevents OOM on 500M+ row tables. Totals persisted to S3 via `_persist_aggregated_totals()` |
+| **DMS Secrets Manager** | All 3 environments (dev/staging/prod) `main.tf` — DMS database passwords fetched from `aws_secretsmanager_secret_version` data sources. Hardcoded passwords and password variables removed |
+
 ### v6.0 ECS Fargate Compute Upgrade (April 1, 2026) — What Changed
 
 | Component | Change |
@@ -2369,7 +2396,7 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 | Component | Change |
 |-----------|--------|
 | **CI/CD Pipeline** | GitHub Actions CI (`ci.yml`) — pytest, Bandit scan, frontend build, Lambda packaging, Terraform validate across all 3 environments |
-| **CD Pipeline** | GitHub Actions CD (`deploy.yml`) — OIDC federation, staging/prod auto-deploy, smoke tests, Terraform plan/apply |
+| **CD Pipeline** | GitHub Actions CD (`deploy.yml`) — OIDC federation, staging/prod auto-deploy, SAP SDK S3 download + ECS image build/push, smoke tests, Terraform plan/apply |
 | **Staging Environment** | `terraform/environments/staging/` — 10.20.0.0/16, 2 AZ, WAF + Audit modules, VPN required |
 | **Production Environment** | `terraform/environments/prod/` — 10.30.0.0/16, 3 AZ, WAF + Audit modules, higher Lambda memory, stricter rate limits |
 | **WAF** | `terraform/modules/waf/` — WAFv2 with rate limiting (1K/5min prod), OWASP Core Rules, SQLi protection, IP reputation |
@@ -2396,15 +2423,15 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 
 ### Production Readiness Score
 
-| Category | v2.0 | v3.0 | v4.0 | v5.0 | v6.0 |
-|----------|------|------|------|------|------|
-| Critical gaps | 7 open | 3 resolved, 4 remaining | 3 resolved, 4 remaining | 3 resolved, **#6 partially resolved**, 3 remaining | 3 remaining (PyRFC + AWS deploy + #6) |
-| High-priority gaps | 8 open | 2 resolved, 6 remaining | **6 resolved**, 2 remaining | **6 resolved**, 2 remaining | **7 resolved** (#15 partially), 1 remaining |
-| GenAI gaps | 9 open | 9 resolved | 9 resolved | 9 resolved | 9 resolved |
-| Code hardening | 0 items | 5 improvements (H1-H5) | 5 improvements | **13 improvements** (H1-H5 + P1-P8) | **19 improvements** (+ E1-E6 ECS) |
-| Medium-priority gaps | 10 open | 1 resolved, 9 remaining | **3 resolved**, 7 remaining | **3 resolved**, 7 remaining | **3 resolved**, 7 remaining |
-| Infrastructure files | 0 CI/CD, 1 env | 0 CI/CD, 1 env | **2 CI/CD pipelines**, **3 environments**, **2 security modules** | + `validation.py`, enhanced `rfc_pool.py` | + **ECS module**, **Dockerfile**, **entrypoint.py**, **.dockerignore** |
-| Test coverage | ~30 unit tests | 82 total (30 + 52) | **82+ tests** + Locust load test suite | **114 tests** verified passing + Locust load test suite | **114 tests** + Locust (unchanged — ECS uses same handler code) |
+| Category | v2.0 | v3.0 | v4.0 | v5.0 | v6.0 | v6.1 |
+|----------|------|------|------|------|------|------|
+| Critical gaps | 7 open | 3 resolved, 4 remaining | 3 resolved, 4 remaining | 3 resolved, **#6 partially resolved**, 3 remaining | 3 remaining (PyRFC + AWS deploy + #6) | 3 remaining (PyRFC + AWS deploy + #6) |
+| High-priority gaps | 8 open | 2 resolved, 6 remaining | **6 resolved**, 2 remaining | **6 resolved**, 2 remaining | **7 resolved** (#15 partially), 1 remaining | **7 resolved** (#15 partially), 1 remaining |
+| GenAI gaps | 9 open | 9 resolved | 9 resolved | 9 resolved | 9 resolved | 9 resolved |
+| Code hardening | 0 items | 5 improvements (H1-H5) | 5 improvements | **13 improvements** (H1-H5 + P1-P8) | **19 improvements** (+ E1-E6 ECS) | **23 improvements** (+ A1-A4 Architectural) |
+| Medium-priority gaps | 10 open | 1 resolved, 9 remaining | **3 resolved**, 7 remaining | **3 resolved**, 7 remaining | **3 resolved**, 7 remaining | **4 resolved** (#23 DMS credentials), 6 remaining |
+| Infrastructure files | 0 CI/CD, 1 env | 0 CI/CD, 1 env | **2 CI/CD pipelines**, **3 environments**, **2 security modules** | + `validation.py`, enhanced `rfc_pool.py` | + **ECS module**, **Dockerfile**, **entrypoint.py**, **.dockerignore** | + **deploy.yml** SAP SDK S3 download, ECS placeholder bootstrap |
+| Test coverage | ~30 unit tests | 82 total (30 + 52) | **82+ tests** + Locust load test suite | **114 tests** verified passing + Locust load test suite | **114 tests** + Locust (unchanged — ECS uses same handler code) | **114 tests** + Locust (unchanged) |
 
 **Minimum viable production path**: Phase 1 (PyRFC Layer — build script ready) + Phase 2 (Terraform apply + ECR push) + Phase 3 (SAP connectivity) remains the critical path. All code-level work for these phases is now complete. With v6.0, the 4 heaviest compute stages (discovery, code analysis, data loading, reconciliation) now run on ECS Fargate (4 vCPU / 16 GB) with no 15-minute timeout — tasks run up to 4 hours with Step Functions `waitForTaskToken` callbacks. The production hardening gaps (RFC timeouts, input validation, idempotency, credential refresh, batch rollback, source system locking, paginated reads) are fully addressed — only AWS account access, ECR image push, and SAP SDK procurement remain as external dependencies.
 

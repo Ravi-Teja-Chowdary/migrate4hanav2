@@ -317,6 +317,29 @@ module "step_functions" {
 }
 
 # ─────────────────────────────────────────────
+# Secrets Manager — DMS Database Credentials
+# ─────────────────────────────────────────────
+resource "aws_secretsmanager_secret" "ecc_db_password" {
+  name        = "migrate4hana/${var.environment}/ecc-db-password"
+  description = "ECC source database password for DMS replication"
+  tags        = { Component = "DMS" }
+}
+
+resource "aws_secretsmanager_secret" "s4_db_password" {
+  name        = "migrate4hana/${var.environment}/s4-db-password"
+  description = "S/4HANA target database password for DMS replication"
+  tags        = { Component = "DMS" }
+}
+
+data "aws_secretsmanager_secret_version" "ecc_db_password" {
+  secret_id = aws_secretsmanager_secret.ecc_db_password.id
+}
+
+data "aws_secretsmanager_secret_version" "s4_db_password" {
+  secret_id = aws_secretsmanager_secret.s4_db_password.id
+}
+
+# ─────────────────────────────────────────────
 # DMS — Database Migration Service
 # ─────────────────────────────────────────────
 module "dms" {
@@ -328,12 +351,12 @@ module "dms" {
   ecc_db_port        = var.ecc_db_port
   ecc_db_name        = var.ecc_db_name
   ecc_db_user        = var.ecc_db_user
-  ecc_db_password    = var.ecc_db_password
+  ecc_db_password    = jsondecode(data.aws_secretsmanager_secret_version.ecc_db_password.secret_string)["password"]
   s4_db_host         = var.s4_db_host
   s4_db_port         = var.s4_db_port
   s4_db_name         = var.s4_db_name
   s4_db_user         = var.s4_db_user
-  s4_db_password     = var.s4_db_password
+  s4_db_password     = jsondecode(data.aws_secretsmanager_secret_version.s4_db_password.secret_string)["password"]
 }
 
 # ─────────────────────────────────────────────

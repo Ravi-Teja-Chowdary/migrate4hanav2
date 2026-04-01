@@ -185,6 +185,12 @@ resource "aws_iam_role_policy" "ecs_task" {
 }
 
 # ── Fargate Task Definition (4 vCPU / 16 GB) ─
+# BOOTSTRAP NOTE: The initial image is a placeholder (alpine:latest) so that
+# terraform apply can succeed BEFORE the real Docker image is pushed to ECR.
+# The CI/CD pipeline (deploy.yml) will register a new revision with the real
+# migrate4hana-worker image after build+push.  The lifecycle block below
+# prevents subsequent `terraform apply` runs from reverting the image back
+# to the placeholder.
 resource "aws_ecs_task_definition" "migration_heavy" {
   family                   = "migrate4hana-heavy-${var.environment}"
   requires_compatibilities = ["FARGATE"]
@@ -196,7 +202,7 @@ resource "aws_ecs_task_definition" "migration_heavy" {
 
   container_definitions = jsonencode([{
     name      = "migration-worker"
-    image     = "${aws_ecr_repository.migration_worker.repository_url}:${var.image_tag}"
+    image     = "alpine:latest"   # Placeholder — CI/CD deploys real image
     essential = true
 
     environment = [
@@ -216,6 +222,13 @@ resource "aws_ecs_task_definition" "migration_heavy" {
       }
     }
   }])
+
+  # After CI/CD pushes the real image and registers a new task revision,
+  # we do NOT want `terraform apply` to revert container_definitions back
+  # to the placeholder.  Terraform manages infra; CI/CD manages the image.
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 
   tags = { Component = "MigrationEngine-Heavy" }
 }
