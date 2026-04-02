@@ -30,11 +30,6 @@ variable "bedrock_model_id" {
   default     = "anthropic.claude-3-sonnet-20240229-v1:0"
   description = "Bedrock foundation model ID for GenAI code analysis"
 }
-variable "local_llm_endpoint" {
-  type        = string
-  default     = ""
-  description = "HTTP endpoint for air-gapped local LLM (e.g., http://10.10.1.X:8000/v1/completions)"
-}
 variable "ast_change_threshold" {
   type        = number
   default     = 3
@@ -203,10 +198,7 @@ resource "aws_lambda_function" "migration" {
       {
         BEDROCK_MODEL_ID      = var.bedrock_model_id
         AST_CHANGE_THRESHOLD  = tostring(var.ast_change_threshold)
-      },
-      var.local_llm_endpoint != "" ? {
-        LOCAL_LLM_ENDPOINT = var.local_llm_endpoint
-      } : {}
+      }
     )
   }
 

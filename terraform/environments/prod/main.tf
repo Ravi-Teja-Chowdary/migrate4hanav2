@@ -79,7 +79,6 @@ module "lambda" {
   entity_resolution_workflow_arn = module.entity_resolution.matching_workflow_arn
 
   bedrock_model_id     = var.bedrock_model_id
-  local_llm_endpoint   = var.local_llm_endpoint
   ast_change_threshold = var.ast_change_threshold
 
   lambda_functions = {
@@ -214,15 +213,6 @@ module "lambda" {
       memory      = 3008
       source_dir  = "${path.root}/../../../lambda/migration-validator"
       layers      = [var.pyrfc_layer_arn]
-    }
-    airgapped-llm-router = {
-      description = "Securely routes extracted AST syntax to Air-gapped Local LLM"
-      handler     = "handler.lambda_handler"
-      runtime     = "python3.11"
-      timeout     = 900
-      memory      = 2048
-      source_dir  = "${path.root}/../../../lambda/code-analyzer"
-      layers      = []
     }
     bedrock-llm-router = {
       description = "Routes standard AST syntax to Amazon Bedrock (Anthropic/Titan)"
@@ -405,19 +395,6 @@ module "vpc_endpoints" {
   vpce_security_group_id = module.vpc.default_security_group_id
 }
 
-# ─────────────────────────────────────────────
-# Air-Gapped LLM (optional)
-# ─────────────────────────────────────────────
-module "airgapped_llm" {
-  source                      = "../../modules/airgapped-llm"
-  vpc_id                      = module.vpc.vpc_id
-  vpc_cidr                    = var.vpc_cidr
-  lambda_private_subnets_cidr = var.private_subnet_cidrs
-  isolated_subnet_id          = module.vpc.private_subnet_ids[0]
-  gpu_ami_id                  = var.gpu_ami_id
-  model_s3_path               = var.llm_model_s3_path
-  model_s3_bucket             = var.llm_model_s3_bucket
-}
 
 # ─────────────────────────────────────────────
 # Entity Resolution — ML-powered BP Deduplication
