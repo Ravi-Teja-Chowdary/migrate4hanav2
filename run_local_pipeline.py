@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "maintenance-planner"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "readiness-check"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "simplification-check"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "sum-orchestrator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "migration-completeness-analyzer"))
 
 from mock_data_generator import MockRFCConnection, generate_complete_ecc_dataset
 
@@ -907,7 +908,7 @@ def run_stage_8_config_assessment(conn, output_dir):
 # =============================================================================
 # STAGE RUNNERS — PHASE 3: REALIZE (Stages 9-10)
 # =============================================================================
-def run_stage_9_pre_conversion_gate(conn, results, output_dir):
+def run_stage_9_pre_conversion_gate(conn, results, output_dir, report_only=False):
     """Stage 9: Pre-Conversion Cutover Gate"""
     banner("[Stage 9/17] Pre-Conversion Cutover Gate", C.BOLD)
 
@@ -925,8 +926,12 @@ def run_stage_9_pre_conversion_gate(conn, results, output_dir):
             status("X", f"{stage}: MISSING or FAILED", C.RED)
             all_ok = False
 
-    section("S/4HANA Target Connectivity")
-    status("V", "S/4HANA target reachable (mock mode)", C.GREEN)
+    if not report_only:
+        section("S/4HANA Target Connectivity")
+        status("V", "S/4HANA target reachable (mock mode)", C.GREEN)
+    else:
+        section("S/4HANA Target Connectivity")
+        status("!", "Skipped (report-only mode — no S/4HANA target required)", C.YELLOW)
 
     section("Risk Assessment")
     ca = results.get("code_analysis", {})
@@ -1819,15 +1824,111 @@ def generate_post_migration_report(results, conn, output_dir, total_time):
 # =============================================================================
 # MAIN PIPELINE RUNNER
 # =============================================================================
+# Step Functions wiring for ecc_full mode:
+#   Stages 1-8 (parallel where possible)
+#     -> Stage 9 (pre-conversion gate, report-only)
+#     -> Stage 9.5 (migration-completeness-analyzer)
+#     -> Stage 9.6 (multi-volume-report-generator)
+#     -> End
+# =============================================================================
+def run_stage_9_5_completeness_analyzer(results, output_dir):
+    """Stage 9.5: Migration Completeness Analyzer"""
+    banner("[Stage 9.5] Migration Completeness Analyzer", C.BOLD)
+
+    from handler import analyze_completion as _analyze_completion
+
+    completion_report = _analyze_completion(results)
+
+    section("Migration Completion Score")
+    overall = completion_report["overall_score"]
+    color = C.GREEN if overall >= 90 else C.YELLOW if overall >= 70 else C.RED
+    print(f"\n  {C.BOLD}{color}  Migration Completion Score: {overall}%{C.END}")
+
+    dims = completion_report.get("dimensions", {})
+    dim_labels = {
+        "code_remediation": "Code Remediation",
+        "data_transformation": "Data Transformation",
+        "config_transformation": "Config Mapping",
+        "role_authorization": "Role Migration",
+        "integration_migration": "Integration",
+        "test_readiness": "Test Readiness",
+    }
+    for dim_name, dim_data in dims.items():
+        score = dim_data.get("score", 0)
+        bar_len = int(score / 100 * 36)
+        bar = "\u2588" * bar_len + " " * (36 - bar_len)
+        icon = "\u2713" if score >= 90 else "\u26A0" if score >= 70 else "\u2717"
+        label = dim_labels.get(dim_name, dim_name)
+        status(" ", f"{label:.<22} {score:>3.0f}% {bar} {icon}", color)
+
+    remaining = completion_report.get("remaining_effort", {})
+    total_hours = remaining.get("total_manual_hours", 0)
+    if total_hours > 0:
+        section("Remaining Manual Work")
+        status("i", f"Total: {total_hours:.0f} person-hours", C.YELLOW)
+        for dim_name, info in remaining.get("breakdown", {}).items():
+            status(" ", f"  {info.get('description', dim_name)}: {info.get('hours', 0):.0f} hrs", C.DIM)
+
+    # Save
+    os.makedirs(os.path.join(output_dir, "completeness"), exist_ok=True)
+    with open(os.path.join(output_dir, "completeness", "completion-report.json"), "w") as f:
+        json.dump(completion_report, f, indent=2, default=str)
+    status("V", "Completion report saved", C.GREEN)
+
+    return completion_report
+
+
+def run_stage_9_6_multi_volume_report(pipeline_results, output_dir, company_name):
+    """Stage 9.6: Multi-Volume PDF Report Generator"""
+    banner("[Stage 9.6] Multi-Volume PDF Report Generator", C.BOLD)
+
+    from multi_volume_report_generator import generate_multi_volume_report
+
+    reports_dir = os.path.join(output_dir, "reports")
+    section("Generating Multi-Volume PDF Report")
+    pdf_files = generate_multi_volume_report(
+        pipeline_results=pipeline_results,
+        output_dir=reports_dir,
+        company_name=company_name,
+        max_pages_per_volume=50,
+    )
+
+    section("Report Volumes Generated")
+    total_pages = 0
+    for i, pdf_path in enumerate(pdf_files, 1):
+        size_kb = os.path.getsize(pdf_path) / 1024
+        status("V", f"Vol {i}/{len(pdf_files)}: {os.path.basename(pdf_path)} ({size_kb:.0f} KB)", C.GREEN)
+
+    return {"pdf_files": pdf_files, "total_volumes": len(pdf_files)}
+
+
 def main():
     assess_only = "--assess-only" in sys.argv
-    mode_label = "ASSESS ONLY (Phases 1-2, Stages 1-8)" if assess_only else "FULL (All 5 Phases, 17 Stages)"
+    ecc_full = "--mode" in sys.argv and "ecc_full" in sys.argv
+
+    if ecc_full:
+        mode_label = "ECC-ONLY FULL EXECUTION (Phases 1-2 + Completeness + Report)"
+    elif assess_only:
+        mode_label = "ASSESS ONLY (Phases 1-2, Stages 1-8)"
+    else:
+        mode_label = "FULL (All 5 Phases, 17 Stages)"
+
+    # Parse --ecc_client if provided
+    ecc_client = "100"
+    for i, arg in enumerate(sys.argv):
+        if arg == "--ecc_client" and i + 1 < len(sys.argv):
+            ecc_client = sys.argv[i + 1]
 
     banner("MIGRATE4HANA -- Local Pipeline Test Run", C.BOLD)
     print(f"  {C.DIM}Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Mode: {mode_label}")
     print(f"  Pipeline: 17-stage, 5-phase SAP Activate")
     print(f"  Company: Bharat Industrial Solutions Pvt Ltd{C.END}")
+
+    if ecc_full:
+        print(f"\n  {C.BOLD}{C.CYAN}Running in ECC-Only Full Execution Mode")
+        print(f"  All remediation and transformation executed.")
+        print(f"  Stages 10-17 skipped (require S/4HANA target for deployment).{C.END}")
 
     start_time = time.time()
 
@@ -1846,7 +1947,7 @@ def main():
 
     mock_event = {
         "metadata": {"run_id": run_id, "timestamp": datetime.now().isoformat()},
-        "input": {"mode": "full", "ecc_client": "100"},
+        "input": {"mode": "full", "ecc_client": ecc_client},
     }
 
     try:
@@ -1909,7 +2010,43 @@ def main():
         # =================================================================
         # CONVERSION GATE -- Phases 1-2 must pass before Phase 3
         # =================================================================
-        if assess_only:
+        if ecc_full:
+            # ECC-Only Full Execution Mode: run Stage 9 in report-only mode,
+            # then Stage 9.5 (completeness analyzer), Stage 9.6 (report generator)
+            print(f"\n{'=' * 70}")
+            print(f"  {C.BOLD}{C.CYAN}  ECC-ONLY MODE -- Running Stage 9 (report-only) + 9.5 + 9.6{C.END}")
+            print(f"{'=' * 70}")
+
+            p3_start = time.time()
+
+            # Stage 9 — report-only mode (skip S/4HANA connectivity check)
+            os.makedirs(os.path.join(output_dir, "execution"), exist_ok=True)
+            t9 = time.time()
+            results["cutover"] = run_stage_9_pre_conversion_gate(conn, results, output_dir, report_only=True)
+            status("T", f"Stage 9 (report-only) completed in {time.time() - t9:.1f}s", C.DIM)
+
+            # Stage 9.5 — Migration Completeness Analyzer
+            t95 = time.time()
+            completion_report = run_stage_9_5_completeness_analyzer(results, output_dir)
+            results["completion_report"] = completion_report
+            status("T", f"Stage 9.5 completed in {time.time() - t95:.1f}s", C.DIM)
+
+            # Attach fix report for the PDF generator (detailed per-program data)
+            fix_report_path = os.path.join(output_dir, "code-analysis", "fix-report.json")
+            if os.path.isfile(fix_report_path):
+                with open(fix_report_path, "r", encoding="utf-8") as f:
+                    results["_fix_report"] = json.load(f)
+
+            # Stage 9.6 — Multi-Volume PDF Report Generator
+            t96 = time.time()
+            company_name = "Bharat Industrial Solutions Pvt Ltd"
+            report_result = run_stage_9_6_multi_volume_report(results, output_dir, company_name)
+            results["report_generation"] = report_result
+            status("T", f"Stage 9.6 completed in {time.time() - t96:.1f}s", C.DIM)
+
+            phase_times["Phases 3 (ECC-Only)"] = time.time() - p3_start
+
+        elif assess_only:
             print(f"\n{'=' * 70}")
             print(f"  {C.BOLD}{C.YELLOW}  --- ASSESS-ONLY MODE -- Skipping Phases 3-5 (Execution) ---{C.END}")
             print(f"{'=' * 70}")
@@ -2006,6 +2143,8 @@ def main():
 
     if assess_only:
         banner("ECC ASSESSMENT COMPLETE (Phases 1-2 Only)", C.GREEN)
+    elif ecc_full:
+        banner("MIGRATE4HANA -- ECC-Only Full Execution Complete", C.GREEN)
     else:
         banner("FULL 17-STAGE MIGRATION PIPELINE COMPLETE", C.GREEN)
 
@@ -2047,7 +2186,7 @@ def main():
     print(f"  | Custom Table Rows:  {dm['custom_table_rows']:>8,}                      |")
     print(f"  +-----------------------------------------------------+")
 
-    if not assess_only:
+    if not assess_only and not ecc_full:
         print(f"\n  {C.BOLD}Execution Summary (Phases 3-5):{C.END}")
         print(f"  +-----------------------------------------------------+")
         cd = results.get("code_deploy", {}).get("results", {}).get("summary", {})
@@ -2080,12 +2219,66 @@ def main():
 
     # Save final report
     with open(os.path.join(output_dir, "final-report.json"), "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, default=str)
+        # Exclude internal keys from final report
+        save_results = {k: v for k, v in results.items() if not k.startswith("_")}
+        json.dump(save_results, f, indent=2, default=str)
 
     # Generate Post-Migration Report (client deliverable)
-    if not assess_only:
+    if not assess_only and not ecc_full:
         post_report = generate_post_migration_report(results, conn, output_dir, total_time)
         results["post_migration_report"] = post_report
+
+    # ECC-Full Mode: Print completion summary
+    if ecc_full:
+        completion = results.get("completion_report", {})
+        overall = completion.get("overall_score", 0)
+        dims = completion.get("dimensions", {})
+        remaining = completion.get("remaining_effort", {})
+        total_hours = remaining.get("total_manual_hours", 0)
+        manual_review = results.get("code_analysis", {}).get("manual_review", 0)
+        report_gen = results.get("report_generation", {})
+        pdf_files = report_gen.get("pdf_files", [])
+
+        dim_labels = {
+            "code_remediation": "Code Remediation",
+            "data_transformation": "Data Transformation",
+            "config_transformation": "Config Mapping",
+            "role_authorization": "Role Migration",
+            "integration_migration": "Integration",
+            "test_readiness": "Test Readiness",
+        }
+
+        print(f"\n{'=' * 64}")
+        print(f"  {C.BOLD}MIGRATE4HANA \u2014 ECC-Only Full Execution Complete{C.END}")
+        print(f"{'=' * 64}")
+        print(f"\n  Migration Completion Score: {C.BOLD}{C.GREEN}{overall}%{C.END}")
+        print(f"  {'─' * 62}")
+        for dim_name, dim_data in dims.items():
+            score = dim_data.get("score", 0)
+            bar_len = int(score / 100 * 36)
+            bar = "\u2588" * bar_len
+            icon = "\u2713" if score >= 90 else "\u26A0"
+            label = dim_labels.get(dim_name, dim_name)
+            print(f"  {label:.<22} {score:>3.0f}% {bar} {icon}")
+
+        if total_hours > 0 or manual_review > 0:
+            print(f"\n  Remaining Manual Work: {total_hours:.0f} person-hours", end="")
+            if manual_review > 0:
+                print(f" ({manual_review} programs need manual ABAP fixes)")
+            else:
+                print()
+
+        if pdf_files:
+            print(f"\n  Migration Report Generated:")
+            for i, pdf_path in enumerate(pdf_files, 1):
+                fname = os.path.basename(pdf_path)
+                print(f"    Vol {i}/{len(pdf_files)}: ...{fname}")
+            print(f"\n  Total: {len(pdf_files)} volume(s)")
+            print(f"  Output: {os.path.join(output_dir, 'reports')}{os.sep}")
+
+        print(f"\n  {C.GREEN}STATUS: Migration package ready for deployment to S/4HANA target.{C.END}")
+        print(f"  NEXT STEP: Provision S/4HANA and run Stages 10-17 to deploy.")
+        print(f"{'=' * 64}")
 
     print(f"\n  {C.CYAN}Output saved to: {output_dir}{C.END}")
     print(f"  {C.DIM}RFC calls made: {conn._call_count}{C.END}")

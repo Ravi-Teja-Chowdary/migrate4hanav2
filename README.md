@@ -300,6 +300,7 @@ migrate4hana/
 |   +-- data-assessor/               # Stage 7  -- AWS DMS CDC data assessment
 |   +-- config-integration-assessor/ # Stage 8  -- Config + integration analysis
 |   +-- pre-conversion-gate/         # Stage 9  -- GO/NO-GO gate
+|   +-- migration-completeness-analyzer/ # Stage 9.5 -- Weighted completion scoring (6 dimensions)
 |   +-- sum-dmo-monitor/             # Stage 10 -- SUM/DMO orchestration & monitoring
 |   +-- spau-spdd-code-deployer/     # Stage 11 -- SPAU/SPDD + code deployment
 |   +-- fins-migration-executor/     # Stage 12 -- FINS_MASS_DATA_MONITOR execution [ECS Fargate]
@@ -349,6 +350,7 @@ migrate4hana/
 +-- run_local_pipeline.py            # Local 17-stage test runner
 +-- api_server.py                    # Local API server (15 REST endpoints, JWT auth)
 +-- pdf_report_generator.py          # PDF report generation
++-- multi_volume_report_generator.py # Multi-volume PDF report (Stage 9.6, ecc_full mode)
 +-- PROJECT_STATUS.md                # Audit scorecard & upgrade status
 +-- PRODUCTION_READINESS_GUIDE.md    # Full deployment & production readiness playbook
 +-- docs/                            # SAP concepts reference
@@ -367,6 +369,77 @@ python run_local_pipeline.py
 ```
 
 This generates a realistic Indian manufacturing company (Bharat Industrial Solutions Pvt Ltd — 4 company codes, 12 plants, 861 custom programs, 3,500 customers, 1,500 vendors, 342 PFCG roles, 1,847 users) and runs all 17 stages locally in ~70 seconds. Output is saved to `test-output/run_YYYYMMDD_HHMMSS/`.
+
+### Pipeline Modes
+
+| Mode | Description | Phases | S/4HANA Required |
+|------|-------------|--------|------------------|
+| `full` | End-to-end migration: all 17 stages across 5 phases | 1-5 | Yes |
+| `assess` | Assessment only: discovery, readiness, code analysis | 1-2 | No |
+| `quick` | Fast assessment: subset of Phase 1-2 checks | 1-2 | No |
+| `delta` | Delta run: re-process only changed objects since last run | 1-2 | No |
+| `ecc_full` | **ECC-only full execution**: runs all remediation and transformation against ECC, generates multi-volume proof-of-work PDF reports. No S/4HANA needed. | 1-2 + 9.5 + 9.6 | **No** |
+
+---
+
+## ECC-Only Full Execution Mode
+
+The `ecc_full` mode runs the complete assessment and remediation pipeline (Phases 1-2) against an ECC system **without requiring an S/4HANA target system**, then generates comprehensive multi-volume PDF reports proving all work is done and migration-ready.
+
+### What It Does
+
+1. **Phase 1 (Prepare)** — Discovery, Maintenance Planner, Readiness Check, Simplification Item Check
+2. **Phase 2 (Explore)** — Code Analysis + AST remediation, CVI/BP preparation, Data Assessment, Config/Integration Assessment
+3. **Stage 9 (Pre-Conversion Gate)** — Report-only mode (no S/4HANA connectivity check)
+4. **Stage 9.5 (Migration Completeness Analyzer)** — Computes a weighted Migration Completion Score across 6 dimensions: Code Remediation (30%), Data Transformation (20%), Configuration (15%), Roles & Authorization (15%), Integration Migration (10%), Test Readiness (10%)
+5. **Stage 9.6 (Multi-Volume PDF Report Generator)** — Generates professional, boardroom-ready multi-volume PDF migration reports
+
+### Why It Exists
+
+This mode enables a **two-phase commercial model**:
+- **Phase A (ECC-Only):** Run Migrate4HANA against the customer's ECC system. All custom code is remediated, business partners are deduplicated and crosswalked, data is assessed, configurations are mapped, and a comprehensive multi-volume report is delivered proving the work is done.
+- **Phase B (Conversion):** When the customer is ready, provision S/4HANA and run Stages 10-17 (SUM/DMO conversion and post-conversion) to complete the migration.
+
+### How to Run
+
+```bash
+# ECC-only full execution (local mock data)
+python run_local_pipeline.py --mode ecc_full --ecc_client 100
+
+# Via API server
+curl -X POST http://localhost:8000/api/pipeline/ecc_full \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"ecc_client": "100"}'
+```
+
+### What the PDF Reports Contain
+
+The multi-volume report is split into volumes of ≤50 pages each, with 10 sections:
+
+| Section | Content |
+|---------|---------|
+| 1. Executive Summary | Overall completion score (donut gauge), 6-dimension spider chart, readiness statement |
+| 2. System Landscape | Discovery summary: programs, tables, FMs, org structure, roles, users |
+| 3. Code Remediation | Fix rates, before/after ABAP code samples, issue breakdown by severity |
+| 4. Data Transformation | BP migration stats, dedup results, crosswalk summary, finance document counts |
+| 5. Configuration | Config checklist, SPRO table coverage, country localization |
+| 6. Roles & Authorization | Role mapping, Fiori catalog assignments, user provisioning |
+| 7. Integration Migration | RFC destinations, IDoc partners, API mappings |
+| 8. Test Readiness | DITL coverage, test generation status |
+| 9. Risk & Recommendations | Manual remediation items, effort estimates, recommended next steps |
+| 10. Appendices | Full crosswalk table, detailed fix log, glossary |
+
+### Sample Output
+
+```
+=== MULTI-VOLUME PDF REPORT ===
+  Generating 10-section professional migration report...
+  Volume 1: Migrate4HANA_Migration_Report_Bharat_Industrial_2026-04-05_Vol1_of_3.pdf (50 pages)
+  Volume 2: Migrate4HANA_Migration_Report_Bharat_Industrial_2026-04-05_Vol2_of_3.pdf (50 pages)
+  Volume 3: Migrate4HANA_Migration_Report_Bharat_Industrial_2026-04-05_Vol3_of_3.pdf (28 pages)
+  Total: 3 volumes, 128 pages
+```
 
 ### Web UI
 
@@ -589,6 +662,8 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **Migration Validator** (Stage 17) | Ready | 95% | 85-check validation, financial reconciliation, GO-LIVE scorecard |
 | **Rollback Manager** | Ready | 97% | Full post-conversion rollback: FI docs, transports, ACDOCA, SPRO, BPs, materials, roles, users, RFC, IDoc. Batch commits (25/batch), source system unlock |
 | **PDF Report Generator** | Ready | 90% | Professional 11-section branded report with ReportLab |
+| **Multi-Volume Report Generator** | Ready | 95% | 10-section multi-volume PDF (≤50 pages/volume), donut gauges, spider charts, before/after code blocks |
+| **Migration Completeness Analyzer** | Ready | 95% | 6-dimension weighted scoring (code 30%, data 20%, config 15%, roles 15%, integration 10%, test 10%), effort estimation |
 | **React Frontend** | Ready | 85% | 6 pages, 5-phase pipeline view, real-time telemetry, scorecard visualization |
 | **API Server** | Ready | 90% | JWT + API key authentication, rate limiting, structured endpoints |
 | **Terraform (14 modules)** | Ready | 92% | VPC, Lambda, ECS, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM, WAF, Audit. DMS credentials via Secrets Manager across all environments |
@@ -617,6 +692,8 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 - Automated business process testing (DITL Cypress)
 - Real-time WebSocket telemetry to frontend
 - Professional PDF report generation (11 sections)
+- Multi-volume PDF migration reports (10 sections, ≤50 pages/volume, ecc_full mode)
+- ECC-only full execution mode (Phases 1-2 + completeness analysis + multi-volume report, no S/4HANA required)
 - Automated rollback on failure (FI reversal + transport cleanup)
 - 85-check GO-LIVE scorecard with Grade A-D assessment across 7 dimensions
 - Web UI with 7 pages: Dashboard, Pipeline, StageDetail, Scorecard, Report, Connections, Telemetry

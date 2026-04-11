@@ -282,6 +282,8 @@ async def start_pipeline_async(mode="full"):
             cmd = [sys.executable, os.path.join(PROJECT_DIR, "run_local_pipeline.py")]
             if mode == "assess":
                 cmd.append("--assess-only")
+            elif mode == "ecc_full":
+                cmd.extend(["--mode", "ecc_full"])
             env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
@@ -466,6 +468,10 @@ async def pipeline_complete():
 async def pipeline_full():
     return await start_pipeline_async(mode="full")
 
+@app.post("/api/pipeline/ecc_full", dependencies=[Depends(require_auth)])
+async def pipeline_ecc_full():
+    return await start_pipeline_async(mode="ecc_full")
+
 @app.post("/api/pipeline/migrate", dependencies=[Depends(require_auth)])
 async def pipeline_migrate():
     return await start_pipeline_async(mode="full")
@@ -526,6 +532,51 @@ async def get_run_pdf(run_id: str):
     raise HTTPException(status_code=404, detail="Report not available for this run")
 
 
+@app.get("/api/v1/reports/{run_id}/volumes", dependencies=[Depends(require_auth)])
+async def get_report_volumes(run_id: str):
+    """List all PDF volumes for a given run."""
+    if run_id == "latest":
+        runs = list_runs()
+        run_id = runs[0]["id"] if runs else None
+    if not run_id:
+        raise HTTPException(status_code=404, detail="No runs found")
+    reports_dir = os.path.join(OUTPUT_DIR, run_id, "reports")
+    if not os.path.isdir(reports_dir):
+        raise HTTPException(status_code=404, detail="No report volumes found for this run")
+    volumes = []
+    for fname in sorted(os.listdir(reports_dir)):
+        if fname.endswith(".pdf"):
+            fpath = os.path.join(reports_dir, fname)
+            volumes.append({
+                "filename": fname,
+                "size_bytes": os.path.getsize(fpath),
+                "size_kb": round(os.path.getsize(fpath) / 1024, 1),
+            })
+    if not volumes:
+        raise HTTPException(status_code=404, detail="No PDF volumes found")
+    return {"run_id": run_id, "total_volumes": len(volumes), "volumes": volumes}
+
+
+@app.get("/api/v1/reports/{run_id}/download/{volume_number}", dependencies=[Depends(require_auth)])
+async def download_report_volume(run_id: str, volume_number: int):
+    """Download a specific PDF volume by number (1-based)."""
+    if run_id == "latest":
+        runs = list_runs()
+        run_id = runs[0]["id"] if runs else None
+    if not run_id:
+        raise HTTPException(status_code=404, detail="No runs found")
+    reports_dir = os.path.join(OUTPUT_DIR, run_id, "reports")
+    if not os.path.isdir(reports_dir):
+        raise HTTPException(status_code=404, detail="No report volumes found")
+    pdf_files = sorted(f for f in os.listdir(reports_dir) if f.endswith(".pdf"))
+    if volume_number < 1 or volume_number > len(pdf_files):
+        raise HTTPException(status_code=404,
+                            detail=f"Volume {volume_number} not found. Available: 1-{len(pdf_files)}")
+    pdf_path = os.path.join(reports_dir, pdf_files[volume_number - 1])
+    return FileResponse(pdf_path, media_type="application/pdf",
+                        filename=pdf_files[volume_number - 1])
+
+
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -560,10 +611,13 @@ def main():
     print(f"    POST /api/pipeline/convert    - Run Phase 3 (stages 9-10)")
     print(f"    POST /api/pipeline/complete   - Run Phases 4-5 (stages 11-17)")
     print(f"    POST /api/pipeline/full       - Run all 5 phases (stages 1-17)")
+    print(f"    POST /api/pipeline/ecc_full   - Run ECC-only mode (stages 1-9.6)")
     print(f"    GET  /api/status              - Pipeline status")
     print(f"    GET  /api/runs                - List all runs")
     print(f"    GET  /api/runs/ID             - Get run results")
     print(f"    GET  /api/runs/ID/pdf         - Download PDF report")
+    print(f"    GET  /api/v1/reports/ID/volumes  - List PDF volumes")
+    print(f"    GET  /api/v1/reports/ID/download/N - Download volume N")
     print(f"    GET  /docs                    - OpenAPI/Swagger documentation\n")
 
     uvicorn.run("api_server:app", host=host, port=port, workers=workers,
