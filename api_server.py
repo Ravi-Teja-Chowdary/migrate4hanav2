@@ -309,13 +309,14 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False):
 
             # Determine if live ECC connection is available
             conns = _load_connections()
-            has_ecc = bool(conns.get("ecc", {}).get("ashost"))
+            ecc_conf = conns.get("ecc") or {}
+            has_ecc = bool(ecc_conf.get("ashost"))
             use_live = has_ecc and _ecc_passwd
 
             if use_live:
                 cmd.append("--live")
                 _add_progress_step("connection", "Using live ECC connection", "SUCCESS",
-                                   {"host": conns["ecc"].get("ashost", "")})
+                                   {"host": ecc_conf.get("ashost", "")})
             else:
                 _add_progress_step("connection", "Using mock ECC data (no live connection)", "WARNING")
 
@@ -588,7 +589,7 @@ async def test_ecc(body: ECCConnection):
 async def ecc_connection_status():
     """Check if a live ECC connection is ready (saved + password in memory)."""
     conns = _load_connections()
-    has_ecc = bool(conns.get("ecc", {}).get("ashost"))
+    has_ecc = bool((conns.get("ecc") or {}).get("ashost"))
     has_passwd = bool(_ecc_passwd)
     return {"live_ready": has_ecc and has_passwd,
             "has_connection": has_ecc,
