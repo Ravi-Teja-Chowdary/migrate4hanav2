@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server, Wifi, WifiOff, CheckCircle2, AlertTriangle,
   XCircle, Loader2, Save, TestTube, ChevronDown, ChevronUp,
-  Shield, Database, Eye, EyeOff,
+  Shield, Database, Eye, EyeOff, Rocket, FileText, Download,
+  Activity, Clock,
 } from 'lucide-react';
-import { apiFetch } from '../api';
+import { apiFetch, getAuthUrl } from '../api';
 
 function ConnectionCard({ title, subtitle, icon: Icon, color, status, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -119,6 +120,83 @@ function StatusMessage({ result }) {
   );
 }
 
+const STATUS_COLORS = {
+  SUCCESS: 'text-green-400',
+  IN_PROGRESS: 'text-yellow-400',
+  WARNING: 'text-amber-400',
+  ERROR: 'text-red-400',
+};
+
+const STATUS_ICONS = {
+  SUCCESS: CheckCircle2,
+  IN_PROGRESS: Clock,
+  WARNING: AlertTriangle,
+  ERROR: XCircle,
+};
+
+function ProgressPanel({ steps, status, runId, pdfGenerated }) {
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [steps]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="glass rounded-2xl overflow-hidden"
+    >
+      <div className="px-6 py-4 border-b border-white/[0.04] flex items-center gap-3">
+        <Activity size={16} className="text-accent-cyan" />
+        <h3 className="text-sm font-semibold text-white/80">Real-Time Progress</h3>
+        <div className="ml-auto flex items-center gap-2">
+          {status === 'running' && (
+            <span className="flex items-center gap-1.5 text-xs text-accent-cyan">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse" />
+              Running
+            </span>
+          )}
+          {status === 'completed' && (
+            <span className="flex items-center gap-1.5 text-xs text-accent-green">
+              <CheckCircle2 size={12} /> Completed
+            </span>
+          )}
+          {status === 'failed' && (
+            <span className="flex items-center gap-1.5 text-xs text-accent-red">
+              <XCircle size={12} /> Failed
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="max-h-80 overflow-y-auto p-4 space-y-1 font-mono text-xs">
+        {steps.length === 0 ? (
+          <div className="text-white/20 text-center py-8">Waiting for progress updates...</div>
+        ) : (
+          steps.map((step, i) => {
+            const Icon = STATUS_ICONS[step.status] || Clock;
+            const color = STATUS_COLORS[step.status] || 'text-white/40';
+            return (
+              <div key={step.event_id || i} className="flex items-start gap-3 py-1.5 border-b border-white/[0.02] last:border-0">
+                <span className="text-white/20 shrink-0 w-16 text-right">
+                  {step.timestamp?.split('T')[1]?.slice(0, 8) || ''}
+                </span>
+                <Icon size={12} className={`${color} mt-0.5 shrink-0`} />
+                <span className={`${color} w-20 shrink-0 font-semibold uppercase text-[10px]`}>{step.status}</span>
+                <span className="text-white/60 flex-1">{step.action}</span>
+                {step.duration_ms != null && (
+                  <span className="text-white/20 shrink-0">{(step.duration_ms / 1000).toFixed(1)}s</span>
+                )}
+              </div>
+            );
+          })
+        )}
+        <div ref={endRef} />
+      </div>
+    </motion.div>
+  );
+}
+
 export default function Connections() {
   // ECC state
   const [eccHost, setEccHost] = useState('');
@@ -131,6 +209,18 @@ export default function Connections() {
   const [eccResult, setEccResult] = useState(null);
   const [eccTesting, setEccTesting] = useState(false);
   const [eccSaving, setEccSaving] = useState(false);
+
+  // Run & Report state
+  const [runState, setRunState] = useState('idle'); // idle | running | completed | failed
+  const [runError, setRunError] = useState(null);
+  const [progressSteps, setProgressSteps] = useState([]);
+  const [runId, setRunId] = useState(null);
+  const [pdfGenerated, setPdfGenerated] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const pollRef = useRef(null);
+  const stepIndexRef = useRef(0);
+
+  const isEccConnected = eccStatus === 'connected' || eccStatus === 'mock';
 
   // Load saved connections
   useEffect(() => {
@@ -182,6 +272,74 @@ export default function Connections() {
     }
     setEccSaving(false);
   }, [eccHost, eccSysnr, eccClient, eccUser, eccRouter]);
+
+  // --- Run Conversion & Generate PDF ---
+  const startRunAndReport = useCallback(async () => {
+    setRunState('running');
+    setRunError(null);
+    setProgressSteps([]);
+    setRunId(null);
+    setPdfGenerated(false);
+    setPdfUrl(null);
+    stepIndexRef.current = 0;
+
+    try {
+      const r = await apiFetch('/api/pipeline/run_and_report', { method: 'POST' });
+      const data = await r.json();
+      if (data.error) {
+        setRunError(data.error);
+        setRunState('failed');
+        return;
+      }
+      // Start polling for progress
+      startProgressPolling();
+    } catch {
+      setRunError('Cannot reach API server. Start it with: python api_server.py');
+      setRunState('failed');
+    }
+  }, []);
+
+  function startProgressPolling() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await apiFetch(`/api/progress?since=${stepIndexRef.current}`);
+        const data = await r.json();
+
+        if (data.steps && data.steps.length > 0) {
+          setProgressSteps(prev => [...prev, ...data.steps]);
+          stepIndexRef.current = data.total_steps;
+        }
+
+        if (data.status === 'completed' || data.status === 'failed') {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setRunState(data.status);
+          if (data.run_id) setRunId(data.run_id);
+          if (data.pdf_generated) {
+            setPdfGenerated(true);
+            const url = await getAuthUrl(`/api/runs/${data.run_id}/pdf`);
+            setPdfUrl(url);
+          }
+        }
+      } catch { /* keep polling */ }
+    }, 1500);
+  }
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  const resetRun = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setRunState('idle');
+    setRunError(null);
+    setProgressSteps([]);
+    setRunId(null);
+    setPdfGenerated(false);
+    setPdfUrl(null);
+    stepIndexRef.current = 0;
+  };
 
   return (
     <div className="p-8 max-w-3xl mx-auto space-y-6">
@@ -269,31 +427,143 @@ export default function Connections() {
         </div>
       </ConnectionCard>
 
-      {/* What happens next */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-        className="glass rounded-2xl p-6"
-      >
-        <h3 className="text-sm font-semibold text-white/70 mb-4">What happens next?</h3>
-        <div className="space-y-3">
-          {[
-            { step: '1', text: 'Configure & test your ECC connection above', icon: Server, color: '#3b82f6' },
-            { step: '2', text: 'Save the connection — password stays in memory for the pipeline', icon: Database, color: '#06b6d4' },
-            { step: '3', text: 'Go to Pipeline → click "Assess" or "Run Full Assessment"', icon: AlertTriangle, color: '#f59e0b' },
-            { step: '4', text: 'Review the assessment report — code issues, data volumes, risks', icon: CheckCircle2, color: '#10b981' },
-          ].map((s) => (
-            <div key={s.step} className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
-                style={{ backgroundColor: `${s.color}15`, color: s.color }}>
-                {s.step}
+      {/* Run Conversion & Generate PDF — shown when ECC is connected */}
+      <AnimatePresence>
+        {isEccConnected && runState === 'idle' && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ delay: 0.2 }}
+            className="glass rounded-2xl p-6 text-center relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-accent-blue/5 to-accent-green/5" />
+            <div className="relative">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-accent-blue/20 to-accent-green/20 flex items-center justify-center mb-4">
+                <Rocket size={28} className="text-accent-cyan" />
               </div>
-              <p className="text-xs text-white/50">{s.text}</p>
+              <h3 className="text-lg font-bold text-white">ECC System Connected</h3>
+              <p className="text-xs text-white/40 mt-1 max-w-md mx-auto">
+                Your SAP ECC system is ready. Click below to extract all data, run the full conversion analysis,
+                and generate a comprehensive PDF report — all in one step.
+              </p>
+              <button
+                onClick={startRunAndReport}
+                className="mt-5 inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gradient-to-r from-accent-blue/20 to-accent-green/20
+                           text-white text-sm font-bold hover:from-accent-blue/30 hover:to-accent-green/30
+                           transition-all duration-300 border border-accent-cyan/20 animate-pulse-glow shadow-lg shadow-accent-cyan/10"
+              >
+                <Rocket size={16} /> Run Conversion & Generate PDF Report
+              </button>
             </div>
-          ))}
-        </div>
-      </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Running / Progress Panel */}
+      <AnimatePresence>
+        {runState !== 'idle' && (
+          <ProgressPanel
+            steps={progressSteps}
+            status={runState}
+            runId={runId}
+            pdfGenerated={pdfGenerated}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Error banner */}
+      <AnimatePresence>
+        {runError && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="glass rounded-xl p-3 flex items-center gap-2 border border-accent-red/20"
+          >
+            <XCircle size={14} className="text-accent-red shrink-0" />
+            <p className="text-xs text-accent-red flex-1">{runError}</p>
+            <button onClick={resetRun} className="text-xs text-white/40 hover:text-white/60 px-2 py-1 rounded-lg bg-white/5">
+              Dismiss
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Completion panel with PDF download */}
+      <AnimatePresence>
+        {runState === 'completed' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="glass rounded-2xl p-8 text-center relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-accent-green/5 to-accent-blue/5" />
+            <div className="relative">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
+                className="w-16 h-16 mx-auto rounded-2xl bg-accent-green/10 flex items-center justify-center mb-4"
+              >
+                <CheckCircle2 size={32} className="text-accent-green" />
+              </motion.div>
+              <h3 className="text-xl font-bold text-white">Conversion Complete!</h3>
+              <p className="text-sm text-white/40 mt-1">
+                All ECC data has been extracted, converted, and analyzed successfully.
+              </p>
+              <div className="flex items-center justify-center gap-3 mt-5">
+                {pdfGenerated && pdfUrl && (
+                  <a
+                    href={pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-blue/20 to-accent-green/20
+                               text-white text-sm font-bold hover:from-accent-blue/30 hover:to-accent-green/30
+                               transition-all duration-300 border border-accent-cyan/20"
+                  >
+                    <Download size={15} /> Download PDF Report
+                  </a>
+                )}
+                <button
+                  onClick={resetRun}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 text-white/60 text-sm font-medium
+                             hover:bg-white/10 transition-all border border-white/10"
+                >
+                  Run Again
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* What happens next — only shown when NOT connected */}
+      {!isEccConnected && runState === 'idle' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="glass rounded-2xl p-6"
+        >
+          <h3 className="text-sm font-semibold text-white/70 mb-4">What happens next?</h3>
+          <div className="space-y-3">
+            {[
+              { step: '1', text: 'Configure & test your ECC connection above', icon: Server, color: '#3b82f6' },
+              { step: '2', text: 'Save the connection — password stays in memory for the pipeline', icon: Database, color: '#06b6d4' },
+              { step: '3', text: 'Once connected, click "Run Conversion & Generate PDF Report"', icon: Rocket, color: '#f59e0b' },
+              { step: '4', text: 'Download the comprehensive migration assessment PDF', icon: FileText, color: '#10b981' },
+            ].map((s) => (
+              <div key={s.step} className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
+                  style={{ backgroundColor: `${s.color}15`, color: s.color }}>
+                  {s.step}
+                </div>
+                <p className="text-xs text-white/50">{s.text}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

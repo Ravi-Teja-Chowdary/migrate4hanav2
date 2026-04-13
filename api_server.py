@@ -45,8 +45,28 @@ CONNECTIONS_FILE = os.path.join(PROJECT_DIR, "connections.json")
 _active_run = {"status": "idle", "results": None, "run_id": None}
 _lock = asyncio.Lock()
 
+# Real-time progress steps for telemetry
+_progress_steps = []
+_progress_lock = asyncio.Lock()
+
 # In-memory ECC password (set after successful connection test, never persisted)
 _ecc_passwd = ""
+
+
+def _add_progress_step(stage, action, status="IN_PROGRESS", details=None, duration_ms=None):
+    """Add a progress step to the real-time telemetry feed."""
+    import asyncio as _aio
+    step = {
+        "event_id": secrets.token_hex(6),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "stage": stage,
+        "action": action,
+        "status": status,
+        "details": details or {},
+        "duration_ms": duration_ms,
+    }
+    _progress_steps.append(step)
+    return step
 
 # =============================================================================
 # AUTHENTICATION
@@ -269,18 +289,22 @@ def get_run(run_id):
         return json.load(f)
 
 
-async def start_pipeline_async(mode="full"):
+async def start_pipeline_async(mode="full", generate_pdf_after=False):
     global _active_run
     async with _lock:
         if _active_run["status"] == "running":
             return {"error": "Pipeline already running"}
         _active_run = {"status": "running", "results": None, "run_id": None,
-                       "started": time.time(), "mode": mode}
+                       "started": time.time(), "mode": mode,
+                       "generate_pdf_after": generate_pdf_after}
+
+    # Clear old progress steps
+    _progress_steps.clear()
+    _add_progress_step("pipeline", "Pipeline started", "IN_PROGRESS", {"mode": mode})
 
     async def _run():
         global _active_run
         try:
-            import subprocess
             cmd = [sys.executable, os.path.join(PROJECT_DIR, "run_local_pipeline.py")]
 
             # Determine if live ECC connection is available
@@ -290,32 +314,94 @@ async def start_pipeline_async(mode="full"):
 
             if use_live:
                 cmd.append("--live")
+                _add_progress_step("connection", "Using live ECC connection", "SUCCESS",
+                                   {"host": conns["ecc"].get("ashost", "")})
+            else:
+                _add_progress_step("connection", "Using mock ECC data (no live connection)", "WARNING")
 
             if mode == "assess":
                 cmd.append("--assess-only")
             elif mode == "ecc_full":
                 cmd.extend(["--mode", "ecc_full"])
 
+            _add_progress_step("extraction", "Starting ECC data extraction", "IN_PROGRESS")
+
             env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
             if use_live:
                 env["M4H_ECC_PASSWD"] = _ecc_passwd
+
+            # Stream stdout line-by-line for real-time progress
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                 cwd=PROJECT_DIR, env=env)
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
+
+            # Read stdout lines in real-time for progress updates
+            async def _read_stdout():
+                while True:
+                    line = await proc.stdout.readline()
+                    if not line:
+                        break
+                    text = line.decode("utf-8", errors="replace").strip()
+                    if not text:
+                        continue
+                    # Parse pipeline output for meaningful progress steps
+                    _parse_pipeline_output(text)
+
+            async def _read_stderr():
+                data = await proc.stderr.read()
+                return data.decode("utf-8", errors="replace") if data else ""
+
+            stderr_task = asyncio.create_task(_read_stderr())
+            try:
+                await asyncio.wait_for(_read_stdout(), timeout=600)
+            except asyncio.TimeoutError:
+                pass
+            stderr_text = await stderr_task
+            await asyncio.wait_for(proc.wait(), timeout=30)
+
             if proc.returncode != 0:
-                err_msg = (stderr.decode() or stdout.decode() or "Unknown error").strip()[-500:]
+                err_msg = (stderr_text or "Unknown error").strip()[-500:]
                 print(f"  [API] Pipeline subprocess failed (exit {proc.returncode}): {err_msg}")
+                _add_progress_step("pipeline", f"Pipeline failed (exit {proc.returncode})", "ERROR",
+                                   {"error": err_msg[:200]})
+
+            _add_progress_step("extraction", "ECC data extraction completed", "SUCCESS")
+
             runs = list_runs()
             latest = runs[0] if runs else None
+
+            # Generate PDF if requested
+            pdf_generated = False
+            if latest and generate_pdf_after:
+                _add_progress_step("pdf-generation", "Generating PDF report", "IN_PROGRESS")
+                t0 = time.time()
+                try:
+                    pdf_path = generate_pdf_for_run(latest["id"])
+                    if pdf_path and os.path.isfile(pdf_path):
+                        pdf_generated = True
+                        _add_progress_step("pdf-generation",
+                                           f"PDF report generated ({os.path.getsize(pdf_path) // 1024} KB)",
+                                           "SUCCESS", {"path": pdf_path},
+                                           duration_ms=int((time.time() - t0) * 1000))
+                    else:
+                        _add_progress_step("pdf-generation", "PDF generation returned no file", "WARNING")
+                except Exception as e:
+                    _add_progress_step("pdf-generation", f"PDF generation failed: {str(e)[:200]}", "ERROR")
+
             async with _lock:
                 if latest:
                     _active_run = {"status": "completed", "run_id": latest["id"],
                                    "results": latest["results"], "mode": mode,
-                                   "duration": time.time() - _active_run.get("started", time.time())}
+                                   "duration": time.time() - _active_run.get("started", time.time()),
+                                   "pdf_generated": pdf_generated}
+                    _add_progress_step("pipeline", "Pipeline completed successfully", "SUCCESS",
+                                       {"run_id": latest["id"], "pdf_generated": pdf_generated},
+                                       duration_ms=int(_active_run["duration"] * 1000))
                 else:
-                    err_msg = (stderr.decode() or stdout.decode() or "Pipeline produced no output").strip()[-500:]
+                    err_msg = (stderr_text or "Pipeline produced no output").strip()[-500:]
                     _active_run = {"status": "failed", "error": f"Pipeline failed: {err_msg}", "results": None}
+                    _add_progress_step("pipeline", "Pipeline failed — no output produced", "ERROR",
+                                       {"error": err_msg[:200]})
         except asyncio.TimeoutError:
             try:
                 proc.kill()
@@ -324,12 +410,47 @@ async def start_pipeline_async(mode="full"):
                 pass
             async with _lock:
                 _active_run = {"status": "failed", "error": "Pipeline timed out after 600s", "results": None}
+            _add_progress_step("pipeline", "Pipeline timed out after 600s", "ERROR")
         except Exception as e:
             async with _lock:
                 _active_run = {"status": "failed", "error": str(e), "results": None}
+            _add_progress_step("pipeline", f"Pipeline error: {str(e)[:200]}", "ERROR")
 
     asyncio.create_task(_run())
     return {"status": "started", "mode": mode}
+
+
+def _parse_pipeline_output(line):
+    """Parse a line of pipeline stdout and emit meaningful progress steps."""
+    low = line.lower()
+
+    # Detect stage headers
+    if "[stage " in low or "stage " in low and "/17]" in low:
+        _add_progress_step("pipeline-stage", line.strip(" =\t"), "IN_PROGRESS")
+    elif "phase " in low and (":" in line or "--" in line):
+        _add_progress_step("pipeline-phase", line.strip(" =\t"), "IN_PROGRESS")
+    # Detect completion markers
+    elif any(kw in low for kw in ["complete", "finished", "done", "saved", "generated"]):
+        _add_progress_step("pipeline-step", line.strip(), "SUCCESS")
+    # Detect warnings
+    elif any(kw in low for kw in ["warning", "caution", "deprecated"]):
+        _add_progress_step("pipeline-step", line.strip(), "WARNING")
+    # Detect errors
+    elif any(kw in low for kw in ["error", "failed", "exception", "traceback"]):
+        _add_progress_step("pipeline-step", line.strip(), "ERROR")
+    # Detect scanning/analysis actions
+    elif any(kw in low for kw in ["scanning", "analyzing", "extracting", "checking",
+                                   "validating", "running", "processing", "loading",
+                                   "reconcil", "migrat", "converting"]):
+        _add_progress_step("pipeline-step", line.strip(), "IN_PROGRESS")
+    # Detect section markers (lines with ">" prefix from pipeline)
+    elif line.strip().startswith(">"):
+        _add_progress_step("pipeline-section", line.strip().lstrip("> "), "IN_PROGRESS")
+    # Status lines with checkmarks or bullet markers
+    elif any(line.strip().startswith(m) for m in ["V ", "o ", "! ", "X "]):
+        marker = line.strip()[0]
+        status = {"V": "SUCCESS", "o": "IN_PROGRESS", "!": "WARNING", "X": "ERROR"}.get(marker, "IN_PROGRESS")
+        _add_progress_step("pipeline-detail", line.strip()[2:].strip(), status)
 
 
 def generate_pdf_for_run(run_id):
@@ -502,6 +623,11 @@ async def pipeline_full():
 async def pipeline_ecc_full():
     return await start_pipeline_async(mode="ecc_full")
 
+@app.post("/api/pipeline/run_and_report", dependencies=[Depends(require_auth)])
+async def pipeline_run_and_report():
+    """Unified endpoint: run full ECC extraction + conversion + PDF generation."""
+    return await start_pipeline_async(mode="ecc_full", generate_pdf_after=True)
+
 @app.post("/api/pipeline/migrate", dependencies=[Depends(require_auth)])
 async def pipeline_migrate():
     return await start_pipeline_async(mode="full")
@@ -533,6 +659,20 @@ async def legacy_run():
 @app.get("/api/status", dependencies=[Depends(require_auth)])
 async def pipeline_status():
     return _active_run
+
+@app.get("/api/progress", dependencies=[Depends(require_auth)])
+async def pipeline_progress(since: int = 0):
+    """Return real-time progress steps. Use ?since=N to get only steps after index N."""
+    steps = _progress_steps[since:] if since > 0 else _progress_steps
+    return {
+        "status": _active_run.get("status", "idle"),
+        "mode": _active_run.get("mode"),
+        "run_id": _active_run.get("run_id"),
+        "pdf_generated": _active_run.get("pdf_generated", False),
+        "total_steps": len(_progress_steps),
+        "since": since,
+        "steps": steps,
+    }
 
 @app.get("/api/runs", dependencies=[Depends(require_auth)])
 async def get_runs():
