@@ -2302,7 +2302,7 @@ def main():
         print(f"  {C.BOLD}MIGRATE4HANA \u2014 ECC-Only Full Execution Complete{C.END}")
         print(f"{'=' * 64}")
         print(f"\n  Migration Completion Score: {C.BOLD}{C.GREEN}{overall}%{C.END}")
-        print(f"  {'─' * 62}")
+        print(f"  {'-' * 62}")
         for dim_name, dim_data in dims.items():
             score = dim_data.get("score", 0)
             bar_len = int(score / 100 * 36)

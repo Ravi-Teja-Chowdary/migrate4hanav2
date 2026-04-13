@@ -222,7 +222,7 @@ export default function Connections() {
 
   const isEccConnected = eccStatus === 'connected' || eccStatus === 'mock';
 
-  // Load saved connections
+  // Load saved connections and check live readiness
   useEffect(() => {
     apiFetch('/api/connections')
       .then((r) => r.ok ? r.json() : Promise.reject(r.statusText))
@@ -233,7 +233,17 @@ export default function Connections() {
           setEccClient(data.ecc.client || '100');
           setEccUser(data.ecc.user || '');
           setEccRouter(data.ecc.saprouter || '');
-          setEccStatus('saved');
+          // Check if password is still in server memory (survives page reload, not server restart)
+          apiFetch('/api/connections/ecc/status')
+            .then((r) => r.ok ? r.json() : Promise.reject(r.statusText))
+            .then((status) => {
+              if (status.live_ready) {
+                setEccStatus('connected');
+              } else {
+                setEccStatus('saved');
+              }
+            })
+            .catch(() => setEccStatus('saved'));
         }
       })
       .catch(() => {});
@@ -512,18 +522,17 @@ export default function Connections() {
                 All ECC data has been extracted, converted, and analyzed successfully.
               </p>
               <div className="flex items-center justify-center gap-3 mt-5">
-                {pdfGenerated && pdfUrl && (
-                  <a
-                    href={pdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-blue/20 to-accent-green/20
-                               text-white text-sm font-bold hover:from-accent-blue/30 hover:to-accent-green/30
-                               transition-all duration-300 border border-accent-cyan/20"
-                  >
-                    <Download size={15} /> Download PDF Report
-                  </a>
-                )}
+                <button
+                  onClick={async () => {
+                    const url = pdfUrl || await getAuthUrl(`/api/runs/${runId || 'latest'}/pdf`);
+                    window.open(url, '_blank');
+                  }}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-accent-green/20 to-accent-cyan/20
+                             text-white text-sm font-bold hover:from-accent-green/30 hover:to-accent-cyan/30
+                             transition-all duration-300 border border-accent-green/30 animate-pulse-glow shadow-lg shadow-accent-green/10"
+                >
+                  <Download size={16} /> Download PDF Report
+                </button>
                 <button
                   onClick={resetRun}
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 text-white/60 text-sm font-medium

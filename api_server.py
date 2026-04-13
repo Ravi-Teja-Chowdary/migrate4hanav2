@@ -32,6 +32,11 @@ from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Optional
 
+# Windows Python 3.7 uses SelectorEventLoop by default, which does not support
+# asyncio.create_subprocess_exec. Switch to ProactorEventLoop on Windows.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI, Request, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -214,6 +219,14 @@ def test_ecc_connection(params):
             sys_info = result.get("RFCSI_EXPORT", {})
             # Store password in memory for pipeline use
             _ecc_passwd = passwd
+            # Auto-save connection details on successful test so pipeline can find them
+            conns = _load_connections()
+            conns["ecc"] = {
+                "ashost": host, "sysnr": sysnr, "client": client,
+                "user": user, "saprouter": params.get("saprouter", ""),
+                "saved_at": datetime.now().isoformat(),
+            }
+            _save_connections(conns)
             return {
                 "status": "connected", "system_id": sys_info.get("RFCSYSID", ""),
                 "host": sys_info.get("RFCHOST", host), "db_system": sys_info.get("RFCDBSYS", ""),
@@ -317,6 +330,18 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False):
                 cmd.append("--live")
                 _add_progress_step("connection", "Using live ECC connection", "SUCCESS",
                                    {"host": ecc_conf.get("ashost", "")})
+            elif has_ecc and not _ecc_passwd:
+                # Connection is saved but password expired (server restarted).
+                # Don't silently fall back to mock — tell the user to re-test.
+                _add_progress_step("connection",
+                                   "ECC connection saved but session expired. "
+                                   "Please re-test the connection on the Connections page to re-authenticate.",
+                                   "ERROR")
+                async with _lock:
+                    _active_run = {"status": "failed",
+                                   "error": "ECC password not in memory. Re-test the connection to re-authenticate.",
+                                   "results": None}
+                return
             else:
                 _add_progress_step("connection", "Using mock ECC data (no live connection)", "WARNING")
 
@@ -413,9 +438,11 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False):
                 _active_run = {"status": "failed", "error": "Pipeline timed out after 600s", "results": None}
             _add_progress_step("pipeline", "Pipeline timed out after 600s", "ERROR")
         except Exception as e:
+            err_detail = f"{type(e).__name__}: {e}" if str(e) else f"{type(e).__name__}: {repr(e)}"
+            print(f"  [API] Pipeline exception: {err_detail}")
             async with _lock:
-                _active_run = {"status": "failed", "error": str(e), "results": None}
-            _add_progress_step("pipeline", f"Pipeline error: {str(e)[:200]}", "ERROR")
+                _active_run = {"status": "failed", "error": err_detail, "results": None}
+            _add_progress_step("pipeline", f"Pipeline error: {err_detail[:200]}", "ERROR")
 
     asyncio.create_task(_run())
     return {"status": "started", "mode": mode}
@@ -456,10 +483,16 @@ def _parse_pipeline_output(line):
 
 def generate_pdf_for_run(run_id):
     run_dir = os.path.join(OUTPUT_DIR, run_id)
-    json_path = os.path.join(run_dir, "post-migration-report.json")
     pdf_path = os.path.join(run_dir, "post-migration-report.pdf")
     if os.path.isfile(pdf_path):
         return pdf_path
+    # Check reports/ subdirectory for multi-volume PDFs
+    reports_dir = os.path.join(run_dir, "reports")
+    if os.path.isdir(reports_dir):
+        pdf_files = sorted(f for f in os.listdir(reports_dir) if f.endswith(".pdf"))
+        if pdf_files:
+            return os.path.join(reports_dir, pdf_files[0])
+    json_path = os.path.join(run_dir, "post-migration-report.json")
     if not os.path.isfile(json_path):
         final_path = os.path.join(run_dir, "final-report.json")
         if not os.path.isfile(final_path):

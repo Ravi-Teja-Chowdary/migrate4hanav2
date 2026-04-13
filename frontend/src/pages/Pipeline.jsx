@@ -5,11 +5,11 @@ import {
   Code, Database, Settings, Shield, Plug, Search,
   PlayCircle, Upload, HardDrive, Wrench, UserCheck, Zap,
   ClipboardCheck, ShieldCheck, ListChecks, ShieldAlert, DollarSign,
-  TestTube2, Rocket, Activity,
+  TestTube2, Rocket, Activity, Download,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { STAGES, PHASES, PHASE_COLORS, SAMPLE_RUN, getStageDuration } from '../data/sampleData';
-import { apiFetch } from '../api';
+import { apiFetch, getAuthUrl } from '../api';
 import LogViewer from '../components/LogViewer';
 
 const ICONS = {
@@ -415,6 +415,17 @@ export default function Pipeline() {
                   : 'Full ECC assessment finished. Review results on the Scorecard and Report pages.'}
               </p>
               <div className="flex items-center justify-center gap-3 mt-5">
+                <button
+                  onClick={async () => {
+                    const url = await getAuthUrl('/api/runs/latest/pdf');
+                    window.open(url, '_blank');
+                  }}
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-green/20 to-accent-cyan/20
+                             text-white text-sm font-bold border border-accent-green/30 hover:from-accent-green/30 hover:to-accent-cyan/30
+                             transition-all duration-300 animate-pulse-glow"
+                >
+                  <Download size={15} /> Download Report
+                </button>
                 <Link
                   to="/telemetry"
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent-blue/10 text-accent-blue text-xs font-medium border border-accent-blue/20 hover:bg-accent-blue/20 transition-all"

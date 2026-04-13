@@ -1588,7 +1588,7 @@ def generate_complete_ecc_dataset():
         "generated_at": datetime.now().isoformat(),
     }
 
-    print("\n✅ Complete ECC dataset generated!")
+    print("\n[OK] Complete ECC dataset generated!")
     print(f"   System: {data['system_info']['description']}")
     print(f"   Programs: {data['system_info']['total_custom_programs']}")
     print(f"   Tables: {data['system_info']['total_custom_tables']}")
@@ -1927,5 +1927,5 @@ if __name__ == "__main__":
     with open(output_file, "w") as f:
         json.dump(save_data, f, indent=2, default=str)
 
-    print(f"\n📦 Dataset saved to: {output_file}")
+    print(f"\n[SAVED] Dataset saved to: {output_file}")
     print(f"   File size: {os.path.getsize(output_file) / 1024:.0f} KB")

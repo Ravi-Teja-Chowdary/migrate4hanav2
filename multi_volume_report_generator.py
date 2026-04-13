@@ -1670,7 +1670,7 @@ def generate_multi_volume_report(
     output_dir: str,
     company_name: str,
     max_pages_per_volume: int = 50,
-) -> list[str]:
+) -> "list[str]":
     """
     Generates a comprehensive multi-volume PDF migration report showing
     all work completed by Migrate4HANA against the source ECC system.
