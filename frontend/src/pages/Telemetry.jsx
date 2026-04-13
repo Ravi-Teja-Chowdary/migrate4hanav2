@@ -79,7 +79,7 @@ export default function Telemetry() {
           try {
             const data = JSON.parse(event.data);
             addLog({
-              id: data.event_id || crypto.randomUUID?.() || Math.random().toString(36).substr(2, 12),
+              id: data.event_id || crypto.randomUUID?.() || Math.random().toString(36).substring(2, 14),
               timestamp: data.timestamp || new Date().toISOString(),
               stage: data.stage || 'unknown',
               action: data.action || '',
@@ -90,7 +90,7 @@ export default function Telemetry() {
             });
           } catch {
             addLog({
-              id: crypto.randomUUID?.() || Math.random().toString(36).substr(2, 12),
+              id: crypto.randomUUID?.() || Math.random().toString(36).substring(2, 14),
               timestamp: new Date().toISOString(),
               stage: 'system',
               action: 'message',
@@ -122,7 +122,7 @@ export default function Telemetry() {
       const actionIdx = idx % MOCK_ACTIONS.length;
       const statusIdx = idx % MOCK_STATUSES.length;
       addLog({
-        id: crypto.randomUUID?.() || Math.random().toString(36).substr(2, 12),
+        id: crypto.randomUUID?.() || Math.random().toString(36).substring(2, 14),
         timestamp: new Date().toISOString(),
         stage: MOCK_STAGES[stageIdx],
         action: MOCK_ACTIONS[actionIdx],

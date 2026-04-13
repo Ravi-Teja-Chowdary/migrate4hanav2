@@ -29,6 +29,7 @@ import json
 import os
 import logging
 import boto3
+import time
 import sys
 from datetime import datetime
 
@@ -620,7 +621,7 @@ def lambda_handler(event, context):
     """
     logger.info(f"Data Assessment & CVI Preparation started")
     log_stage_event("data-assessment", "Pipeline Start", "IN_PROGRESS", {"stage": 3})
-    _stage_start = __import__('time').time()
+    _stage_start = time.time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     discovery = event.get("discovery", {})
@@ -644,7 +645,10 @@ def lambda_handler(event, context):
             from pyrfc import Connection
             conn = Connection(**conn_params)
             has_rfc = True
-        except (ImportError, Exception):
+        except ImportError:
+            has_rfc = False
+            logger.warning("No RFC — generating migration plan only")
+        except Exception:
             has_rfc = False
             logger.warning("No RFC — generating migration plan only")
 
@@ -823,7 +827,7 @@ def lambda_handler(event, context):
             "finance_score": finance_readiness.get("acdoca_compatibility_score", 0) if isinstance(finance_readiness, dict) else 0,
             "data_quality_issues": len(data_quality_issues),
             "sum_readiness": results["data_quality_report"]["sum_readiness"],
-        }, (__import__('time').time() - _stage_start) * 1000)
+        }, (time.time() - _stage_start) * 1000)
         return {
             "status": "success",
             "results": results,

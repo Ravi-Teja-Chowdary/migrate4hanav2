@@ -20,6 +20,7 @@ import os
 import sys
 import logging
 import boto3
+import time
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
@@ -274,7 +275,7 @@ def lambda_handler(event, context):
     """
     logger.info("Cutover Orchestrator started")
     log_stage_event("cutover-orchestrator", "Pipeline Start", "IN_PROGRESS", {"stage": 7, "dry_run": event.get("metadata", {}).get("input", {}).get("dry_run", False)})
-    _stage_start = __import__('time').time()
+    _stage_start = time.time()
 
     # Validate input at system boundary
     validation_errors = validate_event(event, required_fields=["metadata.run_id"])
@@ -403,7 +404,7 @@ def lambda_handler(event, context):
             "results": results,
             "run_id": run_id,
         }
-        log_stage_event("cutover-orchestrator", "Cutover Complete", "SUCCESS", {"go_no_go": "GO", "dry_run": dry_run}, (__import__('time').time() - _stage_start) * 1000)
+        log_stage_event("cutover-orchestrator", "Cutover Complete", "SUCCESS", {"go_no_go": "GO", "dry_run": dry_run}, (time.time() - _stage_start) * 1000)
         return result
 
     except Exception as e:

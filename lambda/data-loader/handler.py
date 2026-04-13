@@ -24,6 +24,7 @@ import os
 import sys
 import logging
 import boto3
+import time
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
@@ -818,7 +819,10 @@ def _get_s4_connection(dry_run):
             ["SecretString"]
         )
         return Connection(**s4_params), True
-    except (ImportError, Exception) as e:
+    except ImportError:
+        logger.warning(f"No RFC to S/4HANA — simulating")
+        return None, False
+    except Exception as e:
         logger.warning(f"No RFC to S/4HANA — simulating: {e}")
         return None, False
 
@@ -896,7 +900,7 @@ def _handle_stream_load(event, stream_type, run_id, dry_run, start_time):
             conn.close()
 
         result["status"] = "success"
-        duration_ms = (__import__('time').time() - start_time) * 1000
+        duration_ms = (time.time() - start_time) * 1000
         log_stage_event("data-loader", f"Stream Complete: {stream_type}", "SUCCESS", result, duration_ms)
         return result
 
@@ -976,7 +980,7 @@ def _handle_reconciliation(event, run_id, dry_run, start_time):
         ContentType="application/json",
     )
 
-    duration_ms = (__import__('time').time() - start_time) * 1000
+    duration_ms = (time.time() - start_time) * 1000
     log_stage_event("data-loader", "Reconciliation Complete", "SUCCESS",
                     report.get("reconciliation", {}).get("variance_summary", {}), duration_ms)
 
@@ -1003,7 +1007,7 @@ def lambda_handler(event, context):
     3. Reconciliation (stage=reconciliation): penny-perfect GL balance check
     """
     logger.info("Data Loader started")
-    _stage_start = __import__('time').time()
+    _stage_start = time.time()
 
     # Validate input at system boundary
     validation_errors = validate_event(event)
@@ -1063,7 +1067,9 @@ def lambda_handler(event, context):
                 )
                 conn = Connection(**s4_params)
                 has_rfc = True
-            except (ImportError, Exception) as e:
+            except ImportError:
+                logger.warning(f"No RFC to S/4HANA — simulating data load")
+            except Exception as e:
                 logger.warning(f"No RFC to S/4HANA — simulating data load: {e}")
 
         # --- Finance: ACDOCA ---
@@ -1223,7 +1229,7 @@ def lambda_handler(event, context):
             ContentType="application/json",
         )
 
-        log_stage_event("data-loader", "Data Loading Complete", "SUCCESS", results.get("summary", {}), (__import__('time').time() - _stage_start) * 1000)
+        log_stage_event("data-loader", "Data Loading Complete", "SUCCESS", results.get("summary", {}), (time.time() - _stage_start) * 1000)
         return {"status": "success", "results": results, "run_id": run_id}
 
     except Exception as e:

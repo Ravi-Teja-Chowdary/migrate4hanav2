@@ -29,13 +29,13 @@ def strip_material_leading_zeros(record: Dict[str, Any]) -> Dict[str, Any]:
     meaningful to the lexical structure (e.g. configuring output schemas).
     """
     cleansed = dict(record)
-    if 'MATNR' in cleansed and type(cleansed['MATNR']) == str:
+    if 'MATNR' in cleansed and isinstance(cleansed['MATNR'], str):
         # Example logic: lstrip zeros but leave at least one if wholly zero
         try:
-             stripped = cleansed['MATNR'].lstrip('0')
-             cleansed['MATNR'] = stripped if stripped else '0'
-        except Exception:
-            pass
+            stripped = cleansed['MATNR'].lstrip('0')
+            cleansed['MATNR'] = stripped if stripped else '0'
+        except (AttributeError, ValueError) as e:
+            logger.warning(f"Failed to strip leading zeros from MATNR: {e}")
     return cleansed
 
 def execute_cleaning_batch(records: List[Dict[str, Any]], table_name: str) -> List[Dict[str, Any]]:

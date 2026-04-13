@@ -36,7 +36,7 @@ const LogViewer = ({ runId }) => {
           try {
             const data = JSON.parse(event.data);
             addLog({
-              id: data.event_id || Math.random().toString(36).substr(2, 9),
+              id: data.event_id || Math.random().toString(36).substring(2, 11),
               timestamp: data.timestamp || new Date().toISOString(),
               stage: data.stage || 'unknown',
               action: data.action || '',
@@ -47,7 +47,7 @@ const LogViewer = ({ runId }) => {
           } catch {
             // non-JSON message — show as raw
             addLog({
-              id: Math.random().toString(36).substr(2, 9),
+              id: Math.random().toString(36).substring(2, 11),
               timestamp: new Date().toISOString(),
               stage: 'system',
               action: 'message',
@@ -89,7 +89,7 @@ const LogViewer = ({ runId }) => {
     const mockInterval = setInterval(() => {
       const i = idx % stages.length;
       addLog({
-        id: Math.random().toString(36).substr(2, 9),
+        id: Math.random().toString(36).substring(2, 11),
         timestamp: new Date().toISOString(),
         stage: stages[i],
         action: actions[i],

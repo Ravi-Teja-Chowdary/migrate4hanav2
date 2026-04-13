@@ -99,7 +99,7 @@ def _metric_box(label, value, color=NAVY):
 
 
 def _severity_color(sev):
-    return {"HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN}.get(sev, GRAY)
+    return {"HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN}.get(sev or "", GRAY)
 
 
 def _table_style_base():
@@ -128,6 +128,9 @@ def generate_pdf(report_data, output_path):
         report_data: dict â€” the post_migration_report section
         output_path: str â€” where to save the PDF
     """
+    if not isinstance(report_data, dict) or not report_data:
+        raise ValueError("report_data must be a non-empty dictionary")
+
     ss = _styles()
     doc = SimpleDocTemplate(
         output_path, pagesize=A4,

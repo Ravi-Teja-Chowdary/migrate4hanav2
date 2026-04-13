@@ -12,6 +12,7 @@ import sys
 import os
 import json
 import time
+import random as _rnd
 from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -213,7 +214,6 @@ _orig_run_fuzzy_match = bpde.run_fuzzy_match
 
 def _scaled_run_fuzzy_match(entities, entity_type="CUSTOMER", threshold=None):
     """Patched fuzzy match that caps block sizes for 10x scale."""
-    import random as _rnd
     if threshold is None:
         threshold = bpde.FUZZY_THRESHOLD
     if not entities:
@@ -290,7 +290,6 @@ _orig_cross_match = bpde._cross_match_customer_vendor
 
 def _scaled_cross_match(customers, vendors, threshold=None):
     """Patched cross-match that caps vendor block sizes for 10x scale."""
-    import random as _rnd
     if threshold is None:
         threshold = bpde.FUZZY_THRESHOLD
 

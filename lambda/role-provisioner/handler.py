@@ -23,6 +23,7 @@ import os
 import sys
 import logging
 import boto3
+import time
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
@@ -188,7 +189,7 @@ def lambda_handler(event, context):
     """
     logger.info("Role Provisioner started")
     log_stage_event("role-provisioner", "Pipeline Start", "IN_PROGRESS", {"stage": 11})
-    _stage_start = __import__('time').time()
+    _stage_start = time.time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     dry_run = event.get("metadata", {}).get("input", {}).get("dry_run", False)
@@ -281,7 +282,9 @@ def lambda_handler(event, context):
             )
             conn = Connection(**s4_params)
             has_rfc = True
-        except (ImportError, Exception) as e:
+        except ImportError:
+            logger.warning(f"No RFC to S/4HANA — simulating role provisioning")
+        except Exception as e:
             logger.warning(f"No RFC to S/4HANA — simulating role provisioning: {e}")
 
         # Create single roles
@@ -349,7 +352,7 @@ def lambda_handler(event, context):
             ContentType="application/json",
         )
 
-        log_stage_event("role-provisioner", "Roles Provisioned", "SUCCESS", results.get("summary", {}), (__import__('time').time() - _stage_start) * 1000)
+        log_stage_event("role-provisioner", "Roles Provisioned", "SUCCESS", results.get("summary", {}), (time.time() - _stage_start) * 1000)
         return {"status": "success", "results": results, "run_id": run_id}
 
     except Exception as e:

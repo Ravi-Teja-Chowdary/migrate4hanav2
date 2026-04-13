@@ -21,6 +21,7 @@ import os
 import re
 import logging
 import boto3
+import time
 import sys
 
 # Append path to load internal logic modules
@@ -514,7 +515,7 @@ def lambda_handler(event, context):
     """
     logger.info(f"Code Analyzer started: {json.dumps(event, default=str)[:500]}")
     log_stage_event("code-analyzer", "Pipeline Start", "IN_PROGRESS", {"stage": 2})
-    _stage_start = __import__('time').time()
+    _stage_start = time.time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     discovery = event.get("discovery", {})
@@ -526,7 +527,10 @@ def lambda_handler(event, context):
             from handler import get_sap_connection  # noqa
             conn = get_sap_connection()
             has_rfc = True
-        except (ImportError, Exception):
+        except ImportError:
+            has_rfc = False
+            logger.warning("No RFC connection — analyzing based on discovery metadata only")
+        except Exception:
             has_rfc = False
             logger.warning("No RFC connection — analyzing based on discovery metadata only")
 
@@ -636,7 +640,7 @@ def lambda_handler(event, context):
         log_stage_event("code-analyzer", "Analysis Complete", "SUCCESS", {
             "issues": len(all_issues), "auto_fixed": remediated_count,
             "atc_integration": atc_integration, "atc_findings": len(atc_results),
-        }, (__import__('time').time() - _stage_start) * 1000)
+        }, (time.time() - _stage_start) * 1000)
 
         return {
             "status": "success",

@@ -26,17 +26,29 @@ def get_simplification_rules(category: str = None) -> List[Dict[str, Any]]:
     try:
         if category:
             # Query using Global Secondary Index for efficient category retrieval
+            rules = []
             response = table.query(
                 IndexName="CategoryIndex",
                 KeyConditionExpression=boto3.dynamodb.conditions.Key('category').eq(category)
             )
-            rules = response.get('Items', [])
+            rules.extend(response.get('Items', []))
+            while 'LastEvaluatedKey' in response:
+                response = table.query(
+                    IndexName="CategoryIndex",
+                    KeyConditionExpression=boto3.dynamodb.conditions.Key('category').eq(category),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+                rules.extend(response.get('Items', []))
             logger.info(f"DynamoDB Rule Router: Fetched {len(rules)} rules for category '{category}'")
             return rules
         else:
             # Scan all if no category specified (less efficient, use carefully)
+            rules = []
             response = table.scan()
-            rules = response.get('Items', [])
+            rules.extend(response.get('Items', []))
+            while 'LastEvaluatedKey' in response:
+                response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+                rules.extend(response.get('Items', []))
             logger.info(f"DynamoDB Rule Router: Scanned and fetched {len(rules)} total rules.")
             return rules
             

@@ -95,7 +95,7 @@ class LocalS3:
         filepath = os.path.join(self.base_dir, Key)
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         with open(filepath, "w", encoding="utf-8") as f:
-            f.write(Body if isinstance(Body, str) else Body.decode("utf-8"))
+            f.write(Body if isinstance(Body, str) else Body.decode("utf-8", errors="replace"))
         return True
 
     def get_object(self, Bucket="", Key=""):

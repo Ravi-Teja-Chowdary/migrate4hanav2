@@ -18,6 +18,7 @@ import os
 import sys
 import logging
 import boto3
+import time
 from datetime import datetime
 
 # Structured telemetry logger for real-time UI streaming
@@ -610,7 +611,7 @@ def lambda_handler(event, context):
     """
     logger.info(f"Discovery Engine started: {json.dumps(event)}")
     log_stage_event("discovery-engine", "Pipeline Start", "IN_PROGRESS", {"mode": event.get("input", {}).get("mode", "full")})
-    _stage_start = __import__('time').time()
+    _stage_start = time.time()
 
     # Validate input at system boundary
     validation_errors = validate_event(event, required_fields=["metadata.run_id"])
@@ -683,7 +684,7 @@ def lambda_handler(event, context):
         )
 
         logger.info(f"Discovery complete: {json.dumps(summary)}")
-        log_stage_event("discovery-engine", "Discovery Complete", "SUCCESS", summary, (__import__('time').time() - _stage_start) * 1000)
+        log_stage_event("discovery-engine", "Discovery Complete", "SUCCESS", summary, (time.time() - _stage_start) * 1000)
 
         return {
             "status": "success",

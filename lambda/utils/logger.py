@@ -95,9 +95,16 @@ def _broadcast_to_websocket(log_entry: Dict[str, Any]) -> None:
     message = json.dumps(log_entry).encode("utf-8")
 
     try:
-        # Scan all active connections
+        # Scan all active connections (paginated)
+        connections = []
         response = table.scan(ProjectionExpression="connectionId")
-        connections = response.get("Items", [])
+        connections.extend(response.get("Items", []))
+        while "LastEvaluatedKey" in response:
+            response = table.scan(
+                ProjectionExpression="connectionId",
+                ExclusiveStartKey=response["LastEvaluatedKey"]
+            )
+            connections.extend(response.get("Items", []))
 
         stale_connections = []
         for conn in connections:
@@ -106,12 +113,11 @@ def _broadcast_to_websocket(log_entry: Dict[str, Any]) -> None:
                 apigw.post_to_connection(
                     ConnectionId=connection_id, Data=message
                 )
-            except apigw.exceptions.GoneException:
-                # Client disconnected — mark for cleanup
-                stale_connections.append(connection_id)
-            except Exception:
-                # Non-fatal — don't let telemetry failures break pipeline
-                pass
+            except Exception as post_err:
+                # Client disconnected (GoneException) — mark for cleanup
+                err_code = getattr(post_err, 'response', {}).get('Error', {}).get('Code', '')
+                if err_code == 'GoneException' or 'Gone' in str(post_err):
+                    stale_connections.append(connection_id)
 
         # Clean up stale connections
         for cid in stale_connections:

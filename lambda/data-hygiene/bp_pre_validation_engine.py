@@ -33,7 +33,11 @@ logger = logging.getLogger("bp_pre_validation")
 logger.setLevel(logging.INFO)
 
 # Configurable: halt migration if critical violation rate exceeds threshold
-HALT_THRESHOLD_PCT = float(os.environ.get("BP_VALIDATION_HALT_PCT", "10.0"))
+HALT_THRESHOLD_PCT = 10.0
+try:
+    HALT_THRESHOLD_PCT = float(os.environ.get("BP_VALIDATION_HALT_PCT", "10.0"))
+except (ValueError, TypeError):
+    pass
 
 
 # =============================================================================

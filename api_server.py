@@ -77,7 +77,7 @@ def _b64url_encode(data: bytes) -> str:
 
 
 def _b64url_decode(s: str) -> bytes:
-    s += "=" * (4 - len(s) % 4)
+    s += "=" * (-len(s) % 4)
     return base64.urlsafe_b64decode(s)
 
 
@@ -161,8 +161,11 @@ async def require_auth(
 # =============================================================================
 def _load_connections():
     if os.path.isfile(CONNECTIONS_FILE):
-        with open(CONNECTIONS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(CONNECTIONS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            return {"ecc": None, "s4hana": None}
     return {"ecc": None, "s4hana": None}
 
 
@@ -288,7 +291,7 @@ async def start_pipeline_async(mode="full"):
                 cwd=PROJECT_DIR, env=env)
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
             if proc.returncode != 0:
-                err_msg = (stderr.decode() or stdout.decode() or "Unknown error").strip()[-500:]
+                err_msg = (stderr.decode("utf-8", errors="replace") or stdout.decode("utf-8", errors="replace") or "Unknown error").strip()[-500:]
                 print(f"  [API] Pipeline subprocess failed (exit {proc.returncode}): {err_msg}")
             runs = list_runs()
             latest = runs[0] if runs else None
@@ -298,7 +301,7 @@ async def start_pipeline_async(mode="full"):
                                    "results": latest["results"], "mode": mode,
                                    "duration": time.time() - _active_run.get("started", time.time())}
                 else:
-                    err_msg = (stderr.decode() or stdout.decode() or "Pipeline produced no output").strip()[-500:]
+                    err_msg = (stderr.decode("utf-8", errors="replace") or stdout.decode("utf-8", errors="replace") or "Pipeline produced no output").strip()[-500:]
                     _active_run = {"status": "failed", "error": f"Pipeline failed: {err_msg}", "results": None}
         except asyncio.TimeoutError:
             async with _lock:

@@ -95,7 +95,10 @@ def main():
     logger.info("  PID   : %d", os.getpid())
 
     # ── Parse input payload ──
-    event = json.loads(input_json)
+    try:
+        event = json.loads(input_json)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid JSON in SFN_INPUT: {exc}")
 
     # ── Set up Python path so the handler's relative imports work ──
     handler_dir = f"/app/lambda/{stage}"
@@ -139,7 +142,7 @@ def main():
     except Exception as exc:
         error_msg = str(exc)[:256]
         cause = traceback.format_exc()[:32768]
-        logger.error("Stage %s FAILED:\n%s", stage, cause)
+        logger.error("Stage %s FAILED (%s): %s\n%s", stage, type(exc).__name__, exc, cause)
 
         try:
             sfn.send_task_failure(

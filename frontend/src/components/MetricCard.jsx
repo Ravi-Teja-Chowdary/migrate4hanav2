@@ -24,7 +24,7 @@ export default function MetricCard({ label, value, sub, icon: Icon, color = '#3b
       </div>
 
       <div className="text-2xl font-bold text-white tracking-tight counter-animate">
-        {typeof value === 'number' ? value.toLocaleString() : value}
+        {typeof value === 'number' ? value.toLocaleString() : value ?? 'N/A'}
       </div>
       <div className="text-xs text-white/40 mt-1">{label}</div>
       {sub && <div className="text-[10px] text-white/25 mt-0.5 font-mono">{sub}</div>}
