@@ -148,12 +148,15 @@ def main():
                 cause=cause,
             )
         except Exception as cb_exc:
-            logger.error("Failed to send task failure callback: %s", cb_exc)
+            logger.critical("CRITICAL: Failed to notify Step Functions of failure: %s", cb_exc)
+            sys.exit(2)
         sys.exit(1)
 
     finally:
         stop_event.set()
-        hb_thread.join(timeout=5)
+        hb_thread.join(timeout=10)
+        if hb_thread.is_alive():
+            logger.warning("Heartbeat thread did not terminate within timeout")
 
 
 if __name__ == "__main__":

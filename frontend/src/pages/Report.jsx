@@ -65,7 +65,7 @@ export default function Report() {
 
   useEffect(() => {
     apiFetch('/api/runs')
-      .then((res) => res.json())
+      .then((res) => res.ok ? res.json() : Promise.reject(res.statusText))
       .then((runs) => {
         if (runs.length > 0) {
           setHasRun(true);
@@ -151,6 +151,7 @@ export default function Report() {
                 a.remove();
                 URL.revokeObjectURL(url);
               } catch (e) {
+                console.error('PDF download error:', e);
                 alert('PDF download failed — is the API server running?');
               }
             }}

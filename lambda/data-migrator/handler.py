@@ -344,15 +344,18 @@ def transform_bp_data(customers, vendors):
             assignment["overlap_analysis"],
             assignment["strategy_used"],
         )
+        crosswalk_s3_status = "success"
     except Exception as e:
         logger.warning(f"S3 crosswalk persistence failed (non-fatal): {e}")
         crosswalk_keys = {}
+        crosswalk_s3_status = "failed"
 
     return {
         "status": "Deduplicated",
         "clean_bp_list": assignment["bp_records"],
         "crosswalk": assignment["crosswalk"],
         "crosswalk_s3_keys": crosswalk_keys,
+        "crosswalk_s3_status": crosswalk_s3_status,
         "repointing_instructions": repointing,
         "pre_validation": pre_validation,
         "remediation_report": remediation_report,

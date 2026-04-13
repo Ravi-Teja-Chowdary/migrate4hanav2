@@ -1891,8 +1891,11 @@ class MockRFCConnection:
         source = self.dataset.get("abap_source", {}).get(PROGRAM_NAME, "")
         if source:
             lines = [{"LINE": line} for line in source.split("\n")]
-            return {"PROG_SOURCE": lines}
-        return {"PROG_SOURCE": []}
+            return {"PROG_SOURCE": lines, "RETURN": []}
+        return {
+            "PROG_SOURCE": [],
+            "RETURN": [{"TYPE": "E", "MESSAGE": f"Program {PROGRAM_NAME} not found"}],
+        }
 
     def close(self):
         pass

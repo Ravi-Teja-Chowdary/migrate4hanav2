@@ -153,11 +153,23 @@ def orchestrate_fins_migration(connection):
 
                 for entry in progress_entries:
                     table_name = entry.get("TABLE_NAME", "")
+                    try:
+                        records_processed = int(entry.get("RECORDS_PROCESSED", 0))
+                    except (ValueError, TypeError):
+                        records_processed = 0
+                    try:
+                        total_records = int(entry.get("TOTAL_RECORDS", 0))
+                    except (ValueError, TypeError):
+                        total_records = 0
+                    try:
+                        percent_complete = float(entry.get("PERCENT_COMPLETE", 0))
+                    except (ValueError, TypeError):
+                        percent_complete = 0.0
                     fins_result["progress"][table_name] = {
                         "status": entry.get("STATUS", ""),
-                        "records_processed": int(entry.get("RECORDS_PROCESSED", 0)),
-                        "total_records": int(entry.get("TOTAL_RECORDS", 0)),
-                        "percent_complete": float(entry.get("PERCENT_COMPLETE", 0)),
+                        "records_processed": records_processed,
+                        "total_records": total_records,
+                        "percent_complete": percent_complete,
                     }
 
                 if overall_status in ("COMPLETED", "FINISHED"):

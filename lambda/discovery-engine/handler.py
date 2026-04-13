@@ -274,7 +274,7 @@ def scan_org_structure(conn):
         ],
     )
     org["company_codes"] = []
-    for row in result["DATA"]:
+    for row in result.get("DATA", []):
         fields = row["WA"].split("|")
         if len(fields) >= 4:
             org["company_codes"].append({
@@ -297,7 +297,7 @@ def scan_org_structure(conn):
         ],
     )
     org["plants"] = []
-    for row in result["DATA"]:
+    for row in result.get("DATA", []):
         fields = row["WA"].split("|")
         if len(fields) >= 4:
             org["plants"].append({
@@ -318,7 +318,7 @@ def scan_org_structure(conn):
         ],
     )
     org["sales_orgs"] = []
-    for row in result["DATA"]:
+    for row in result.get("DATA", []):
         fields = row["WA"].split("|")
         if len(fields) >= 2:
             org["sales_orgs"].append({
@@ -337,7 +337,7 @@ def scan_org_structure(conn):
         ],
     )
     org["controlling_areas"] = []
-    for row in result["DATA"]:
+    for row in result.get("DATA", []):
         fields = row["WA"].split("|")
         if len(fields) >= 2:
             org["controlling_areas"].append({

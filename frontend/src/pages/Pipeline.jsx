@@ -219,6 +219,7 @@ export default function Pipeline() {
   }
 
   function startPolling() {
+    if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
         const r = await apiFetch('/api/status');

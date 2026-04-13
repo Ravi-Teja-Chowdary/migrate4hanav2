@@ -65,6 +65,7 @@ const LogViewer = ({ runId }) => {
         };
 
         ws.onerror = () => {
+          clearTimeout(reconnectTimer.current);
           ws.close();
         };
       };
@@ -145,7 +146,7 @@ const LogViewer = ({ runId }) => {
         ) : (
             logs.map(log => (
             <div key={log.id} className="flex gap-4 opacity-90 hover:opacity-100 hover:bg-gray-800/50 p-1 rounded">
-                <span className="text-gray-500 shrink-0">[{log.timestamp.split('T')[1].slice(0, -1)}]</span>
+                <span className="text-gray-500 shrink-0">[{log.timestamp?.split('T')[1]?.slice(0, -1) || 'N/A'}]</span>
                 <span className="text-blue-400 font-semibold w-36 shrink-0 truncate">[{log.stage}]</span>
                 <span className={`w-24 shrink-0 truncate ${
                     log.status === 'ERROR' ? 'text-red-500 font-bold' : 

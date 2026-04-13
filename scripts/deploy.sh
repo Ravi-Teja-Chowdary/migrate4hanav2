@@ -23,11 +23,11 @@ FUNCTIONS=("discovery-engine" "process-miner" "code-analyzer" "data-hygiene" "da
 
 for func in "${FUNCTIONS[@]}"; do
     echo "  Packaging ${func}..."
-    cd "${LAMBDA_DIR}/${func}"
+    cd "${LAMBDA_DIR}/${func}" || { echo "ERROR: Cannot enter ${LAMBDA_DIR}/${func}"; exit 1; }
 
     # Install dependencies if requirements.txt exists
     if [ -f "requirements.txt" ]; then
-        pip install -r requirements.txt -t . --quiet
+        pip install -r requirements.txt -t . --quiet || { echo "ERROR: pip install failed for ${func}"; exit 1; }
     fi
 
     echo "  ✓ ${func} ready"
@@ -36,9 +36,9 @@ done
 # Step 2: Build Frontend
 echo ""
 echo "Step 2: Building Frontend React Web App..."
-cd "${PROJECT_DIR}/frontend"
-npm ci
-npm run build 
+cd "${PROJECT_DIR}/frontend" || { echo "ERROR: Cannot enter frontend directory"; exit 1; }
+npm ci || { echo "ERROR: npm ci failed"; exit 1; }
+npm run build || { echo "ERROR: npm run build failed"; exit 1; }
 
 # Step 3: Terraform
 echo ""

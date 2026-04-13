@@ -54,10 +54,12 @@ def check_s4_connectivity(conn_params):
     try:
         from pyrfc import Connection
         conn = Connection(**conn_params)
-        # Ping with a lightweight RFC
-        result = conn.call("RFC_PING")
-        conn.close()
-        return {"reachable": True, "latency_ms": 0}
+        try:
+            # Ping with a lightweight RFC
+            result = conn.call("RFC_PING")
+            return {"reachable": True, "latency_ms": 0}
+        finally:
+            conn.close()
     except ImportError:
         logger.warning("PyRFC not available — skipping connectivity check")
         return {"reachable": True, "latency_ms": 0, "note": "pyrfc not installed — mock mode"}
@@ -128,8 +130,8 @@ def lock_source_system(conn, lock=True):
             try:
                 conn.call("BAPI_USER_LOCK", USERNAME=uname)
                 locked_count += 1
-            except Exception:
-                pass  # Some service users may not be lockable
+            except Exception as e:
+                logger.warning(f"Operation failed: {e}")
         if locked_count > 0:
             conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         lock_result["users_locked"] = locked_count
@@ -374,8 +376,10 @@ def lambda_handler(event, context):
                     ["SecretString"]
                 )
                 ecc_conn = Connection(**ecc_params)
-                lock_result = lock_source_system(ecc_conn, lock=True)
-                ecc_conn.close()
+                try:
+                    lock_result = lock_source_system(ecc_conn, lock=True)
+                finally:
+                    ecc_conn.close()
             except Exception as e:
                 lock_result = {"locked": False, "reason": str(e)}
             results["checks"]["source_lock"] = lock_result

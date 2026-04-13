@@ -198,7 +198,7 @@ class DonutGaugeFlowable(Flowable):
         _draw_donut(c, cx, cy, outer_r, inner_r, 0, 360)
 
         # Score ring
-        angle = self.score / 100 * 360
+        angle = min(max(self.score / 100 * 360, 0), 360)
         c.setFillColor(fill_color)
         _draw_donut(c, cx, cy, outer_r, inner_r, 90, 90 - angle)
 
@@ -394,6 +394,8 @@ def _build_section_1_executive(pipeline_results, completion_report):
 
     # Hero: Completion Score Gauge
     overall_score = completion_report.get("overall_score", 0)
+    if not isinstance(overall_score, (int, float)):
+        overall_score = 0
     gauge = DonutGaugeFlowable(overall_score, size=200)
     story.append(Table([[gauge]], colWidths=[USABLE_W],
                        style=TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")])))

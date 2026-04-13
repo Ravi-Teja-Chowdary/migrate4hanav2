@@ -149,7 +149,7 @@ export default function Connections() {
   // Load saved connections
   useEffect(() => {
     apiFetch('/api/connections')
-      .then((r) => r.json())
+      .then((r) => r.ok ? r.json() : Promise.reject(r.statusText))
       .then((data) => {
         if (data.ecc) {
           setEccHost(data.ecc.ashost || '');

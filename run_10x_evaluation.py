@@ -682,7 +682,7 @@ def generate_evaluation_report_md(results, conn, total_time, output_dir):
 | Finance → ACDOCA | {dl.get("finance", {}).get("documents_loaded", 0):,} | {"LOADED" if dl.get("finance", {}).get("documents_loaded", 0) > 0 else "PENDING"} |
 | Business Partners → BUT000 | {dl.get("business_partner", {}).get("partners_created", 0):,} | {"LOADED" if dl.get("business_partner", {}).get("partners_created", 0) > 0 else "PENDING"} |
 | Re-pointing Executed | {dl.get("repointing", {}).get("executed", 0):,} | {"COMPLETE" if dl.get("repointing", {}).get("executed", 0) > 0 else "N/A"} |
-| BAPI Commits | {dl.get("commits", conn._committed):,} | COMMITTED |
+| BAPI Commits | {dl.get("commits", getattr(conn, "_committed", 0)):,} | COMMITTED |
 
 ### Stage 10-12: Config, Roles & Integrations Applied
 
@@ -739,8 +739,8 @@ def generate_evaluation_report_md(results, conn, total_time, output_dir):
 
 | Metric | Value |
 |--------|-------|
-| Total RFC/BAPI Calls | {conn._call_count:,} |
-| BAPI Commits | {conn._committed:,} |
+| Total RFC/BAPI Calls | {getattr(conn, "_call_count", 0):,} |
+| BAPI Commits | {getattr(conn, "_committed", 0):,} |
 | Finance Docs/Second | {dm["finance_docs"]/max(total_time, 0.1):,.0f} |
 | BP Records/Second | {dm["bp_created"]/max(total_time, 0.1):,.0f} |
 | Total Data Points Processed | {dm["finance_docs"] + dm["customers"] + dm["vendors"]:,} |
@@ -756,7 +756,7 @@ def generate_evaluation_report_md(results, conn, total_time, output_dir):
 
 4. **Code Analysis**: All {len(conn.dataset.get("abap_source", {}))} ABAP programs analyzed consistently regardless of data volume. The Master Fix Engine applied {ca.get("total_fixes_applied", 0):,} fixes with a {ca.get("fix_rate", 0):.1f}% auto-fix rate.
 
-5. **End-to-End Integrity**: The full 13-stage pipeline completed in {total_time:.1f}s with {conn._call_count:,} total RFC/BAPI calls. The GO-LIVE scorecard grade of **{sc.get("grade", "N/A")}** ({sc.get("score", "N/A")}) confirms the tool handles 10x scale reliably.
+5. **End-to-End Integrity**: The full 13-stage pipeline completed in {total_time:.1f}s with {getattr(conn, "_call_count", 0):,} total RFC/BAPI calls. The GO-LIVE scorecard grade of **{sc.get("grade", "N/A")}** ({sc.get("score", "N/A")}) confirms the tool handles 10x scale reliably.
 
 ---
 
@@ -1071,7 +1071,7 @@ def main():
 
     print(f"\n  {C.GREEN}✅ Evaluation report generated: {report_path}{C.END}")
     print(f"  {C.CYAN}📁 Output artifacts: {output_dir}{C.END}")
-    print(f"  {C.DIM}Total time: {total_time:.1f}s | RFC calls: {conn._call_count:,}{C.END}")
+    print(f"  {C.DIM}Total time: {total_time:.1f}s | RFC calls: {getattr(conn, '_call_count', 0):,}{C.END}")
     print()
 
 

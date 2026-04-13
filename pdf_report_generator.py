@@ -276,10 +276,10 @@ def generate_pdf(report_data, output_path):
     story.append(HRFlowable(width="100%", thickness=1, color=GREEN))
     story.append(Spacer(1, 4 * mm))
 
-    dm = report_data.get("data_migration", {})
-    fin = dm.get("finance", {})
-    bp = dm.get("business_partner_conversion", {})
-    ct = dm.get("custom_tables", {})
+    dm = report_data.get("data_migration") or {}
+    fin = dm.get("finance") or {}
+    bp = dm.get("business_partner_conversion") or {}
+    ct = dm.get("custom_tables") or {}
 
     story.append(Paragraph("Financial Data (BKPF/BSEG â†’ ACDOCA)", ss["SubH"]))
     fin_data = [
@@ -511,8 +511,12 @@ def generate_pdf(report_data, output_path):
 
 def generate_pdf_from_file(json_path, output_path=None):
     """Load a JSON report file and generate PDF."""
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Error: {json_path} is not valid JSON: {e}")
+        return None
 
     if output_path is None:
         output_path = json_path.replace(".json", ".pdf")

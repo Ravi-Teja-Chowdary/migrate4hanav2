@@ -94,6 +94,11 @@ def _broadcast_to_websocket(log_entry: Dict[str, Any]) -> None:
 
     message = json.dumps(log_entry).encode("utf-8")
 
+    # API Gateway WebSocket has a 128KB frame limit
+    if len(message) > 131072:
+        log_entry["payload_snippet"] = log_entry.get("payload_snippet", "")[:200] + "...[truncated]"
+        message = json.dumps(log_entry).encode("utf-8")
+
     try:
         # Scan all active connections
         response = table.scan(ProjectionExpression="connectionId")
@@ -109,9 +114,11 @@ def _broadcast_to_websocket(log_entry: Dict[str, Any]) -> None:
             except apigw.exceptions.GoneException:
                 # Client disconnected — mark for cleanup
                 stale_connections.append(connection_id)
-            except Exception:
+            except Exception as exc:
+                # Check for 410 Gone returned as ClientError
+                if hasattr(exc, 'response') and exc.response.get('ResponseMetadata', {}).get('HTTPStatusCode') == 410:
+                    stale_connections.append(connection_id)
                 # Non-fatal — don't let telemetry failures break pipeline
-                pass
 
         # Clean up stale connections
         for cid in stale_connections:

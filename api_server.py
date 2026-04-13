@@ -96,7 +96,7 @@ def generate_jwt(subject: str = "migrate4hana", expiry_hours: int = 24) -> str:
     return f"{signing_input}.{_b64url_encode(sig)}"
 
 
-def verify_jwt(token: str) -> dict | None:
+def verify_jwt(token: str) -> Optional[dict]:
     """Verify a HS256 JWT. Returns the payload dict or None if invalid."""
     _ensure_jwt_secret()
     try:
@@ -184,16 +184,18 @@ def test_ecc_connection(params):
         if params.get("saprouter"):
             conn_params["saprouter"] = params["saprouter"]
         conn = pyrfc.Connection(**conn_params)
-        result = conn.call("RFC_SYSTEM_INFO")
-        sys_info = result.get("RFCSI_EXPORT", {})
-        conn.close()
-        return {
-            "status": "connected", "system_id": sys_info.get("RFCSYSID", ""),
-            "host": sys_info.get("RFCHOST", host), "db_system": sys_info.get("RFCDBSYS", ""),
-            "sap_release": sys_info.get("RFCSAPRL", ""), "kernel": sys_info.get("RFCKERNRL", ""),
-            "client": client,
-            "message": f"Connected to {sys_info.get('RFCSYSID', host)} (ECC {sys_info.get('RFCSAPRL', '')})",
-        }
+        try:
+            result = conn.call("RFC_SYSTEM_INFO")
+            sys_info = result.get("RFCSI_EXPORT", {})
+            return {
+                "status": "connected", "system_id": sys_info.get("RFCSYSID", ""),
+                "host": sys_info.get("RFCHOST", host), "db_system": sys_info.get("RFCDBSYS", ""),
+                "sap_release": sys_info.get("RFCSAPRL", ""), "kernel": sys_info.get("RFCKERNRL", ""),
+                "client": client,
+                "message": f"Connected to {sys_info.get('RFCSYSID', host)} (ECC {sys_info.get('RFCSAPRL', '')})",
+            }
+        finally:
+            conn.close()
     except ImportError:
         return {"status": "mock", "system_id": "BIS", "host": host, "sap_release": "ECC 6.0 EHP8",
                 "client": client, "message": f"PyRFC not installed - mock mode active. Connection to {host} will be simulated."}
@@ -215,9 +217,11 @@ def test_s4hana_connection(params):
         try:
             import pyrfc
             conn = pyrfc.Connection(ashost=host, sysnr=sysnr, client=client, user=user, passwd=params.get("passwd", ""))
-            result = conn.call("RFC_SYSTEM_INFO")
-            sys_info = result.get("RFCSI_EXPORT", {})
-            conn.close()
+            try:
+                result = conn.call("RFC_SYSTEM_INFO")
+                sys_info = result.get("RFCSI_EXPORT", {})
+            finally:
+                conn.close()
             return {"status": "connected", "system_id": sys_info.get("RFCSYSID", ""), "host": host,
                     "sap_release": sys_info.get("RFCSAPRL", ""),
                     "message": f"Connected to S/4HANA {sys_info.get('RFCSYSID', host)}"}
@@ -303,6 +307,11 @@ async def start_pipeline_async(mode="full"):
                     err_msg = (stderr.decode() or stdout.decode() or "Pipeline produced no output").strip()[-500:]
                     _active_run = {"status": "failed", "error": f"Pipeline failed: {err_msg}", "results": None}
         except asyncio.TimeoutError:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
             async with _lock:
                 _active_run = {"status": "failed", "error": "Pipeline timed out after 600s", "results": None}
         except Exception as e:
@@ -380,7 +389,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("M4H_CORS_ORIGINS", "*").split(","),
+    allow_origins=os.environ.get("M4H_CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -569,6 +578,8 @@ async def download_report_volume(run_id: str, volume_number: int):
     if not os.path.isdir(reports_dir):
         raise HTTPException(status_code=404, detail="No report volumes found")
     pdf_files = sorted(f for f in os.listdir(reports_dir) if f.endswith(".pdf"))
+    if not pdf_files:
+        raise HTTPException(status_code=404, detail="No PDF volumes found in reports directory")
     if volume_number < 1 or volume_number > len(pdf_files):
         raise HTTPException(status_code=404,
                             detail=f"Volume {volume_number} not found. Available: 1-{len(pdf_files)}")

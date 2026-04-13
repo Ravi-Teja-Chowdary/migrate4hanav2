@@ -102,11 +102,13 @@ function ReadinessCheckDetail({ data }) {
         <DataRow label="High Impact" value={data.custom_code_impact.high} color="#ef4444" />
         <DataRow label="Medium Impact" value={data.custom_code_impact.medium} color="#f59e0b" />
         <DataRow label="Low Impact" value={data.custom_code_impact.low} color="#10b981" />
+        {(() => { const total = data.custom_code_impact.high + data.custom_code_impact.medium + data.custom_code_impact.low; return (
         <div className="mt-3 h-3 rounded-full bg-white/5 overflow-hidden flex">
-          <div className="h-full bg-red-500" style={{ width: `${(data.custom_code_impact.high / (data.custom_code_impact.high + data.custom_code_impact.medium + data.custom_code_impact.low)) * 100}%` }} />
-          <div className="h-full bg-amber-500" style={{ width: `${(data.custom_code_impact.medium / (data.custom_code_impact.high + data.custom_code_impact.medium + data.custom_code_impact.low)) * 100}%` }} />
-          <div className="h-full bg-green-500" style={{ width: `${(data.custom_code_impact.low / (data.custom_code_impact.high + data.custom_code_impact.medium + data.custom_code_impact.low)) * 100}%` }} />
+          <div className="h-full bg-red-500" style={{ width: `${total > 0 ? (data.custom_code_impact.high / total) * 100 : 0}%` }} />
+          <div className="h-full bg-amber-500" style={{ width: `${total > 0 ? (data.custom_code_impact.medium / total) * 100 : 0}%` }} />
+          <div className="h-full bg-green-500" style={{ width: `${total > 0 ? (data.custom_code_impact.low / total) * 100 : 0}%` }} />
         </div>
+        ); })()}
       </Section>
       <Section title="Sizing & Effort" delay={0.2}>
         <DataRow label="HANA Sizing Recommendation" value={data.sizing_recommendation} color="#06b6d4" />

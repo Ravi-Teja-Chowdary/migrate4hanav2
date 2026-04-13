@@ -521,7 +521,11 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                 stripped = line.strip()
                 if stripped.startswith("*") or stripped.startswith('"'):
                     continue
-                if re.search(pattern, line, re.IGNORECASE):
+                try:
+                    match = re.search(pattern, line, re.IGNORECASE)
+                except re.error:
+                    continue
+                if match:
                     issue = {
                         "rule_id": rule_id,
                         "program": prog_name,
@@ -1216,10 +1220,10 @@ def run_stage_12_data_load(conn, results, output_dir):
             "instructions": repoint_count,
             "executed": repoint_executed,
         },
-        "commits": conn._committed,
+        "commits": getattr(conn, "_committed", 0),
     }
     status("o", f"Total BAPI calls: {conn._call_count}")
-    status("o", f"Commits: {conn._committed}")
+    status("o", f"Commits: {getattr(conn, '_committed', 0)}")
 
     with open(os.path.join(output_dir, "execution", "data-load.json"), "w") as f:
         json.dump(load_result, f, indent=2, default=str)
@@ -1799,8 +1803,8 @@ def generate_post_migration_report(results, conn, output_dir, total_time):
         },
 
         "technical_metrics": {
-            "rfc_calls_executed": conn._call_count,
-            "bapi_commits": conn._committed,
+            "rfc_calls_executed": getattr(conn, "_call_count", 0),
+            "bapi_commits": getattr(conn, "_committed", 0),
             "pipeline_duration_seconds": round(total_time, 1),
             "programs_deployed": cd.get("deployed", 0),
             "programs_activated": cd.get("activated", 0),
@@ -2070,7 +2074,7 @@ def main():
             results["cutover"] = run_stage_9_pre_conversion_gate(conn, results, output_dir)
             status("T", f"Stage 9 completed in {time.time() - t9:.1f}s", C.DIM)
 
-            if results["cutover"]["go_no_go"] != "GO":
+            if results.get("cutover", {}).get("go_no_go") != "GO":
                 print(f"\n  {C.RED}X CUTOVER BLOCKED -- Execution halted{C.END}")
                 raise Exception("Cutover gate returned NO-GO")
 

@@ -346,11 +346,18 @@ def lambda_handler(event, context):
             )
             conn = Connection(**conn_params)
             has_rfc = True
-        except (ImportError, Exception):
+        except ImportError:
+            logger.error("pyrfc not available — cannot connect to SAP")
+            has_rfc = False
+        except Exception as e:
+            logger.error(f"RFC connection error: {e}")
             has_rfc = False
 
         if has_rfc:
-            config_data = extract_config_tables(conn)
+            try:
+                config_data = extract_config_tables(conn)
+            finally:
+                conn.close()
         else:
             logger.warning("No RFC — generating config template only")
             config_data = {
