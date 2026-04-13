@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Square, RotateCcw, CheckCircle2, Clock, AlertTriangle,
   Code, Database, Settings, Shield, Plug, Search,
-  PlayCircle, Upload, HardDrive, Wrench, UserCheck, Zap, ArrowDown,
+  PlayCircle, Upload, HardDrive, Wrench, UserCheck, Zap,
   ClipboardCheck, ShieldCheck, ListChecks, ShieldAlert, DollarSign,
-  TestTube2, Rocket, AlertOctagon, Activity,
+  TestTube2, Rocket, Activity,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { STAGES, PHASES, PHASE_COLORS, SAMPLE_RUN, getStageDuration } from '../data/sampleData';
@@ -111,7 +111,7 @@ export default function Pipeline() {
   const [currentStage, setCurrentStage] = useState(-1);
   const [stageStatuses, setStageStatuses] = useState({});
   const [elapsed, setElapsed] = useState({});
-  const [apiMode, setApiMode] = useState(null); // null | 'assess' | 'convert' | 'complete' | 'full'
+  const [apiMode, setApiMode] = useState(null); // null | 'assess' | 'ecc_full'
   const [apiStatus, setApiStatus] = useState('idle');
   const [apiError, setApiError] = useState(null);
   const timerRef = useRef(null);
@@ -122,9 +122,8 @@ export default function Pipeline() {
   // Get stages for a given mode
   function getStagesForMode(mode) {
     if (mode === 'assess') return STAGES.filter((s) => s.phaseNumber <= 2);
-    if (mode === 'convert') return STAGES.filter((s) => s.phaseNumber === 3);
-    if (mode === 'complete') return STAGES.filter((s) => s.phaseNumber >= 4);
-    return STAGES; // 'full' runs all 17 stages end-to-end
+    if (mode === 'ecc_full') return STAGES.filter((s) => s.phaseNumber <= 2);
+    return STAGES;
   }
 
   // --- Visual Stage Runner (runs ALL stages continuously, no pauses between phases) ---
@@ -173,44 +172,14 @@ export default function Pipeline() {
     }
   }
 
-  async function triggerConvert() {
+  async function triggerEccFull() {
     setApiStatus('polling');
     setApiError(null);
     try {
-      const r = await apiFetch('/api/pipeline/convert', { method: 'POST' });
+      const r = await apiFetch('/api/pipeline/ecc_full', { method: 'POST' });
       const data = await r.json();
       if (data.error) { setApiError(data.error); setApiStatus('error'); return; }
-      startVisualRun('convert');
-      startPolling();
-    } catch {
-      setApiError('Cannot reach API server. Start it with: python api_server.py');
-      setApiStatus('error');
-    }
-  }
-
-  async function triggerComplete() {
-    setApiStatus('polling');
-    setApiError(null);
-    try {
-      const r = await apiFetch('/api/pipeline/complete', { method: 'POST' });
-      const data = await r.json();
-      if (data.error) { setApiError(data.error); setApiStatus('error'); return; }
-      startVisualRun('complete');
-      startPolling();
-    } catch {
-      setApiError('Cannot reach API server. Start it with: python api_server.py');
-      setApiStatus('error');
-    }
-  }
-
-  async function triggerFull() {
-    setApiStatus('polling');
-    setApiError(null);
-    try {
-      const r = await apiFetch('/api/pipeline/full', { method: 'POST' });
-      const data = await r.json();
-      if (data.error) { setApiError(data.error); setApiStatus('error'); return; }
-      startVisualRun('full');
+      startVisualRun('ecc_full');
       startPolling();
     } catch {
       setApiError('Cannot reach API server. Start it with: python api_server.py');
@@ -250,13 +219,11 @@ export default function Pipeline() {
   }, []);
 
   const completedCount = Object.values(stageStatuses).filter((s) => s === 'completed').length;
-  const totalStages = apiMode === 'assess' ? 8 : apiMode === 'convert' ? 2 : apiMode === 'complete' ? 7 : 17;
+  const totalStages = apiMode === 'assess' ? 8 : apiMode === 'ecc_full' ? 8 : 17;
 
   const modeLabel = {
     assess: 'Running Assessment (Phases 1-2, read-only)...',
-    convert: 'Running Conversion (Phase 3, Stages 9-10)...',
-    complete: 'Running Completion (Phases 4-5, Stages 11-17)...',
-    full: 'Running Full Migration (All 5 Phases, 17 Stages)...',
+    ecc_full: 'Running Full ECC Assessment (Phases 1-2 + Report Generation)...',
   };
 
   return (
@@ -271,7 +238,7 @@ export default function Pipeline() {
           >
             Migration <span className="gradient-text">Pipeline</span>
           </motion.h1>
-          <p className="text-sm text-white/40 mt-1">17-stage SAP Activate — ECC to S/4HANA migration</p>
+          <p className="text-sm text-white/40 mt-1">SAP Activate assessment — live ECC data extraction & analysis</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -290,32 +257,12 @@ export default function Pipeline() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.015 }}
-                onClick={triggerConvert}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 text-amber-400 text-sm font-semibold
-                           hover:bg-amber-500/20 transition-all duration-300 border border-amber-500/20"
-              >
-                <Wrench size={15} /> Start Conversion
-              </motion.button>
-              <motion.button
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.03 }}
-                onClick={triggerComplete}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-500/10 text-green-400 text-sm font-semibold
-                           hover:bg-green-500/20 transition-all duration-300 border border-green-500/20"
-              >
-                <CheckCircle2 size={15} /> Complete Migration
-              </motion.button>
-              <motion.button
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.045 }}
-                onClick={triggerFull}
+                onClick={triggerEccFull}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-blue/20 to-accent-green/20
                            text-white text-sm font-bold hover:from-accent-blue/30 hover:to-accent-green/30
                            transition-all duration-300 border border-accent-cyan/20 animate-pulse-glow"
               >
-                <Rocket size={15} /> Run Full Migration
+                <Rocket size={15} /> Run Full Assessment
               </motion.button>
             </>
           )}
@@ -384,36 +331,10 @@ export default function Pipeline() {
       {PHASES.map((phase) => {
         const phaseStages = STAGES.filter((s) => s.phaseNumber === phase.id);
         const isOutOfScope = (apiMode === 'assess' && phase.id > 2)
-          || (apiMode === 'convert' && phase.id !== 3)
-          || (apiMode === 'complete' && phase.id < 4);
+          || (apiMode === 'ecc_full' && phase.id > 2);
 
         return (
           <div key={phase.id}>
-            {/* Visual separators between key phases (informational only, NOT blocking) */}
-            {phase.id === 3 && apiMode === 'full' && (
-              <div className="flex flex-col items-center gap-2 py-4 my-2">
-                <div className="h-px w-full bg-gradient-to-r from-transparent via-accent-amber/40 to-transparent" />
-                <div className="flex items-center gap-2 px-5 py-2 rounded-full glass border border-accent-amber/20">
-                  <AlertOctagon size={14} className="text-accent-amber" />
-                  <span className="text-[11px] font-bold text-accent-amber tracking-wider">SAP SUM/DMO PHASE</span>
-                  <AlertOctagon size={14} className="text-accent-amber" />
-                </div>
-                <div className="h-px w-full bg-gradient-to-r from-transparent via-accent-amber/40 to-transparent" />
-              </div>
-            )}
-
-            {phase.id === 4 && apiMode === 'full' && (
-              <div className="flex items-center justify-center gap-3 py-3 my-2">
-                <div className="h-px flex-1 bg-gradient-to-r from-transparent to-accent-cyan/30" />
-                <div className="flex items-center gap-2 px-4 py-1.5 rounded-full glass text-[11px] font-medium text-accent-cyan border border-accent-cyan/20">
-                  <ArrowDown size={12} />
-                  POST-CONVERSION
-                  <ArrowDown size={12} />
-                </div>
-                <div className="h-px flex-1 bg-gradient-to-l from-transparent to-accent-cyan/30" />
-              </div>
-            )}
-
             {/* Phase container */}
             <div className={`glass rounded-2xl p-6 ${isOutOfScope ? 'opacity-20' : ''}`}>
               <div className="flex items-center gap-3 mb-6">
@@ -486,22 +407,13 @@ export default function Pipeline() {
                 <CheckCircle2 size={32} className="text-accent-green" />
               </motion.div>
               <h3 className="text-xl font-bold text-white">
-                {apiMode === 'assess' ? 'Assessment Complete' : apiMode === 'convert' ? 'Conversion Complete' : apiMode === 'complete' ? 'Migration Complete' : 'Full Migration Complete'}
+                {apiMode === 'assess' ? 'Assessment Complete' : 'Full ECC Assessment Complete'}
               </h3>
               <p className="text-sm text-white/40 mt-1">
                 {apiMode === 'assess'
                   ? 'Phases 1-2 finished. Review results on the Scorecard and Report pages.'
-                  : apiMode === 'convert'
-                  ? 'Phase 3 conversion (Stages 9-10) finished successfully.'
-                  : apiMode === 'complete'
-                  ? 'Phases 4-5 (Stages 11-17) executed successfully.'
-                  : 'All 17 stages executed successfully via SAP Activate Methodology'}
+                  : 'Full ECC assessment finished. Review results on the Scorecard and Report pages.'}
               </p>
-              {(apiMode === 'full' || apiMode === 'complete') && (
-                <p className="text-xs text-white/25 mt-3 font-mono">
-                  Grade A  ·  100% Score  ·  READY FOR GO-LIVE
-                </p>
-              )}
               <div className="flex items-center justify-center gap-3 mt-5">
                 <Link
                   to="/telemetry"

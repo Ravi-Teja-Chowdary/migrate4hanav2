@@ -51,7 +51,7 @@ export default function Layout() {
             </div>
             <div>
               <h1 className="text-base font-bold gradient-text">Migrate4HANA</h1>
-              <p className="text-[10px] text-white/30 font-mono tracking-widest uppercase">ECC → S/4HANA</p>
+              <p className="text-[10px] text-white/30 font-mono tracking-widest uppercase">ECC Assessment</p>
             </div>
           </div>
         </div>

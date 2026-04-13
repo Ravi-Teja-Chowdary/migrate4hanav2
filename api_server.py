@@ -45,6 +45,9 @@ CONNECTIONS_FILE = os.path.join(PROJECT_DIR, "connections.json")
 _active_run = {"status": "idle", "results": None, "run_id": None}
 _lock = asyncio.Lock()
 
+# In-memory ECC password (set after successful connection test, never persisted)
+_ecc_passwd = ""
+
 # =============================================================================
 # AUTHENTICATION
 # =============================================================================
@@ -172,21 +175,25 @@ def _save_connections(data):
 
 
 def test_ecc_connection(params):
+    global _ecc_passwd
     host = params.get("ashost", "")
     sysnr = params.get("sysnr", "")
     client = params.get("client", "")
     user = params.get("user", "")
+    passwd = params.get("passwd", "")
     if not all([host, sysnr, client, user]):
         return {"status": "error", "message": "Missing required fields: ashost, sysnr, client, user"}
     try:
         import pyrfc
-        conn_params = {"ashost": host, "sysnr": sysnr, "client": client, "user": user, "passwd": params.get("passwd", "")}
+        conn_params = {"ashost": host, "sysnr": sysnr, "client": client, "user": user, "passwd": passwd}
         if params.get("saprouter"):
             conn_params["saprouter"] = params["saprouter"]
         conn = pyrfc.Connection(**conn_params)
         try:
             result = conn.call("RFC_SYSTEM_INFO")
             sys_info = result.get("RFCSI_EXPORT", {})
+            # Store password in memory for pipeline use
+            _ecc_passwd = passwd
             return {
                 "status": "connected", "system_id": sys_info.get("RFCSYSID", ""),
                 "host": sys_info.get("RFCHOST", host), "db_system": sys_info.get("RFCDBSYS", ""),
@@ -197,8 +204,7 @@ def test_ecc_connection(params):
         finally:
             conn.close()
     except ImportError:
-        return {"status": "mock", "system_id": "BIS", "host": host, "sap_release": "ECC 6.0 EHP8",
-                "client": client, "message": f"PyRFC not installed - mock mode active. Connection to {host} will be simulated."}
+        return {"status": "error", "message": "PyRFC is not installed. Install pyrfc to connect to SAP ECC."}
     except Exception as e:
         return {"status": "error", "message": f"Connection failed: {str(e)}"}
 
@@ -268,14 +274,6 @@ async def start_pipeline_async(mode="full"):
     async with _lock:
         if _active_run["status"] == "running":
             return {"error": "Pipeline already running"}
-        if mode == "convert":
-            last_results = _active_run.get("results", {})
-            if not last_results or not last_results.get("code_analysis"):
-                return {"error": "Phase 2 must be completed before running Phase 3 (convert)"}
-        elif mode == "complete":
-            last_results = _active_run.get("results", {})
-            if not last_results or not last_results.get("sum_dmo"):
-                return {"error": "Phase 3 must be completed before running Phases 4-5 (complete)"}
         _active_run = {"status": "running", "results": None, "run_id": None,
                        "started": time.time(), "mode": mode}
 
@@ -284,11 +282,23 @@ async def start_pipeline_async(mode="full"):
         try:
             import subprocess
             cmd = [sys.executable, os.path.join(PROJECT_DIR, "run_local_pipeline.py")]
+
+            # Determine if live ECC connection is available
+            conns = _load_connections()
+            has_ecc = bool(conns.get("ecc", {}).get("ashost"))
+            use_live = has_ecc and _ecc_passwd
+
+            if use_live:
+                cmd.append("--live")
+
             if mode == "assess":
                 cmd.append("--assess-only")
             elif mode == "ecc_full":
                 cmd.extend(["--mode", "ecc_full"])
+
             env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+            if use_live:
+                env["M4H_ECC_PASSWD"] = _ecc_passwd
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                 cwd=PROJECT_DIR, env=env)
@@ -451,6 +461,17 @@ async def save_s4hana_connection(body: S4HANAConnection):
 @app.post("/api/connections/ecc/test", dependencies=[Depends(require_auth)])
 async def test_ecc(body: ECCConnection):
     return test_ecc_connection(body.model_dump())
+
+
+@app.get("/api/connections/ecc/status", dependencies=[Depends(require_auth)])
+async def ecc_connection_status():
+    """Check if a live ECC connection is ready (saved + password in memory)."""
+    conns = _load_connections()
+    has_ecc = bool(conns.get("ecc", {}).get("ashost"))
+    has_passwd = bool(_ecc_passwd)
+    return {"live_ready": has_ecc and has_passwd,
+            "has_connection": has_ecc,
+            "has_password": has_passwd}
 
 
 @app.post("/api/connections/s4hana/test", dependencies=[Depends(require_auth)])

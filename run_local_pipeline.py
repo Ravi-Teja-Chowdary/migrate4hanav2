@@ -1,15 +1,19 @@
 """
-Migrate4HANA — Local Pipeline Test Runner
+Migrate4HANA — Local Pipeline Runner
 ==========================================
-Runs ALL 17 migration stages locally against mock ECC data.
-Organized in 5 SAP Activate phases. No AWS needed, no SAP needed. Just Python.
+Runs migration stages locally. Supports two modes:
+
+  --live       Use real SAP ECC connection (reads connections.json + M4H_ECC_PASSWD env)
+  (default)    Fall back to mock ECC data if --live is not specified
+
+Other flags:
+  --assess-only            Phases 1-2 only (stages 1-8)
+  --mode ecc_full          ECC-Only full execution (stages 1-9.6, no S/4HANA)
 
 Usage:
-    python run_local_pipeline.py                  # Full 17-stage run
-    python run_local_pipeline.py --assess-only    # Phases 1-2 only (stages 1-8)
-
-This simulates exactly what Step Functions would do in AWS,
-but everything runs on your laptop. Perfect for development.
+    python run_local_pipeline.py --live --mode ecc_full   # Real ECC, full assessment
+    python run_local_pipeline.py --live --assess-only     # Real ECC, phases 1-2 only
+    python run_local_pipeline.py                          # Mock data, full 17-stage run
 """
 
 import sys
@@ -1909,6 +1913,7 @@ def run_stage_9_6_multi_volume_report(pipeline_results, output_dir, company_name
 def main():
     assess_only = "--assess-only" in sys.argv
     ecc_full = "--mode" in sys.argv and "ecc_full" in sys.argv
+    live_mode = "--live" in sys.argv
 
     if ecc_full:
         mode_label = "ECC-ONLY FULL EXECUTION (Phases 1-2 + Completeness + Report)"
@@ -1917,17 +1922,19 @@ def main():
     else:
         mode_label = "FULL (All 5 Phases, 17 Stages)"
 
+    data_source = "LIVE SAP ECC" if live_mode else "MOCK DATA"
+
     # Parse --ecc_client if provided
     ecc_client = "100"
     for i, arg in enumerate(sys.argv):
         if arg == "--ecc_client" and i + 1 < len(sys.argv):
             ecc_client = sys.argv[i + 1]
 
-    banner("MIGRATE4HANA -- Local Pipeline Test Run", C.BOLD)
+    banner("MIGRATE4HANA -- Local Pipeline Run", C.BOLD)
     print(f"  {C.DIM}Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Mode: {mode_label}")
-    print(f"  Pipeline: 17-stage, 5-phase SAP Activate")
-    print(f"  Company: Bharat Industrial Solutions Pvt Ltd{C.END}")
+    print(f"  Data Source: {data_source}")
+    print(f"  Pipeline: 17-stage, 5-phase SAP Activate{C.END}")
 
     if ecc_full:
         print(f"\n  {C.BOLD}{C.CYAN}Running in ECC-Only Full Execution Mode")
@@ -1936,10 +1943,50 @@ def main():
 
     start_time = time.time()
 
-    # Generate mock data
-    print(f"\n  {C.YELLOW}Generating mock ECC dataset...{C.END}")
-    dataset = generate_complete_ecc_dataset()
-    conn = MockRFCConnection(dataset)
+    # ── Build connection: live RFC or mock ───────────────────────────
+    if live_mode:
+        print(f"\n  {C.CYAN}Connecting to live SAP ECC via RFC...{C.END}")
+        conn_file = os.path.join(PROJECT_DIR, "connections.json")
+        if not os.path.isfile(conn_file):
+            print(f"  {C.RED}X connections.json not found. Save ECC connection from the UI first.{C.END}")
+            sys.exit(1)
+        with open(conn_file, "r", encoding="utf-8") as f:
+            conns = json.load(f)
+        ecc_cfg = conns.get("ecc", {})
+        if not ecc_cfg.get("ashost"):
+            print(f"  {C.RED}X No ECC connection configured. Set it up from the Connections page.{C.END}")
+            sys.exit(1)
+
+        ecc_passwd = os.environ.get("M4H_ECC_PASSWD", "")
+        if not ecc_passwd:
+            print(f"  {C.RED}X ECC password not found. Test the connection from the UI before running the pipeline.{C.END}")
+            sys.exit(1)
+
+        conn_params = {
+            "ashost": ecc_cfg.get("ashost", ""),
+            "sysnr": ecc_cfg.get("sysnr", "00"),
+            "client": ecc_cfg.get("client", "100"),
+            "user": ecc_cfg.get("user", ""),
+            "passwd": ecc_passwd,
+        }
+        if ecc_cfg.get("saprouter"):
+            conn_params["saprouter"] = ecc_cfg["saprouter"]
+
+        ecc_client = conn_params["client"]
+
+        from real_rfc_connection import RealRFCConnection
+        try:
+            conn = RealRFCConnection(conn_params)
+        except Exception as e:
+            print(f"  {C.RED}X Failed to connect to SAP ECC: {e}{C.END}")
+            sys.exit(1)
+
+        company_name = conn.dataset.get("system_info", {}).get("sid", "SAP ECC")
+    else:
+        print(f"\n  {C.YELLOW}Generating mock ECC dataset...{C.END}")
+        dataset = generate_complete_ecc_dataset()
+        conn = MockRFCConnection(dataset)
+        company_name = "Bharat Industrial Solutions Pvt Ltd"
 
     # Output directory
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2043,7 +2090,6 @@ def main():
 
             # Stage 9.6 — Multi-Volume PDF Report Generator
             t96 = time.time()
-            company_name = "Bharat Industrial Solutions Pvt Ltd"
             report_result = run_stage_9_6_multi_volume_report(results, output_dir, company_name)
             results["report_generation"] = report_result
             status("T", f"Stage 9.6 completed in {time.time() - t96:.1f}s", C.DIM)

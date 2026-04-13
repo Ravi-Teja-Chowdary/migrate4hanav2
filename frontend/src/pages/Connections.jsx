@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Server, Cloud, Wifi, WifiOff, CheckCircle2, AlertTriangle,
+  Server, Wifi, WifiOff, CheckCircle2, AlertTriangle,
   XCircle, Loader2, Save, TestTube, ChevronDown, ChevronUp,
   Shield, Database, Eye, EyeOff,
 } from 'lucide-react';
@@ -132,20 +132,6 @@ export default function Connections() {
   const [eccTesting, setEccTesting] = useState(false);
   const [eccSaving, setEccSaving] = useState(false);
 
-  // S/4HANA state
-  const [s4Type, setS4Type] = useState('rfc');
-  const [s4Host, setS4Host] = useState('');
-  const [s4Sysnr, setS4Sysnr] = useState('00');
-  const [s4Client, setS4Client] = useState('100');
-  const [s4User, setS4User] = useState('');
-  const [s4Pass, setS4Pass] = useState('');
-  const [s4ApiUrl, setS4ApiUrl] = useState('');
-  const [s4Router, setS4Router] = useState('');
-  const [s4Status, setS4Status] = useState(null);
-  const [s4Result, setS4Result] = useState(null);
-  const [s4Testing, setS4Testing] = useState(false);
-  const [s4Saving, setS4Saving] = useState(false);
-
   // Load saved connections
   useEffect(() => {
     apiFetch('/api/connections')
@@ -158,16 +144,6 @@ export default function Connections() {
           setEccUser(data.ecc.user || '');
           setEccRouter(data.ecc.saprouter || '');
           setEccStatus('saved');
-        }
-        if (data.s4hana) {
-          setS4Type(data.s4hana.connection_type || 'rfc');
-          setS4Host(data.s4hana.ashost || '');
-          setS4Sysnr(data.s4hana.sysnr || '00');
-          setS4Client(data.s4hana.client || '100');
-          setS4User(data.s4hana.user || '');
-          setS4ApiUrl(data.s4hana.api_url || '');
-          setS4Router(data.s4hana.saprouter || '');
-          setS4Status('saved');
         }
       })
       .catch(() => {});
@@ -207,48 +183,14 @@ export default function Connections() {
     setEccSaving(false);
   }, [eccHost, eccSysnr, eccClient, eccUser, eccRouter]);
 
-  const testS4 = useCallback(async () => {
-    setS4Testing(true);
-    setS4Result(null);
-    try {
-      const r = await apiFetch('/api/connections/s4hana/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connection_type: s4Type, ashost: s4Host, sysnr: s4Sysnr, client: s4Client, user: s4User, passwd: s4Pass, api_url: s4ApiUrl, saprouter: s4Router }),
-      });
-      const data = await r.json();
-      setS4Result(data);
-      setS4Status(data.status);
-    } catch {
-      setS4Result({ status: 'error', message: 'Cannot reach API server.' });
-      setS4Status('error');
-    }
-    setS4Testing(false);
-  }, [s4Type, s4Host, s4Sysnr, s4Client, s4User, s4Pass, s4ApiUrl, s4Router]);
-
-  const saveS4 = useCallback(async () => {
-    setS4Saving(true);
-    try {
-      await apiFetch('/api/connections/s4hana', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connection_type: s4Type, ashost: s4Host, sysnr: s4Sysnr, client: s4Client, user: s4User, api_url: s4ApiUrl, saprouter: s4Router }),
-      });
-      setS4Status('saved');
-    } catch {
-      setS4Result({ status: 'error', message: 'Failed to save.' });
-    }
-    setS4Saving(false);
-  }, [s4Type, s4Host, s4Sysnr, s4Client, s4User, s4ApiUrl, s4Router]);
-
   return (
     <div className="p-8 max-w-3xl mx-auto space-y-6">
       <div>
         <motion.h1 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
           className="text-3xl font-bold text-white">
-          System <span className="gradient-text">Connections</span>
+          SAP ECC <span className="gradient-text">Connection</span>
         </motion.h1>
-        <p className="text-sm text-white/40 mt-1">Configure your SAP ECC source and S/4HANA target</p>
+        <p className="text-sm text-white/40 mt-1">Configure your SAP ECC source system for live assessment</p>
       </div>
 
       {/* Info Banner */}
@@ -261,12 +203,12 @@ export default function Connections() {
         <Shield size={16} className="text-accent-blue mt-0.5 shrink-0" />
         <div>
           <p className="text-xs text-white/50">
-            <b className="text-white/70">How it works:</b> Enter your SAP connection details below.
-            The tool connects via <b>RFC protocol</b> (PyRFC) to read your ECC system and write to S/4HANA.
-            Passwords are never stored — only connection metadata is saved locally.
+            <b className="text-white/70">How it works:</b> Enter your SAP ECC connection details below.
+            The tool connects via <b>RFC protocol</b> (PyRFC) to read your ECC system for migration assessment.
+            Passwords are never stored on disk — they are only held in memory during the session.
           </p>
           <p className="text-[10px] text-white/25 mt-1">
-            No PyRFC? The tool runs in <b>mock mode</b> with realistic demo data for evaluation.
+            <b>Important:</b> Test the connection before running the pipeline. The password is passed securely to the pipeline process.
           </p>
         </div>
       </motion.div>
@@ -274,7 +216,7 @@ export default function Connections() {
       {/* ECC Connection */}
       <ConnectionCard
         title="SAP ECC Source System"
-        subtitle="RFC connection to your existing ECC 6.0 system"
+        subtitle="RFC connection to your existing ECC system"
         icon={Server}
         color="#3b82f6"
         status={eccStatus}
@@ -299,7 +241,7 @@ export default function Connections() {
           />
           <Field label="Password" value={eccPass} onChange={setEccPass}
             type="password" placeholder="••••••••"
-            helpText="Not stored — only used for connection test"
+            helpText="Held in memory only — used for connection test & pipeline"
           />
           <Field label="SAP Router (optional)" value={eccRouter} onChange={setEccRouter}
             placeholder="/H/saprouter.company.com/S/3299/H/"
@@ -327,91 +269,6 @@ export default function Connections() {
         </div>
       </ConnectionCard>
 
-      {/* S/4HANA Connection */}
-      <ConnectionCard
-        title="S/4HANA Target System"
-        subtitle="Target system where migration will be executed"
-        icon={Cloud}
-        color="#10b981"
-        status={s4Status}
-      >
-        {/* Connection type toggle */}
-        <div className="mb-5">
-          <label className="block text-xs text-white/40 mb-2">Connection Type</label>
-          <div className="flex gap-2">
-            {[
-              { id: 'rfc', label: 'RFC (On-Premise)', icon: Server },
-              { id: 'odata', label: 'OData (Cloud)', icon: Cloud },
-            ].map((opt) => (
-              <button key={opt.id} onClick={() => setS4Type(opt.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-medium transition-all
-                  ${s4Type === opt.id
-                    ? 'bg-accent-green/10 text-accent-green border border-accent-green/30'
-                    : 'bg-white/[0.03] text-white/40 border border-white/[0.06] hover:bg-white/[0.05]'
-                  }`}
-              >
-                <opt.icon size={14} /> {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {s4Type === 'rfc' ? (
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Application Server" value={s4Host} onChange={setS4Host}
-              placeholder="10.0.2.100 or s4hana.company.com" required />
-            <Field label="System Number" value={s4Sysnr} onChange={setS4Sysnr}
-              placeholder="00" required />
-            <Field label="Client" value={s4Client} onChange={setS4Client}
-              placeholder="100" required />
-            <Field label="User" value={s4User} onChange={setS4User}
-              placeholder="SAPUSER" required
-              helpText="Needs write access (transport, BAPI)"
-            />
-            <Field label="Password" value={s4Pass} onChange={setS4Pass}
-              type="password" placeholder="••••••••" />
-            <Field label="SAP Router (optional)" value={s4Router} onChange={setS4Router}
-              placeholder="/H/saprouter/S/3299/H/" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Field label="API Endpoint URL" value={s4ApiUrl} onChange={setS4ApiUrl}
-                placeholder="https://mycompany.s4hana.cloud.sap/sap/opu/odata/sap/" required
-                helpText="S/4HANA Cloud OData service base URL"
-              />
-            </div>
-            <Field label="Host / Tenant" value={s4Host} onChange={setS4Host}
-              placeholder="mycompany.s4hana.cloud.sap" required />
-            <Field label="Communication User" value={s4User} onChange={setS4User}
-              placeholder="COM_USER_001" required
-              helpText="From Communication Arrangement in S/4HC"
-            />
-            <Field label="Password / Secret" value={s4Pass} onChange={setS4Pass}
-              type="password" placeholder="••••••••" />
-          </div>
-        )}
-
-        <StatusMessage result={s4Result} />
-
-        <div className="flex items-center gap-3 mt-5">
-          <button onClick={testS4} disabled={s4Testing || !s4Host}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent-cyan/10 text-accent-cyan text-xs font-semibold
-                       hover:bg-accent-cyan/20 transition-all border border-accent-cyan/20 disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            {s4Testing ? <Loader2 size={14} className="animate-spin" /> : <TestTube size={14} />}
-            Test Connection
-          </button>
-          <button onClick={saveS4} disabled={s4Saving || !s4Host}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent-green/10 text-accent-green text-xs font-semibold
-                       hover:bg-accent-green/20 transition-all border border-accent-green/20 disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            {s4Saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            Save
-          </button>
-        </div>
-      </ConnectionCard>
-
       {/* What happens next */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -423,10 +280,9 @@ export default function Connections() {
         <div className="space-y-3">
           {[
             { step: '1', text: 'Configure & test your ECC connection above', icon: Server, color: '#3b82f6' },
-            { step: '2', text: 'Go to Pipeline → click "Assess ECC System" (read-only, safe to run anytime)', icon: Database, color: '#06b6d4' },
-            { step: '3', text: 'Review the assessment report — code issues, data volumes, risks', icon: AlertTriangle, color: '#f59e0b' },
-            { step: '4', text: 'Configure S/4HANA target connection', icon: Cloud, color: '#10b981' },
-            { step: '5', text: 'Go to Pipeline → click "Start Migration" when ready for cutover', icon: CheckCircle2, color: '#10b981' },
+            { step: '2', text: 'Save the connection — password stays in memory for the pipeline', icon: Database, color: '#06b6d4' },
+            { step: '3', text: 'Go to Pipeline → click "Assess" or "Run Full Assessment"', icon: AlertTriangle, color: '#f59e0b' },
+            { step: '4', text: 'Review the assessment report — code issues, data volumes, risks', icon: CheckCircle2, color: '#10b981' },
           ].map((s) => (
             <div key={s.step} className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
