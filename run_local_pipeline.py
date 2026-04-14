@@ -2125,11 +2125,19 @@ def main():
         # ── Data Validation: Verify ABAP source payload before code analysis ──
         _abap_src = conn.dataset.get("abap_source", {})
         _src_count = len(_abap_src)
+        _skip_stage5 = False
         if _src_count == 0:
-            print(f"\n  {C.RED}{C.BOLD}  ABORT: abap_source dict is EMPTY — cannot run code analysis on empty data!{C.END}")
-            print(f"  {C.RED}  Check that RFC_READ_REPORT returned data during Stage 1 extraction.{C.END}")
-            raise ValueError("Data Payload is empty — Aborting Stage 5 (Code Analysis) to prevent blank report. "
-                             "abap_source has 0 programs. Fix RFC_READ_REPORT extraction first.")
+            print(f"\n  {C.YELLOW}{C.BOLD}  WARNING: abap_source dict is EMPTY — no custom code was extracted.{C.END}")
+            print(f"  {C.YELLOW}  This SAP system may have TRDIR entries with no actual source code stored.{C.END}")
+            print(f"  {C.YELLOW}  Skipping Stage 5 (Code Analysis) — continuing with metadata-only report.{C.END}")
+            _skip_stage5 = True
+            results["code_analysis"] = {
+                "programs_analyzed": 0, "total_issues": 0, "auto_fixable": 0,
+                "manual_review": 0, "issues": [], "programs": [],
+                "critical_issues": 0, "auto_remediated": 0, "fix_rate": 0,
+                "total_fixes_applied": 0, "ast_engine": {"total_changes": 0, "programs_transformed": 0},
+                "skipped": True, "skip_reason": "No ABAP source code extracted from SAP system",
+            }
         else:
             _sample_names = list(_abap_src.keys())[:5]
             _avg_lines = sum(len(v.split("\n")) for v in _abap_src.values()) / max(_src_count, 1)
@@ -2141,9 +2149,17 @@ def main():
             if _non_empty < _src_count:
                 print(f"  {C.YELLOW}  ! {_src_count - _non_empty} programs have trivial/empty source{C.END}")
             if _non_empty == 0:
-                raise ValueError("Data Payload is empty — Aborting Stage 5: all programs have trivial/empty source code. "
-                                 "RFC_READ_REPORT may be returning empty CONTENT table.")
-        results["code_analysis"] = run_stage_5_code_analysis(conn, results["discovery"], output_dir)
+                print(f"  {C.YELLOW}  WARNING: All {_src_count} programs have trivial/empty source — skipping code analysis.{C.END}")
+                _skip_stage5 = True
+                results["code_analysis"] = {
+                    "programs_analyzed": 0, "total_issues": 0, "auto_fixable": 0,
+                    "manual_review": 0, "issues": [], "programs": [],
+                    "critical_issues": 0, "auto_remediated": 0, "fix_rate": 0,
+                    "total_fixes_applied": 0, "ast_engine": {"total_changes": 0, "programs_transformed": 0},
+                    "skipped": True, "skip_reason": "All extracted programs had trivial/empty source code",
+                }
+        if not _skip_stage5:
+            results["code_analysis"] = run_stage_5_code_analysis(conn, results["discovery"], output_dir)
         status("T", f"Stage 5 completed in {time.time() - t5:.1f}s", C.DIM)
 
         # Stage 6

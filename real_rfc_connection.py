@@ -597,7 +597,8 @@ class RealRFCConnection:
     def _read_single_report(self, prog_name):
         """Read a single ABAP program source.
         Primary:  RFC_READ_REPORT  (CONTENT table, LINE field)
-        Fallback: READ_REPORT_LINE_BY_LINE (CONTENT/LINES table)
+        Fallback 1: READ_REPORT_LINE_BY_LINE (CONTENT/LINES table)
+        Fallback 2: Direct read from REPOSRC table via RFC_READ_TABLE
         Returns (source_string, line_count, auth_error_flag)."""
         padded_name = prog_name.ljust(40)
 
@@ -621,7 +622,7 @@ class RealRFCConnection:
             logger.info(f"[ABAP] RFC_READ_REPORT failed for {prog_name}: {e1}")
             print(f"       Attempting to read {prog_name}... RFC_READ_REPORT failed: {e1}")
 
-        # ── Fallback: READ_REPORT_LINE_BY_LINE ──
+        # ── Fallback 1: READ_REPORT_LINE_BY_LINE ──
         try:
             self._ensure_connection()
             result = self._pyrfc.call("READ_REPORT_LINE_BY_LINE",
@@ -632,17 +633,33 @@ class RealRFCConnection:
                 source = "\n".join(
                     line.get("LINE", line.get("TDLINE", "")) for line in content
                 )
-                print(f"       Attempting to read {prog_name}... (fallback) Result: {len(source)} chars")
+                print(f"       Attempting to read {prog_name}... (fallback1) Result: {len(source)} chars")
                 if source.strip():
                     return source, line_count, False
-            else:
-                print(f"       Attempting to read {prog_name}... (fallback) Result: 0 chars")
         except Exception as e2:
             if self._check_auth_error(prog_name, e2):
                 return None, 0, True
-            logger.info(f"[ABAP] READ_REPORT_LINE_BY_LINE also failed for {prog_name}: {e2}")
+            logger.info(f"[ABAP] READ_REPORT_LINE_BY_LINE failed for {prog_name}: {e2}")
 
-        logger.warning(f"[ABAP] Both extraction methods returned empty for {prog_name}")
+        # ── Fallback 2: Direct read from REPOSRC via RFC_READ_TABLE ──
+        try:
+            self._ensure_connection()
+            result = self._pyrfc.call("RFC_READ_TABLE",
+                                       QUERY_TABLE="REPOSRC",
+                                       DELIMITER="|",
+                                       FIELDS=[{"FIELDNAME": "DATA"}],
+                                       OPTIONS=[{"TEXT": f"PROGNAME = '{prog_name.strip()}'"}],
+                                       ROWCOUNT=1)
+            data_rows = result.get("DATA", [])
+            if data_rows:
+                raw = data_rows[0].get("WA", "")
+                if raw.strip():
+                    print(f"       Attempting to read {prog_name}... (REPOSRC) Result: {len(raw)} chars")
+                    return raw.strip(), raw.count("\n") + 1, False
+        except Exception as e3:
+            logger.info(f"[ABAP] REPOSRC direct read failed for {prog_name}: {e3}")
+
+        logger.warning(f"[ABAP] All extraction methods returned empty for {prog_name}")
         return None, 0, False
 
     def _extract_abap_source(self, programs):
