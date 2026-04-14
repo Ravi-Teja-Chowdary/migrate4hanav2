@@ -20,9 +20,16 @@ Usage:
 
 import sys
 import os
+import io
 import json
 import time
 from datetime import datetime
+
+# Force UTF-8 output on Windows to avoid charmap codec errors with emoji/unicode
+if sys.stdout and hasattr(sys.stdout, 'buffer'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+if sys.stderr and hasattr(sys.stderr, 'buffer'):
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Add project paths
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
