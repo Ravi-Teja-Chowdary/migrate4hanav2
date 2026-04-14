@@ -572,10 +572,48 @@ class RealRFCConnection:
         logger.info(f"[RFC] {table}: fetched {len(all_rows)} total rows")
         return all_rows
 
+    def _read_single_report(self, prog_name):
+        """Read a single ABAP program source via RFC_READ_REPORT (primary)
+        with automatic fallback to READ_REPORT_LINE_BY_LINE.
+        Returns (source_string, line_count) or (None, 0) on failure."""
+        padded_name = prog_name.ljust(40)
+
+        # ── Primary: RFC_READ_REPORT ──
+        try:
+            self._ensure_connection()
+            result = self._pyrfc.call("RFC_READ_REPORT", PROGRAM=padded_name)
+            content = result.get("CONTENT", [])
+            line_count = len(content)
+            print(f"       DEBUG: Program {prog_name} returned {line_count} lines of code.")
+            if content:
+                code = "\n".join(line.get("LINE", "") for line in content)
+                print(f"       DEBUG: Successfully fetched {len(code)} characters for {prog_name}")
+                return code, line_count
+            return None, 0
+        except Exception as primary_err:
+            logger.warning(f"[ABAP] RFC_READ_REPORT failed for {prog_name}: {primary_err} — trying fallback")
+
+        # ── Fallback: READ_REPORT_LINE_BY_LINE ──
+        try:
+            self._ensure_connection()
+            result = self._pyrfc.call("READ_REPORT_LINE_BY_LINE",
+                                       PROGRAM=padded_name)
+            content = result.get("CONTENT", result.get("LINES", []))
+            line_count = len(content)
+            print(f"       DEBUG: (fallback) Program {prog_name} returned {line_count} lines of code.")
+            if content:
+                code = "\n".join(line.get("LINE", line.get("TDLINE", "")) for line in content)
+                print(f"       DEBUG: Successfully fetched {len(code)} characters for {prog_name}")
+                return code, line_count
+            return None, 0
+        except Exception as fallback_err:
+            logger.error(f"[ABAP] Fallback READ_REPORT_LINE_BY_LINE also failed for {prog_name}: {fallback_err}")
+            return None, 0
+
     def _extract_abap_source(self, programs):
         """Read source code for custom programs via RFC_READ_REPORT.
-        Uses 40-char padded program names, CONTENT table parsing,
-        batched extraction with retry logic, throttling, and progress logging."""
+        Falls back to READ_REPORT_LINE_BY_LINE if RFC_READ_REPORT is unavailable.
+        Uses 40-char padded names, CONTENT table parsing, throttling, and progress logging."""
         sources = {}
         failed_programs = []
         whitespace_only_programs = []
@@ -606,43 +644,29 @@ class RealRFCConnection:
             print(f"       ... batch {batch_start+1}-{batch_end}/{total}")
 
             for prog_name in batch:
-                # Pad program name to exactly 40 characters (SAP CHAR40 field)
-                padded_name = prog_name.ljust(40)
                 max_retries = 3
+                extracted = False
                 for attempt in range(1, max_retries + 1):
-                    try:
-                        self._ensure_connection()
-                        result = self._pyrfc.call("RFC_READ_REPORT",
-                                                   PROGRAM=padded_name)
-                        content = result.get("CONTENT", [])
-                        line_count = len(content)
-                        print(f"       DEBUG: Program {prog_name} returned {line_count} lines of code.")
-
-                        if content:
-                            code = "\n".join(
-                                line.get("LINE", "") for line in content
-                            )
-                            # Check for whitespace-only source
-                            if not code.strip():
-                                logger.warning(f"[ABAP] {prog_name}: {line_count} lines returned but ALL whitespace")
-                                print(f"       WARNING: {prog_name} returned {line_count} lines but all whitespace — skipping")
-                                whitespace_only_programs.append(prog_name)
-                            else:
-                                sources[prog_name] = code
+                    code, line_count = self._read_single_report(prog_name)
+                    if code is not None:
+                        if not code.strip():
+                            logger.warning(f"[ABAP] {prog_name}: {line_count} lines returned but ALL whitespace")
+                            print(f"       WARNING: {prog_name} returned {line_count} lines but all whitespace — skipping")
+                            whitespace_only_programs.append(prog_name)
                         else:
-                            logger.warning(f"[ABAP] {prog_name}: RFC_READ_REPORT returned empty CONTENT table")
-                        break  # success — no retry needed
-                    except Exception as e:
+                            sources[prog_name] = code
+                        extracted = True
+                        break
+                    elif code is None and line_count == 0:
                         if attempt < max_retries:
                             backoff = min(2 ** attempt, 15)
-                            logger.warning(f"[ABAP] {prog_name} attempt {attempt}/{max_retries} failed: {e} — retry in {backoff}s")
+                            logger.warning(f"[ABAP] {prog_name}: empty result, attempt {attempt}/{max_retries} — retry in {backoff}s")
                             _time.sleep(backoff)
                         else:
-                            logger.error(f"[ABAP] {prog_name}: FAILED after {max_retries} attempts: {e}")
+                            logger.error(f"[ABAP] {prog_name}: FAILED after {max_retries} attempts — no source returned")
                             failed_programs.append(prog_name)
 
                 programs_processed += 1
-                # Per-10th-program progress logging
                 if programs_processed % 10 == 0 or programs_processed == total:
                     elapsed = _time.time() - extraction_start
                     rate = programs_processed / max(elapsed, 0.01)
@@ -666,10 +690,9 @@ class RealRFCConnection:
             if len(failed_programs) > 10:
                 print(f"         ... and {len(failed_programs) - 10} more")
 
-        # Safety check: if extraction finished too fast with 0 results, flag it
         if total > 0 and len(sources) == 0:
             logger.critical(f"[ABAP] ZERO programs extracted from {total} candidates in {elapsed_total:.1f}s!")
-            print(f"       CRITICAL: 0/{total} programs extracted — RFC_READ_REPORT may be failing silently!")
+            print(f"       CRITICAL: 0/{total} programs extracted — both RFC_READ_REPORT and fallback returned nothing!")
         elif elapsed_total < 1.0 and total > 10:
             logger.warning(f"[ABAP] Extraction of {total} programs completed in {elapsed_total:.1f}s — suspiciously fast")
             print(f"       WARNING: Extraction of {total} programs finished in {elapsed_total:.1f}s — verify data is real")
