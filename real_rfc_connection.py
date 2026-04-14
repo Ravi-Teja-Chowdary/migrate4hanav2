@@ -16,6 +16,9 @@ Usage:
 import pyrfc
 import logging
 import time as _time
+import zlib
+import gzip
+import binascii
 from datetime import datetime
 
 logger = logging.getLogger("real_rfc_connection")
@@ -229,7 +232,7 @@ class RealRFCConnection:
         data["finance"] = self._extract_finance()
         print(f"       {len(data['finance']['bkpf'])} doc headers, {len(data['finance']['bseg'])} line items")
 
-        print("    -> ABAP source code (Direct Table Read: REPOSRC/REPOLOAD)...")
+        print("    -> ABAP source code (RFC_READ_REPORT + RPY_PROGRAM_READ/SOURCE_EXTENDED)...")
         data["abap_source"] = self._extract_abap_source(data["programs"])
         print(f"       {len(data['abap_source'])} programs with source code")
 
@@ -595,126 +598,144 @@ class RealRFCConnection:
         return False
 
     def _read_single_report(self, prog_name):
-        """Read a single ABAP program source via Direct Table Extraction.
-        Primary:   REPOSRC table (DATA field, R3STATE='A' for active version)
-        Fallback:  REPOLOAD table (LDATA field, alternative source storage)
+        """Read a single ABAP program source.
+        Primary:   RFC_READ_REPORT (CONTENT table with hex/binary detection)
+        Fallback:  RPY_PROGRAM_READ (SOURCE_EXTENDED table — kernel-decompressed)
         Returns (source_string, line_count, auth_error_flag)."""
         clean_name = prog_name.strip()
-        print(f"       Switching to Direct Table Read for {clean_name}...")
+        padded_name = clean_name.ljust(40)
 
-        # ── Primary: REPOSRC table (active version) ──
+        # ── Primary: RFC_READ_REPORT ──
         try:
             self._ensure_connection()
-            result = self._pyrfc.call(
-                "RFC_READ_TABLE",
-                QUERY_TABLE="REPOSRC",
-                DELIMITER="|",
-                FIELDS=[{"FIELDNAME": "DATA"}],
-                OPTIONS=[{"TEXT": f"PROGNAME = '{clean_name}' AND R3STATE = 'A'"}],
-                ROWCOUNT=1)
-            data_rows = result.get("DATA", [])
-            if data_rows:
-                raw = data_rows[0].get("WA", "")
-                if raw.strip():
-                    # DATA field may be compressed — try to decompress via FM
-                    source = self._try_decompress(raw, clean_name)
-                    line_count = source.count("\n") + 1
-                    print(f"       Attempting to read {clean_name}... (REPOSRC) Result: {len(source)} chars")
-                    return source, line_count, False
-                else:
-                    logger.info(f"[ABAP] REPOSRC returned empty DATA for {clean_name}")
-            else:
-                logger.info(f"[ABAP] REPOSRC returned 0 rows for {clean_name} (R3STATE='A')")
-        except Exception as e1:
-            if self._check_auth_error(clean_name, e1):
-                return None, 0, True
-            logger.info(f"[ABAP] REPOSRC read failed for {clean_name}: {e1}")
-
-        # ── Fallback: REPOLOAD table ──
-        try:
-            self._ensure_connection()
-            result = self._pyrfc.call(
-                "RFC_READ_TABLE",
-                QUERY_TABLE="REPOLOAD",
-                DELIMITER="|",
-                FIELDS=[{"FIELDNAME": "LDATA"}],
-                OPTIONS=[{"TEXT": f"PROGNAME = '{clean_name}'"}],
-                ROWCOUNT=1)
-            data_rows = result.get("DATA", [])
-            if data_rows:
-                raw = data_rows[0].get("WA", "")
-                if raw.strip():
-                    source = self._try_decompress(raw, clean_name)
-                    line_count = source.count("\n") + 1
-                    print(f"       Attempting to read {clean_name}... (REPOLOAD) Result: {len(source)} chars")
-                    return source, line_count, False
-                else:
-                    logger.info(f"[ABAP] REPOLOAD returned empty LDATA for {clean_name}")
-            else:
-                logger.info(f"[ABAP] REPOLOAD returned 0 rows for {clean_name}")
-        except Exception as e2:
-            if self._check_auth_error(clean_name, e2):
-                return None, 0, True
-            logger.info(f"[ABAP] REPOLOAD read failed for {clean_name}: {e2}")
-
-        # ── Last resort: RFC_READ_REPORT (in case tables are locked but FM works) ──
-        try:
-            self._ensure_connection()
-            padded_name = clean_name.ljust(40)
             result = self._pyrfc.call("RFC_READ_REPORT", PROGRAM=padded_name)
             content = result.get("CONTENT", [])
             if content:
                 source = "\n".join(line.get("LINE", "") for line in content)
+                # Check if returned data is hex-encoded or binary
+                source = self._decode_if_binary(source, clean_name)
                 if source.strip():
-                    print(f"       Attempting to read {clean_name}... (RFC_READ_REPORT) Result: {len(source)} chars")
+                    print(f"       DEBUG: Program {clean_name} returned {len(content)} lines "
+                          f"({len(source)} chars) via RFC_READ_REPORT")
                     return source, len(content), False
-        except Exception as e3:
-            if self._check_auth_error(clean_name, e3):
+                else:
+                    logger.info(f"[ABAP] RFC_READ_REPORT: {clean_name} returned {len(content)} lines but all whitespace")
+            else:
+                logger.info(f"[ABAP] RFC_READ_REPORT: {clean_name} returned empty CONTENT table")
+        except Exception as e1:
+            if self._check_auth_error(clean_name, e1):
                 return None, 0, True
-            logger.info(f"[ABAP] RFC_READ_REPORT failed for {clean_name}: {e3}")
+            logger.info(f"[ABAP] RFC_READ_REPORT failed for {clean_name}: {e1}")
+
+        # ── Fallback: RPY_PROGRAM_READ with SOURCE_EXTENDED ──
+        try:
+            self._ensure_connection()
+            result = self._pyrfc.call("RPY_PROGRAM_READ",
+                                       PROGRAM_NAME=padded_name,
+                                       WITH_LOWERCASE='X')
+            # SOURCE_EXTENDED handles binary→text conversion inside SAP kernel
+            source_ext = result.get("SOURCE_EXTENDED", [])
+            if source_ext:
+                source = "\n".join(line.get("LINE", line.get("SLINE", "")) for line in source_ext)
+                source = self._decode_if_binary(source, clean_name)
+                if source.strip():
+                    print(f"       DEBUG: Program {clean_name} returned {len(source_ext)} lines "
+                          f"({len(source)} chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED")
+                    return source, len(source_ext), False
+
+            # Fallback within RPY: try SOURCE table if SOURCE_EXTENDED is empty
+            source_std = result.get("SOURCE", [])
+            if source_std:
+                source = "\n".join(line.get("LINE", line.get("SLINE", "")) for line in source_std)
+                source = self._decode_if_binary(source, clean_name)
+                if source.strip():
+                    print(f"       DEBUG: Program {clean_name} returned {len(source_std)} lines "
+                          f"({len(source)} chars) via RPY_PROGRAM_READ/SOURCE")
+                    return source, len(source_std), False
+
+            logger.info(f"[ABAP] RPY_PROGRAM_READ: {clean_name} — SOURCE_EXTENDED={len(source_ext)}, "
+                         f"SOURCE={len(source_std)} (both empty/whitespace)")
+        except Exception as e2:
+            if self._check_auth_error(clean_name, e2):
+                return None, 0, True
+            logger.info(f"[ABAP] RPY_PROGRAM_READ failed for {clean_name}: {e2}")
 
         logger.warning(f"[ABAP] All extraction methods returned empty for {clean_name}")
         return None, 0, False
 
-    def _try_decompress(self, raw_data, prog_name):
-        """Attempt to decompress REPOSRC/REPOLOAD binary DATA field.
-        If the data is readable text, return as-is.
-        If it looks compressed/binary, try ABAP_COMPRESS_BINARY with DECOMPRESS."""
-        # Check if data is already readable text (common on older ECC systems)
-        printable_ratio = sum(1 for c in raw_data if c.isprintable() or c in ('\n', '\r', '\t')) / max(len(raw_data), 1)
-        if printable_ratio > 0.85:
-            return raw_data
+    def _decode_if_binary(self, raw_text, prog_name):
+        """Detect and decode hex-encoded, zlib-compressed, or gzip-compressed data.
+        If the first character is non-printable, try binascii.unhexlify() first,
+        then zlib/gzip decompression on the result."""
+        if not raw_text:
+            return raw_text
 
-        # Data appears binary/compressed — try SAP decompression FM
-        try:
-            self._ensure_connection()
-            result = self._pyrfc.call(
-                "SCMS_BINARY_TO_STRING",
-                INPUT_LENGTH=len(raw_data),
-                INPUT=[{"LINE": raw_data}])
-            text = result.get("TEXT_BUFFER", "")
-            if text.strip():
-                logger.info(f"[ABAP] Decompressed {prog_name}: {len(raw_data)} bytes -> {len(text)} chars")
-                return text
-        except Exception:
-            pass
+        # Check: if first character is non-printable → likely hex-encoded or binary
+        first_char = raw_text[0] if raw_text else ''
+        is_non_printable = first_char and not first_char.isprintable() and first_char not in ('\n', '\r', '\t', ' ')
 
-        # Fallback: try treating it as line-separated data
-        try:
-            lines = raw_data.split("\n")
-            cleaned = "\n".join(l.rstrip() for l in lines)
-            if cleaned.strip():
-                return cleaned
-        except Exception:
-            pass
+        if is_non_printable:
+            logger.info(f"[ABAP] {prog_name}: first char is non-printable (0x{ord(first_char):02X}), attempting binary decode")
 
-        # Return raw as last resort
-        return raw_data
+            # Try zlib decompression directly on raw bytes
+            try:
+                raw_bytes = raw_text.encode('latin-1')
+                decompressed = zlib.decompress(raw_bytes)
+                decoded = decompressed.decode('utf-8', errors='replace')
+                if decoded.strip():
+                    logger.info(f"[ABAP] {prog_name}: zlib decompression succeeded: {len(raw_bytes)} -> {len(decoded)} chars")
+                    return decoded
+            except (zlib.error, Exception):
+                pass
+
+            # Try gzip decompression
+            try:
+                raw_bytes = raw_text.encode('latin-1')
+                decompressed = gzip.decompress(raw_bytes)
+                decoded = decompressed.decode('utf-8', errors='replace')
+                if decoded.strip():
+                    logger.info(f"[ABAP] {prog_name}: gzip decompression succeeded: {len(raw_bytes)} -> {len(decoded)} chars")
+                    return decoded
+            except (gzip.BadGzipFile, OSError, Exception):
+                pass
+
+            logger.info(f"[ABAP] {prog_name}: binary decode failed, returning raw text")
+
+        # Check: if data looks like hex string (all hex chars, even length)
+        stripped = raw_text.replace('\n', '').replace('\r', '').replace(' ', '')
+        if len(stripped) > 20 and len(stripped) % 2 == 0:
+            try:
+                # Test if it's valid hex
+                int(stripped[:20], 16)
+                # Looks like hex — try unhexlify + decompress
+                binary_data = binascii.unhexlify(stripped)
+                # Try zlib on the unhexlified data
+                try:
+                    decompressed = zlib.decompress(binary_data)
+                    decoded = decompressed.decode('utf-8', errors='replace')
+                    if decoded.strip():
+                        logger.info(f"[ABAP] {prog_name}: hex+zlib decode succeeded: {len(stripped)//2} bytes -> {len(decoded)} chars")
+                        return decoded
+                except (zlib.error, Exception):
+                    pass
+                # Try raw unhexlified as text
+                try:
+                    decoded = binary_data.decode('utf-8', errors='replace')
+                    if decoded.strip() and sum(1 for c in decoded if c.isprintable() or c in '\n\r\t ') / len(decoded) > 0.8:
+                        logger.info(f"[ABAP] {prog_name}: hex decode succeeded: {len(decoded)} chars")
+                        return decoded
+                except Exception:
+                    pass
+            except (ValueError, binascii.Error):
+                pass  # Not hex data
+
+        return raw_text
 
     def _extract_abap_source(self, programs):
-        """Read source code for custom programs via Direct Table Extraction.
-        Primary: REPOSRC (DATA field, R3STATE='A'), Fallback: REPOLOAD (LDATA field).
-        Includes authorization error detection, type diagnostics, and progress logging."""
+        """Read source code for custom programs via RFC_READ_REPORT (primary)
+        with RPY_PROGRAM_READ/SOURCE_EXTENDED as fallback.
+        Includes hex/binary detection, zlib decompression, auth error detection,
+        type diagnostics, and progress logging."""
         sources = {}
         failed_programs = []
         whitespace_only_programs = []
@@ -750,9 +771,9 @@ class RealRFCConnection:
 
         total = len(sample)
         batch_size = 25
-        logger.info(f"[ABAP] Extracting source for {total} programs (cap={cap}) via Direct Table Read (REPOSRC/REPOLOAD)")
-        print(f"       Extracting source for {total} programs via Direct Table Read "
-              f"(REPOSRC -> REPOLOAD -> RFC_READ_REPORT)...")
+        logger.info(f"[ABAP] Extracting source for {total} programs (cap={cap}) via RFC_READ_REPORT + RPY_PROGRAM_READ/SOURCE_EXTENDED")
+        print(f"       Extracting source for {total} programs via RFC_READ_REPORT "
+              f"(fallback: RPY_PROGRAM_READ/SOURCE_EXTENDED)...")
 
         extraction_start = _time.time()
 
@@ -820,7 +841,7 @@ class RealRFCConnection:
 
         if total > 0 and len(sources) == 0:
             logger.critical(f"[ABAP] ZERO programs extracted from {total} candidates in {elapsed_total:.1f}s!")
-            print(f"       CRITICAL: 0/{total} programs extracted — REPOSRC + REPOLOAD + RFC_READ_REPORT all returned nothing!")
+            print(f"       CRITICAL: 0/{total} programs extracted — RFC_READ_REPORT + RPY_PROGRAM_READ/SOURCE_EXTENDED both returned nothing!")
             if auth_blocked_programs:
                 print(f"       → {len(auth_blocked_programs)} were authorization failures — this is likely the root cause!")
         elif elapsed_total < 1.0 and total > 10:
