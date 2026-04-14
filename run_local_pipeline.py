@@ -2127,9 +2127,9 @@ def main():
         _src_count = len(_abap_src)
         if _src_count == 0:
             print(f"\n  {C.RED}{C.BOLD}  ABORT: abap_source dict is EMPTY — cannot run code analysis on empty data!{C.END}")
-            print(f"  {C.RED}  Check that RPY_PROGRAM_READ returned data during Stage 1 extraction.{C.END}")
+            print(f"  {C.RED}  Check that RFC_READ_REPORT returned data during Stage 1 extraction.{C.END}")
             raise ValueError("Data Payload is empty — Aborting Stage 5 (Code Analysis) to prevent blank report. "
-                             "abap_source has 0 programs. Fix RPY_PROGRAM_READ extraction first.")
+                             "abap_source has 0 programs. Fix RFC_READ_REPORT extraction first.")
         else:
             _sample_names = list(_abap_src.keys())[:5]
             _avg_lines = sum(len(v.split("\n")) for v in _abap_src.values()) / max(_src_count, 1)
@@ -2142,7 +2142,7 @@ def main():
                 print(f"  {C.YELLOW}  ! {_src_count - _non_empty} programs have trivial/empty source{C.END}")
             if _non_empty == 0:
                 raise ValueError("Data Payload is empty — Aborting Stage 5: all programs have trivial/empty source code. "
-                                 "RPY_PROGRAM_READ may be returning empty PROG_SOURCE.")
+                                 "RFC_READ_REPORT may be returning empty CONTENT table.")
         results["code_analysis"] = run_stage_5_code_analysis(conn, results["discovery"], output_dir)
         status("T", f"Stage 5 completed in {time.time() - t5:.1f}s", C.DIM)
 
