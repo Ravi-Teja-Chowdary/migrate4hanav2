@@ -229,7 +229,7 @@ class RealRFCConnection:
         data["finance"] = self._extract_finance()
         print(f"       {len(data['finance']['bkpf'])} doc headers, {len(data['finance']['bseg'])} line items")
 
-        print("    -> ABAP source code (RFC_READ_REPORT)...")
+        print("    -> ABAP source code (Direct Table Read: REPOSRC/REPOLOAD)...")
         data["abap_source"] = self._extract_abap_source(data["programs"])
         print(f"       {len(data['abap_source'])} programs with source code")
 
@@ -595,76 +595,125 @@ class RealRFCConnection:
         return False
 
     def _read_single_report(self, prog_name):
-        """Read a single ABAP program source.
-        Primary:  RFC_READ_REPORT  (CONTENT table, LINE field)
-        Fallback 1: READ_REPORT_LINE_BY_LINE (CONTENT/LINES table)
-        Fallback 2: Direct read from REPOSRC table via RFC_READ_TABLE
+        """Read a single ABAP program source via Direct Table Extraction.
+        Primary:   REPOSRC table (DATA field, R3STATE='A' for active version)
+        Fallback:  REPOLOAD table (LDATA field, alternative source storage)
         Returns (source_string, line_count, auth_error_flag)."""
-        padded_name = prog_name.ljust(40)
+        clean_name = prog_name.strip()
+        print(f"       Switching to Direct Table Read for {clean_name}...")
 
-        # ── Primary: RFC_READ_REPORT ──
+        # ── Primary: REPOSRC table (active version) ──
         try:
             self._ensure_connection()
-            result = self._pyrfc.call("RFC_READ_REPORT",
-                                       PROGRAM=padded_name)
-            content = result.get("CONTENT", [])
-            line_count = len(content)
-            if content:
-                source = "\n".join(line.get("LINE", "") for line in content)
-                print(f"       Attempting to read {prog_name}... Result: {len(source)} chars")
-                if source.strip():
-                    return source, line_count, False
-            else:
-                print(f"       Attempting to read {prog_name}... Result: 0 chars (empty CONTENT)")
-        except Exception as e1:
-            if self._check_auth_error(prog_name, e1):
-                return None, 0, True
-            logger.info(f"[ABAP] RFC_READ_REPORT failed for {prog_name}: {e1}")
-            print(f"       Attempting to read {prog_name}... RFC_READ_REPORT failed: {e1}")
-
-        # ── Fallback 1: READ_REPORT_LINE_BY_LINE ──
-        try:
-            self._ensure_connection()
-            result = self._pyrfc.call("READ_REPORT_LINE_BY_LINE",
-                                       PROGRAM=padded_name)
-            content = result.get("CONTENT", result.get("LINES", []))
-            line_count = len(content)
-            if content:
-                source = "\n".join(
-                    line.get("LINE", line.get("TDLINE", "")) for line in content
-                )
-                print(f"       Attempting to read {prog_name}... (fallback1) Result: {len(source)} chars")
-                if source.strip():
-                    return source, line_count, False
-        except Exception as e2:
-            if self._check_auth_error(prog_name, e2):
-                return None, 0, True
-            logger.info(f"[ABAP] READ_REPORT_LINE_BY_LINE failed for {prog_name}: {e2}")
-
-        # ── Fallback 2: Direct read from REPOSRC via RFC_READ_TABLE ──
-        try:
-            self._ensure_connection()
-            result = self._pyrfc.call("RFC_READ_TABLE",
-                                       QUERY_TABLE="REPOSRC",
-                                       DELIMITER="|",
-                                       FIELDS=[{"FIELDNAME": "DATA"}],
-                                       OPTIONS=[{"TEXT": f"PROGNAME = '{prog_name.strip()}'"}],
-                                       ROWCOUNT=1)
+            result = self._pyrfc.call(
+                "RFC_READ_TABLE",
+                QUERY_TABLE="REPOSRC",
+                DELIMITER="|",
+                FIELDS=[{"FIELDNAME": "DATA"}],
+                OPTIONS=[{"TEXT": f"PROGNAME = '{clean_name}' AND R3STATE = 'A'"}],
+                ROWCOUNT=1)
             data_rows = result.get("DATA", [])
             if data_rows:
                 raw = data_rows[0].get("WA", "")
                 if raw.strip():
-                    print(f"       Attempting to read {prog_name}... (REPOSRC) Result: {len(raw)} chars")
-                    return raw.strip(), raw.count("\n") + 1, False
-        except Exception as e3:
-            logger.info(f"[ABAP] REPOSRC direct read failed for {prog_name}: {e3}")
+                    # DATA field may be compressed — try to decompress via FM
+                    source = self._try_decompress(raw, clean_name)
+                    line_count = source.count("\n") + 1
+                    print(f"       Attempting to read {clean_name}... (REPOSRC) Result: {len(source)} chars")
+                    return source, line_count, False
+                else:
+                    logger.info(f"[ABAP] REPOSRC returned empty DATA for {clean_name}")
+            else:
+                logger.info(f"[ABAP] REPOSRC returned 0 rows for {clean_name} (R3STATE='A')")
+        except Exception as e1:
+            if self._check_auth_error(clean_name, e1):
+                return None, 0, True
+            logger.info(f"[ABAP] REPOSRC read failed for {clean_name}: {e1}")
 
-        logger.warning(f"[ABAP] All extraction methods returned empty for {prog_name}")
+        # ── Fallback: REPOLOAD table ──
+        try:
+            self._ensure_connection()
+            result = self._pyrfc.call(
+                "RFC_READ_TABLE",
+                QUERY_TABLE="REPOLOAD",
+                DELIMITER="|",
+                FIELDS=[{"FIELDNAME": "LDATA"}],
+                OPTIONS=[{"TEXT": f"PROGNAME = '{clean_name}'"}],
+                ROWCOUNT=1)
+            data_rows = result.get("DATA", [])
+            if data_rows:
+                raw = data_rows[0].get("WA", "")
+                if raw.strip():
+                    source = self._try_decompress(raw, clean_name)
+                    line_count = source.count("\n") + 1
+                    print(f"       Attempting to read {clean_name}... (REPOLOAD) Result: {len(source)} chars")
+                    return source, line_count, False
+                else:
+                    logger.info(f"[ABAP] REPOLOAD returned empty LDATA for {clean_name}")
+            else:
+                logger.info(f"[ABAP] REPOLOAD returned 0 rows for {clean_name}")
+        except Exception as e2:
+            if self._check_auth_error(clean_name, e2):
+                return None, 0, True
+            logger.info(f"[ABAP] REPOLOAD read failed for {clean_name}: {e2}")
+
+        # ── Last resort: RFC_READ_REPORT (in case tables are locked but FM works) ──
+        try:
+            self._ensure_connection()
+            padded_name = clean_name.ljust(40)
+            result = self._pyrfc.call("RFC_READ_REPORT", PROGRAM=padded_name)
+            content = result.get("CONTENT", [])
+            if content:
+                source = "\n".join(line.get("LINE", "") for line in content)
+                if source.strip():
+                    print(f"       Attempting to read {clean_name}... (RFC_READ_REPORT) Result: {len(source)} chars")
+                    return source, len(content), False
+        except Exception as e3:
+            if self._check_auth_error(clean_name, e3):
+                return None, 0, True
+            logger.info(f"[ABAP] RFC_READ_REPORT failed for {clean_name}: {e3}")
+
+        logger.warning(f"[ABAP] All extraction methods returned empty for {clean_name}")
         return None, 0, False
 
+    def _try_decompress(self, raw_data, prog_name):
+        """Attempt to decompress REPOSRC/REPOLOAD binary DATA field.
+        If the data is readable text, return as-is.
+        If it looks compressed/binary, try ABAP_COMPRESS_BINARY with DECOMPRESS."""
+        # Check if data is already readable text (common on older ECC systems)
+        printable_ratio = sum(1 for c in raw_data if c.isprintable() or c in ('\n', '\r', '\t')) / max(len(raw_data), 1)
+        if printable_ratio > 0.85:
+            return raw_data
+
+        # Data appears binary/compressed — try SAP decompression FM
+        try:
+            self._ensure_connection()
+            result = self._pyrfc.call(
+                "SCMS_BINARY_TO_STRING",
+                INPUT_LENGTH=len(raw_data),
+                INPUT=[{"LINE": raw_data}])
+            text = result.get("TEXT_BUFFER", "")
+            if text.strip():
+                logger.info(f"[ABAP] Decompressed {prog_name}: {len(raw_data)} bytes -> {len(text)} chars")
+                return text
+        except Exception:
+            pass
+
+        # Fallback: try treating it as line-separated data
+        try:
+            lines = raw_data.split("\n")
+            cleaned = "\n".join(l.rstrip() for l in lines)
+            if cleaned.strip():
+                return cleaned
+        except Exception:
+            pass
+
+        # Return raw as last resort
+        return raw_data
+
     def _extract_abap_source(self, programs):
-        """Read source code for custom programs via RFC_READ_REPORT (primary)
-        with READ_REPORT_LINE_BY_LINE as fallback.
+        """Read source code for custom programs via Direct Table Extraction.
+        Primary: REPOSRC (DATA field, R3STATE='A'), Fallback: REPOLOAD (LDATA field).
         Includes authorization error detection, type diagnostics, and progress logging."""
         sources = {}
         failed_programs = []
@@ -701,9 +750,9 @@ class RealRFCConnection:
 
         total = len(sample)
         batch_size = 25
-        logger.info(f"[ABAP] Extracting source for {total} programs (cap={cap}) via RFC_READ_REPORT")
-        print(f"       Extracting source for {total} programs via RFC_READ_REPORT "
-              f"(fallback: READ_REPORT_LINE_BY_LINE)...")
+        logger.info(f"[ABAP] Extracting source for {total} programs (cap={cap}) via Direct Table Read (REPOSRC/REPOLOAD)")
+        print(f"       Extracting source for {total} programs via Direct Table Read "
+              f"(REPOSRC -> REPOLOAD -> RFC_READ_REPORT)...")
 
         extraction_start = _time.time()
 
@@ -736,7 +785,7 @@ class RealRFCConnection:
                             logger.warning(f"[ABAP] {prog_name}: empty result, attempt {attempt}/{max_retries} — retry in {backoff}s")
                             _time.sleep(backoff)
                         else:
-                            logger.error(f"[ABAP] {prog_name}: FAILED after {max_retries} attempts — both methods empty")
+                            logger.error(f"[ABAP] {prog_name}: FAILED after {max_retries} attempts — all extraction methods empty")
                             failed_programs.append(prog_name)
 
                 programs_processed += 1
@@ -763,7 +812,7 @@ class RealRFCConnection:
             print(f"       → Check transactions SU01/SU53 for missing S_DEVELOP, S_PROGNAM objects")
 
         if failed_programs:
-            print(f"       WARNING: {len(failed_programs)} programs failed both extraction methods:")
+            print(f"       WARNING: {len(failed_programs)} programs failed all extraction methods:")
             for p in failed_programs[:10]:
                 print(f"         - {p}")
             if len(failed_programs) > 10:
@@ -771,7 +820,7 @@ class RealRFCConnection:
 
         if total > 0 and len(sources) == 0:
             logger.critical(f"[ABAP] ZERO programs extracted from {total} candidates in {elapsed_total:.1f}s!")
-            print(f"       CRITICAL: 0/{total} programs extracted — RFC_READ_REPORT + fallback both returned nothing!")
+            print(f"       CRITICAL: 0/{total} programs extracted — REPOSRC + REPOLOAD + RFC_READ_REPORT all returned nothing!")
             if auth_blocked_programs:
                 print(f"       → {len(auth_blocked_programs)} were authorization failures — this is likely the root cause!")
         elif elapsed_total < 1.0 and total > 10:
