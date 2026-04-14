@@ -573,10 +573,12 @@ class RealRFCConnection:
         return all_rows
 
     def _extract_abap_source(self, programs):
-        """Read source code for custom programs via RPY_PROGRAM_READ.
-        Uses batched extraction with retry logic, throttling, and progress logging."""
+        """Read source code for custom programs via RFC_READ_REPORT.
+        Uses 40-char padded program names, CONTENT table parsing,
+        batched extraction with retry logic, throttling, and progress logging."""
         sources = {}
         failed_programs = []
+        whitespace_only_programs = []
         programs_processed = 0
 
         sample = [p["NAME"] for p in programs if p.get("type") in
@@ -592,9 +594,9 @@ class RealRFCConnection:
         sample = sample[:cap]
 
         total = len(sample)
-        batch_size = 25  # process in batches to avoid long-running single loops
-        logger.info(f"[ABAP] Extracting source for {total} programs (cap={cap})")
-        print(f"       Extracting source for {total} programs...")
+        batch_size = 25
+        logger.info(f"[ABAP] Extracting source for {total} programs (cap={cap}) via RFC_READ_REPORT")
+        print(f"       Extracting source for {total} programs via RFC_READ_REPORT...")
 
         extraction_start = _time.time()
 
@@ -604,20 +606,32 @@ class RealRFCConnection:
             print(f"       ... batch {batch_start+1}-{batch_end}/{total}")
 
             for prog_name in batch:
+                # Pad program name to exactly 40 characters (SAP CHAR40 field)
+                padded_name = prog_name.ljust(40)
                 max_retries = 3
                 for attempt in range(1, max_retries + 1):
                     try:
                         self._ensure_connection()
-                        result = self._pyrfc.call("RPY_PROGRAM_READ",
-                                                   PROGRAM_NAME=prog_name,
-                                                   WITH_LOWERCASE="X")
-                        lines = result.get("PROG_SOURCE", [])
-                        if lines:
-                            code = "\n".join(line.get("LINE", "") for line in lines)
-                            sources[prog_name] = code
+                        result = self._pyrfc.call("RFC_READ_REPORT",
+                                                   PROGRAM=padded_name)
+                        content = result.get("CONTENT", [])
+                        line_count = len(content)
+                        print(f"       DEBUG: Program {prog_name} returned {line_count} lines of code.")
+
+                        if content:
+                            code = "\n".join(
+                                line.get("LINE", "") for line in content
+                            )
+                            # Check for whitespace-only source
+                            if not code.strip():
+                                logger.warning(f"[ABAP] {prog_name}: {line_count} lines returned but ALL whitespace")
+                                print(f"       WARNING: {prog_name} returned {line_count} lines but all whitespace — skipping")
+                                whitespace_only_programs.append(prog_name)
+                            else:
+                                sources[prog_name] = code
                         else:
-                            logger.warning(f"[ABAP] {prog_name}: RPY_PROGRAM_READ returned empty PROG_SOURCE")
-                        break  # success
+                            logger.warning(f"[ABAP] {prog_name}: RFC_READ_REPORT returned empty CONTENT table")
+                        break  # success — no retry needed
                     except Exception as e:
                         if attempt < max_retries:
                             backoff = min(2 ** attempt, 15)
@@ -640,6 +654,11 @@ class RealRFCConnection:
 
         elapsed_total = _time.time() - extraction_start
 
+        if whitespace_only_programs:
+            print(f"       WARNING: {len(whitespace_only_programs)} programs returned whitespace-only source:")
+            for p in whitespace_only_programs[:10]:
+                print(f"         - {p}")
+
         if failed_programs:
             print(f"       WARNING: {len(failed_programs)} programs failed source extraction:")
             for p in failed_programs[:10]:
@@ -650,12 +669,13 @@ class RealRFCConnection:
         # Safety check: if extraction finished too fast with 0 results, flag it
         if total > 0 and len(sources) == 0:
             logger.critical(f"[ABAP] ZERO programs extracted from {total} candidates in {elapsed_total:.1f}s!")
-            print(f"       CRITICAL: 0/{total} programs extracted — RPY_PROGRAM_READ may be failing silently!")
+            print(f"       CRITICAL: 0/{total} programs extracted — RFC_READ_REPORT may be failing silently!")
         elif elapsed_total < 1.0 and total > 10:
             logger.warning(f"[ABAP] Extraction of {total} programs completed in {elapsed_total:.1f}s — suspiciously fast")
             print(f"       WARNING: Extraction of {total} programs finished in {elapsed_total:.1f}s — verify data is real")
 
-        logger.info(f"[ABAP] Source extraction complete: {len(sources)} succeeded, {len(failed_programs)} failed in {elapsed_total:.1f}s")
+        logger.info(f"[ABAP] Source extraction complete: {len(sources)} succeeded, "
+                     f"{len(failed_programs)} failed, {len(whitespace_only_programs)} whitespace-only in {elapsed_total:.1f}s")
         print(f"       Extraction complete: {len(sources)}/{total} programs in {elapsed_total:.1f}s")
         return sources
 
