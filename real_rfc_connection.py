@@ -229,7 +229,7 @@ class RealRFCConnection:
         data["finance"] = self._extract_finance()
         print(f"       {len(data['finance']['bkpf'])} doc headers, {len(data['finance']['bseg'])} line items")
 
-        print("    -> ABAP source code (RPY_PROGRAM_READ)...")
+        print("    -> ABAP source code (3-tier: RPY → RFC_READ → READ_REPORT)...")
         data["abap_source"] = self._extract_abap_source(data["programs"])
         print(f"       {len(data['abap_source'])} programs with source code")
 
@@ -572,58 +572,129 @@ class RealRFCConnection:
         logger.info(f"[RFC] {table}: fetched {len(all_rows)} total rows")
         return all_rows
 
+    # ── Authorization error keywords SAP embeds in RFC exceptions ──
+    _AUTH_ERROR_KEYWORDS = [
+        "NO_AUTHORITY", "AUTHORITY", "NOT_AUTHORIZED", "ENQUEUE",
+        "NO_PERMISSION", "AUTHORIZATION", "S_DEVELOP", "S_PROGNAM",
+        "ACTVT", "RC=12", "PERMISSION_FAILURE",
+    ]
+
+    def _check_auth_error(self, prog_name, exc):
+        """Inspect an RFC exception for SAP authorization failures.
+        Returns True if an auth error was detected (and logs details)."""
+        err_upper = str(exc).upper()
+        for kw in self._AUTH_ERROR_KEYWORDS:
+            if kw in err_upper:
+                logger.critical(
+                    f"[ABAP-AUTH] {prog_name}: SAP authorization error detected! "
+                    f"Missing auth object keyword: '{kw}'. Full error: {exc}"
+                )
+                print(f"       🔒 AUTH ERROR: {prog_name} — SAP denied access "
+                      f"(keyword '{kw}'). Check S_DEVELOP / S_PROGNAM authorizations.")
+                return True
+        return False
+
     def _read_single_report(self, prog_name):
-        """Read a single ABAP program source via RFC_READ_REPORT (primary)
-        with automatic fallback to READ_REPORT_LINE_BY_LINE.
-        Returns (source_string, line_count) or (None, 0) on failure."""
+        """Read a single ABAP program source using a 3-tier cascade.
+        Tier 1: RPY_PROGRAM_READ  (PROG_SOURCE table)
+        Tier 2: RFC_READ_REPORT   (CONTENT table)
+        Tier 3: READ_REPORT       (direct kernel read)
+        Each tier is attempted even if the previous returned empty data.
+        Returns (source_string, line_count, auth_error_flag)."""
         padded_name = prog_name.ljust(40)
 
-        # ── Primary: RFC_READ_REPORT ──
+        # ── Tier 1: RPY_PROGRAM_READ ──
         try:
             self._ensure_connection()
-            result = self._pyrfc.call("RFC_READ_REPORT", PROGRAM=padded_name)
+            result = self._pyrfc.call("RPY_PROGRAM_READ",
+                                       PROGRAM_NAME=padded_name,
+                                       WITH_LOWERCASE="X")
+            content = result.get("PROG_SOURCE", result.get("PROG_SOURCES", []))
+            line_count = len(content)
+            print(f"       DEBUG: [Tier1-RPY] {prog_name} -> {line_count} lines")
+            if content:
+                code = "\n".join(
+                    line.get("LINE", line.get("SOURCE", "")) for line in content
+                )
+                if code.strip():
+                    print(f"       DEBUG: Successfully fetched {len(code)} characters for {prog_name}")
+                    return code, line_count, False
+        except Exception as e1:
+            if self._check_auth_error(prog_name, e1):
+                return None, 0, True
+            logger.info(f"[ABAP] Tier1 RPY_PROGRAM_READ failed for {prog_name}: {e1}")
+
+        # ── Tier 2: RFC_READ_REPORT ──
+        try:
+            self._ensure_connection()
+            result = self._pyrfc.call("RFC_READ_REPORT",
+                                       PROGRAM=padded_name)
             content = result.get("CONTENT", [])
             line_count = len(content)
-            print(f"       DEBUG: Program {prog_name} returned {line_count} lines of code.")
+            print(f"       DEBUG: [Tier2-RFC_READ] {prog_name} -> {line_count} lines")
             if content:
                 code = "\n".join(line.get("LINE", "") for line in content)
-                print(f"       DEBUG: Successfully fetched {len(code)} characters for {prog_name}")
-                return code, line_count
-            return None, 0
-        except Exception as primary_err:
-            logger.warning(f"[ABAP] RFC_READ_REPORT failed for {prog_name}: {primary_err} — trying fallback")
+                if code.strip():
+                    print(f"       DEBUG: Successfully fetched {len(code)} characters for {prog_name}")
+                    return code, line_count, False
+        except Exception as e2:
+            if self._check_auth_error(prog_name, e2):
+                return None, 0, True
+            logger.info(f"[ABAP] Tier2 RFC_READ_REPORT failed for {prog_name}: {e2}")
 
-        # ── Fallback: READ_REPORT_LINE_BY_LINE ──
+        # ── Tier 3: READ_REPORT (standard SAP kernel read) ──
         try:
             self._ensure_connection()
-            result = self._pyrfc.call("READ_REPORT_LINE_BY_LINE",
-                                       PROGRAM=padded_name)
-            content = result.get("CONTENT", result.get("LINES", []))
+            result = self._pyrfc.call("READ_REPORT",
+                                       REPORT=padded_name)
+            content = result.get("LINES", result.get("CONTENT", []))
             line_count = len(content)
-            print(f"       DEBUG: (fallback) Program {prog_name} returned {line_count} lines of code.")
+            print(f"       DEBUG: [Tier3-READ_REPORT] {prog_name} -> {line_count} lines")
             if content:
-                code = "\n".join(line.get("LINE", line.get("TDLINE", "")) for line in content)
-                print(f"       DEBUG: Successfully fetched {len(code)} characters for {prog_name}")
-                return code, line_count
-            return None, 0
-        except Exception as fallback_err:
-            logger.error(f"[ABAP] Fallback READ_REPORT_LINE_BY_LINE also failed for {prog_name}: {fallback_err}")
-            return None, 0
+                code = "\n".join(
+                    line.get("LINE", line.get("TDLINE", "")) for line in content
+                )
+                if code.strip():
+                    print(f"       DEBUG: Successfully fetched {len(code)} characters for {prog_name}")
+                    return code, line_count, False
+        except Exception as e3:
+            if self._check_auth_error(prog_name, e3):
+                return None, 0, True
+            logger.info(f"[ABAP] Tier3 READ_REPORT failed for {prog_name}: {e3}")
+
+        logger.warning(f"[ABAP] All 3 extraction tiers returned empty for {prog_name}")
+        return None, 0, False
 
     def _extract_abap_source(self, programs):
-        """Read source code for custom programs via RFC_READ_REPORT.
-        Falls back to READ_REPORT_LINE_BY_LINE if RFC_READ_REPORT is unavailable.
-        Uses 40-char padded names, CONTENT table parsing, throttling, and progress logging."""
+        """Read source code for custom programs via 3-tier fallback cascade:
+        RPY_PROGRAM_READ → RFC_READ_REPORT → READ_REPORT.
+        Includes authorization error detection, type diagnostics, and progress logging."""
         sources = {}
         failed_programs = []
         whitespace_only_programs = []
+        auth_blocked_programs = []
         programs_processed = 0
 
-        sample = [p["NAME"] for p in programs if p.get("type") in
-                  ("report", "module_pool", "include")]
+        # Diagnostic: log type distribution so we can see if filter is dropping programs
+        type_counts = {}
+        for p in programs:
+            t = p.get("type", "unknown")
+            type_counts[t] = type_counts.get(t, 0) + 1
+        print(f"       Program type distribution: {type_counts}")
+        logger.info(f"[ABAP] Program type distribution: {type_counts}")
+
+        # Accept report, module_pool, include, subroutine_pool — skip class/interface/function_group
+        eligible_types = ("report", "module_pool", "include", "subroutine_pool")
+        sample = [p["NAME"] for p in programs if p.get("type") in eligible_types]
+
+        # If standard filter returns nothing, try ALL programs as last resort
+        if not sample:
+            logger.warning("[ABAP] No programs matched standard type filter — trying ALL programs")
+            print(f"       WARNING: Type filter matched 0 programs — retrying with ALL types")
+            sample = [p["NAME"] for p in programs if p.get("NAME", "").strip()]
 
         if not sample:
-            logger.warning("[ABAP] No eligible programs found (report/module_pool/include)")
+            logger.warning("[ABAP] No eligible programs found at all")
             print(f"       WARNING: No eligible programs found for source extraction!")
             return sources
 
@@ -633,8 +704,9 @@ class RealRFCConnection:
 
         total = len(sample)
         batch_size = 25
-        logger.info(f"[ABAP] Extracting source for {total} programs (cap={cap}) via RFC_READ_REPORT")
-        print(f"       Extracting source for {total} programs via RFC_READ_REPORT...")
+        logger.info(f"[ABAP] Extracting source for {total} programs (cap={cap}) via 3-tier cascade")
+        print(f"       Extracting source for {total} programs via 3-tier cascade "
+              f"(RPY_PROGRAM_READ → RFC_READ_REPORT → READ_REPORT)...")
 
         extraction_start = _time.time()
 
@@ -644,10 +716,14 @@ class RealRFCConnection:
             print(f"       ... batch {batch_start+1}-{batch_end}/{total}")
 
             for prog_name in batch:
-                max_retries = 3
+                max_retries = 2
                 extracted = False
                 for attempt in range(1, max_retries + 1):
-                    code, line_count = self._read_single_report(prog_name)
+                    code, line_count, auth_error = self._read_single_report(prog_name)
+                    if auth_error:
+                        auth_blocked_programs.append(prog_name)
+                        extracted = True  # don't retry auth failures
+                        break
                     if code is not None:
                         if not code.strip():
                             logger.warning(f"[ABAP] {prog_name}: {line_count} lines returned but ALL whitespace")
@@ -663,7 +739,7 @@ class RealRFCConnection:
                             logger.warning(f"[ABAP] {prog_name}: empty result, attempt {attempt}/{max_retries} — retry in {backoff}s")
                             _time.sleep(backoff)
                         else:
-                            logger.error(f"[ABAP] {prog_name}: FAILED after {max_retries} attempts — no source returned")
+                            logger.error(f"[ABAP] {prog_name}: FAILED after {max_retries} attempts — all 3 tiers empty")
                             failed_programs.append(prog_name)
 
                 programs_processed += 1
@@ -683,8 +759,14 @@ class RealRFCConnection:
             for p in whitespace_only_programs[:10]:
                 print(f"         - {p}")
 
+        if auth_blocked_programs:
+            print(f"       🔒 AUTH BLOCKED: {len(auth_blocked_programs)} programs denied by SAP authorization:")
+            for p in auth_blocked_programs[:10]:
+                print(f"         - {p}")
+            print(f"       → Check transactions SU01/SU53 for missing S_DEVELOP, S_PROGNAM objects")
+
         if failed_programs:
-            print(f"       WARNING: {len(failed_programs)} programs failed source extraction:")
+            print(f"       WARNING: {len(failed_programs)} programs failed all 3 extraction tiers:")
             for p in failed_programs[:10]:
                 print(f"         - {p}")
             if len(failed_programs) > 10:
@@ -692,13 +774,16 @@ class RealRFCConnection:
 
         if total > 0 and len(sources) == 0:
             logger.critical(f"[ABAP] ZERO programs extracted from {total} candidates in {elapsed_total:.1f}s!")
-            print(f"       CRITICAL: 0/{total} programs extracted — both RFC_READ_REPORT and fallback returned nothing!")
+            print(f"       CRITICAL: 0/{total} programs extracted — all 3 tiers returned nothing!")
+            if auth_blocked_programs:
+                print(f"       → {len(auth_blocked_programs)} were authorization failures — this is likely the root cause!")
         elif elapsed_total < 1.0 and total > 10:
             logger.warning(f"[ABAP] Extraction of {total} programs completed in {elapsed_total:.1f}s — suspiciously fast")
             print(f"       WARNING: Extraction of {total} programs finished in {elapsed_total:.1f}s — verify data is real")
 
         logger.info(f"[ABAP] Source extraction complete: {len(sources)} succeeded, "
-                     f"{len(failed_programs)} failed, {len(whitespace_only_programs)} whitespace-only in {elapsed_total:.1f}s")
+                     f"{len(failed_programs)} failed, {len(auth_blocked_programs)} auth-blocked, "
+                     f"{len(whitespace_only_programs)} whitespace-only in {elapsed_total:.1f}s")
         print(f"       Extraction complete: {len(sources)}/{total} programs in {elapsed_total:.1f}s")
         return sources
 
