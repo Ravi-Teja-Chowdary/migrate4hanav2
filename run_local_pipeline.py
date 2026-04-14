@@ -9,10 +9,12 @@ Runs migration stages locally. Supports two modes:
 Other flags:
   --assess-only            Phases 1-2 only (stages 1-8)
   --mode ecc_full          ECC-Only full execution (stages 1-9.6, no S/4HANA)
+  --limit N                Fast test: extract only first N programs/customers/vendors
 
 Usage:
     python run_local_pipeline.py --live --mode ecc_full   # Real ECC, full assessment
     python run_local_pipeline.py --live --assess-only     # Real ECC, phases 1-2 only
+    python run_local_pipeline.py --live --limit 50        # Real ECC, fast test (50 items)
     python run_local_pipeline.py                          # Mock data, full 17-stage run
 """
 
@@ -457,13 +459,9 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
 
     import re
 
-    # Import the master fix engine for actual remediation
-    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "code-analyzer", "fixers"))
-    from master_fix_engine import MasterFixEngine
-
     # ── Phase 1: Issue Detection ──────────────────────────────
-    # Full rule set reflecting what the fix engine can actually handle.
-    # auto_fix=True for every category the Deep+L1+L2+L2B engines cover.
+    # Full rule set reflecting what the AST engine can handle.
+    # auto_fix=True for every category the AST engine covers.
     RULES = [
         # Obsolete statements — L2 + L2B fix all of these
         ("ABAP-001", r"\bOCCURS\s+\d+\b", "OCCURS is obsolete -> INITIAL SIZE", "high", True),
@@ -566,23 +564,88 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
         color = C.RED if sev == "critical" else C.YELLOW if sev == "high" else C.CYAN
         status("o", f"  {sev.upper()}: {count}", color)
 
-    # ── Phase 2: Auto-Remediation via Master Fix Engine ───────
-    section("Running Master Fix Engine (Deep + L1 + L2 + L2B)")
-    engine = MasterFixEngine(countries=["IN", "US", "DE", "AE"])
+    # ── Phase 2: Auto-Remediation via AST Engine (Primary) ───────
+    # The full ABAP AST engine (130+ S/4HANA migration rules) is the primary
+    # fix engine for all custom ABAP code remediation when deployed locally.
+    # It applies structural parse→transform→generate on the original source.
+    section("Running ABAP AST Engine — Primary Fix Engine (130+ structural migration rules)")
+    from abap_ast_engine import process_abap_file
 
     abap_source = conn.dataset.get("abap_source", {})
-    fixed_programs, fix_report = engine.fix_all_programs(abap_source)
+    fixed_programs = {}
+    ast_total_changes = 0
+    ast_programs_transformed = 0
+    ast_category_counts = {}
+    ast_severity_counts = {}
+    ast_parse_errors_total = 0
 
-    # Store fixed code back so Stage 11 deploys the fixed versions
-    conn.dataset["fixed_abap_source"] = fixed_programs
+    # Build a fix_report structure compatible with downstream consumers
+    fix_report = {
+        "total_fixes_applied": 0,
+        "fixes_by_level": {
+            "AST_structural": 0,
+        },
+        "programs": [],
+    }
 
-    total_fixes = fix_report["total_fixes_applied"]
+    for prog_name, source in abap_source.items():
+        original_lines = len(source.split("\n"))
+        prog_report = {
+            "program": prog_name,
+            "original_lines": original_lines,
+            "fixed_lines": original_lines,
+            "total_fixes": 0,
+            "ast_changes": 0,
+        }
+        try:
+            ast_result = process_abap_file(source)
+            ast_changes = ast_result.get("changes", [])
+            ast_stats = ast_result.get("stats", {})
+
+            if ast_changes:
+                fixed_programs[prog_name] = ast_result["transformed_code"]
+                ast_programs_transformed += 1
+                ast_total_changes += len(ast_changes)
+
+                prog_report["ast_changes"] = len(ast_changes)
+                prog_report["total_fixes"] = len(ast_changes)
+                prog_report["fixed_lines"] = len(ast_result["transformed_code"].split("\n"))
+
+                # Aggregate category and severity counts
+                for cat, cnt in ast_stats.get("category_breakdown", {}).items():
+                    ast_category_counts[cat] = ast_category_counts.get(cat, 0) + cnt
+                for sev, cnt in ast_stats.get("severity_breakdown", {}).items():
+                    ast_severity_counts[sev] = ast_severity_counts.get(sev, 0) + cnt
+            else:
+                # No changes needed — keep original
+                fixed_programs[prog_name] = source
+
+            parse_errs = len(ast_result.get("parse_errors", []))
+            if parse_errs:
+                ast_parse_errors_total += parse_errs
+
+        except Exception as e:
+            status("!", f"AST engine failed on {prog_name}: {e}", C.YELLOW)
+            fixed_programs[prog_name] = source
+
+        fix_report["programs"].append(prog_report)
+
+    # Update fix_report totals
+    fix_report["total_fixes_applied"] = ast_total_changes
+    fix_report["fixes_by_level"]["AST_structural"] = ast_total_changes
     by_level = fix_report["fixes_by_level"]
+    total_fixes = fix_report["total_fixes_applied"]
 
-    status("V", f"Deep Knowledge Engine: {by_level['DEEP_knowledge']} rewrites (table/field/WHERE)", C.GREEN)
-    status("V", f"Level 1 Table/Field:   {by_level['L1_table_field']} additional rewrites", C.GREEN)
-    status("V", f"Level 2 Structure:     {by_level['L2_structure']} statement transforms", C.GREEN)
-    status("V", f"Level 2B Aggressive:   {by_level['L2B_aggressive']} advanced transforms", C.GREEN)
+    status("V", f"AST Engine:            {ast_total_changes} structural transforms across {ast_programs_transformed} programs", C.GREEN)
+    if ast_category_counts:
+        top_cats = sorted(ast_category_counts.items(), key=lambda x: -x[1])[:5]
+        for cat, cnt in top_cats:
+            status("  ->", f"{cat}: {cnt} changes", C.CYAN)
+    if ast_parse_errors_total > 0:
+        status("!", f"AST parse warnings: {ast_parse_errors_total} (non-blocking)", C.YELLOW)
+
+    # Store final fixed code back so Stage 11 deploys the AST-processed versions
+    conn.dataset["fixed_abap_source"] = fixed_programs
 
     # Calculate real fix rate: fixes applied vs. total issues detected
     fix_rate = (total_fixes / max(len(all_issues), 1)) * 100
@@ -597,6 +660,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
     print(f"\n  {C.BOLD}{C.GREEN}  +----------------------------------------------+")
     print(f"  |  FIX RATE: {effective_rate:.0f}% ({fixable_issues}/{len(all_issues)} issues)    |")
     print(f"  |  FIXES APPLIED: {total_fixes:,} across {programs_analyzed} programs  |")
+    print(f"  |  AST TRANSFORMS: {ast_total_changes:,} structural changes        |")
     print(f"  |  MANUAL REVIEW: {manual_issues} items                    |")
     print(f"  +----------------------------------------------+{C.END}")
 
@@ -646,6 +710,13 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
         "manual_review": manual_issues,
         "fixes_by_level": by_level,
         "programs_fixed": len([r for r in fix_report.get("programs", []) if r["total_fixes"] > 0]),
+        "ast_engine": {
+            "total_changes": ast_total_changes,
+            "programs_transformed": ast_programs_transformed,
+            "category_breakdown": ast_category_counts,
+            "severity_breakdown": ast_severity_counts,
+            "parse_errors": ast_parse_errors_total,
+        },
     }
 
 
@@ -1778,6 +1849,7 @@ def generate_post_migration_report(results, conn, output_dir, total_time):
                     "total_issues": ca["total_issues"],
                     "fix_rate": ca.get("fix_rate", 0),
                     "manual_review": ca.get("manual_review", 0),
+                    "ast_engine_changes": ca.get("ast_engine", {}).get("total_changes", 0),
                 },
             },
             "phase_3_realize": {
@@ -1915,6 +1987,16 @@ def main():
     ecc_full = "--mode" in sys.argv and "ecc_full" in sys.argv
     live_mode = "--live" in sys.argv
 
+    # Parse --limit N for fast local testing
+    fast_limit = 0
+    for i, arg in enumerate(sys.argv):
+        if arg == "--limit" and i + 1 < len(sys.argv):
+            try:
+                fast_limit = int(sys.argv[i + 1])
+            except ValueError:
+                print(f"  {C.RED}X --limit requires an integer (got '{sys.argv[i+1]}'){C.END}")
+                sys.exit(1)
+
     if ecc_full:
         mode_label = "ECC-ONLY FULL EXECUTION (Phases 1-2 + Completeness + Report)"
     elif assess_only:
@@ -1923,6 +2005,8 @@ def main():
         mode_label = "FULL (All 5 Phases, 17 Stages)"
 
     data_source = "LIVE SAP ECC" if live_mode else "MOCK DATA"
+    if fast_limit > 0:
+        data_source += f" (--limit {fast_limit})"
 
     # Parse --ecc_client if provided
     ecc_client = "100"
@@ -1976,7 +2060,7 @@ def main():
 
         from real_rfc_connection import RealRFCConnection
         try:
-            conn = RealRFCConnection(conn_params)
+            conn = RealRFCConnection(conn_params, limit=fast_limit)
         except Exception as e:
             print(f"  {C.RED}X Failed to connect to SAP ECC: {e}{C.END}")
             sys.exit(1)
@@ -2038,11 +2122,53 @@ def main():
 
         # Stage 5
         t5 = time.time()
+        # ── Data Validation: Verify ABAP source payload before code analysis ──
+        _abap_src = conn.dataset.get("abap_source", {})
+        _src_count = len(_abap_src)
+        if _src_count == 0:
+            print(f"\n  {C.RED}{C.BOLD}  ABORT: abap_source dict is EMPTY — cannot run code analysis on empty data!{C.END}")
+            print(f"  {C.RED}  Check that RPY_PROGRAM_READ returned data during Stage 1 extraction.{C.END}")
+            raise ValueError("Data Payload is empty — Aborting Stage 5 (Code Analysis) to prevent blank report. "
+                             "abap_source has 0 programs. Fix RPY_PROGRAM_READ extraction first.")
+        else:
+            _sample_names = list(_abap_src.keys())[:5]
+            _avg_lines = sum(len(v.split("\n")) for v in _abap_src.values()) / max(_src_count, 1)
+            print(f"\n  {C.GREEN}  Data Validation (Stage 5 input):{C.END}")
+            print(f"  {C.GREEN}  ✓ abap_source: {_src_count} programs, avg {_avg_lines:.0f} lines/program{C.END}")
+            print(f"  {C.DIM}    Sample: {', '.join(_sample_names)}{C.END}")
+            # Verify at least some programs contain real code (not just empty strings)
+            _non_empty = sum(1 for v in _abap_src.values() if len(v.strip()) > 10)
+            if _non_empty < _src_count:
+                print(f"  {C.YELLOW}  ! {_src_count - _non_empty} programs have trivial/empty source{C.END}")
+            if _non_empty == 0:
+                raise ValueError("Data Payload is empty — Aborting Stage 5: all programs have trivial/empty source code. "
+                                 "RPY_PROGRAM_READ may be returning empty PROG_SOURCE.")
         results["code_analysis"] = run_stage_5_code_analysis(conn, results["discovery"], output_dir)
         status("T", f"Stage 5 completed in {time.time() - t5:.1f}s", C.DIM)
 
         # Stage 6
         t6 = time.time()
+        # ── Data Validation: Verify customer/vendor payloads before dedup ──
+        _custs = conn.dataset.get("customers", [])
+        _vends = conn.dataset.get("vendors", [])
+        if len(_custs) == 0 and len(_vends) == 0:
+            print(f"\n  {C.RED}{C.BOLD}  ABORT: customers AND vendors lists are EMPTY — cannot run dedup on empty data!{C.END}")
+            print(f"  {C.RED}  Check that RFC_READ_TABLE for KNA1/LFA1 returned data during Stage 1 extraction.{C.END}")
+            raise ValueError("Data Payload is empty — Aborting Stage 6 (Data Hygiene) to prevent blank report. "
+                             "customers=0, vendors=0. Fix RFC_READ_TABLE field validation for KNA1/LFA1 first.")
+        else:
+            print(f"\n  {C.GREEN}  Data Validation (Stage 6 input):{C.END}")
+            print(f"  {C.GREEN}  ✓ customers: {len(_custs)} rows{C.END}")
+            if _custs:
+                _c_sample = [c.get("NAME1", "?")[:30] for c in _custs[:3]]
+                print(f"  {C.DIM}    Sample: {', '.join(_c_sample)}{C.END}")
+                _c_with_name = sum(1 for c in _custs if c.get("NAME1", "").strip())
+                if _c_with_name < len(_custs):
+                    print(f"  {C.YELLOW}  ! {len(_custs) - _c_with_name} customers missing NAME1{C.END}")
+            print(f"  {C.GREEN}  ✓ vendors: {len(_vends)} rows{C.END}")
+            if _vends:
+                _v_sample = [v.get("NAME1", "?")[:30] for v in _vends[:3]]
+                print(f"  {C.DIM}    Sample: {', '.join(_v_sample)}{C.END}")
         results["data_hygiene"] = run_stage_6_data_hygiene(conn, output_dir)
         status("T", f"Stage 6 completed in {time.time() - t6:.1f}s", C.DIM)
 
@@ -2225,6 +2351,9 @@ def main():
     print(f"  | Critical Issues:    {ca['critical_issues']:>8,}                      |")
     print(f"  | Auto-Fixed:         {ca['auto_remediated']:>8,} ({ca.get('fix_rate', 0):.0f}%)             |")
     print(f"  | Fixes Applied:      {ca.get('total_fixes_applied', 0):>8,}                      |")
+    ast_eng = ca.get("ast_engine", {})
+    if ast_eng.get("total_changes", 0) > 0:
+        print(f"  | AST Transforms:     {ast_eng['total_changes']:>8,} ({ast_eng.get('programs_transformed', 0)} programs)     |")
     print(f"  | Manual Review:      {ca.get('manual_review', 0):>8,}                      |")
     dm = results["data_hygiene"]["results"]
     print(f"  | BP Conversion:      {dm['bp_created']:>8,} (merged {dm['duplicates_merged']})      |")

@@ -14,7 +14,12 @@ Usage:
 """
 
 import pyrfc
+import logging
+import time as _time
 from datetime import datetime
+
+logger = logging.getLogger("real_rfc_connection")
+logger.setLevel(logging.INFO)
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -52,14 +57,17 @@ class RealRFCConnection:
     to the real pyrfc.Connection for any RFC function.
     """
 
-    def __init__(self, conn_params):
+    def __init__(self, conn_params, limit=0):
         """
         conn_params: dict with keys ashost, sysnr, client, user, passwd,
                      and optionally saprouter.
+        limit: when > 0, cap programs/customers/vendors to this many for fast testing.
         """
         clean = {k: v for k, v in conn_params.items() if v}
+        self._conn_params = clean
         self._pyrfc = pyrfc.Connection(**clean)
         self._call_count = 0
+        self._limit = limit
 
         # Execution tracking (same as MockRFCConnection)
         self._deployed_programs = {}
@@ -75,6 +83,7 @@ class RealRFCConnection:
         self._committed = 0
 
         # Extract live data
+        self._field_cache = {}  # Cache for DDIF_FIELDINFO_GET results per table
         self.dataset = self._extract_all()
 
     # ── Public interface ────────────────────────────────────────────────
@@ -90,10 +99,74 @@ class RealRFCConnection:
         except Exception:
             pass
 
+    # ── Dynamic Field Discovery ─────────────────────────────────────────
+
+    def _discover_table_fields(self, table_name):
+        """Call DDIF_FIELDINFO_GET for the given table and return the set of
+        valid field names.  Results are cached so repeated calls for the same
+        table hit SAP only once."""
+        if table_name in self._field_cache:
+            return self._field_cache[table_name]
+
+        try:
+            self._ensure_connection()
+            result = self._pyrfc.call("DDIF_FIELDINFO_GET",
+                                       TABNAME=table_name, FIELDNAME="", LANGU="E")
+            # DFIES_TAB contains the full field catalog
+            dfies = result.get("DFIES_TAB", [])
+            fields = {row.get("FIELDNAME", "") for row in dfies if row.get("FIELDNAME")}
+            if not fields:
+                # Fallback — try the LINES_DESCRIBED table
+                lines_desc = result.get("LINES_DESCRIBED", [])
+                fields = {row.get("FIELDNAME", "") for row in lines_desc if row.get("FIELDNAME")}
+            self._field_cache[table_name] = fields
+            logger.info(f"[FIELD_DISCOVERY] {table_name}: {len(fields)} fields discovered")
+            return fields
+        except Exception as e:
+            logger.warning(f"[FIELD_DISCOVERY] DDIF_FIELDINFO_GET failed for {table_name}: {e}")
+            print(f"    [FIELD_DISCOVERY] Warning: Could not discover fields for {table_name}: {e}")
+            self._field_cache[table_name] = set()  # cache the failure to avoid repeated calls
+            return set()
+
+    def _validate_fields(self, table, requested_fields, mandatory_fields=None):
+        """Intersect requested fields with actual SAP table fields.
+        Returns the list of valid fields to pass to RFC_READ_TABLE.
+        Logs CRITICAL for any mandatory fields that are missing."""
+        actual = self._discover_table_fields(table)
+        if not actual:
+            # Discovery failed — fall back to original field list (let RFC_READ_TABLE decide)
+            logger.warning(f"[FIELD_VALIDATE] {table}: field discovery returned nothing, using all requested fields")
+            return requested_fields
+
+        valid = [f for f in requested_fields if f in actual]
+        dropped = [f for f in requested_fields if f not in actual]
+
+        if dropped:
+            logger.warning(f"[FIELD_VALIDATE] {table}: Dropped non-existent fields: {dropped}")
+            print(f"    [FIELD_VALIDATE] {table}: Dropped {len(dropped)} invalid fields: {', '.join(dropped)}")
+
+        if mandatory_fields:
+            missing_mandatory = [f for f in mandatory_fields if f not in actual]
+            if missing_mandatory:
+                logger.critical(
+                    f"[FIELD_VALIDATE] {table}: MANDATORY fields missing from SAP schema: {missing_mandatory}"
+                )
+                print(f"    {chr(27)}[91m[FIELD_VALIDATE] CRITICAL: {table} is missing mandatory fields: "
+                      f"{', '.join(missing_mandatory)} — data quality will be degraded!{chr(27)}[0m")
+
+        if not valid:
+            logger.error(f"[FIELD_VALIDATE] {table}: No valid fields remaining after intersection!")
+            return requested_fields  # fall back
+
+        return valid
+
     # ── Data extraction ─────────────────────────────────────────────────
 
-    def _read_table(self, table, fields=None, options=None, max_rows=0):
-        """Wrapper around RFC_READ_TABLE with chunked reads for large tables."""
+    def _read_table(self, table, fields=None, options=None, max_rows=0,
+                    mandatory_fields=None):
+        """Wrapper around RFC_READ_TABLE with dynamic field validation and reconnect."""
+        if fields:
+            fields = self._validate_fields(table, fields, mandatory_fields)
         params = {"QUERY_TABLE": table, "DELIMITER": "|"}
         if fields:
             params["FIELDS"] = [{"FIELDNAME": f} for f in fields]
@@ -102,15 +175,20 @@ class RealRFCConnection:
         if max_rows:
             params["ROWCOUNT"] = max_rows
         try:
+            self._ensure_connection()
             result = self._pyrfc.call("RFC_READ_TABLE", **params)
             return _parse_rfc_read_table(result)
         except Exception as e:
+            logger.warning(f"[RFC] Could not read {table}: {e}")
             print(f"    [RFC] Warning: Could not read {table}: {e}")
             return []
 
     def _extract_all(self):
         """Extract all ECC data into the standard dataset format."""
-        print("  Extracting live ECC data via RFC...")
+        if self._limit > 0:
+            print(f"  Extracting live ECC data via RFC (--limit {self._limit} active)...")
+        else:
+            print("  Extracting live ECC data via RFC...")
         data = {}
 
         # System info from RFC_SYSTEM_INFO
@@ -209,7 +287,8 @@ class RealRFCConnection:
         """Read custom programs from TRDIR (Z* and Y* namespace)."""
         fields = ["NAME", "SUBC", "CDAT", "UDAT", "UNAM", "RSTAT"]
         options = ["NAME LIKE 'Z%' OR NAME LIKE 'Y%'"]
-        rows = self._read_table_chunked("TRDIR", fields, options)
+        max_rows = self._limit if self._limit > 0 else 0
+        rows = self._read_table_chunked("TRDIR", fields, options, max_rows=max_rows)
 
         programs = []
         type_map = {"1": "report", "I": "include", "M": "module_pool",
@@ -273,10 +352,12 @@ class RealRFCConnection:
     def _extract_org_structure(self):
         """Read org structure from T001, T001W, TVKO, TKA01, T001L, T024E."""
         company_codes = self._read_table("T001",
-            ["BUKRS", "BUTXT", "WAERS", "LAND1", "ORT01", "KTOPL", "PERIV"])
+            ["BUKRS", "BUTXT", "WAERS", "LAND1", "ORT01", "KTOPL", "PERIV"],
+            mandatory_fields=["BUKRS", "BUTXT"])
 
         plants = self._read_table("T001W",
-            ["WERKS", "NAME1", "BUKRS", "LAND1", "FABKL", "ORT01"])
+            ["WERKS", "NAME1", "BUKRS", "LAND1", "FABKL", "ORT01"],
+            mandatory_fields=["WERKS", "NAME1"])
 
         storage_locs = self._read_table("T001L",
             ["WERKS", "LGORT", "LGOBE"])
@@ -386,15 +467,23 @@ class RealRFCConnection:
         }
 
     def _extract_customers(self):
-        """Read customers from KNA1."""
-        fields = ["KUNNR", "NAME1", "LAND1", "STCD1", "SMTP_ADDR", "TELF1", "KTOKD"]
-        rows = self._read_table_chunked("KNA1", fields)
+        """Read customers from KNA1 with dynamic field validation."""
+        fields = ["KUNNR", "NAME1", "LAND1", "ORT01", "PSTLZ", "STRAS",
+                   "STCD1", "SMTP_ADDR", "TELF1", "KTOKD"]
+        mandatory = ["KUNNR", "NAME1", "PSTLZ"]
+        max_rows = self._limit if self._limit > 0 else 0
+        rows = self._read_table_chunked("KNA1", fields, max_rows=max_rows,
+                                         mandatory_fields=mandatory)
         return rows
 
     def _extract_vendors(self):
-        """Read vendors from LFA1."""
-        fields = ["LIFNR", "NAME1", "LAND1", "STCD1", "SMTP_ADDR", "KTOKK"]
-        rows = self._read_table_chunked("LFA1", fields)
+        """Read vendors from LFA1 with dynamic field validation."""
+        fields = ["LIFNR", "NAME1", "LAND1", "ORT01", "PSTLZ", "STRAS",
+                   "STCD1", "SMTP_ADDR", "KTOKK"]
+        mandatory = ["LIFNR", "NAME1", "PSTLZ"]
+        max_rows = self._limit if self._limit > 0 else 0
+        rows = self._read_table_chunked("LFA1", fields, max_rows=max_rows,
+                                         mandatory_fields=mandatory)
         return rows
 
     def _extract_finance(self):
@@ -408,11 +497,30 @@ class RealRFCConnection:
 
         return {"bkpf": bkpf, "bseg": bseg}
 
+    def _ensure_connection(self):
+        """Reconnect if the pyrfc connection has dropped."""
+        try:
+            self._pyrfc.alive
+        except Exception:
+            logger.warning("RFC connection lost — reconnecting...")
+            try:
+                self._pyrfc = pyrfc.Connection(**self._conn_params)
+                logger.info("RFC reconnection successful")
+            except Exception as e:
+                logger.error(f"RFC reconnection failed: {e}")
+                raise
+
     def _read_table_chunked(self, table, fields=None, options=None,
-                             chunk_size=5000, max_rows=0):
-        """Read large tables in chunks. If max_rows > 0, stop after that many."""
+                             chunk_size=5000, max_rows=0, max_retries=3,
+                             mandatory_fields=None):
+        """Read large tables in chunks with retry/backoff and dynamic field validation.
+        If max_rows > 0, stop after that many."""
+        if fields:
+            fields = self._validate_fields(table, fields, mandatory_fields)
         all_rows = []
         skip = 0
+        consecutive_failures = 0
+        chunk_num = 0
         while True:
             remaining = max_rows - len(all_rows) if max_rows else chunk_size
             fetch = min(chunk_size, remaining) if max_rows else chunk_size
@@ -425,40 +533,130 @@ class RealRFCConnection:
                 params["FIELDS"] = [{"FIELDNAME": f} for f in fields]
             if options:
                 params["OPTIONS"] = [{"TEXT": t} for t in options]
-            try:
-                result = self._pyrfc.call("RFC_READ_TABLE", **params)
-                rows = _parse_rfc_read_table(result)
-                if not rows:
+
+            success = False
+            chunk_num += 1
+            for attempt in range(1, max_retries + 1):
+                try:
+                    self._ensure_connection()
+                    result = self._pyrfc.call("RFC_READ_TABLE", **params)
+                    rows = _parse_rfc_read_table(result)
+                    if not rows:
+                        if chunk_num == 1:
+                            logger.warning(f"[RFC] {table}: First chunk returned 0 rows")
+                        return all_rows  # table exhausted
+                    all_rows.extend(rows)
+                    consecutive_failures = 0
+                    success = True
+                    target_str = f"/{max_rows}" if max_rows else ""
+                    print(f"       Chunk {chunk_num} received — {len(all_rows):,}{target_str} rows from {table}")
+                    if len(rows) < fetch:
+                        return all_rows  # last page
+                    skip += fetch
                     break
-                all_rows.extend(rows)
-                if len(rows) < fetch:
-                    break
-                skip += fetch
-            except Exception as e:
-                print(f"    [RFC] Warning: Chunk read of {table} failed at offset {skip}: {e}")
+                except Exception as e:
+                    backoff = min(2 ** attempt, 30)
+                    logger.warning(
+                        f"[RFC] Chunk read of {table} failed at offset {skip} "
+                        f"(attempt {attempt}/{max_retries}): {e} — retrying in {backoff}s"
+                    )
+                    print(f"    [RFC] Warning: {table} offset {skip} attempt {attempt}/{max_retries}: {e}")
+                    _time.sleep(backoff)
+
+            if not success:
+                consecutive_failures += 1
+                logger.error(f"[RFC] Giving up on {table} at offset {skip} after {max_retries} retries")
+                print(f"    [RFC] ERROR: Could not read {table} at offset {skip} after {max_retries} retries")
                 break
+
+        logger.info(f"[RFC] {table}: fetched {len(all_rows)} total rows")
         return all_rows
 
     def _extract_abap_source(self, programs):
-        """Read source code for custom programs via RPY_PROGRAM_READ."""
+        """Read source code for custom programs via RPY_PROGRAM_READ.
+        Uses batched extraction with retry logic, throttling, and progress logging."""
         sources = {}
-        # Read source for a sample of programs (reading all can be slow)
+        failed_programs = []
+        programs_processed = 0
+
         sample = [p["NAME"] for p in programs if p.get("type") in
                   ("report", "module_pool", "include")]
-        # Cap at 200 programs to keep extraction time reasonable
-        sample = sample[:200]
 
-        for prog_name in sample:
-            try:
-                result = self._pyrfc.call("RPY_PROGRAM_READ",
-                                           PROGRAM_NAME=prog_name,
-                                           WITH_LOWERCASE="X")
-                lines = result.get("PROG_SOURCE", [])
-                if lines:
-                    sources[prog_name] = "\n".join(
-                        line.get("LINE", "") for line in lines)
-            except Exception:
-                pass  # Skip programs we can't read
+        if not sample:
+            logger.warning("[ABAP] No eligible programs found (report/module_pool/include)")
+            print(f"       WARNING: No eligible programs found for source extraction!")
+            return sources
+
+        # Respect --limit if set, otherwise cap at 500
+        cap = self._limit if self._limit > 0 else 500
+        sample = sample[:cap]
+
+        total = len(sample)
+        batch_size = 25  # process in batches to avoid long-running single loops
+        logger.info(f"[ABAP] Extracting source for {total} programs (cap={cap})")
+        print(f"       Extracting source for {total} programs...")
+
+        extraction_start = _time.time()
+
+        for batch_start in range(0, total, batch_size):
+            batch = sample[batch_start:batch_start + batch_size]
+            batch_end = min(batch_start + batch_size, total)
+            print(f"       ... batch {batch_start+1}-{batch_end}/{total}")
+
+            for prog_name in batch:
+                max_retries = 3
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        self._ensure_connection()
+                        result = self._pyrfc.call("RPY_PROGRAM_READ",
+                                                   PROGRAM_NAME=prog_name,
+                                                   WITH_LOWERCASE="X")
+                        lines = result.get("PROG_SOURCE", [])
+                        if lines:
+                            code = "\n".join(line.get("LINE", "") for line in lines)
+                            sources[prog_name] = code
+                        else:
+                            logger.warning(f"[ABAP] {prog_name}: RPY_PROGRAM_READ returned empty PROG_SOURCE")
+                        break  # success
+                    except Exception as e:
+                        if attempt < max_retries:
+                            backoff = min(2 ** attempt, 15)
+                            logger.warning(f"[ABAP] {prog_name} attempt {attempt}/{max_retries} failed: {e} — retry in {backoff}s")
+                            _time.sleep(backoff)
+                        else:
+                            logger.error(f"[ABAP] {prog_name}: FAILED after {max_retries} attempts: {e}")
+                            failed_programs.append(prog_name)
+
+                programs_processed += 1
+                # Per-10th-program progress logging
+                if programs_processed % 10 == 0 or programs_processed == total:
+                    elapsed = _time.time() - extraction_start
+                    rate = programs_processed / max(elapsed, 0.01)
+                    print(f"       Program {programs_processed}/{total} analyzed "
+                          f"({len(sources)} extracted, {elapsed:.1f}s, {rate:.1f} prog/s)")
+
+                # Throttle to avoid ECC gateway overload
+                _time.sleep(0.1)
+
+        elapsed_total = _time.time() - extraction_start
+
+        if failed_programs:
+            print(f"       WARNING: {len(failed_programs)} programs failed source extraction:")
+            for p in failed_programs[:10]:
+                print(f"         - {p}")
+            if len(failed_programs) > 10:
+                print(f"         ... and {len(failed_programs) - 10} more")
+
+        # Safety check: if extraction finished too fast with 0 results, flag it
+        if total > 0 and len(sources) == 0:
+            logger.critical(f"[ABAP] ZERO programs extracted from {total} candidates in {elapsed_total:.1f}s!")
+            print(f"       CRITICAL: 0/{total} programs extracted — RPY_PROGRAM_READ may be failing silently!")
+        elif elapsed_total < 1.0 and total > 10:
+            logger.warning(f"[ABAP] Extraction of {total} programs completed in {elapsed_total:.1f}s — suspiciously fast")
+            print(f"       WARNING: Extraction of {total} programs finished in {elapsed_total:.1f}s — verify data is real")
+
+        logger.info(f"[ABAP] Source extraction complete: {len(sources)} succeeded, {len(failed_programs)} failed in {elapsed_total:.1f}s")
+        print(f"       Extraction complete: {len(sources)}/{total} programs in {elapsed_total:.1f}s")
         return sources
 
     def _extract_users(self):
