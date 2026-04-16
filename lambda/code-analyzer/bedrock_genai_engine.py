@@ -31,7 +31,9 @@ logger = logging.getLogger("bedrock_genai_engine")
 logger.setLevel(logging.INFO)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-BEDROCK_MODEL_ID = "anthropic.claude-opus-4-6-v1"
+# Claude Opus 4.6 requires a cross-region inference profile (not raw model ID).
+# Override via BEDROCK_MODEL_ID env var if using a custom inference profile ARN.
+BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-opus-4-6-v1")
 BEDROCK_REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 MAX_TOKENS = 8192
 MAX_SOURCE_CHARS = 60_000  # Truncate very large programs to stay within token limits
