@@ -827,6 +827,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
             f.write(code)
 
     # Build genai_escalations list for the PDF report generator
+    # Include ALL programs sent to GenAI (not just successful ones)
     genai_escalations = []
     for prog_name, genai_result in genai_results_by_program.items():
         fixes = genai_result.get("fixes", [])
@@ -837,6 +838,14 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                 "backend": "Bedrock",
                 "findings": f"{len(fixes)} issue(s) remediated",
                 "remediation": "Applied",
+            })
+        else:
+            genai_escalations.append({
+                "program": prog_name,
+                "escalation_reason": f"< {ast_threshold if 'ast_threshold' in dir() else 3} AST changes found",
+                "backend": "Bedrock",
+                "findings": "No actionable findings",
+                "remediation": "No result returned",
             })
 
     return {
@@ -2380,31 +2389,22 @@ def main():
         conn = MockRFCConnection(dataset)
         company_name = "Bharat Industrial Solutions Pvt Ltd"
 
-    # ── Pre-Flight Cache Wipe ──
-    # Clean output directory completely before run to prevent PDF generator
-    # from falling back to stale data from previous runs
+    # ── Pre-Flight Cache Cleanup ──
+    # Clean only loose cache files (json/tmp/db) from test-output root.
+    # Previous run directories are PRESERVED for historical records.
     test_output_root = os.path.join(PROJECT_DIR, "test-output")
     if os.path.exists(test_output_root):
-        import shutil
         stale_items = []
         for item in os.listdir(test_output_root):
             item_path = os.path.join(test_output_root, item)
-            # Remove stale cache files and temp artifacts; keep directory structure
-            if item.endswith((".json", ".tmp", ".db")):
+            if item.endswith((".json", ".tmp", ".db")) and os.path.isfile(item_path):
                 try:
                     os.remove(item_path)
                     stale_items.append(item)
                 except OSError:
                     pass
-            elif os.path.isdir(item_path) and item.startswith("run_"):
-                # Remove previous run directories to prevent fallback reads
-                try:
-                    shutil.rmtree(item_path)
-                    stale_items.append(item)
-                except OSError:
-                    pass
         if stale_items:
-            print(f"  {C.DIM}Pre-flight cache wipe: removed {len(stale_items)} stale items{C.END}")
+            print(f"  {C.DIM}Pre-flight cache cleanup: removed {len(stale_items)} stale cache files{C.END}")
 
     # Output directory
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")

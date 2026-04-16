@@ -790,18 +790,18 @@ def _build_section_3_code(pipeline_results):
                         USABLE_W * 0.25, USABLE_W * 0.20],
         ))
     else:
-        # Build from genai_engine stats if genai_escalations list is empty
+        # Build from genai_engine stats — use ACTUAL values, no fabricated fallbacks
         genai_eng = ca.get("genai_engine", {})
         genai_remediated = genai_eng.get("programs_remediated", 0)
         genai_fix_count = genai_eng.get("total_fixes", 0)
-        escalation_count = max(genai_eng.get("programs_sent", 0), manual_review)
+        programs_sent = genai_eng.get("programs_sent", 0)
         genai_summary_rows = [
-            ["Programs escalated from AST to GenAI", str(escalation_count)],
+            ["Programs escalated from AST to GenAI", str(programs_sent)],
             ["Escalation threshold", f"< {ast_threshold} deterministic changes found"],
             ["GenAI backend (primary)", "Amazon Bedrock (Claude)"],
             ["GenAI backend (fallback)", "Air-Gapped Local LLM"],
-            ["Additional issues identified by GenAI", str(max(genai_fix_count, critical // 3))],
-            ["Remediations applied via GenAI", str(max(genai_remediated, genai_fix_count))],
+            ["Additional issues identified by GenAI", str(genai_fix_count)],
+            ["Remediations applied via GenAI", str(genai_remediated)],
         ]
         story.append(Paragraph(
             f"Programs where the AST engine found fewer than {ast_threshold} deterministic "
@@ -1228,14 +1228,19 @@ def _build_section_9_roadmap(pipeline_results, completion_report):
     total_hours = remaining.get("total_manual_hours", 0)
     breakdown = remaining.get("breakdown", {})
     code_effort = breakdown.get("code_remediation", {}).get("hours", 0)
+    # Fixed project overhead items (provisioning, monitoring, UAT)
+    overhead_provision = 40
+    overhead_sumdmo = 16
+    overhead_uat = 40
+    grand_total = total_hours + overhead_provision + overhead_sumdmo + overhead_uat
 
     story.append(Paragraph("Remaining Manual Work Estimate", ss["SubSectionH"]))
     effort_rows = [
         ["Manual code fixes", f"{code_effort:.0f} person-hours", "ABAP Developer"],
-        ["S/4HANA system provisioning", "40 person-hours", "Basis Admin"],
-        ["SUM/DMO execution monitoring", "16 person-hours", "Basis Admin"],
-        ["UAT coordination", "40 person-hours", "Project Manager"],
-        ["Total remaining", f"{total_hours + 96:.0f} person-hours", ""],
+        ["S/4HANA system provisioning", f"{overhead_provision} person-hours", "Basis Admin"],
+        ["SUM/DMO execution monitoring", f"{overhead_sumdmo} person-hours", "Basis Admin"],
+        ["UAT coordination", f"{overhead_uat} person-hours", "Project Manager"],
+        ["Total remaining", f"{grand_total:.0f} person-hours", ""],
     ]
     story.append(_make_table(
         ["Work Item", "Estimated Effort", "Responsibility"],
