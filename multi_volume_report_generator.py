@@ -434,13 +434,25 @@ def _build_section_1_executive(pipeline_results, completion_report):
         or p.get("remediation_status") == "COMPLETED"
         or p.get("remediation_agent") == "GENAI"
     )
+    genai_failed_count = sum(
+        1 for p in fix_report.get("programs", [])
+        if p.get("genai_failed")
+    )
     genai_display = max(genai_eng.get("total_fixes", 0), genai_auto_count)
+    genai_sent = genai_eng.get("programs_sent", 0)
+    genai_resolved = genai_eng.get("programs_remediated", 0)
+    genai_failed = genai_eng.get("programs_failed", max(genai_failed_count, genai_sent - genai_resolved))
+    genai_issues_unresolved = genai_eng.get("issues_unresolved", 0)
 
     metrics_data = [
         ["Custom Programs Scanned", str(disc.get("total_programs", 0))],
         ["S/4HANA Compatibility Issues Found", str(ca.get("total_issues", 0))],
         ["Issues Auto-Remediated", str(ca.get("auto_remediated", 0))],
         ["Remediations via GenAI", str(genai_display)],
+        ["GenAI: Programs Sent", str(genai_sent)],
+        ["GenAI: Programs Resolved", str(genai_resolved)],
+        ["GenAI: Programs Unsuccessful", str(genai_failed)],
+        ["GenAI: Issues Unresolved", str(genai_issues_unresolved)],
         ["Auto-Fix Success Rate", f"{ca.get('fix_rate', 0):.1f}%"],
         ["Programs Requiring Manual Review", str(ca.get("manual_review", 0))],
         ["Business Partners Deduplicated", f"{dh_results.get('duplicates_merged', 0)} clusters"],
@@ -772,54 +784,61 @@ def _build_section_3_code(pipeline_results):
 
     genai_results = ca.get("genai_escalations", [])
     ast_threshold = ca.get("ast_change_threshold", 3)
+    genai_eng = ca.get("genai_engine", {})
+    genai_sent = genai_eng.get("programs_sent", 0)
+    genai_resolved = genai_eng.get("programs_remediated", 0)
+    genai_failed_total = genai_eng.get("programs_failed", 0)
+    genai_unresolved_issues = genai_eng.get("issues_unresolved", 0)
+
+    # Summary paragraph always shown
+    story.append(Paragraph(
+        f"Programs where the AST engine found fewer than {ast_threshold} deterministic "
+        "changes were escalated to the GenAI router (Bedrock or Air-Gapped LLM) for "
+        "deeper semantic analysis.",
+        ss["Body"],
+    ))
+
+    # GenAI outcome summary table
+    genai_summary_rows = [
+        ["Programs Sent to GenAI", str(genai_sent)],
+        ["Programs Successfully Resolved", str(genai_resolved)],
+        ["Programs Unsuccessful", str(genai_failed_total)],
+        ["Issues Unresolved by GenAI", str(genai_unresolved_issues)],
+        ["GenAI Backend (Primary)", "Amazon Bedrock (Claude)"],
+        ["GenAI Backend (Fallback)", "Air-Gapped Local LLM"],
+    ]
+    story.append(_make_table(
+        ["Metric", "Value"],
+        genai_summary_rows,
+        col_widths=[USABLE_W * 0.6, USABLE_W * 0.4],
+    ))
 
     if genai_results:
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph("Per-Program GenAI Results", ss["SubSectionH"]))
         genai_rows = []
         for esc in genai_results:
+            status_label = esc.get("status", "UNKNOWN")
+            status_display = "\u2713 Resolved" if status_label == "SUCCESS" else "\u2717 Unsuccessful"
             genai_rows.append([
                 esc.get("program", ""),
-                esc.get("escalation_reason", f"< {ast_threshold} AST changes found"),
+                str(esc.get("issues_sent", 0)),
                 esc.get("backend", "Bedrock"),
                 esc.get("findings", ""),
-                esc.get("remediation", "Applied"),
+                status_display,
             ])
         story.append(_make_table(
-            ["Program", "Escalation Reason", "GenAI Backend", "Additional Findings", "Remediation"],
+            ["Program", "Issues Sent", "GenAI Backend", "Outcome", "Status"],
             genai_rows,
-            col_widths=[USABLE_W * 0.18, USABLE_W * 0.22, USABLE_W * 0.15,
-                        USABLE_W * 0.25, USABLE_W * 0.20],
+            col_widths=[USABLE_W * 0.18, USABLE_W * 0.12, USABLE_W * 0.15,
+                        USABLE_W * 0.30, USABLE_W * 0.25],
         ))
-    else:
-        # Build from genai_engine stats — use ACTUAL values, no fabricated fallbacks
-        genai_eng = ca.get("genai_engine", {})
-        genai_remediated = genai_eng.get("programs_remediated", 0)
-        genai_fix_count = genai_eng.get("total_fixes", 0)
-        programs_sent = genai_eng.get("programs_sent", 0)
-        genai_summary_rows = [
-            ["Programs escalated from AST to GenAI", str(programs_sent)],
-            ["Escalation threshold", f"< {ast_threshold} deterministic changes found"],
-            ["GenAI backend (primary)", "Amazon Bedrock (Claude)"],
-            ["GenAI backend (fallback)", "Air-Gapped Local LLM"],
-            ["Additional issues identified by GenAI", str(genai_fix_count)],
-            ["Remediations applied via GenAI", str(genai_remediated)],
-        ]
+    elif genai_sent == 0:
         story.append(Paragraph(
-            f"Programs where the AST engine found fewer than {ast_threshold} deterministic "
-            "changes were escalated to the GenAI router (Bedrock or Air-Gapped LLM) for "
-            "deeper semantic analysis.",
+            "No programs required GenAI escalation \u2014 all issues were resolved "
+            "deterministically by the AST engine.",
             ss["Body"],
         ))
-        story.append(_make_table(
-            ["Metric", "Value"],
-            genai_summary_rows,
-            col_widths=[USABLE_W * 0.6, USABLE_W * 0.4],
-        ))
-        if escalation_count == 0:
-            story.append(Paragraph(
-                "No programs required GenAI escalation \u2014 all issues were resolved "
-                "deterministically by the AST engine.",
-                ss["Body"],
-            ))
 
     story.append(PageBreak())
     return story

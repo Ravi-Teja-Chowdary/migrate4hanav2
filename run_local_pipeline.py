@@ -662,6 +662,8 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
     genai_total_fixes = 0
     genai_programs_sent = 0
     genai_programs_remediated = 0
+    genai_programs_failed = 0
+    genai_issues_unresolved = 0
     genai_recommendations = []
     genai_results_by_program = {}
 
@@ -707,7 +709,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                         ast_changes_summary=ast_summary,
                     )
 
-                    if genai_result:
+                    if genai_result and not genai_result.get("_error"):
                         genai_results_by_program[prog_name] = genai_result
                         fixes = genai_result.get("fixes", [])
                         recs = genai_result.get("recommendations", [])
@@ -723,6 +725,12 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                                        f"{fix.get('explanation', 'N/A')[:60]} (confidence: {conf})", C.CYAN)
                             if len(fixes) > 3:
                                 status("  ->", f"  ...and {len(fixes) - 3} more fixes", C.DIM)
+                        else:
+                            # Bedrock responded but returned no fixes
+                            genai_programs_failed += 1
+                            genai_issues_unresolved += len(unfixed)
+                            status("!", f"  {prog_name}: Bedrock responded but returned 0 fixes "
+                                   f"({len(unfixed)} issues unresolved)", C.YELLOW)
 
                         if remediated_source and isinstance(remediated_source, str) and remediated_source.strip():
                             fixed_programs[prog_name] = remediated_source
@@ -742,16 +750,64 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                         if recs:
                             for rec in recs:
                                 genai_recommendations.append({"program": prog_name, "recommendation": rec})
+                    elif genai_result and genai_result.get("_error"):
+                        # Bedrock returned an error — track as explicit failure
+                        error_reason = genai_result.get("_error_reason", "Unknown error")
+                        genai_programs_failed += 1
+                        genai_issues_unresolved += len(unfixed)
+                        genai_results_by_program[prog_name] = genai_result
+                        status("!", f"  {prog_name}: GenAI FAILED — {error_reason} "
+                               f"({len(unfixed)} issues unresolved)", C.YELLOW)
+                        # Mark in fix report as GenAI-attempted but failed
+                        for pr in fix_report.get("programs", []):
+                            if pr["program"] == prog_name:
+                                pr["genai_attempted"] = True
+                                pr["genai_failed"] = True
+                                pr["genai_error"] = error_reason
+                                pr["remediation_status"] = "FAILED"
+                                break
                     else:
-                        status("!", f"  {prog_name}: Bedrock returned no result", C.YELLOW)
+                        # Bedrock returned None (should not happen with new error propagation)
+                        genai_programs_failed += 1
+                        genai_issues_unresolved += len(unfixed)
+                        genai_results_by_program[prog_name] = {
+                            "_error": True, "_error_reason": "No response from Bedrock",
+                            "fixes": [], "recommendations": [],
+                        }
+                        status("!", f"  {prog_name}: Bedrock returned no result "
+                               f"({len(unfixed)} issues unresolved)", C.YELLOW)
+                        for pr in fix_report.get("programs", []):
+                            if pr["program"] == prog_name:
+                                pr["genai_attempted"] = True
+                                pr["genai_failed"] = True
+                                pr["genai_error"] = "No response from Bedrock"
+                                pr["remediation_status"] = "FAILED"
+                                break
 
                 except Exception as e:
-                    status("!", f"  {prog_name}: GenAI failed — {e}", C.YELLOW)
+                    genai_programs_failed += 1
+                    genai_issues_unresolved += len(unfixed)
+                    genai_results_by_program[prog_name] = {
+                        "_error": True, "_error_reason": str(e),
+                        "fixes": [], "recommendations": [],
+                    }
+                    status("!", f"  {prog_name}: GenAI exception — {e} "
+                           f"({len(unfixed)} issues unresolved)", C.YELLOW)
                     logger.error(f"GenAI remediation failed for {prog_name}: {e}")
+                    for pr in fix_report.get("programs", []):
+                        if pr["program"] == prog_name:
+                            pr["genai_attempted"] = True
+                            pr["genai_failed"] = True
+                            pr["genai_error"] = str(e)
+                            pr["remediation_status"] = "FAILED"
+                            break
 
             # GenAI summary
             status("V", f"GenAI Engine: {genai_total_fixes} fix(es) across "
                    f"{genai_programs_remediated}/{genai_programs_sent} program(s)", C.GREEN)
+            if genai_programs_failed > 0:
+                status("!", f"GenAI Unsuccessful: {genai_programs_failed} program(s) failed, "
+                       f"{genai_issues_unresolved} issue(s) unresolved by GenAI", C.YELLOW)
 
     # Update fix_report with GenAI stats
     fix_report["fixes_by_level"]["GenAI_bedrock"] = genai_total_fixes
@@ -827,25 +883,44 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
             f.write(code)
 
     # Build genai_escalations list for the PDF report generator
-    # Include ALL programs sent to GenAI (not just successful ones)
+    # Include ALL programs sent to GenAI with actual outcome (success, failed, no fixes)
     genai_escalations = []
     for prog_name, genai_result in genai_results_by_program.items():
+        is_error = genai_result.get("_error", False)
+        error_reason = genai_result.get("_error_reason", "")
         fixes = genai_result.get("fixes", [])
+        # Count unfixed issues for this program
+        prog_issue_count = len(programs_needing_genai.get(prog_name, []))
+
         if fixes:
             genai_escalations.append({
                 "program": prog_name,
                 "escalation_reason": f"< {ast_threshold if 'ast_threshold' in dir() else 3} AST changes found",
                 "backend": "Bedrock",
+                "issues_sent": prog_issue_count,
                 "findings": f"{len(fixes)} issue(s) remediated",
-                "remediation": "Applied",
+                "remediation": "\u2713 Applied",
+                "status": "SUCCESS",
+            })
+        elif is_error:
+            genai_escalations.append({
+                "program": prog_name,
+                "escalation_reason": f"< {ast_threshold if 'ast_threshold' in dir() else 3} AST changes found",
+                "backend": "Bedrock",
+                "issues_sent": prog_issue_count,
+                "findings": f"FAILED: {error_reason}",
+                "remediation": f"\u2717 Unsuccessful ({prog_issue_count} issues unresolved)",
+                "status": "FAILED",
             })
         else:
             genai_escalations.append({
                 "program": prog_name,
                 "escalation_reason": f"< {ast_threshold if 'ast_threshold' in dir() else 3} AST changes found",
                 "backend": "Bedrock",
-                "findings": "No actionable findings",
-                "remediation": "No result returned",
+                "issues_sent": prog_issue_count,
+                "findings": "0 fixes returned",
+                "remediation": f"\u2717 Unsuccessful ({prog_issue_count} issues unresolved)",
+                "status": "FAILED",
             })
 
     return {
@@ -870,7 +945,9 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
             "model": "anthropic.claude-opus-4-6-v1",
             "programs_sent": genai_programs_sent,
             "programs_remediated": genai_programs_remediated,
+            "programs_failed": genai_programs_failed,
             "total_fixes": genai_total_fixes,
+            "issues_unresolved": genai_issues_unresolved,
             "recommendations": len(genai_recommendations),
         },
     }

@@ -120,7 +120,8 @@ Respond with ONLY this JSON (no other text):
 
 
 def _invoke_bedrock(prompt: str) -> Optional[Dict]:
-    """Invoke AWS Bedrock with Claude Opus 4.6. Returns parsed response or None."""
+    """Invoke AWS Bedrock with Claude Opus 4.6. Returns parsed response or error dict."""
+    last_error = "Unknown error"
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             client = _get_bedrock_client()
@@ -156,7 +157,8 @@ def _invoke_bedrock(prompt: str) -> Optional[Dict]:
 
             if not text.strip():
                 logger.warning("Bedrock returned empty content")
-                return None
+                return {"_error": True, "_error_reason": "Empty response from Bedrock",
+                        "fixes": [], "recommendations": []}
 
             usage = response_body.get("usage", {})
             logger.info(f"Bedrock response: {len(text)} chars, "
@@ -167,33 +169,41 @@ def _invoke_bedrock(prompt: str) -> Optional[Dict]:
 
         except NoCredentialsError:
             logger.error("AWS credentials not configured. Run 'aws configure' first.")
-            return None
+            return {"_error": True, "_error_reason": "AWS credentials not configured",
+                    "fixes": [], "recommendations": []}
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code == "AccessDeniedException":
                 logger.error(f"Bedrock access denied — enable model access for {BEDROCK_MODEL_ID} "
                              f"in AWS Console > Bedrock > Model access")
-                return None
+                return {"_error": True, "_error_reason": f"Access denied for {BEDROCK_MODEL_ID}",
+                        "fixes": [], "recommendations": []}
             elif error_code == "ThrottlingException" and attempt < MAX_RETRIES:
                 wait = RETRY_BACKOFF * attempt
                 logger.warning(f"Bedrock throttled, retrying in {wait}s...")
                 time.sleep(wait)
+                last_error = f"Throttled after {MAX_RETRIES} attempts"
                 continue
             else:
                 logger.error(f"Bedrock ClientError: {e}")
-                return None
+                return {"_error": True, "_error_reason": f"ClientError: {error_code}",
+                        "fixes": [], "recommendations": []}
         except EndpointConnectionError:
             logger.error(f"Cannot connect to Bedrock endpoint in {BEDROCK_REGION}. "
                          f"Check region and network.")
-            return None
+            return {"_error": True, "_error_reason": f"Cannot connect to Bedrock in {BEDROCK_REGION}",
+                    "fixes": [], "recommendations": []}
         except (BotoCoreError, Exception) as e:
             logger.error(f"Bedrock invocation failed: {e}")
+            last_error = str(e)
             if attempt < MAX_RETRIES:
                 time.sleep(RETRY_BACKOFF)
                 continue
-            return None
+            return {"_error": True, "_error_reason": last_error,
+                    "fixes": [], "recommendations": []}
 
-    return None
+    return {"_error": True, "_error_reason": last_error,
+            "fixes": [], "recommendations": []}
 
 
 def _parse_response(content: str) -> Dict:
