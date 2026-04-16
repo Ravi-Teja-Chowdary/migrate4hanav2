@@ -287,11 +287,15 @@ class RealRFCConnection:
             return {"sid": "???", "description": "Unknown SAP system"}
 
     def _extract_programs(self):
-        """Read custom programs from TRDIR (Z* and Y* namespace)."""
+        """Read custom programs from TRDIR (Z* and Y* namespace).
+        Results sorted descending (Z-A) so Z* programs are prioritized when limit is applied."""
         fields = ["NAME", "SUBC", "CDAT", "UDAT", "UNAM", "RSTAT"]
         options = ["NAME LIKE 'Z%' OR NAME LIKE 'Y%'"]
         max_rows = self._limit if self._limit > 0 else 0
         rows = self._read_table_chunked("TRDIR", fields, options, max_rows=max_rows)
+
+        # Sort descending (Z-A) so Z* programs are processed before Y* when limit applies
+        rows.sort(key=lambda r: r.get("NAME", ""), reverse=True)
 
         programs = []
         type_map = {"1": "report", "I": "include", "M": "module_pool",

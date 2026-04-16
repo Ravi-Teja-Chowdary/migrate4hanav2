@@ -178,8 +178,13 @@ def assign_bp_ids(
             remapped_customers[kunnr] = bp_id
         elif strategy == "VENDOR_PRIORITY" and kunnr in overlapping_ids:
             # Customer gets remapped
-            raw_num = int(kunnr)
-            bp_id = str(raw_num + CUSTOMER_BP_OFFSET).zfill(10)
+            try:
+                raw_num = int(kunnr)
+                bp_id = str(raw_num + CUSTOMER_BP_OFFSET).zfill(10)
+            except ValueError:
+                bp_id = str(internal_counter).zfill(10)
+                internal_counter += 1
+                logger.warning(f"Non-numeric KUNNR '{kunnr}' cannot use offset; assigned internal BP ID {bp_id}")
             id_action = "REMAPPED_OFFSET"
             remapped_customers[kunnr] = bp_id
         else:
@@ -261,8 +266,13 @@ def assign_bp_ids(
             remapped_vendors[lifnr] = bp_id
         elif strategy == "CUSTOMER_PRIORITY" and lifnr in overlapping_ids:
             # Vendor gets remapped (default strategy)
-            raw_num = int(lifnr)
-            bp_id = str(raw_num + VENDOR_BP_OFFSET).zfill(10)
+            try:
+                raw_num = int(lifnr)
+                bp_id = str(raw_num + VENDOR_BP_OFFSET).zfill(10)
+            except ValueError:
+                bp_id = str(internal_counter).zfill(10)
+                internal_counter += 1
+                logger.warning(f"Non-numeric LIFNR '{lifnr}' cannot use offset; assigned internal BP ID {bp_id}")
             id_action = "REMAPPED_OFFSET"
             remapped_vendors[lifnr] = bp_id
         elif strategy == "VENDOR_PRIORITY":

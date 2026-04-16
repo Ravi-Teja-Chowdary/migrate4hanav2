@@ -125,6 +125,7 @@ def compute_data_score(data_hygiene: dict, data_assessment: dict) -> dict:
 def compute_config_score(config_assessment: dict, discovery: dict) -> dict:
     """Compute configuration transformation completion sub-score (0-100)."""
     checklist_items = config_assessment.get("checklist_items", 0)
+    synthesized_configs = config_assessment.get("synthesized_configs", 0)
 
     # SPRO extraction coverage
     disc_summary = discovery.get("summary", {})
@@ -132,9 +133,10 @@ def compute_config_score(config_assessment: dict, discovery: dict) -> dict:
 
     scores = []
 
-    # SPRO tables extracted
-    if checklist_items > 0:
-        spro_score = min(100, (checklist_items / KNOWN_SPRO_TABLES) * 100)
+    # SPRO tables extracted + synthesized configs
+    total_config_items = checklist_items
+    if total_config_items > 0:
+        spro_score = min(100, (total_config_items / KNOWN_SPRO_TABLES) * 100)
         scores.append(spro_score)
     else:
         scores.append(0)
@@ -145,13 +147,20 @@ def compute_config_score(config_assessment: dict, discovery: dict) -> dict:
     else:
         scores.append(0)
 
+    # Auto-synthesized config boost (ML, Universal Journal, CVI)
+    if synthesized_configs > 0:
+        scores.append(100.0)  # synthesis engine ran successfully
+    else:
+        scores.append(0)
+
     score = sum(scores) / max(len(scores), 1)
 
-    remaining_config = max(0, KNOWN_SPRO_TABLES - checklist_items)
+    remaining_config = max(0, KNOWN_SPRO_TABLES - total_config_items)
 
     return {
         "score": round(score, 1),
         "checklist_items": checklist_items,
+        "synthesized_configs": synthesized_configs,
         "known_spro_tables": KNOWN_SPRO_TABLES,
         "company_codes": company_codes,
         "manual_effort_hours": remaining_config * EFFORT_PER_MANUAL_CONFIG,

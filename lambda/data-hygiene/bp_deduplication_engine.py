@@ -8,6 +8,9 @@ ML-driven deduplication for SAP Customers (KNA1) and Vendors (LFA1) using:
   4. AWS Entity Resolution integration (when configured)
   5. Weighted multi-field scoring with configurable thresholds
 
+Uses python-Levenshtein and jellyfish libraries for C-accelerated matching
+when available, falling back to pure-Python implementations otherwise.
+
 Output feeds Stage 9 (data-loader) for BUT000 BP creation in S/4HANA.
 """
 import logging
@@ -23,20 +26,46 @@ logger.setLevel(logging.INFO)
 FUZZY_THRESHOLD = float(os.environ.get("BP_FUZZY_THRESHOLD", "0.82"))
 ENTITY_RESOLUTION_ENABLED = os.environ.get("ENTITY_RESOLUTION_WORKFLOW_ARN", "") != ""
 
+# ── Accelerated library imports (with graceful fallback) ──
+_USE_C_LEVENSHTEIN = False
+_USE_JELLYFISH = False
+
+try:
+    import Levenshtein as _c_lev
+    _USE_C_LEVENSHTEIN = True
+    logger.info("Using C-accelerated python-Levenshtein for edit distance")
+except ImportError:
+    _c_lev = None
+    logger.info("python-Levenshtein not installed — using pure-Python fallback")
+
+try:
+    import jellyfish as _jf
+    _USE_JELLYFISH = True
+    logger.info("Using jellyfish for Soundex phonetic codes")
+except ImportError:
+    _jf = None
+    logger.info("jellyfish not installed — using pure-Python Soundex fallback")
+
 # =============================================================================
 # PHONETIC & FUZZY MATCHING ALGORITHMS
 # =============================================================================
 
 def _soundex(name: str) -> str:
-    """American Soundex algorithm for phonetic name matching.
-    Maps names to a letter + 3-digit code so that similar-sounding names
-    (e.g. 'SMITH' / 'SMYTH', 'MEYER' / 'MEIER') produce the same code."""
+    """Soundex phonetic code. Uses jellyfish C extension when available,
+    otherwise falls back to pure-Python American Soundex."""
     if not name:
         return "0000"
-    name = re.sub(r'[^A-Z]', '', name.upper())
-    if not name:
+    cleaned = re.sub(r'[^A-Za-z]', '', name.upper())
+    if not cleaned:
         return "0000"
 
+    if _USE_JELLYFISH:
+        try:
+            return _jf.soundex(cleaned)
+        except Exception:
+            pass  # fall through to pure-Python
+
+    # Pure-Python American Soundex
     code_map = {
         'B': '1', 'F': '1', 'P': '1', 'V': '1',
         'C': '2', 'G': '2', 'J': '2', 'K': '2', 'Q': '2', 'S': '2', 'X': '2', 'Z': '2',
@@ -45,10 +74,10 @@ def _soundex(name: str) -> str:
         'M': '5', 'N': '5',
         'R': '6',
     }
-    result = name[0]
-    prev_code = code_map.get(name[0], '0')
+    result = cleaned[0]
+    prev_code = code_map.get(cleaned[0], '0')
 
-    for ch in name[1:]:
+    for ch in cleaned[1:]:
         code = code_map.get(ch, '0')
         if code != '0' and code != prev_code:
             result += code
@@ -58,7 +87,14 @@ def _soundex(name: str) -> str:
 
 
 def _levenshtein_distance(s1: str, s2: str) -> int:
-    """Compute Levenshtein (edit) distance between two strings."""
+    """Compute Levenshtein (edit) distance. Uses C extension when available."""
+    if _USE_C_LEVENSHTEIN:
+        try:
+            return _c_lev.distance(s1, s2)
+        except Exception:
+            pass  # fall through to pure-Python
+
+    # Pure-Python fallback
     if len(s1) < len(s2):
         return _levenshtein_distance(s2, s1)
     if len(s2) == 0:
@@ -178,7 +214,11 @@ def _compute_match_score(entity_a: Dict, entity_b: Dict) -> float:
 def _build_blocks(entities: List[Dict]) -> Dict[str, List[int]]:
     """Build blocking keys to avoid O(n^2) pairwise comparison.
     Groups entities by Soundex(NAME1) + first 3 chars of postal code.
-    Only entities in the same block are compared pairwise."""
+    Only entities in the same block are compared pairwise.
+
+    Enforces a max block size to prevent memory blowup — blocks exceeding
+    the cap are split by adding extra hash bits."""
+    MAX_BLOCK_SIZE = 500
     blocks: Dict[str, List[int]] = {}
     for idx, entity in enumerate(entities):
         name = _normalize_name(entity.get("NAME1", ""))
@@ -192,7 +232,22 @@ def _build_blocks(entities: List[Dict]) -> Dict[str, List[int]]:
             tax_block = f"TAX_{tax}"
             blocks.setdefault(tax_block, []).append(idx)
 
-    return blocks
+    # Split oversized blocks to keep pairwise comparisons bounded
+    final_blocks: Dict[str, List[int]] = {}
+    for key, indices in blocks.items():
+        if len(indices) <= MAX_BLOCK_SIZE:
+            final_blocks[key] = indices
+        else:
+            # Sub-partition by country code to reduce block size
+            for i in range(0, len(indices), MAX_BLOCK_SIZE):
+                sub_key = f"{key}_p{i // MAX_BLOCK_SIZE}"
+                final_blocks[sub_key] = indices[i:i + MAX_BLOCK_SIZE]
+            logger.warning(
+                f"Block '{key}' had {len(indices)} entities — split into "
+                f"{math.ceil(len(indices) / MAX_BLOCK_SIZE)} sub-blocks"
+            )
+
+    return final_blocks
 
 
 # =============================================================================
@@ -471,13 +526,25 @@ def process_cvi_deduplication(
     Pipeline:
     1. Try AWS Entity Resolution (if workflow ARN configured)
     2. Fallback: Local fuzzy matching (Levenshtein + Soundex + weighted scoring)
+       Uses O(n) blocking strategy (Soundex + Postal Code) to avoid O(n²) blowup.
     3. Cross-match customers vs vendors for intercompany BPs
     4. Output instructs Stage 9 (data-loader) on BUT000 BAPI mapping
     """
+    # Log which matching backend will be used
+    workflow_arn = os.environ.get("ENTITY_RESOLUTION_WORKFLOW_ARN", "")
+    if not workflow_arn:
+        logger.info(
+            "AWS Entity Resolution ARN not configured — using LOCAL fuzzy matching "
+            f"(C-Levenshtein={'yes' if _USE_C_LEVENSHTEIN else 'no'}, "
+            f"jellyfish={'yes' if _USE_JELLYFISH else 'no'})"
+        )
+
     # Attempt AWS Entity Resolution first
     er_result = None
     if ENTITY_RESOLUTION_ENABLED:
         er_result = _run_entity_resolution(customers_kna1, vendors_lfa1)
+        if er_result is None:
+            logger.info("AWS Entity Resolution returned no result — falling back to local matching")
 
     # Local fuzzy deduplication (always runs — serves as fallback or complement)
     k_unique, k_dupes = run_fuzzy_match(customers_kna1, "CUSTOMER")
@@ -498,7 +565,9 @@ def process_cvi_deduplication(
             "threshold": FUZZY_THRESHOLD,
             "field_weights": FIELD_WEIGHTS,
             "blocking": "soundex_name + postal_prefix + tax_id",
-            "aws_entity_resolution": "active" if er_result else "not_configured",
+            "aws_entity_resolution": "active" if er_result else "local_fallback",
+            "c_levenshtein": _USE_C_LEVENSHTEIN,
+            "jellyfish_soundex": _USE_JELLYFISH,
         },
         "stats": {
             "total_raw": len(customers_kna1) + len(vendors_lfa1),

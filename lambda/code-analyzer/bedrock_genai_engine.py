@@ -80,29 +80,34 @@ Your task:
 3. For Dynpro/CALL SCREEN issues: suggest the Fiori/Web Dynpro replacement pattern.
 4. For Native SQL (EXEC SQL): rewrite using Open SQL / ABAP SQL.
 5. For deprecated FM calls: provide the modern replacement code.
-6. Explain each change briefly.
 
-IMPORTANT RULES:
-- Return ONLY valid ABAP code in your fixes.
+STRICT OUTPUT RULES — FOLLOW EXACTLY:
+- Your response MUST contain ONLY a valid JSON object. No conversational text before or after.
+- Do NOT include any preamble, explanation, greeting, or commentary outside the JSON.
+- All code values in "fixed_code", "original_code", and "full_remediated_source" MUST contain
+  ONLY raw ABAP code wrapped in ```abap ... ``` blocks. No natural language inside code fields.
+- Return ONLY valid ABAP code in your fixes — no pseudocode, no placeholders.
 - Preserve the original program structure and variable names.
 - Do NOT remove business logic — only modernize the syntax/API calls.
 - If a fix requires architectural changes beyond code (e.g., new Fiori app), note it
   as a recommendation but still provide the best possible code-level fix.
+- If you cannot fix an issue, still include it with confidence "low" and explain in the
+  explanation field — do NOT skip it or return empty.
 {trunc_note}
 ABAP Source Code:
 ```abap
 {truncated}
 ```
 
-Respond in this exact JSON format:
+Respond with ONLY this JSON (no other text):
 {{
   "program": "{program_name}",
   "fixes": [
     {{
       "rule_id": "MANUAL-001",
       "line": 42,
-      "original_code": "CALL SCREEN 100.",
-      "fixed_code": "* TODO: Replace with Fiori LaunchPad call\\n* cl_gui_frontend_services=>execute(...).",
+      "original_code": "```abap\\nCALL SCREEN 100.\\n```",
+      "fixed_code": "```abap\\n* TODO: Replace with Fiori LaunchPad call\\n* cl_gui_frontend_services=>execute(...).\\n```",
       "explanation": "Dynpro 100 must be replaced with a Fiori application.",
       "confidence": "high|medium|low"
     }}
@@ -110,7 +115,7 @@ Respond in this exact JSON format:
   "recommendations": [
     "Free-text architectural recommendations that go beyond line-level fixes"
   ],
-  "full_remediated_source": "<the complete program with all fixes applied, or null if not feasible>"
+  "full_remediated_source": "```abap\\n<the complete program with all fixes applied>\\n```"
 }}"""
 
 
@@ -122,8 +127,14 @@ def _invoke_bedrock(prompt: str) -> Optional[Dict]:
             body = json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": MAX_TOKENS,
+                "system": (
+                    "You are an ABAP code remediation engine. You output ONLY valid JSON. "
+                    "Never include conversational text, greetings, or explanations outside "
+                    "the JSON structure. All ABAP code must be wrapped in ```abap``` blocks. "
+                    "If you cannot produce a fix, return the JSON with an empty fixes array."
+                ),
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,
+                "temperature": 0.1,
             })
 
             logger.info(f"Bedrock invoke attempt {attempt}/{MAX_RETRIES} "
