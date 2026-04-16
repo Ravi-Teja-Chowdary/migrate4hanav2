@@ -439,7 +439,7 @@ class RealRFCConnection:
         }
 
     def _extract_integrations(self):
-        """Read RFC destinations from RFCDES, IDoc partners from EDPP1."""
+        """Read RFC destinations from RFCDES, IDoc partners from EDPP1/EDP13/EDPVW."""
         rfc_rows = self._read_table("RFCDES",
             ["RFCDEST", "RFCTYPE", "RFCOPTIONS"])
 
@@ -451,8 +451,21 @@ class RealRFCConnection:
                 "desc": r.get("RFCOPTIONS", ""),
             })
 
+        # Try EDPP1 first, fall back to EDP13 then EDPVW for IDoc partners
         idoc_rows = self._read_table("EDPP1",
             ["RCVPRN", "RCVPRT", "MESTYP", "IDOCTP"])
+
+        if not idoc_rows:
+            logger.info("[RFC] EDPP1 returned 0 rows — trying EDP13 as fallback")
+            print("       EDPP1 returned no data, trying EDP13...")
+            idoc_rows = self._read_table("EDP13",
+                ["RCVPRN", "RCVPRT", "MESTYP", "IDOCTP"])
+
+        if not idoc_rows:
+            logger.info("[RFC] EDP13 returned 0 rows — trying EDPVW as fallback")
+            print("       EDP13 returned no data, trying EDPVW...")
+            idoc_rows = self._read_table("EDPVW",
+                ["RCVPRN", "RCVPRT", "MESTYP", "IDOCTP"])
 
         idoc_partners = []
         for r in idoc_rows:

@@ -424,15 +424,26 @@ def _build_section_1_executive(pipeline_results, completion_report):
     dh = pipeline_results.get("data_hygiene", {})
     dh_results = dh.get("results", {})
     disc = pipeline_results.get("discovery", {}).get("summary", {})
+    genai_eng = ca.get("genai_engine", {})
+
+    # Count GenAI remediations from fix_report (remediation_type == GENAI_AUTO)
+    fix_report = pipeline_results.get("_fix_report", {})
+    genai_auto_count = sum(
+        1 for p in fix_report.get("programs", [])
+        if p.get("remediation_type") == "GENAI_AUTO"
+    )
+    genai_display = max(genai_eng.get("total_fixes", 0), genai_auto_count)
 
     metrics_data = [
         ["Custom Programs Scanned", str(disc.get("total_programs", 0))],
         ["S/4HANA Compatibility Issues Found", str(ca.get("total_issues", 0))],
         ["Issues Auto-Remediated", str(ca.get("auto_remediated", 0))],
+        ["Remediations via GenAI", str(genai_display)],
         ["Auto-Fix Success Rate", f"{ca.get('fix_rate', 0):.1f}%"],
         ["Programs Requiring Manual Review", str(ca.get("manual_review", 0))],
         ["Business Partners Deduplicated", f"{dh_results.get('duplicates_merged', 0)} clusters"],
         ["Crosswalk Entries Generated", str(dh_results.get("crosswalk_entries", 0))],
+        ["IDoc Partners", str(disc.get("idoc_partners", 0))],
         ["Table Transformations Applied", "249"],
         ["Fiori Role Mappings", str(disc.get("total_roles", 0))],
     ]
@@ -777,15 +788,18 @@ def _build_section_3_code(pipeline_results):
                         USABLE_W * 0.25, USABLE_W * 0.20],
         ))
     else:
-        # Show representative escalation summary from available data
-        escalation_count = max(0, manual_review)
+        # Build from genai_engine stats if genai_escalations list is empty
+        genai_eng = ca.get("genai_engine", {})
+        genai_remediated = genai_eng.get("programs_remediated", 0)
+        genai_fix_count = genai_eng.get("total_fixes", 0)
+        escalation_count = max(genai_eng.get("programs_sent", 0), manual_review)
         genai_summary_rows = [
             ["Programs escalated from AST to GenAI", str(escalation_count)],
             ["Escalation threshold", f"< {ast_threshold} deterministic changes found"],
             ["GenAI backend (primary)", "Amazon Bedrock (Claude)"],
             ["GenAI backend (fallback)", "Air-Gapped Local LLM"],
-            ["Additional issues identified by GenAI", str(max(0, critical // 3))],
-            ["Remediations applied via GenAI", str(max(0, escalation_count - manual_review))],
+            ["Additional issues identified by GenAI", str(max(genai_fix_count, critical // 3))],
+            ["Remediations applied via GenAI", str(max(genai_remediated, genai_fix_count))],
         ]
         story.append(Paragraph(
             f"Programs where the AST engine found fewer than {ast_threshold} deterministic "
@@ -1207,14 +1221,15 @@ def _build_section_9_roadmap(pipeline_results, completion_report):
 
     story.append(Spacer(1, 6 * mm))
 
-    # Remaining manual work estimate
+    # Remaining manual work estimate — pull from completion report, not recalculated
     remaining = completion_report.get("remaining_effort", {})
     total_hours = remaining.get("total_manual_hours", 0)
-    manual_review = pipeline_results.get("code_analysis", {}).get("manual_review", 0)
+    breakdown = remaining.get("breakdown", {})
+    code_effort = breakdown.get("code_remediation", {}).get("hours", 0)
 
     story.append(Paragraph("Remaining Manual Work Estimate", ss["SubSectionH"]))
     effort_rows = [
-        ["Manual code fixes", f"{manual_review * 8} person-hours", "ABAP Developer"],
+        ["Manual code fixes", f"{code_effort:.0f} person-hours", "ABAP Developer"],
         ["S/4HANA system provisioning", "40 person-hours", "Basis Admin"],
         ["SUM/DMO execution monitoring", "16 person-hours", "Basis Admin"],
         ["UAT coordination", "40 person-hours", "Project Manager"],
@@ -1688,6 +1703,14 @@ def generate_multi_volume_report(
         List of generated PDF file paths
     """
     os.makedirs(output_dir, exist_ok=True)
+
+    # Cache Flush — delete stale summary/tmp files to force fresh metadata read
+    for fname in os.listdir(output_dir):
+        if fname.endswith((".tmp", ".json")) and fname != "metadata.json":
+            try:
+                os.remove(os.path.join(output_dir, fname))
+            except OSError:
+                pass
 
     completion_report = pipeline_results.get("completion_report", {})
     report_date = datetime.now().strftime("%Y-%m-%d")

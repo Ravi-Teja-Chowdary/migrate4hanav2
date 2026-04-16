@@ -128,6 +128,19 @@ def generate_pdf(report_data, output_path):
         report_data: dict â€” the post_migration_report section
         output_path: str â€” where to save the PDF
     """
+    # Hard-delete stale cache files to prevent reading previous run data
+    import os as _os
+    _cache_files = ['assessment_summary.json', 'temp_metadata.db']
+    _out_dir = _os.path.dirname(output_path) if output_path else '.'
+    for _cf in _cache_files:
+        for _sd in [_out_dir, '.', 'test-output']:
+            _cp = _os.path.join(_sd, _cf)
+            if _os.path.exists(_cp):
+                try:
+                    _os.remove(_cp)
+                except OSError:
+                    pass
+
     ss = _styles()
     doc = SimpleDocTemplate(
         output_path, pagesize=A4,
