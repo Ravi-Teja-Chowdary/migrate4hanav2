@@ -585,6 +585,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
     ast_category_counts = {}
     ast_severity_counts = {}
     ast_parse_errors_total = 0
+    ast_failed_programs = []  # Programs where AST engine raised an exception
 
     # Build a fix_report structure compatible with downstream consumers
     fix_report = {
@@ -634,6 +635,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
         except Exception as e:
             status("!", f"AST engine failed on {prog_name}: {e}", C.YELLOW)
             fixed_programs[prog_name] = source
+            ast_failed_programs.append(prog_name)
 
         fix_report["programs"].append(prog_report)
 
@@ -651,24 +653,136 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
     if ast_parse_errors_total > 0:
         status("!", f"AST parse warnings: {ast_parse_errors_total} (non-blocking)", C.YELLOW)
 
-    # Store final fixed code back so Stage 11 deploys the AST-processed versions
+    # ── Phase 3: GenAI Remediation via AWS Bedrock (Claude Opus 4.6) ─────────
+    # For issues the AST engine cannot handle (MANUAL-* rules, AST failures),
+    # escalate to Claude Opus 4.6 on AWS Bedrock for semantic remediation.
+    section("GenAI Remediation Engine (AWS Bedrock / Claude Opus 4.6)")
+    from bedrock_genai_engine import check_bedrock_connectivity, remediate_with_genai
+
+    genai_total_fixes = 0
+    genai_programs_sent = 0
+    genai_programs_remediated = 0
+    genai_recommendations = []
+    genai_results_by_program = {}
+
+    # Collect per-program unfixed issues (auto_fixable=False OR AST-failed programs)
+    programs_needing_genai = {}
+    for issue in all_issues:
+        prog = issue["program"]
+        if not issue["auto_fixable"] or prog in ast_failed_programs:
+            programs_needing_genai.setdefault(prog, []).append(issue)
+
+    if not programs_needing_genai:
+        status("V", "No issues require GenAI escalation — AST engine handled everything", C.GREEN)
+    else:
+        status("o", f"{len(programs_needing_genai)} program(s) with {sum(len(v) for v in programs_needing_genai.values())} "
+               f"unfixed issue(s) need GenAI remediation")
+
+        bedrock_available = check_bedrock_connectivity()
+        if not bedrock_available:
+            status("!", "AWS Bedrock not available — skipping GenAI phase", C.YELLOW)
+            status("i", "Run 'aws configure' and enable Bedrock model access to activate GenAI", C.DIM)
+        else:
+            status("V", f"Bedrock connected (Claude Opus 4.6)", C.GREEN)
+
+            for prog_name, unfixed in programs_needing_genai.items():
+                genai_programs_sent += 1
+                source = fixed_programs.get(prog_name, abap_source.get(prog_name, ""))
+
+                # Build AST changes summary for context
+                ast_summary = "No AST changes were applied."
+                for pr in fix_report.get("programs", []):
+                    if pr["program"] == prog_name and pr["ast_changes"] > 0:
+                        ast_summary = f"AST engine applied {pr['ast_changes']} structural fixes."
+                        break
+
+                status("->", f"Sending {prog_name} to Bedrock ({len(unfixed)} issues, "
+                       f"{len(source)} chars)...", C.CYAN)
+
+                try:
+                    genai_result = remediate_with_genai(
+                        program_name=prog_name,
+                        abap_source=source,
+                        unfixed_issues=unfixed,
+                        ast_changes_summary=ast_summary,
+                    )
+
+                    if genai_result:
+                        genai_results_by_program[prog_name] = genai_result
+                        fixes = genai_result.get("fixes", [])
+                        recs = genai_result.get("recommendations", [])
+                        remediated_source = genai_result.get("full_remediated_source")
+
+                        if fixes:
+                            genai_total_fixes += len(fixes)
+                            genai_programs_remediated += 1
+                            status("V", f"  {prog_name}: {len(fixes)} GenAI fix(es) received", C.GREEN)
+                            for fix in fixes[:3]:
+                                conf = fix.get("confidence", "?")
+                                status("  ->", f"[{fix.get('rule_id', '?')}] L{fix.get('line', '?')}: "
+                                       f"{fix.get('explanation', 'N/A')[:60]} (confidence: {conf})", C.CYAN)
+                            if len(fixes) > 3:
+                                status("  ->", f"  ...and {len(fixes) - 3} more fixes", C.DIM)
+
+                        if remediated_source and isinstance(remediated_source, str) and remediated_source.strip():
+                            fixed_programs[prog_name] = remediated_source
+                            # Update fix report
+                            for pr in fix_report.get("programs", []):
+                                if pr["program"] == prog_name:
+                                    pr["genai_fixes"] = len(fixes)
+                                    pr["total_fixes"] += len(fixes)
+                                    pr["fixed_lines"] = len(remediated_source.split("\n"))
+                                    break
+
+                        if recs:
+                            for rec in recs:
+                                genai_recommendations.append({"program": prog_name, "recommendation": rec})
+                    else:
+                        status("!", f"  {prog_name}: Bedrock returned no result", C.YELLOW)
+
+                except Exception as e:
+                    status("!", f"  {prog_name}: GenAI failed — {e}", C.YELLOW)
+                    logger.error(f"GenAI remediation failed for {prog_name}: {e}")
+
+            # GenAI summary
+            status("V", f"GenAI Engine: {genai_total_fixes} fix(es) across "
+                   f"{genai_programs_remediated}/{genai_programs_sent} program(s)", C.GREEN)
+
+    # Update fix_report with GenAI stats
+    fix_report["fixes_by_level"]["GenAI_bedrock"] = genai_total_fixes
+    fix_report["total_fixes_applied"] = ast_total_changes + genai_total_fixes
+
+    # Save GenAI results
+    if genai_results_by_program:
+        genai_dir = os.path.join(output_dir, "code-analysis", "genai-results")
+        os.makedirs(genai_dir, exist_ok=True)
+        with open(os.path.join(genai_dir, "genai_remediation.json"), "w", encoding="utf-8") as f:
+            json.dump(genai_results_by_program, f, indent=2, default=str)
+        if genai_recommendations:
+            with open(os.path.join(genai_dir, "genai_recommendations.json"), "w", encoding="utf-8") as f:
+                json.dump(genai_recommendations, f, indent=2, default=str)
+
+    # Store final fixed code back so Stage 11 deploys the AST+GenAI-processed versions
     conn.dataset["fixed_abap_source"] = fixed_programs
 
-    # Calculate real fix rate: fixes applied vs. total issues detected
-    fix_rate = (total_fixes / max(len(all_issues), 1)) * 100
-    # Cap at 100 since one fix can address multiple detected issue lines
-    fix_rate = min(fix_rate, 100.0)
+    by_level = fix_report["fixes_by_level"]
+    total_fixes = fix_report["total_fixes_applied"]
 
-    # More accurate: count how many auto-fixable issues are in categories the engine covers
+    # Calculate real fix rate: fixes applied vs. total issues detected
+    # Now includes both AST structural fixes and GenAI semantic fixes
     fixable_issues = sum(1 for i in all_issues if i["auto_fixable"])
-    manual_issues = len(all_issues) - fixable_issues
-    effective_rate = (fixable_issues / max(len(all_issues), 1)) * 100
+    manual_issues_original = len(all_issues) - fixable_issues
+    genai_addressed = min(genai_total_fixes, manual_issues_original)
+    manual_issues = manual_issues_original - genai_addressed
+    total_addressed = fixable_issues + genai_addressed
+    effective_rate = (total_addressed / max(len(all_issues), 1)) * 100
 
     print(f"\n  {C.BOLD}{C.GREEN}  +----------------------------------------------+")
-    print(f"  |  FIX RATE: {effective_rate:.0f}% ({fixable_issues}/{len(all_issues)} issues)    |")
+    print(f"  |  FIX RATE: {effective_rate:.0f}% ({total_addressed}/{len(all_issues)} issues)    |")
     print(f"  |  FIXES APPLIED: {total_fixes:,} across {programs_analyzed} programs  |")
     print(f"  |  AST TRANSFORMS: {ast_total_changes:,} structural changes        |")
-    print(f"  |  MANUAL REVIEW: {manual_issues} items                    |")
+    print(f"  |  GENAI FIXES:    {genai_total_fixes:,} semantic remediations      |")
+    print(f"  |  MANUAL REVIEW:  {manual_issues} items remaining             |")
     print(f"  +----------------------------------------------+{C.END}")
 
     # Per-program fix summary
@@ -711,7 +825,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
         "status": "success",
         "total_issues": len(all_issues),
         "critical_issues": severity_counts.get("critical", 0),
-        "auto_remediated": fixable_issues,
+        "auto_remediated": total_addressed,
         "fix_rate": round(effective_rate, 1),
         "total_fixes_applied": total_fixes,
         "manual_review": manual_issues,
@@ -723,6 +837,13 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
             "category_breakdown": ast_category_counts,
             "severity_breakdown": ast_severity_counts,
             "parse_errors": ast_parse_errors_total,
+        },
+        "genai_engine": {
+            "model": "anthropic.claude-opus-4-6-v1",
+            "programs_sent": genai_programs_sent,
+            "programs_remediated": genai_programs_remediated,
+            "total_fixes": genai_total_fixes,
+            "recommendations": len(genai_recommendations),
         },
     }
 
@@ -2143,6 +2264,7 @@ def main():
                 "manual_review": 0, "issues": [], "programs": [],
                 "critical_issues": 0, "auto_remediated": 0, "fix_rate": 0,
                 "total_fixes_applied": 0, "ast_engine": {"total_changes": 0, "programs_transformed": 0},
+                "genai_engine": {"model": "anthropic.claude-opus-4-6-v1", "programs_sent": 0, "programs_remediated": 0, "total_fixes": 0, "recommendations": 0},
                 "skipped": True, "skip_reason": "No ABAP source code extracted from SAP system",
             }
         else:
@@ -2163,6 +2285,7 @@ def main():
                     "manual_review": 0, "issues": [], "programs": [],
                     "critical_issues": 0, "auto_remediated": 0, "fix_rate": 0,
                     "total_fixes_applied": 0, "ast_engine": {"total_changes": 0, "programs_transformed": 0},
+                    "genai_engine": {"model": "anthropic.claude-opus-4-6-v1", "programs_sent": 0, "programs_remediated": 0, "total_fixes": 0, "recommendations": 0},
                     "skipped": True, "skip_reason": "All extracted programs had trivial/empty source code",
                 }
         if not _skip_stage5:
@@ -2377,6 +2500,9 @@ def main():
     ast_eng = ca.get("ast_engine", {})
     if ast_eng.get("total_changes", 0) > 0:
         print(f"  | AST Transforms:     {ast_eng['total_changes']:>8,} ({ast_eng.get('programs_transformed', 0)} programs)     |")
+    genai_eng = ca.get("genai_engine", {})
+    if genai_eng.get("total_fixes", 0) > 0:
+        print(f"  | GenAI Fixes:        {genai_eng['total_fixes']:>8,} ({genai_eng.get('programs_remediated', 0)} programs)     |")
     print(f"  | Manual Review:      {ca.get('manual_review', 0):>8,}                      |")
     dm = results["data_hygiene"]["results"]
     print(f"  | BP Conversion:      {dm['bp_created']:>8,} (merged {dm['duplicates_merged']})      |")
