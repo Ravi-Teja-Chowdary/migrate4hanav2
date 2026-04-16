@@ -3,7 +3,7 @@
   [1mMIGRATE4HANA -- Local Pipeline Run[0m[1m
 ======================================================================[0m
 
-  [2mDate: 2026-04-16 20:26:22
+  [2mDate: 2026-04-16 21:37:33
   Mode: ECC-ONLY FULL EXECUTION (Phases 1-2 + Completeness + Report)
   Data Source: LIVE SAP ECC
   Pipeline: 17-stage, 5-phase SAP Activate[0m
@@ -86,7 +86,7 @@
        DEBUG: Program Z_XMII_KPI_HIST_ERP2005=======FT returned 793 lines (20756 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_XMII_KPI_DEF_ERP2005========FT returned 723 lines (18970 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_XMII_KPI_DEF_ERP2004========FT returned 723 lines (18970 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 10/500 analyzed (10 extracted, 1.3s, 7.4 prog/s)
+       Program 10/500 analyzed (10 extracted, 1.3s, 7.5 prog/s)
        DEBUG: Program Z_XMII_CORP_KPI_FILL_MONTH returned 41 lines (939 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_XMII_CONTROL_RECIPE_GET=====FT returned 1158 lines (29942 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_XMII_CHART_TEST=============FT returned 339 lines (8199 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -97,7 +97,7 @@
        DEBUG: Program Z_XD03TOP returned 13 lines (487 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_XD03 returned 103 lines (3911 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_WWW_WORKORDER_CRT===========FT returned 1426 lines (33729 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 20/500 analyzed (20 extracted, 2.6s, 7.5 prog/s)
+       Program 20/500 analyzed (20 extracted, 2.7s, 7.5 prog/s)
        DEBUG: Program Z_WHUSMAINT returned 158 lines (4888 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_VISH_TEST returned 10 lines (273 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_UTIL_TABLE_ENTRIES_COUNT returned 50 lines (1205 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -107,7 +107,7 @@
        DEBUG: Program Z_UTIL_PERIODIC_PROD_ORD_GI returned 177 lines (6048 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_UTIL_INIT_STOCK_561_LOAD returned 411 lines (12832 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_UTIL_INIT_STOCK_561_EXTRACT returned 480 lines (15123 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 30/500 analyzed (28 extracted, 8.0s, 3.8 prog/s)
+       Program 30/500 analyzed (28 extracted, 7.9s, 3.8 prog/s)
        DEBUG: Program Z_USR12_TYPE_CONVERSION_BACK returned 51 lines (1584 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_USR12_TYPE_CONVERSION returned 52 lines (1537 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_USR10_TYPE_CONVERSION_BACK returned 55 lines (1726 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -129,7 +129,7 @@
        DEBUG: Program Z_TP_VS_USR10_USR12 returned 395 lines (11127 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_TOOL_CREATE_ASSET returned 123 lines (3267 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_TK13========================FT returned 875 lines (22974 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 50/500 analyzed (48 extracted, 10.4s, 4.8 prog/s)
+       Program 50/500 analyzed (48 extracted, 10.5s, 4.8 prog/s)
        ... batch 51-75/500
        DEBUG: Program Z_TK11========================FT returned 1326 lines (33465 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_TH_RKZUKO00 returned 576 lines (20977 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -152,7 +152,7 @@
        DEBUG: Program Z_STRESS_TEST_500 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_499 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_498 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 70/500 analyzed (68 extracted, 13.0s, 5.4 prog/s)
+       Program 70/500 analyzed (68 extracted, 12.9s, 5.4 prog/s)
        DEBUG: Program Z_STRESS_TEST_497 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_496 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_495 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -186,7 +186,7 @@
        DEBUG: Program Z_STRESS_TEST_470 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_469 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_468 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 100/500 analyzed (98 extracted, 16.7s, 6.0 prog/s)
+       Program 100/500 analyzed (98 extracted, 16.6s, 6.0 prog/s)
        ... batch 101-125/500
        DEBUG: Program Z_STRESS_TEST_467 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_466 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -198,7 +198,7 @@
        DEBUG: Program Z_STRESS_TEST_460 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_459 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_458 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 110/500 analyzed (108 extracted, 17.9s, 6.1 prog/s)
+       Program 110/500 analyzed (108 extracted, 17.9s, 6.2 prog/s)
        DEBUG: Program Z_STRESS_TEST_457 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_456 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_455 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -209,7 +209,7 @@
        DEBUG: Program Z_STRESS_TEST_450 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_449 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_448 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 120/500 analyzed (118 extracted, 19.1s, 6.3 prog/s)
+       Program 120/500 analyzed (118 extracted, 19.0s, 6.3 prog/s)
        DEBUG: Program Z_STRESS_TEST_447 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_446 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_445 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -221,7 +221,7 @@
        DEBUG: Program Z_STRESS_TEST_440 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_439 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_438 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 130/500 analyzed (128 extracted, 20.4s, 6.4 prog/s)
+       Program 130/500 analyzed (128 extracted, 20.3s, 6.4 prog/s)
        DEBUG: Program Z_STRESS_TEST_437 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_436 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_435 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -232,7 +232,7 @@
        DEBUG: Program Z_STRESS_TEST_430 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_429 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_428 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 140/500 analyzed (138 extracted, 21.6s, 6.5 prog/s)
+       Program 140/500 analyzed (138 extracted, 21.5s, 6.5 prog/s)
        DEBUG: Program Z_STRESS_TEST_427 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_426 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_425 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -243,7 +243,7 @@
        DEBUG: Program Z_STRESS_TEST_420 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_419 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_418 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 150/500 analyzed (148 extracted, 22.8s, 6.6 prog/s)
+       Program 150/500 analyzed (148 extracted, 22.7s, 6.6 prog/s)
        ... batch 151-175/500
        DEBUG: Program Z_STRESS_TEST_417 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_416 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -255,7 +255,7 @@
        DEBUG: Program Z_STRESS_TEST_410 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_409 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_408 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 160/500 analyzed (158 extracted, 24.0s, 6.7 prog/s)
+       Program 160/500 analyzed (158 extracted, 23.9s, 6.7 prog/s)
        DEBUG: Program Z_STRESS_TEST_407 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_406 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_405 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -266,7 +266,7 @@
        DEBUG: Program Z_STRESS_TEST_400 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_399 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_398 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 170/500 analyzed (168 extracted, 25.3s, 6.7 prog/s)
+       Program 170/500 analyzed (168 extracted, 25.1s, 6.8 prog/s)
        DEBUG: Program Z_STRESS_TEST_397 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_396 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_395 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -278,7 +278,7 @@
        DEBUG: Program Z_STRESS_TEST_390 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_389 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_388 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 180/500 analyzed (178 extracted, 26.5s, 6.8 prog/s)
+       Program 180/500 analyzed (178 extracted, 26.4s, 6.8 prog/s)
        DEBUG: Program Z_STRESS_TEST_387 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_386 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_385 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -289,7 +289,7 @@
        DEBUG: Program Z_STRESS_TEST_380 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_379 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_378 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 190/500 analyzed (188 extracted, 27.7s, 6.9 prog/s)
+       Program 190/500 analyzed (188 extracted, 27.6s, 6.9 prog/s)
        DEBUG: Program Z_STRESS_TEST_377 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_376 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_375 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -300,7 +300,7 @@
        DEBUG: Program Z_STRESS_TEST_370 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_369 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_368 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 200/500 analyzed (198 extracted, 28.9s, 6.9 prog/s)
+       Program 200/500 analyzed (198 extracted, 28.8s, 6.9 prog/s)
        ... batch 201-225/500
        DEBUG: Program Z_STRESS_TEST_367 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_366 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -312,7 +312,7 @@
        DEBUG: Program Z_STRESS_TEST_360 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_359 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_358 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 210/500 analyzed (208 extracted, 30.2s, 7.0 prog/s)
+       Program 210/500 analyzed (208 extracted, 30.0s, 7.0 prog/s)
        DEBUG: Program Z_STRESS_TEST_357 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_356 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_355 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -323,7 +323,7 @@
        DEBUG: Program Z_STRESS_TEST_350 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_349 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_348 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 220/500 analyzed (218 extracted, 31.4s, 7.0 prog/s)
+       Program 220/500 analyzed (218 extracted, 31.2s, 7.1 prog/s)
        DEBUG: Program Z_STRESS_TEST_347 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_346 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_345 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -335,7 +335,7 @@
        DEBUG: Program Z_STRESS_TEST_340 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_339 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_338 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 230/500 analyzed (228 extracted, 32.7s, 7.0 prog/s)
+       Program 230/500 analyzed (228 extracted, 32.3s, 7.1 prog/s)
        DEBUG: Program Z_STRESS_TEST_337 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_336 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_335 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -346,7 +346,7 @@
        DEBUG: Program Z_STRESS_TEST_330 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_329 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_328 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 240/500 analyzed (238 extracted, 33.9s, 7.1 prog/s)
+       Program 240/500 analyzed (238 extracted, 33.5s, 7.2 prog/s)
        DEBUG: Program Z_STRESS_TEST_327 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_326 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_325 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -357,7 +357,7 @@
        DEBUG: Program Z_STRESS_TEST_320 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_319 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_318 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 250/500 analyzed (248 extracted, 35.1s, 7.1 prog/s)
+       Program 250/500 analyzed (248 extracted, 34.7s, 7.2 prog/s)
        ... batch 251-275/500
        DEBUG: Program Z_STRESS_TEST_317 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_316 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -369,7 +369,7 @@
        DEBUG: Program Z_STRESS_TEST_310 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_309 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_308 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 260/500 analyzed (258 extracted, 36.3s, 7.2 prog/s)
+       Program 260/500 analyzed (258 extracted, 35.9s, 7.3 prog/s)
        DEBUG: Program Z_STRESS_TEST_307 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_306 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_305 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -380,7 +380,7 @@
        DEBUG: Program Z_STRESS_TEST_300 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_299 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_298 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 270/500 analyzed (268 extracted, 37.5s, 7.2 prog/s)
+       Program 270/500 analyzed (268 extracted, 37.1s, 7.3 prog/s)
        DEBUG: Program Z_STRESS_TEST_297 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_296 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_295 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -392,7 +392,7 @@
        DEBUG: Program Z_STRESS_TEST_290 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_289 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_288 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 280/500 analyzed (278 extracted, 38.8s, 7.2 prog/s)
+       Program 280/500 analyzed (278 extracted, 38.3s, 7.3 prog/s)
        DEBUG: Program Z_STRESS_TEST_287 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_286 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_285 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -403,7 +403,7 @@
        DEBUG: Program Z_STRESS_TEST_280 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_279 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_278 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 290/500 analyzed (288 extracted, 40.0s, 7.2 prog/s)
+       Program 290/500 analyzed (288 extracted, 39.5s, 7.3 prog/s)
        DEBUG: Program Z_STRESS_TEST_277 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_276 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_275 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -414,7 +414,7 @@
        DEBUG: Program Z_STRESS_TEST_270 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_269 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_268 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 300/500 analyzed (298 extracted, 41.3s, 7.3 prog/s)
+       Program 300/500 analyzed (298 extracted, 40.7s, 7.4 prog/s)
        ... batch 301-325/500
        DEBUG: Program Z_STRESS_TEST_267 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_266 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -426,7 +426,7 @@
        DEBUG: Program Z_STRESS_TEST_260 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_259 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_258 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 310/500 analyzed (308 extracted, 42.5s, 7.3 prog/s)
+       Program 310/500 analyzed (308 extracted, 41.9s, 7.4 prog/s)
        DEBUG: Program Z_STRESS_TEST_257 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_256 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_255 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -437,7 +437,7 @@
        DEBUG: Program Z_STRESS_TEST_250 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_249 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_248 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 320/500 analyzed (318 extracted, 43.7s, 7.3 prog/s)
+       Program 320/500 analyzed (318 extracted, 43.1s, 7.4 prog/s)
        DEBUG: Program Z_STRESS_TEST_247 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_246 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_245 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -449,7 +449,7 @@
        DEBUG: Program Z_STRESS_TEST_240 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_239 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_238 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 330/500 analyzed (328 extracted, 44.9s, 7.3 prog/s)
+       Program 330/500 analyzed (328 extracted, 44.3s, 7.4 prog/s)
        DEBUG: Program Z_STRESS_TEST_237 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_236 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_235 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -460,7 +460,7 @@
        DEBUG: Program Z_STRESS_TEST_230 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_229 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_228 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 340/500 analyzed (338 extracted, 46.1s, 7.4 prog/s)
+       Program 340/500 analyzed (338 extracted, 45.6s, 7.5 prog/s)
        DEBUG: Program Z_STRESS_TEST_227 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_226 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_225 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -471,7 +471,7 @@
        DEBUG: Program Z_STRESS_TEST_220 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_219 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_218 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 350/500 analyzed (348 extracted, 47.3s, 7.4 prog/s)
+       Program 350/500 analyzed (348 extracted, 46.8s, 7.5 prog/s)
        ... batch 351-375/500
        DEBUG: Program Z_STRESS_TEST_217 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_216 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -483,7 +483,7 @@
        DEBUG: Program Z_STRESS_TEST_210 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_209 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_208 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 360/500 analyzed (358 extracted, 48.6s, 7.4 prog/s)
+       Program 360/500 analyzed (358 extracted, 48.0s, 7.5 prog/s)
        DEBUG: Program Z_STRESS_TEST_207 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_206 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_205 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -494,7 +494,7 @@
        DEBUG: Program Z_STRESS_TEST_200 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_199 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_198 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 370/500 analyzed (368 extracted, 49.8s, 7.4 prog/s)
+       Program 370/500 analyzed (368 extracted, 49.2s, 7.5 prog/s)
        DEBUG: Program Z_STRESS_TEST_197 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_196 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_195 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -506,7 +506,7 @@
        DEBUG: Program Z_STRESS_TEST_190 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_189 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_188 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 380/500 analyzed (378 extracted, 51.0s, 7.4 prog/s)
+       Program 380/500 analyzed (378 extracted, 50.4s, 7.5 prog/s)
        DEBUG: Program Z_STRESS_TEST_187 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_186 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_185 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -517,7 +517,7 @@
        DEBUG: Program Z_STRESS_TEST_180 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_179 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_178 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 390/500 analyzed (388 extracted, 52.3s, 7.5 prog/s)
+       Program 390/500 analyzed (388 extracted, 51.6s, 7.6 prog/s)
        DEBUG: Program Z_STRESS_TEST_177 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_176 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_175 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -528,7 +528,7 @@
        DEBUG: Program Z_STRESS_TEST_170 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_169 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_168 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 400/500 analyzed (398 extracted, 53.5s, 7.5 prog/s)
+       Program 400/500 analyzed (398 extracted, 52.8s, 7.6 prog/s)
        ... batch 401-425/500
        DEBUG: Program Z_STRESS_TEST_167 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_166 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -540,7 +540,7 @@
        DEBUG: Program Z_STRESS_TEST_160 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_159 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_158 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 410/500 analyzed (408 extracted, 54.7s, 7.5 prog/s)
+       Program 410/500 analyzed (408 extracted, 54.0s, 7.6 prog/s)
        DEBUG: Program Z_STRESS_TEST_157 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_156 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_155 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -551,7 +551,7 @@
        DEBUG: Program Z_STRESS_TEST_150 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_149 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_148 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 420/500 analyzed (418 extracted, 55.9s, 7.5 prog/s)
+       Program 420/500 analyzed (418 extracted, 55.2s, 7.6 prog/s)
        DEBUG: Program Z_STRESS_TEST_147 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_146 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_145 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -563,7 +563,7 @@
        DEBUG: Program Z_STRESS_TEST_140 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_139 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_138 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 430/500 analyzed (428 extracted, 57.1s, 7.5 prog/s)
+       Program 430/500 analyzed (428 extracted, 56.5s, 7.6 prog/s)
        DEBUG: Program Z_STRESS_TEST_137 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_136 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_135 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -574,7 +574,7 @@
        DEBUG: Program Z_STRESS_TEST_130 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_129 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_128 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 440/500 analyzed (438 extracted, 58.3s, 7.5 prog/s)
+       Program 440/500 analyzed (438 extracted, 57.7s, 7.6 prog/s)
        DEBUG: Program Z_STRESS_TEST_127 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_126 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_125 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -585,7 +585,7 @@
        DEBUG: Program Z_STRESS_TEST_120 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_119 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_118 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 450/500 analyzed (448 extracted, 59.6s, 7.6 prog/s)
+       Program 450/500 analyzed (448 extracted, 58.9s, 7.6 prog/s)
        ... batch 451-475/500
        DEBUG: Program Z_STRESS_TEST_117 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_116 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -597,7 +597,7 @@
        DEBUG: Program Z_STRESS_TEST_110 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_109 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_108 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 460/500 analyzed (458 extracted, 60.8s, 7.6 prog/s)
+       Program 460/500 analyzed (458 extracted, 60.1s, 7.7 prog/s)
        DEBUG: Program Z_STRESS_TEST_107 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_106 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_105 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -608,7 +608,7 @@
        DEBUG: Program Z_STRESS_TEST_100 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_099 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_098 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 470/500 analyzed (468 extracted, 62.0s, 7.6 prog/s)
+       Program 470/500 analyzed (468 extracted, 61.3s, 7.7 prog/s)
        DEBUG: Program Z_STRESS_TEST_097 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_096 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_095 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -620,7 +620,7 @@
        DEBUG: Program Z_STRESS_TEST_090 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_089 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_088 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 480/500 analyzed (478 extracted, 63.2s, 7.6 prog/s)
+       Program 480/500 analyzed (478 extracted, 62.6s, 7.7 prog/s)
        DEBUG: Program Z_STRESS_TEST_087 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_086 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_085 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -631,7 +631,7 @@
        DEBUG: Program Z_STRESS_TEST_080 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_079 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_078 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 490/500 analyzed (488 extracted, 64.5s, 7.6 prog/s)
+       Program 490/500 analyzed (488 extracted, 63.7s, 7.7 prog/s)
        DEBUG: Program Z_STRESS_TEST_077 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_076 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_075 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
@@ -642,11 +642,11 @@
        DEBUG: Program Z_STRESS_TEST_070 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_069 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
        DEBUG: Program Z_STRESS_TEST_068 returned 6 lines (261 chars) via RPY_PROGRAM_READ/SOURCE_EXTENDED
-       Program 500/500 analyzed (498 extracted, 65.7s, 7.6 prog/s)
+       Program 500/500 analyzed (498 extracted, 65.0s, 7.7 prog/s)
        WARNING: 2 programs failed all extraction methods:
          - Z_WCCP_CALC_LOSS_OF_TIME======E
          - Z_WCCP_BREAKDOWN_TIMES========E
-       Extraction complete: 498/500 programs in 65.8s
+       Extraction complete: 498/500 programs in 65.1s
        498 programs with source code
     -> Users (USR02)...
        Chunk 1 received ΓÇö 5,000 rows from USR02
@@ -659,7 +659,6 @@
      Tables: 4048
      Customers: 19575
      Vendors: 2415
-  [2mPre-flight cache wipe: removed 1 stale items[0m
 
 [1m[96m======================================================================
   PHASE 1: PREPARE -- Assessment & Pre-Checks
@@ -4897,14 +4896,15 @@
   [92mo[0m 4 program(s) with 107 unfixed issue(s) need GenAI remediation
   [92mV[0m Bedrock connected (Claude Opus 4.6)
   [96m->[0m Sending Z_YIV_INFOB_COS to Bedrock (1 issues, 16722 chars)...
-  [93m![0m   Z_YIV_INFOB_COS: Bedrock returned no result
+  [93m![0m   Z_YIV_INFOB_COS: GenAI FAILED ΓÇö ClientError: ValidationException (1 issues unresolved)
   [96m->[0m Sending Z_XSI_GENERATE_TRACK_DATA to Bedrock (1 issues, 1967 chars)...
-  [93m![0m   Z_XSI_GENERATE_TRACK_DATA: Bedrock returned no result
+  [93m![0m   Z_XSI_GENERATE_TRACK_DATA: GenAI FAILED ΓÇö ClientError: ValidationException (1 issues unresolved)
   [96m->[0m Sending Z_TRANSACTION to Bedrock (1 issues, 2031 chars)...
-  [93m![0m   Z_TRANSACTION: Bedrock returned no result
+  [93m![0m   Z_TRANSACTION: GenAI FAILED ΓÇö ClientError: ValidationException (1 issues unresolved)
   [96m->[0m Sending Z_TH_RKZUKO00 to Bedrock (104 issues, 20977 chars)...
-  [93m![0m   Z_TH_RKZUKO00: Bedrock returned no result
+  [93m![0m   Z_TH_RKZUKO00: GenAI FAILED ΓÇö ClientError: ValidationException (104 issues unresolved)
   [92mV[0m GenAI Engine: 0 fix(es) across 0/4 program(s)
+  [93m![0m GenAI Unsuccessful: 4 program(s) failed, 107 issue(s) unresolved by GenAI
 
   [1m[92m  +----------------------------------------------+
   |  FIX RATE: 100% (2923/2926 issues)    |
@@ -4933,7 +4933,7 @@
   [96m->[0m MKPF -> I_MaterialDocumentHeader
   [96m->[0m MSEG -> I_MaterialDocumentItem
   [96m->[0m KONV -> I_PricingConditionRecord
-  [2mT[0m Stage 5 completed in 6.9s
+  [2mT[0m Stage 5 completed in 7.7s
 
   [92m  Data Validation (Stage 6 input):[0m
   [92m  Γ£ô customers: 19575 rows[0m
@@ -5003,7 +5003,7 @@
   [92mo[0m Total rows: 0
   [92mV[0m All custom tables mapped for direct migration
   [92mV[0m Cross-walk table saved (14024 entries)
-  [2mT[0m Stage 6 completed in 10.3s
+  [2mT[0m Stage 6 completed in 10.6s
 
 [92m======================================================================
   [1m[Stage 7/17] Data Assessment & Migration Planning[0m[92m
@@ -5134,7 +5134,7 @@
   [1m[94m> Report Volumes Generated[0m
   [92mV[0m Vol 1/2: Migrate4HANA_Migration_Report_Y01_20260416_Vol1_of_2.pdf (84 KB)
   [92mV[0m Vol 2/2: Migrate4HANA_Migration_Report_Y01_20260416_Vol2_of_2.pdf (49 KB)
-  [2mT[0m Stage 9.6 completed in 0.4s
+  [2mT[0m Stage 9.6 completed in 0.5s
 
 [92m======================================================================
   [1mMIGRATE4HANA -- ECC-Only Full Execution Complete[0m[92m
@@ -5143,9 +5143,9 @@
   [1mPhase Timing Summary:[0m
   +-----------------------------------------------------+
   | Phase 1 (PREPARE)                  0.0s              |
-  | Phase 2 (EXPLORE)                 17.2s              |
-  | Phases 3 (ECC-Only)                3.7s              |
-  | TOTAL.........................   129.0s              |
+  | Phase 2 (EXPLORE)                 18.3s              |
+  | Phases 3 (ECC-Only)                3.8s              |
+  | TOTAL.........................   132.7s              |
   +-----------------------------------------------------+
 
   [1mPlanning Summary (Phases 1-2):[0m
@@ -5176,7 +5176,7 @@
   | Custom Table Rows:         0                      |
   +-----------------------------------------------------+
 
-  [92mTotal Time: 129.0s[0m
+  [92mTotal Time: 132.7s[0m
 
 ================================================================
   [1mMIGRATE4HANA ΓÇö ECC-Only Full Execution Complete[0m
@@ -5198,12 +5198,12 @@
     Vol 2/2: ...Migrate4HANA_Migration_Report_Y01_20260416_Vol2_of_2.pdf
 
   Total: 2 volume(s)
-  Output: C:\Users\ajays\Downloads\migrate4hanav2\test-output\run_20260416_202810\reports\
+  Output: C:\Users\ajays\Downloads\migrate4hanav2\test-output\run_20260416_213923\reports\
 
   [92mSTATUS: Migration package ready for deployment to S/4HANA target.[0m
   NEXT STEP: Provision S/4HANA and run Stages 10-17 to deploy.
 ================================================================
 
-  [96mOutput saved to: C:\Users\ajays\Downloads\migrate4hanav2\test-output\run_20260416_202810[0m
+  [96mOutput saved to: C:\Users\ajays\Downloads\migrate4hanav2\test-output\run_20260416_213923[0m
   [2mRFC calls made: 0[0m
 

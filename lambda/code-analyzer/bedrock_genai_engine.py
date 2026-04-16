@@ -120,50 +120,53 @@ Respond with ONLY this JSON (no other text):
 
 
 def _invoke_bedrock(prompt: str) -> Optional[Dict]:
-    """Invoke AWS Bedrock with Claude Opus 4.6. Returns parsed response or error dict."""
+    """Invoke AWS Bedrock via the Converse API (model-agnostic).
+    Returns parsed response dict or error dict with _error/_error_reason."""
     last_error = "Unknown error"
+    system_msg = (
+        "You are an ABAP code remediation engine. You output ONLY valid JSON. "
+        "Never include conversational text, greetings, or explanations outside "
+        "the JSON structure. All ABAP code must be wrapped in ```abap``` blocks. "
+        "If you cannot produce a fix, return the JSON with an empty fixes array."
+    )
+
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             client = _get_bedrock_client()
-            body = json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": MAX_TOKENS,
-                "system": (
-                    "You are an ABAP code remediation engine. You output ONLY valid JSON. "
-                    "Never include conversational text, greetings, or explanations outside "
-                    "the JSON structure. All ABAP code must be wrapped in ```abap``` blocks. "
-                    "If you cannot produce a fix, return the JSON with an empty fixes array."
-                ),
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
-            })
 
-            logger.info(f"Bedrock invoke attempt {attempt}/{MAX_RETRIES} "
+            logger.info(f"Bedrock converse attempt {attempt}/{MAX_RETRIES} "
                         f"(model={BEDROCK_MODEL_ID}, region={BEDROCK_REGION})")
 
-            response = client.invoke_model(
+            response = client.converse(
                 modelId=BEDROCK_MODEL_ID,
-                body=body,
-                contentType="application/json",
-                accept="application/json",
+                system=[{"text": system_msg}],
+                messages=[{
+                    "role": "user",
+                    "content": [{"text": prompt}],
+                }],
+                inferenceConfig={
+                    "maxTokens": MAX_TOKENS,
+                    "temperature": 0.1,
+                },
             )
 
-            response_body = json.loads(response["body"].read())
-            content_blocks = response_body.get("content", [])
+            # Extract text from the Converse API response
+            output_message = response.get("output", {}).get("message", {})
+            content_blocks = output_message.get("content", [])
             text = ""
             for block in content_blocks:
-                if block.get("type") == "text":
-                    text += block.get("text", "")
+                if "text" in block:
+                    text += block["text"]
 
             if not text.strip():
                 logger.warning("Bedrock returned empty content")
                 return {"_error": True, "_error_reason": "Empty response from Bedrock",
                         "fixes": [], "recommendations": []}
 
-            usage = response_body.get("usage", {})
+            usage = response.get("usage", {})
             logger.info(f"Bedrock response: {len(text)} chars, "
-                        f"input_tokens={usage.get('input_tokens', '?')}, "
-                        f"output_tokens={usage.get('output_tokens', '?')}")
+                        f"input_tokens={usage.get('inputTokens', '?')}, "
+                        f"output_tokens={usage.get('outputTokens', '?')}")
 
             return _parse_response(text)
 
@@ -173,9 +176,9 @@ def _invoke_bedrock(prompt: str) -> Optional[Dict]:
                     "fixes": [], "recommendations": []}
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
+            error_msg = e.response.get("Error", {}).get("Message", str(e))
+            logger.error(f"Bedrock ClientError [{error_code}]: {error_msg}")
             if error_code == "AccessDeniedException":
-                logger.error(f"Bedrock access denied — enable model access for {BEDROCK_MODEL_ID} "
-                             f"in AWS Console > Bedrock > Model access")
                 return {"_error": True, "_error_reason": f"Access denied for {BEDROCK_MODEL_ID}",
                         "fixes": [], "recommendations": []}
             elif error_code == "ThrottlingException" and attempt < MAX_RETRIES:
@@ -185,8 +188,7 @@ def _invoke_bedrock(prompt: str) -> Optional[Dict]:
                 last_error = f"Throttled after {MAX_RETRIES} attempts"
                 continue
             else:
-                logger.error(f"Bedrock ClientError: {e}")
-                return {"_error": True, "_error_reason": f"ClientError: {error_code}",
+                return {"_error": True, "_error_reason": f"{error_code}: {error_msg}",
                         "fixes": [], "recommendations": []}
         except EndpointConnectionError:
             logger.error(f"Cannot connect to Bedrock endpoint in {BEDROCK_REGION}. "

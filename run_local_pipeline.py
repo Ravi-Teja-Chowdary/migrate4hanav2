@@ -942,7 +942,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
             "parse_errors": ast_parse_errors_total,
         },
         "genai_engine": {
-            "model": "anthropic.claude-opus-4-6-v1",
+            "model": "anthropic.claude-opus-4-5",
             "programs_sent": genai_programs_sent,
             "programs_remediated": genai_programs_remediated,
             "programs_failed": genai_programs_failed,
