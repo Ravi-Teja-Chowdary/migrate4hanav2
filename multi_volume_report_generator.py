@@ -426,11 +426,13 @@ def _build_section_1_executive(pipeline_results, completion_report):
     disc = pipeline_results.get("discovery", {}).get("summary", {})
     genai_eng = ca.get("genai_engine", {})
 
-    # Count GenAI remediations from fix_report (remediation_type == GENAI_AUTO)
+    # Count GenAI remediations from fix_report (multiple flag checks)
     fix_report = pipeline_results.get("_fix_report", {})
     genai_auto_count = sum(
         1 for p in fix_report.get("programs", [])
         if p.get("remediation_type") == "GENAI_AUTO"
+        or p.get("remediation_status") == "COMPLETED"
+        or p.get("remediation_agent") == "GENAI"
     )
     genai_display = max(genai_eng.get("total_fixes", 0), genai_auto_count)
 
@@ -1379,6 +1381,8 @@ def _build_section_10_appendices(pipeline_results):
             total_f = prog.get("total_fixes", 0)
             orig = prog.get("original_lines", 0)
             status_t = "\u2713 FIXED" if total_f > 0 else "\u2713 CLEAN"
+            if prog.get("remediation_status") == "COMPLETED" or prog.get("remediation_type") == "GENAI_AUTO":
+                status_t = "\u2713 Auto-Fixed (GenAI)"
             detail_rows.append([str(idx), pname[:30], str(orig), str(total_f), status_t])
         for chunk_start in range(0, len(detail_rows), 50):
             chunk = detail_rows[chunk_start:chunk_start + 50]

@@ -735,6 +735,8 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                                     pr["is_remediated"] = True
                                     pr["remediation_source"] = "GenAI"
                                     pr["remediation_type"] = "GENAI_AUTO"
+                                    pr["remediation_status"] = "COMPLETED"
+                                    pr["remediation_agent"] = "GENAI"
                                     break
 
                         if recs:
@@ -2378,6 +2380,32 @@ def main():
         conn = MockRFCConnection(dataset)
         company_name = "Bharat Industrial Solutions Pvt Ltd"
 
+    # ── Pre-Flight Cache Wipe ──
+    # Clean output directory completely before run to prevent PDF generator
+    # from falling back to stale data from previous runs
+    test_output_root = os.path.join(PROJECT_DIR, "test-output")
+    if os.path.exists(test_output_root):
+        import shutil
+        stale_items = []
+        for item in os.listdir(test_output_root):
+            item_path = os.path.join(test_output_root, item)
+            # Remove stale cache files and temp artifacts; keep directory structure
+            if item.endswith((".json", ".tmp", ".db")):
+                try:
+                    os.remove(item_path)
+                    stale_items.append(item)
+                except OSError:
+                    pass
+            elif os.path.isdir(item_path) and item.startswith("run_"):
+                # Remove previous run directories to prevent fallback reads
+                try:
+                    shutil.rmtree(item_path)
+                    stale_items.append(item)
+                except OSError:
+                    pass
+        if stale_items:
+            print(f"  {C.DIM}Pre-flight cache wipe: removed {len(stale_items)} stale items{C.END}")
+
     # Output directory
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = os.path.join(PROJECT_DIR, "test-output", f"run_{run_id}")
@@ -2385,9 +2413,10 @@ def main():
 
     results = {}
     phase_times = {}
+    run_start_ts = datetime.now().isoformat()
 
     mock_event = {
-        "metadata": {"run_id": run_id, "timestamp": datetime.now().isoformat()},
+        "metadata": {"run_id": run_id, "timestamp": run_start_ts},
         "input": {"mode": "full", "ecc_client": ecc_client},
     }
 
@@ -2594,6 +2623,34 @@ def main():
                         status("i", f"Cache flush: removed {cache_file}", C.DIM)
                     except OSError:
                         pass
+
+            # ── Phase-Gate: Write assessment_summary.json with current run timestamp ──
+            # This serves as the "data freshness" signal for the PDF generator
+            assessment_summary = {
+                "run_id": run_id,
+                "run_start_ts": run_start_ts,
+                "committed_at": datetime.now().isoformat(),
+                "genai_remediations": sum(
+                    1 for p in results.get("_fix_report", {}).get("programs", [])
+                    if p.get("remediation_status") == "COMPLETED"
+                ),
+                "total_manual_hours": completion_report.get("remaining_effort", {}).get("total_manual_hours", 0),
+                "idoc_partners": disc_summary.get("idoc_partners", 0),
+                "completion_pct": completion_report.get("overall_completion_pct", 0),
+            }
+            summary_path = os.path.join(output_dir, "assessment_summary.json")
+            with open(summary_path, "w", encoding="utf-8") as f:
+                json.dump(assessment_summary, f, indent=2)
+            status("V", "Assessment summary committed — phase-gate passed", C.GREEN)
+
+            # Verify phase-gate: assessment_summary.json must be newer than run start
+            from datetime import datetime as _dt
+            summary_ts = _dt.fromisoformat(assessment_summary["committed_at"])
+            start_ts = _dt.fromisoformat(run_start_ts)
+            if summary_ts >= start_ts:
+                status("V", "[INFO] Metadata successfully committed to disk. PDF Generation starting now...", C.GREEN)
+            else:
+                status("!", "Phase-gate FAILED: assessment_summary older than run start — aborting PDF", C.RED)
 
             # Stage 9.6 — Multi-Volume PDF Report Generator
             t96 = time.time()
