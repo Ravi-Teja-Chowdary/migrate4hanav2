@@ -653,10 +653,10 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
     if ast_parse_errors_total > 0:
         status("!", f"AST parse warnings: {ast_parse_errors_total} (non-blocking)", C.YELLOW)
 
-    # ── Phase 3: GenAI Remediation via AWS Bedrock (Claude Opus 4.6) ─────────
+    # ── Phase 3: GenAI Remediation via AWS Bedrock (Claude Opus 4.5) ─────────
     # For issues the AST engine cannot handle (MANUAL-* rules, AST failures),
-    # escalate to Claude Opus 4.6 on AWS Bedrock for semantic remediation.
-    section("GenAI Remediation Engine (AWS Bedrock / Claude Opus 4.6)")
+    # escalate to Claude Opus 4.5 on AWS Bedrock for semantic remediation.
+    section("GenAI Remediation Engine (AWS Bedrock / Claude Opus 4.5)")
     from bedrock_genai_engine import check_bedrock_connectivity, remediate_with_genai
 
     genai_total_fixes = 0
@@ -685,7 +685,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
             status("!", "AWS Bedrock not available — skipping GenAI phase", C.YELLOW)
             status("i", "Run 'aws configure' and enable Bedrock model access to activate GenAI", C.DIM)
         else:
-            status("V", f"Bedrock connected (Claude Opus 4.6)", C.GREEN)
+            status("V", f"Bedrock connected (Claude Opus 4.5)", C.GREEN)
 
             for prog_name, unfixed in programs_needing_genai.items():
                 genai_programs_sent += 1
@@ -2548,7 +2548,7 @@ def main():
                 "manual_review": 0, "issues": [], "programs": [],
                 "critical_issues": 0, "auto_remediated": 0, "fix_rate": 0,
                 "total_fixes_applied": 0, "ast_engine": {"total_changes": 0, "programs_transformed": 0},
-                "genai_engine": {"model": "anthropic.claude-opus-4-6-v1", "programs_sent": 0, "programs_remediated": 0, "total_fixes": 0, "recommendations": 0},
+                "genai_engine": {"model": "anthropic.claude-opus-4-5", "programs_sent": 0, "programs_remediated": 0, "total_fixes": 0, "recommendations": 0},
                 "genai_escalations": [],
                 "skipped": True, "skip_reason": "No ABAP source code extracted from SAP system",
             }
@@ -2570,7 +2570,7 @@ def main():
                     "manual_review": 0, "issues": [], "programs": [],
                     "critical_issues": 0, "auto_remediated": 0, "fix_rate": 0,
                     "total_fixes_applied": 0, "ast_engine": {"total_changes": 0, "programs_transformed": 0},
-                    "genai_engine": {"model": "anthropic.claude-opus-4-6-v1", "programs_sent": 0, "programs_remediated": 0, "total_fixes": 0, "recommendations": 0},
+                    "genai_engine": {"model": "anthropic.claude-opus-4-5", "programs_sent": 0, "programs_remediated": 0, "total_fixes": 0, "recommendations": 0},
                     "genai_escalations": [],
                     "skipped": True, "skip_reason": "All extracted programs had trivial/empty source code",
                 }

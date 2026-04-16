@@ -1,7 +1,7 @@
 """
 bedrock_genai_engine.py — AWS Bedrock GenAI Engine for Migrate4HANA
 ===================================================================
-Invokes Claude Opus 4.6 on AWS Bedrock to remediate ABAP code issues
+Invokes Claude Opus 4.5 on AWS Bedrock to remediate ABAP code issues
 that the deterministic AST engine cannot handle (Dynpro calls, native SQL,
 SAPGui FMs, complex semantic patterns).
 
@@ -10,7 +10,7 @@ Used as Phase 3 of Stage 5 in the local pipeline (run_local_pipeline.py).
 Requirements:
     - boto3 installed
     - AWS credentials configured via `aws configure`
-    - Bedrock model access enabled for Claude Opus 4.6 in your AWS region
+    - Bedrock model access enabled for Claude Opus 4.5 in your AWS region
 """
 
 import json
@@ -31,9 +31,9 @@ logger = logging.getLogger("bedrock_genai_engine")
 logger.setLevel(logging.INFO)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-# Claude Opus 4.6 requires a cross-region inference profile (not raw model ID).
+# Claude Opus 4.5 via global cross-region inference profile.
 # Override via BEDROCK_MODEL_ID env var if using a custom inference profile ARN.
-BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-opus-4-6-v1")
+BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-opus-4-5-v2-global")
 BEDROCK_REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 MAX_TOKENS = 8192
 MAX_SOURCE_CHARS = 60_000  # Truncate very large programs to stay within token limits
