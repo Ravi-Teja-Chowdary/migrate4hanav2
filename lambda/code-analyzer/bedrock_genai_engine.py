@@ -120,7 +120,8 @@ Respond with ONLY this JSON (no other text):
 
 
 def _invoke_bedrock(prompt: str) -> Optional[Dict]:
-    """Invoke AWS Bedrock via the Converse API (model-agnostic).
+    """Invoke AWS Bedrock with Claude via invoke_model (Messages API).
+    Uses array-format content blocks for compatibility with Claude Opus 4.6.
     Returns parsed response dict or error dict with _error/_error_reason."""
     last_error = "Unknown error"
     system_msg = (
@@ -134,39 +135,45 @@ def _invoke_bedrock(prompt: str) -> Optional[Dict]:
         try:
             client = _get_bedrock_client()
 
-            logger.info(f"Bedrock converse attempt {attempt}/{MAX_RETRIES} "
-                        f"(model={BEDROCK_MODEL_ID}, region={BEDROCK_REGION})")
-
-            response = client.converse(
-                modelId=BEDROCK_MODEL_ID,
-                system=[{"text": system_msg}],
-                messages=[{
+            # Use array-format content blocks (required by Claude Opus 4.6)
+            body = json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": MAX_TOKENS,
+                "system": [{"type": "text", "text": system_msg}],
+                "messages": [{
                     "role": "user",
-                    "content": [{"text": prompt}],
+                    "content": [{"type": "text", "text": prompt}],
                 }],
-                inferenceConfig={
-                    "maxTokens": MAX_TOKENS,
-                    "temperature": 0.1,
-                },
+                "temperature": 0.1,
+            })
+
+            logger.info(f"Bedrock invoke attempt {attempt}/{MAX_RETRIES} "
+                        f"(model={BEDROCK_MODEL_ID}, region={BEDROCK_REGION}, "
+                        f"prompt_len={len(prompt)})")
+
+            response = client.invoke_model(
+                modelId=BEDROCK_MODEL_ID,
+                body=body,
+                contentType="application/json",
+                accept="application/json",
             )
 
-            # Extract text from the Converse API response
-            output_message = response.get("output", {}).get("message", {})
-            content_blocks = output_message.get("content", [])
+            response_body = json.loads(response["body"].read())
+            content_blocks = response_body.get("content", [])
             text = ""
             for block in content_blocks:
-                if "text" in block:
-                    text += block["text"]
+                if block.get("type") == "text":
+                    text += block.get("text", "")
 
             if not text.strip():
                 logger.warning("Bedrock returned empty content")
                 return {"_error": True, "_error_reason": "Empty response from Bedrock",
                         "fixes": [], "recommendations": []}
 
-            usage = response.get("usage", {})
+            usage = response_body.get("usage", {})
             logger.info(f"Bedrock response: {len(text)} chars, "
-                        f"input_tokens={usage.get('inputTokens', '?')}, "
-                        f"output_tokens={usage.get('outputTokens', '?')}")
+                        f"input_tokens={usage.get('input_tokens', '?')}, "
+                        f"output_tokens={usage.get('output_tokens', '?')}")
 
             return _parse_response(text)
 
