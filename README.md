@@ -213,6 +213,9 @@ migrate4hanav2/
 ├── scripts/
 │   ├── deploy.sh                        # Azure deployment script
 │   └── setup-pyrfc.sh                   # PyRFC container image builder
+├── sapnwrfc/                            # SAP NW RFC SDK (Windows DLLs)
+│   ├── __init__.py                      #   Auto-registers DLL path for pyrfc
+│   └── lib/                             #   sapnwrfc.dll, ICU libraries
 ├── tests/                               # Test suite
 ├── api_server.py                        # Local FastAPI dev server
 ├── run_local_pipeline.py                # Local CLI runner (offline mode)
@@ -237,7 +240,7 @@ migrate4hanav2/
 | Docker | Latest stable |
 | Node.js | 18+ |
 | Python | 3.11 |
-| SAP NW RFC SDK | 7.50 *(optional — not required for offline mode)* |
+| SAP NW RFC SDK | 7.50 *(Windows DLLs bundled in `sapnwrfc/lib/`; Linux SDK needed for Docker builds)* |
 
 ---
 

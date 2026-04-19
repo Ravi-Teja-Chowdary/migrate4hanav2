@@ -39,6 +39,10 @@ if sys.stderr and hasattr(sys.stderr, 'buffer'):
 
 # Add project paths
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, PROJECT_DIR)  # ensure sapnwrfc package is importable
+
+import sapnwrfc  # register SAP NW RFC SDK DLL path before any pyrfc import
+
 sys.path.insert(0, os.path.join(PROJECT_DIR, "mock-ecc"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "discovery-engine"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "code-analyzer"))

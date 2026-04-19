@@ -25,10 +25,13 @@ RUN tdnf install -y python3 python3-pip python3-devel \
     gcc gcc-c++ make unzip ca-certificates && \
     tdnf clean all
 
-# Copy and extract SAP NW RFC SDK (from containers/ directory in build context)
+# Copy and extract SAP NW RFC SDK (Linux x86_64 version for container builds)
 # NOTE: You must provide the SAP NW RFC SDK zip (nwrfc750P_*.zip) in the containers/
 # directory before building. Download from SAP Support Portal (SAP Note 2573790).
 # The SDK is required for live RFC connections to SAP ECC/S4HANA.
+#
+# For LOCAL Windows development, the Windows DLLs are bundled in sapnwrfc/lib/
+# and auto-registered by the sapnwrfc/__init__.py bootstrap module.
 COPY containers/nwrfc750P_*.zip /tmp/
 RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \
     if [ -d /opt/sap/nwrfcsdk ]; then \

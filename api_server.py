@@ -28,6 +28,8 @@ import hmac
 import base64
 import secrets
 import time
+
+import sapnwrfc  # register SAP NW RFC SDK DLL path before any pyrfc import
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Optional

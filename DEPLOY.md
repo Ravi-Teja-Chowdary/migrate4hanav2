@@ -47,8 +47,8 @@ Before starting, make sure you have the following:
 **Optional (for live SAP connectivity):**
 | Requirement | Purpose |
 |-------------|---------|
-| SAP NW RFC SDK 7.50 | Native SAP RFC connectivity (download from SAP Support Portal) |
-| SAP S-user account | Required to download the RFC SDK |
+| SAP NW RFC SDK 7.50 | Native SAP RFC connectivity — **Windows DLLs bundled in `sapnwrfc/lib/`** for local development; Linux x86_64 zip needed for Docker/cloud builds (download from SAP Support Portal) |
+| SAP S-user account | Required to download the Linux RFC SDK |
 | Network access to SAP ECC | RFC port 3300 connectivity to your SAP system |
 | Network access to SAP S/4HANA | RFC port 3300 + OData port 443 |
 
@@ -446,6 +446,30 @@ docker push migrate4hanadev.azurecr.io/migrate4hana/worker:latest
 
 > **Note about SAP NW RFC SDK:** If you have the SAP NW RFC SDK, place the zip file (`nwrfc750P_*.zip`) in the `containers/` directory **before** building. If you don't have it, the build will still succeed but live RFC connections won't work (you can still use mock/offline mode).
 
+### 8.5 SAP NW RFC SDK — Local Development (Windows)
+
+The project bundles the **Windows x64 SAP NW RFC SDK 7.50 DLLs** in `sapnwrfc/lib/` for local development:
+
+```
+sapnwrfc/
+├── __init__.py          # Auto-registers DLL path on import
+└── lib/
+    ├── sapnwrfc.dll     # Core RFC library
+    ├── icudt50.dll      # ICU data
+    ├── icuin50.dll      # ICU internationalization
+    ├── icuuc50.dll      # ICU common
+    ├── libicudecnumber.dll
+    ├── libsapucum.dll   # SAP Unicode library
+    └── ...
+```
+
+**How it works:**
+- The `sapnwrfc/__init__.py` module calls `os.add_dll_directory()` (Python 3.8+) on Windows to register the DLL path.
+- Entry-point files (`api_server.py`, `run_local_pipeline.py`, `real_rfc_connection.py`) import `sapnwrfc` **before** importing `pyrfc`.
+- No manual `PATH` manipulation is needed.
+
+**For Linux/Docker builds:** The bundled Windows DLLs are **not** used. Instead, place the Linux x86_64 SDK zip file (`nwrfc750P_*.zip`) in the `containers/` directory before building the Docker image. The Dockerfile extracts and installs it automatically.
+
 ### 8.4 Verify the Image
 
 ```bash
@@ -809,7 +833,7 @@ az monitor log-analytics query \
 | Claude 429 Rate Limit | Too many API calls | Built-in exponential backoff handles this; wait and retry |
 | Container App CrashLoopBackOff | Missing env vars or image | Check Container App logs; verify ACR image exists |
 | RFC connection timeout | Network/firewall issue | Verify VPN/ExpressRoute and NSG rules (port 3300) |
-| `pyrfc` import error | Missing SAP NW RFC SDK | Place `nwrfc750P_*.zip` in `containers/` and rebuild image |
+| `pyrfc` import error | Missing SAP NW RFC SDK | **Local/Windows:** The SDK DLLs are bundled in `sapnwrfc/lib/` — ensure `import sapnwrfc` runs before pyrfc. **Docker:** Place `nwrfc750P_*.zip` (Linux x86_64) in `containers/` and rebuild image |
 | Functions cold start | Premium Plan scaling | First invocation takes 5-10s; subsequent calls are fast |
 | APIM 502 Bad Gateway | Functions not deployed | Re-deploy with `func azure functionapp publish` |
 

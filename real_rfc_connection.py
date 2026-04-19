@@ -13,6 +13,7 @@ Usage:
     # conn.call("RFC_READ_TABLE", ...) passes through to pyrfc
 """
 
+import sapnwrfc  # register SAP NW RFC SDK DLL path before pyrfc
 import pyrfc
 import logging
 import time as _time
