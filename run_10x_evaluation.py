@@ -379,7 +379,7 @@ sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "integration-activator"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "migration-validator"))
 
 from run_local_pipeline import (
-    C, banner, status, section, LocalS3, patch_aws_services,
+    C, banner, status, section, LocalBlobStorage, patch_cloud_services,
     run_stage_1_discovery, run_stage_2_code_analysis,
     run_stage_3_data_migration, run_stage_4_config,
     run_stage_5_roles, run_stage_6_integrations,

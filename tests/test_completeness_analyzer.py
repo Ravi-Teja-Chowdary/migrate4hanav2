@@ -180,7 +180,7 @@ class TestCompletenessAnalyzer(unittest.TestCase):
         self.assertEqual(report["readiness"], "READY")
 
     def test_handler_entry_point(self):
-        """Test the Lambda handler entry point."""
+        """Test the Azure Function handler entry point."""
         from handler import handler
         event = {"pipeline_results": _make_pipeline_results()}
         response = handler(event)

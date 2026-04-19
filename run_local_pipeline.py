@@ -102,10 +102,10 @@ def section(text):
 
 
 # =============================================================================
-# LOCAL S3 SIMULATOR (saves to disk instead of S3)
+# LOCAL BLOB STORAGE SIMULATOR (saves to disk instead of Blob Storage)
 # =============================================================================
-class LocalS3:
-    """Saves 'S3 objects' to a local directory."""
+class LocalBlobStorage:
+    """Saves 'Blob Storage objects' to a local directory."""
 
     def __init__(self, base_dir):
         self.base_dir = base_dir
@@ -125,19 +125,19 @@ class LocalS3:
 
 
 # =============================================================================
-# MONKEY-PATCH: Replace AWS services with local equivalents
+# MONKEY-PATCH: Replace cloud services with local equivalents
 # =============================================================================
-def patch_aws_services(output_dir):
-    """Replace boto3 calls with local filesystem operations."""
+def patch_cloud_services(output_dir):
+    """Replace cloud storage calls with local filesystem operations."""
     import unittest.mock as mock
 
-    local_s3 = LocalS3(output_dir)
+    local_storage = LocalBlobStorage(output_dir)
 
-    # Create a mock boto3.client
-    def mock_boto3_client(service_name, **kwargs):
-        if service_name == "s3":
-            return local_s3
-        elif service_name == "secretsmanager":
+    # Create a mock storage client
+    def mock_storage_client(service_name, **kwargs):
+        if service_name == "storage":
+            return local_storage
+        elif service_name == "secrets":
             m = mock.MagicMock()
             m.get_secret_value.return_value = {
                 "SecretString": json.dumps({
@@ -151,7 +151,7 @@ def patch_aws_services(output_dir):
             return m
         return mock.MagicMock()
 
-    return mock_boto3_client
+    return mock_storage_client
 
 
 # =============================================================================
@@ -659,11 +659,11 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
     if ast_parse_errors_total > 0:
         status("!", f"AST parse warnings: {ast_parse_errors_total} (non-blocking)", C.YELLOW)
 
-    # ── Phase 3: GenAI Remediation via AWS Bedrock (Claude Opus 4.5) ─────────
+    # ── Phase 3: GenAI Remediation via Claude Opus 4.6 ──────────────────────
     # For issues the AST engine cannot handle (MANUAL-* rules, AST failures),
-    # escalate to Claude Opus 4.5 on AWS Bedrock for semantic remediation.
-    section("GenAI Remediation Engine (AWS Bedrock / Claude Opus 4.5)")
-    from bedrock_genai_engine import check_bedrock_connectivity, remediate_with_genai
+    # escalate to Claude Opus 4.6 for semantic remediation.
+    section("GenAI Remediation Engine (Claude Opus 4.6)")
+    from claude_engine import analyze_abap_code as _claude_analyze
 
     genai_total_fixes = 0
     genai_programs_sent = 0
@@ -686,12 +686,18 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
         status("o", f"{len(programs_needing_genai)} program(s) with {sum(len(v) for v in programs_needing_genai.values())} "
                f"unfixed issue(s) need GenAI remediation")
 
-        bedrock_available = check_bedrock_connectivity()
-        if not bedrock_available:
-            status("!", "AWS Bedrock not available — skipping GenAI phase", C.YELLOW)
-            status("i", "Run 'aws configure' and enable Bedrock model access to activate GenAI", C.DIM)
+        try:
+            from claude_engine import _create_client
+            _create_client()
+            claude_available = True
+        except Exception:
+            claude_available = False
+
+        if not claude_available:
+            status("!", "Claude API not available — skipping GenAI phase", C.YELLOW)
+            status("i", "Set ANTHROPIC_API_KEY to activate Claude GenAI remediation", C.DIM)
         else:
-            status("V", f"Bedrock connected (Claude Opus 4.5)", C.GREEN)
+            status("V", "Claude connected (Opus 4.6)", C.GREEN)
 
             for prog_name, unfixed in programs_needing_genai.items():
                 genai_programs_sent += 1
@@ -704,15 +710,17 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                         ast_summary = f"AST engine applied {pr['ast_changes']} structural fixes."
                         break
 
-                status("->", f"Sending {prog_name} to Bedrock ({len(unfixed)} issues, "
+                status("->", f"Sending {prog_name} to Claude ({len(unfixed)} issues, "
                        f"{len(source)} chars)...", C.CYAN)
 
                 try:
-                    genai_result = remediate_with_genai(
-                        program_name=prog_name,
-                        abap_source=source,
-                        unfixed_issues=unfixed,
-                        ast_changes_summary=ast_summary,
+                    genai_result = _claude_analyze(
+                        source_code=source,
+                        issue_context={
+                            "program_name": prog_name,
+                            "unfixed_issues": unfixed,
+                            "ast_changes_summary": ast_summary,
+                        },
                     )
 
                     if genai_result and not genai_result.get("_error"):
@@ -732,10 +740,10 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                             if len(fixes) > 3:
                                 status("  ->", f"  ...and {len(fixes) - 3} more fixes", C.DIM)
                         else:
-                            # Bedrock responded but returned no fixes
+                            # Claude responded but returned no fixes
                             genai_programs_failed += 1
                             genai_issues_unresolved += len(unfixed)
-                            status("!", f"  {prog_name}: Bedrock responded but returned 0 fixes "
+                            status("!", f"  {prog_name}: Claude responded but returned 0 fixes "
                                    f"({len(unfixed)} issues unresolved)", C.YELLOW)
 
                         if remediated_source and isinstance(remediated_source, str) and remediated_source.strip():
@@ -757,7 +765,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                             for rec in recs:
                                 genai_recommendations.append({"program": prog_name, "recommendation": rec})
                     elif genai_result and genai_result.get("_error"):
-                        # Bedrock returned an error — track as explicit failure
+                        # Claude returned an error — track as explicit failure
                         error_reason = genai_result.get("_error_reason", "Unknown error")
                         genai_programs_failed += 1
                         genai_issues_unresolved += len(unfixed)
@@ -773,20 +781,20 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                                 pr["remediation_status"] = "FAILED"
                                 break
                     else:
-                        # Bedrock returned None (should not happen with new error propagation)
+                        # Claude returned None (should not happen with new error propagation)
                         genai_programs_failed += 1
                         genai_issues_unresolved += len(unfixed)
                         genai_results_by_program[prog_name] = {
-                            "_error": True, "_error_reason": "No response from Bedrock",
+                            "_error": True, "_error_reason": "No response from Claude",
                             "fixes": [], "recommendations": [],
                         }
-                        status("!", f"  {prog_name}: Bedrock returned no result "
+                        status("!", f"  {prog_name}: Claude returned no result "
                                f"({len(unfixed)} issues unresolved)", C.YELLOW)
                         for pr in fix_report.get("programs", []):
                             if pr["program"] == prog_name:
                                 pr["genai_attempted"] = True
                                 pr["genai_failed"] = True
-                                pr["genai_error"] = "No response from Bedrock"
+                                pr["genai_error"] = "No response from Claude"
                                 pr["remediation_status"] = "FAILED"
                                 break
 
@@ -816,7 +824,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
                        f"{genai_issues_unresolved} issue(s) unresolved by GenAI", C.YELLOW)
 
     # Update fix_report with GenAI stats
-    fix_report["fixes_by_level"]["GenAI_bedrock"] = genai_total_fixes
+    fix_report["fixes_by_level"]["GenAI_claude"] = genai_total_fixes
     fix_report["total_fixes_applied"] = ast_total_changes + genai_total_fixes
 
     # Save GenAI results
@@ -902,9 +910,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
             genai_escalations.append({
                 "program": prog_name,
                 "escalation_reason": f"< {ast_threshold if 'ast_threshold' in dir() else 3} AST changes found",
-                "backend": "Bedrock",
-                "issues_sent": prog_issue_count,
-                "findings": f"{len(fixes)} issue(s) remediated",
+                "backend": "Claude",
                 "remediation": "\u2713 Applied",
                 "status": "SUCCESS",
             })
@@ -912,7 +918,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
             genai_escalations.append({
                 "program": prog_name,
                 "escalation_reason": f"< {ast_threshold if 'ast_threshold' in dir() else 3} AST changes found",
-                "backend": "Bedrock",
+                "backend": "Claude",
                 "issues_sent": prog_issue_count,
                 "findings": f"FAILED: {error_reason}",
                 "remediation": f"\u2717 Unsuccessful ({prog_issue_count} issues unresolved)",
@@ -922,7 +928,7 @@ def run_stage_5_code_analysis(conn, discovery_result, output_dir):
             genai_escalations.append({
                 "program": prog_name,
                 "escalation_reason": f"< {ast_threshold if 'ast_threshold' in dir() else 3} AST changes found",
-                "backend": "Bedrock",
+                "backend": "Claude",
                 "issues_sent": prog_issue_count,
                 "findings": "0 fixes returned",
                 "remediation": f"\u2717 Unsuccessful ({prog_issue_count} issues unresolved)",
@@ -2304,7 +2310,7 @@ def generate_post_migration_report(results, conn, output_dir, total_time):
 # =============================================================================
 # MAIN PIPELINE RUNNER
 # =============================================================================
-# Step Functions wiring for ecc_full mode:
+# Durable Functions wiring for ecc_full mode:
 #   Stages 1-8 (parallel where possible)
 #     -> Stage 9 (pre-conversion gate, report-only)
 #     -> Stage 9.5 (migration-completeness-analyzer)
