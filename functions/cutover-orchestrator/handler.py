@@ -297,7 +297,7 @@ def create_checkpoint(run_id, event):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Pre-cutover orchestration.
     Validates readiness, locks source, creates checkpoint.

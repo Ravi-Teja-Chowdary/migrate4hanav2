@@ -1121,7 +1121,7 @@ def generate_readiness_roadmap(data_collection, simplification_impact,
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Main entry point for the Readiness Check Engine.
 

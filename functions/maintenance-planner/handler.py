@@ -1025,7 +1025,7 @@ def generate_target_definition(stack_data, compatibility_results, business_funct
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Main entry point for the Maintenance Planner interface.
 

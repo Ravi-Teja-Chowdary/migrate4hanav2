@@ -581,7 +581,7 @@ def check_s4hana_readiness(programs, tables, org):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Main entry point for the Discovery Engine.
 

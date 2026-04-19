@@ -255,7 +255,7 @@ class TestCutoverOrchestrator:
             "roles": {"status": "success"},
             "integrations": {"status": "success"},
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] == "success"
         go = result.get("go_no_go", "").upper()
         assert go == "GO"
@@ -273,7 +273,7 @@ class TestCutoverOrchestrator:
             "roles": {"status": "success"},
             "integrations": {"status": "success"},
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] == "success"
 
 
@@ -296,7 +296,7 @@ class TestCodeDeployer:
                 },
             },
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] == "success"
 
 
@@ -319,7 +319,7 @@ class TestDataLoader:
                 },
             },
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] == "success"
 
 
@@ -339,7 +339,7 @@ class TestConfigApplier:
                 },
             },
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] in ("success", "validation_warnings")
 
 
@@ -359,7 +359,7 @@ class TestRoleProvisioner:
                 },
             },
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] == "success"
 
 
@@ -379,7 +379,7 @@ class TestIntegrationActivator:
                 },
             },
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] == "success"
 
 
@@ -400,7 +400,7 @@ class TestMigrationValidator:
                 "stage_12": {"status": "success"},
             },
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] == "success"
 
 
@@ -667,7 +667,7 @@ class TestRollbackManager:
                 {"request_number": "NPLK900001"},
             ],
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] in ("ROLLBACK_COMPLETE", "ROLLBACK_PARTIAL")
         assert "summary" in result
         assert result["summary"]["total_items"] >= 2
@@ -681,7 +681,7 @@ class TestRollbackManager:
                 {"doc_number": "5000000001", "company_code": "1000", "fiscal_year": "2026", "ledger": "0L"},
             ],
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert "acdoca_reversals" in result.get("report", {})
 
     def test_rollback_includes_spro(self):
@@ -693,7 +693,7 @@ class TestRollbackManager:
                 {"table": "T001", "key_fields": {"BUKRS": "1000"}, "description": "Company code config"},
             ],
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert "spro_rollbacks" in result.get("report", {})
 
 
@@ -706,7 +706,7 @@ class TestConfigApplierValidation:
         event = {
             "metadata": {"run_id": "test-validate", "input": {"dry_run": True}},
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] in ("success", "validation_warnings")
         assert "validation_errors" in result.get("results", {})
 
@@ -715,7 +715,7 @@ class TestConfigApplierValidation:
         event = {
             "metadata": {"run_id": "test-summary", "input": {"dry_run": True}},
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         summary = result.get("results", {}).get("summary", {})
         assert "number_ranges" in summary
         assert "ledgers" in summary
@@ -735,7 +735,7 @@ class TestErrorHandling:
             "discovery": {"status": "success"},
             # Missing other stages
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] in ("success", "failed", "blocked")
 
     def test_data_loader_with_empty_input(self):
@@ -744,7 +744,7 @@ class TestErrorHandling:
             "metadata": {"run_id": "test-empty", "input": {"dry_run": True, "s3_bucket": "test"}},
             "results": {},
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] == "success"
 
     def test_validator_with_no_prior_stages(self):
@@ -753,5 +753,5 @@ class TestErrorHandling:
             "metadata": {"run_id": "test-noprev", "input": {"dry_run": True}},
             "results": {},
         }
-        result = handler.lambda_handler(event, None)
+        result = handler.main(event, None)
         assert result["status"] == "success"

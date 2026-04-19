@@ -346,7 +346,7 @@ def load_fixed_programs_from_s3(run_id):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Deploy fixed ABAP code to S/4HANA.
     Reads fixed programs from S3, uploads via RFC, activates, creates transport.

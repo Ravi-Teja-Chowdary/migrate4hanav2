@@ -65,4 +65,4 @@ entity-resolution-output/
 .env.local
 .env.production
 
-.github/
+.github/compile_functions.txt

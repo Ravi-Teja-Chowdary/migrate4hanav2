@@ -3716,7 +3716,7 @@ def validate_conversion_readiness(si_findings, prerequisite_notes, remediation_t
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Main entry point for the Simplification Item Check Engine.
 

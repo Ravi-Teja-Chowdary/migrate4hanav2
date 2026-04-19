@@ -1002,7 +1002,7 @@ def _handle_reconciliation(event, run_id, dry_run, start_time):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Load transformed data into S/4HANA target system.
     Reads staged data from S3, writes to S/4 via BAPIs.

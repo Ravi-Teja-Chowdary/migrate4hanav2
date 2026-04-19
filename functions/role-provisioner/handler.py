@@ -181,7 +181,7 @@ def assign_users_to_roles(conn, user_assignments):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Provision roles, catalogs, and user assignments in S/4HANA.
     """

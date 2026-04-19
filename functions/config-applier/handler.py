@@ -378,7 +378,7 @@ def activate_material_ledger(connection):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Apply configuration to S/4HANA target system.
     Includes Material Ledger activation as a mandatory S/4HANA step.

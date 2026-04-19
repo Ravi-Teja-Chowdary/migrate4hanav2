@@ -327,7 +327,7 @@ def generate_s4_config_checklist(config_data):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """Config & Org Structure Replicator main handler."""
     logger.info("Config Replicator started")
     log_stage_event("config-replicator", "Pipeline Start", "IN_PROGRESS", {"stage": 4})

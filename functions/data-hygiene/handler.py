@@ -27,7 +27,7 @@ from bp_crosswalk_engine import assign_bp_ids, detect_id_overlaps, generate_repo
 from mdm_data_cleanser import execute_cleaning_batch
 
 
-def lambda_handler(event, context):
+def main(event, context):
     """Azure Function entry point for data hygiene processing."""
     logger.info("Data Hygiene handler invoked")
 

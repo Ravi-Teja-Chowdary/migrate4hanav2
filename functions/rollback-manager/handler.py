@@ -595,7 +595,7 @@ def verify_rollback_category(conn, category: str, items: list) -> dict:
     }
 
 
-def lambda_handler(event, context):
+def main(event, context):
     logger.info(f"Initiating Rollback Sequence. Payload: {json.dumps(event)}")
     log_stage_event("rollback-manager", "Rollback Start", "IN_PROGRESS", {"stage": "rollback"})
     _stage_start = __import__('time').time()

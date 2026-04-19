@@ -274,7 +274,7 @@ def check_auth_object_changes(roles):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """Role & Authorization Migrator main handler."""
     logger.info("Role Migrator started")
     log_stage_event("role-migrator", "Pipeline Start", "IN_PROGRESS", {"stage": 5})

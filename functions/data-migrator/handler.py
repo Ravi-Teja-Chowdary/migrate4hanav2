@@ -618,7 +618,7 @@ def assess_finance_data_readiness(connection, finance_data):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Main entry point for Data Assessment & CVI Preparation.
 

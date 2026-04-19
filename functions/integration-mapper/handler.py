@@ -325,7 +325,7 @@ def generate_integration_plan(rfc_dests, idoc_partners, bapis):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """Integration Mapper main handler."""
     logger.info("Integration Mapper started")
     log_stage_event("integration-mapper", "Pipeline Start", "IN_PROGRESS", {"stage": 6})

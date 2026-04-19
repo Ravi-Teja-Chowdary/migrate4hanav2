@@ -400,7 +400,7 @@ def _count_completed_stages(pipeline_results: dict) -> int:
     )
 
 
-def lambda_handler(event, context=None):
+def main(event, context=None):
     """Function handler entry point for Durable Functions integration."""
     pipeline_results = event.get("pipeline_results", event)
     completion_report = analyze_completion(pipeline_results)
@@ -412,4 +412,4 @@ def lambda_handler(event, context=None):
 
 
 # Alias for backward compatibility
-handler = lambda_handler
+handler = main

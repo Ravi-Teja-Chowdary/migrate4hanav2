@@ -135,8 +135,8 @@ def main():
         handler_module = importlib.import_module("handler")
         context = _ContainerContext(stage)
 
-        logger.info("Invoking handler.lambda_handler for stage=%s", stage)
-        result = handler_module.lambda_handler(event, context)
+        logger.info("Invoking handler.main for stage=%s", stage)
+        result = handler_module.main(event, context)
 
         # ── Raise success event on Durable Functions orchestrator ──
         output = {"Payload": result}

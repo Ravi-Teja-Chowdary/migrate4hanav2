@@ -752,7 +752,7 @@ class ST03NAnalyzer:
             "dead_code": unused_zprograms
         }
 
-def lambda_handler(event, context):
+def main(event, context):
     logger.info("Process Miner ST03N Analyzer Activated")
     analyzer = ST03NAnalyzer()
 

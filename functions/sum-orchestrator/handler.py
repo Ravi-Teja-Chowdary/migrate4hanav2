@@ -3789,7 +3789,7 @@ def generate_sum_report(execution_data, prerequisites, sum_config, progress, dow
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Main entry point for the SUM/DMO Orchestrator.
 

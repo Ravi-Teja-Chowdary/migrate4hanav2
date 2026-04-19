@@ -1294,7 +1294,7 @@ describe('{test_name} - S/4HANA Validation', () => {{
         return TCODE_ODATA_MAP.get(tcode, [f"/sap/opu/odata/sap/API_{tcode}_SRV"])
 
 
-def lambda_handler(event, context):
+def main(event, context):
     logger.info("Executing DITL Generation Pipeline (Part 5 Automation)")
     generator = DITLTestGenerator(target_framework="cypress")
 
@@ -1334,7 +1334,9 @@ def lambda_handler(event, context):
             ROWCOUNT=99999,
         )
 
-        from lambda_.process_miner.st03n_analyzer import ST03NAnalyzer
+        import sys as _sys, os as _os
+        _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '..', 'process-miner'))
+        from st03n_analyzer import ST03NAnalyzer
         catalog = ST03NAnalyzer().fiori_catalog
 
         st03n_mappings = []

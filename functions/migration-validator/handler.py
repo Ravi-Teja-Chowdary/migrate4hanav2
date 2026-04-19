@@ -903,7 +903,7 @@ def generate_scorecard(validation_results):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Run end-to-end validation of the migrated S/4HANA system.
     """

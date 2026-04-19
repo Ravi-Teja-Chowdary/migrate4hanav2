@@ -203,7 +203,7 @@ def configure_india_integrations(conn, india_config):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Activate integrations in S/4HANA target system.
     """

@@ -505,7 +505,7 @@ def suggest_cds_views(tables):
 # =============================================================================
 # MAIN HANDLER
 # =============================================================================
-def lambda_handler(event, context):
+def main(event, context):
     """
     Main entry point for Code Analyzer.
 
