@@ -26,18 +26,17 @@ import json
 import os
 import sys
 import logging
-import boto3
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from storage_client import put_object, get_object, list_objects
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 
 
 # =============================================================================
@@ -325,22 +324,22 @@ def generate_adjustment_report(spau_items, spdd_items):
 
 
 # =============================================================================
-# LOAD FIXED PROGRAMS FROM S3
+# LOAD FIXED PROGRAMS FROM STORAGE
 # =============================================================================
 def load_fixed_programs_from_s3(run_id):
-    """Load the auto-remediated ABAP programs from the staging bucket."""
+    """Load the auto-remediated ABAP programs from the staging container."""
     programs = {}
     try:
         prefix = f"migrations/{run_id}/code-analysis/fixed-programs/"
-        response = s3.list_objects_v2(Bucket=STAGING_BUCKET, Prefix=prefix) if hasattr(s3, 'list_objects_v2') else {"Contents": []}
+        response = list_objects(STAGING_CONTAINER, prefix)
         for obj in response.get("Contents", []):
             key = obj["Key"]
             prog_name = key.split("/")[-1].replace(".abap", "")
-            body = s3.get_object(Bucket=STAGING_BUCKET, Key=key)
+            body = get_object(STAGING_CONTAINER, key)
             source = body["Body"] if isinstance(body["Body"], str) else body["Body"].read().decode("utf-8")
             programs[prog_name] = source
     except Exception as e:
-        logger.warning(f"Could not load from S3: {e}")
+        logger.warning(f"Could not load from storage: {e}")
     return programs
 
 
@@ -401,8 +400,7 @@ def lambda_handler(event, context):
         try:
             from pyrfc import Connection
             s4_params = json.loads(
-                boto3.client("secretsmanager")
-                .get_secret_value(SecretId=os.environ.get("S4_SECRETS_ARN", os.environ.get("SECRETS_ARN", "")))
+                get_secret_value(os.environ.get("S4_SECRET_NAME", os.environ.get("ECC_SECRET_NAME", "s4hana-credentials")))
                 ["SecretString"]
             )
             conn = Connection(**s4_params)
@@ -495,20 +493,20 @@ def lambda_handler(event, context):
             "adjustment_effort_hours": adjustment_report.get("estimated_effort_hours", 0),
         }
 
-        # Save to S3
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/code-deployer.json",
-            Body=json.dumps(results, indent=2, default=str),
-            ContentType="application/json",
+        # Save to storage
+        put_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/execution/code-deployer.json",
+            json.dumps(results, indent=2, default=str),
+            content_type="application/json",
         )
 
         # Save SPAU/SPDD adjustment report separately
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/spau-spdd-adjustment-report.json",
-            Body=json.dumps(adjustment_report, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/execution/spau-spdd-adjustment-report.json",
+            json.dumps(adjustment_report, indent=2, default=str),
+            content_type="application/json",
         )
 
         log_stage_event("code-deployer", "Deployment Complete", "SUCCESS", results.get("summary", {}), (__import__('time').time() - _stage_start) * 1000)

@@ -21,16 +21,15 @@ import json
 import os
 import sys
 import logging
-import boto3
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_BUCKET = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 
 
 # =============================================================================
@@ -338,8 +337,7 @@ def lambda_handler(event, context):
         try:
             from pyrfc import Connection
             conn_params = json.loads(
-                boto3.client("secretsmanager")
-                .get_secret_value(SecretId=os.environ.get("SECRETS_ARN", ""))
+                get_secret_value(os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials"))
                 ["SecretString"]
             )
             conn = Connection(**conn_params)
@@ -361,28 +359,28 @@ def lambda_handler(event, context):
         plan = generate_integration_plan(rfc_dests, idoc_partners, bapis)
 
         # Save results
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/integrations/rfc-destinations.json",
-            Body=json.dumps(rfc_dests, indent=2, default=str),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/integrations/rfc-destinations.json",
+            json.dumps(rfc_dests, indent=2, default=str),
         )
 
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/integrations/idoc-partners.json",
-            Body=json.dumps(idoc_partners, indent=2, default=str),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/integrations/idoc-partners.json",
+            json.dumps(idoc_partners, indent=2, default=str),
         )
 
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/integrations/bapi-compatibility.json",
-            Body=json.dumps(bapis, indent=2),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/integrations/bapi-compatibility.json",
+            json.dumps(bapis, indent=2),
         )
 
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/integrations/migration-plan.json",
-            Body=json.dumps(plan, indent=2),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/integrations/migration-plan.json",
+            json.dumps(plan, indent=2),
         )
 
         result = {

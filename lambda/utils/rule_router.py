@@ -1,54 +1,47 @@
 """
-rule_router.py - DynamoDB Rule Retriever
-Fetches ABAP Simplification Rules and Validation Rules dynamically from DynamoDB.
-Falls back to local static JSON if DynamoDB is unreachable.
+rule_router.py - Rule Retriever
+Fetches ABAP Simplification Rules and Validation Rules dynamically from Cosmos DB.
+Falls back to local static JSON if Cosmos DB is unreachable.
 """
 import os
 import json
 import logging
-import boto3
-from botocore.exceptions import ClientError
 from typing import List, Dict, Any
+from db_client import get_table
 
-logger = logging.getLogger("dynamodb_rule_router")
+logger = logging.getLogger("rule_router")
 logger.setLevel(logging.INFO)
 
-# Initialize DynamoDB resource
-DYNAMODB_TABLE_NAME = os.environ.get("RULES_TABLE_NAME", "sap-simplification-rules")
-dynamodb = boto3.resource('dynamodb')
+# Initialize database table
+RULES_TABLE_NAME = os.environ.get("RULES_TABLE_NAME", "sap-simplification-rules")
+rules_table = get_table(RULES_TABLE_NAME)
 
 def get_simplification_rules(category: str = None) -> List[Dict[str, Any]]:
     """
-    Fetches rules from DynamoDB. If category is provided, filters by category using GSI.
+    Fetches rules from Cosmos DB. If category is provided, filters by category.
     """
-    table = dynamodb.Table(DYNAMODB_TABLE_NAME)
-    
     try:
         if category:
-            # Query using Global Secondary Index for efficient category retrieval
-            response = table.query(
+            response = rules_table.query(
                 IndexName="CategoryIndex",
-                KeyConditionExpression=boto3.dynamodb.conditions.Key('category').eq(category)
+                KeyConditionExpression="category = :cat",
+                ExpressionAttributeValues={":cat": category}
             )
             rules = response.get('Items', [])
-            logger.info(f"DynamoDB Rule Router: Fetched {len(rules)} rules for category '{category}'")
+            logger.info(f"Rule Router: Fetched {len(rules)} rules for category '{category}'")
             return rules
         else:
-            # Scan all if no category specified (less efficient, use carefully)
-            response = table.scan()
+            response = rules_table.scan()
             rules = response.get('Items', [])
-            logger.info(f"DynamoDB Rule Router: Scanned and fetched {len(rules)} total rules.")
+            logger.info(f"Rule Router: Scanned and fetched {len(rules)} total rules.")
             return rules
             
-    except ClientError as e:
-        logger.error(f"Failed to fetch rules from DynamoDB: {e}. Falling back to static JSON rules.")
-        return _get_fallback_rules(category)
     except Exception as e:
-        logger.error(f"Unexpected error when fetching rules: {e}")
+        logger.error(f"Failed to fetch rules: {e}. Falling back to static JSON rules.")
         return _get_fallback_rules(category)
 
 def _get_fallback_rules(category: str = None) -> List[Dict[str, Any]]:
-    """Emergency fallback to full static rule set if DynamoDB is offline."""
+    """Emergency fallback to full static rule set if database is offline."""
     fallback = [
         # === SYNTAX — Obsolete ABAP constructs ===
         {"rule_id": "OBS_001", "category": "SYNTAX",

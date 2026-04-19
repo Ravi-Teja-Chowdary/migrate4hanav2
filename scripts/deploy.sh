@@ -1,61 +1,64 @@
-#!/bin/bash
-###############################################################################
-# Migrate4HANA — Deployment Script
-# Packages Lambda functions and deploys via Terraform
-###############################################################################
-
+#!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-LAMBDA_DIR="${PROJECT_DIR}/lambda"
-TF_DIR="${PROJECT_DIR}/terraform/environments/dev"
+# ──────────────────────────────────────────────────────────────
+# Migrate4HANA — Azure Deployment Script
+# ──────────────────────────────────────────────────────────────
 
-echo "============================================="
-echo "  Migrate4HANA — Deploy"
-echo "============================================="
+ENVIRONMENT="${1:-dev}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Step 1: Package Lambda functions
-echo ""
-echo "Step 1: Packaging Lambda functions..."
+echo "═══════════════════════════════════════════════════════"
+echo " Migrate4HANA — Deploying to Azure ($ENVIRONMENT)"
+echo "═══════════════════════════════════════════════════════"
 
-FUNCTIONS=("discovery-engine" "process-miner" "code-analyzer" "data-hygiene" "data-migrator" "config-replicator" "role-migrator" "integration-mapper" "cutover-orchestrator" "code-deployer" "data-loader" "config-applier" "role-provisioner" "integration-activator" "migration-validator" "test-generator" "rollback-manager")
+# 1. Verify Azure CLI login
+echo "▶ Verifying Azure CLI authentication..."
+az account show > /dev/null 2>&1 || { echo "ERROR: Not logged in. Run 'az login' first."; exit 1; }
 
-for func in "${FUNCTIONS[@]}"; do
-    echo "  Packaging ${func}..."
-    cd "${LAMBDA_DIR}/${func}" || { echo "ERROR: Cannot enter ${LAMBDA_DIR}/${func}"; exit 1; }
+# 2. Terraform — provision infrastructure
+echo "▶ Provisioning Azure infrastructure via Terraform..."
+cd "$PROJECT_ROOT/terraform/environments/$ENVIRONMENT"
+terraform init -upgrade
+terraform plan -out=tfplan
+terraform apply tfplan
 
-    # Install dependencies if requirements.txt exists
-    if [ -f "requirements.txt" ]; then
-        pip install -r requirements.txt -t . --quiet || { echo "ERROR: pip install failed for ${func}"; exit 1; }
-    fi
+# Capture outputs
+RG_NAME=$(terraform output -raw resource_group)
+FUNC_APP_NAME=$(terraform output -raw function_app_url | sed 's|https://||' | sed 's|\.azurewebsites\.net.*||')
+ACR_NAME=$(az acr list --resource-group "$RG_NAME" --query "[0].loginServer" -o tsv)
 
-    echo "  ✓ ${func} ready"
+# 3. Build & push container images
+echo "▶ Building container images..."
+cd "$PROJECT_ROOT"
+az acr login --name "$ACR_NAME"
+
+for STAGE in discovery-engine code-analyzer data-loader data-loader-reconcile; do
+    echo "  → Building $STAGE..."
+    docker build -t "$ACR_NAME/$STAGE:latest" -f ecs/Dockerfile --build-arg STAGE_TARGET="$STAGE" .
+    docker push "$ACR_NAME/$STAGE:latest"
 done
 
-# Step 2: Build Frontend
-echo ""
-echo "Step 2: Building Frontend React Web App..."
-cd "${PROJECT_DIR}/frontend" || { echo "ERROR: Cannot enter frontend directory"; exit 1; }
-npm ci || { echo "ERROR: npm ci failed"; exit 1; }
-npm run build || { echo "ERROR: npm run build failed"; exit 1; }
+# 4. Deploy Azure Functions
+echo "▶ Deploying Azure Functions..."
+cd "$PROJECT_ROOT"
+func azure functionapp publish "$FUNC_APP_NAME" --python
 
-# Step 3: Terraform
-echo ""
-echo "Step 3: Running Terraform..."
-cd "${TF_DIR}"
+# 5. Build & deploy frontend
+echo "▶ Building frontend..."
+cd "$PROJECT_ROOT/frontend"
+npm ci
+npm run build
 
-terraform init -input=false
-terraform plan -out=tfplan
-echo ""
-read -p "Apply this plan? (yes/no): " CONFIRM
-if [ "$CONFIRM" = "yes" ]; then
-    terraform apply tfplan
-    echo ""
-    echo "============================================="
-    echo "  Deployment Complete!"
-    echo "============================================="
-    terraform output
-else
-    echo "Deployment cancelled."
+# Deploy to Azure Static Web Apps or Blob Storage static site
+STORAGE_ACCOUNT=$(cd "$PROJECT_ROOT/terraform/environments/$ENVIRONMENT" && terraform output -raw storage_account_name 2>/dev/null || echo "")
+if [ -n "$STORAGE_ACCOUNT" ]; then
+    echo "  → Deploying frontend to Azure Blob Storage static site..."
+    az storage blob upload-batch -d '$web' -s dist --account-name "$STORAGE_ACCOUNT" --overwrite
 fi
+
+echo ""
+echo "═══════════════════════════════════════════════════════"
+echo " ✅ Deployment complete!"
+echo "═══════════════════════════════════════════════════════"

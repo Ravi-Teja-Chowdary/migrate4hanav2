@@ -1,14 +1,18 @@
 #!/bin/bash
 ###############################################################################
-# Migrate4HANA — PyRFC Lambda Layer Builder
+# Migrate4HANA — PyRFC Container Image Builder
 #
-# This script builds a Lambda layer containing:
+# This script builds a Docker image containing:
 # - PyRFC (Python SAP RFC library)
 # - SAP NetWeaver RFC SDK (you must download this from SAP)
 #
+# The resulting image is pushed to Azure Container Registry (ACR) and used by
+# Azure Container Apps (heavy compute stages) and Azure Functions (serverless).
+#
 # PREREQUISITES:
-# 1. Docker installed (for building the layer in Amazon Linux 2)
-# 2. SAP NetWeaver RFC SDK downloaded from SAP (requires S-user)
+# 1. Docker installed
+# 2. Azure CLI installed and logged in (az login)
+# 3. SAP NetWeaver RFC SDK downloaded from SAP (requires S-user)
 #    Download from: https://launchpad.support.sap.com/#/softwarecenter
 #    Search for: SAP NW RFC SDK 7.50
 #    Download: Linux x86_64 version
@@ -24,12 +28,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-LAYER_DIR="${PROJECT_DIR}/lambda-layers/pyrfc"
-BUILD_DIR="${LAYER_DIR}/build"
-OUTPUT_DIR="${LAYER_DIR}/output"
+BUILD_DIR="${PROJECT_DIR}/pyrfc-build"
+OUTPUT_DIR="${BUILD_DIR}/output"
 
 echo "============================================="
-echo "  Migrate4HANA — PyRFC Layer Builder"
+echo "  Migrate4HANA — PyRFC Image Builder"
 echo "============================================="
 
 # ── Step 1: Check prerequisites ──
@@ -42,6 +45,17 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 echo "  ✓ Docker found"
+
+if ! command -v az &> /dev/null; then
+    echo "ERROR: Azure CLI is not installed."
+    echo "Install Azure CLI: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli"
+    exit 1
+fi
+echo "  ✓ Azure CLI found"
+
+# Verify Azure login
+az account show > /dev/null 2>&1 || { echo "ERROR: Not logged in. Run 'az login' first."; exit 1; }
+echo "  ✓ Azure CLI authenticated"
 
 NWRFC_SDK_FILE=$(ls -1 "${SCRIPT_DIR}"/nwrfc750P_*.zip 2>/dev/null | head -1)
 if [ -z "$NWRFC_SDK_FILE" ]; then
@@ -65,21 +79,20 @@ echo "  ✓ SAP NW RFC SDK found: ${NWRFC_SDK_FILE}"
 # ── Step 2: Set up build directory ──
 echo ""
 echo "Step 2: Setting up build directory..."
-rm -rf "${BUILD_DIR}" "${OUTPUT_DIR}"
-mkdir -p "${BUILD_DIR}/python" "${BUILD_DIR}/lib" "${OUTPUT_DIR}"
+rm -rf "${BUILD_DIR}"
+mkdir -p "${BUILD_DIR}" "${OUTPUT_DIR}"
 
 # Copy the SDK zip
 cp "${NWRFC_SDK_FILE}" "${BUILD_DIR}/"
 
-# ── Step 3: Build the layer using Docker ──
+# ── Step 3: Build the PyRFC base image ──
 echo ""
-echo "Step 3: Building Lambda layer in Docker (Amazon Linux 2)..."
+echo "Step 3: Building PyRFC base image in Docker (CBL-Mariner)..."
 
 cat > "${BUILD_DIR}/Dockerfile" << 'DOCKERFILE'
-FROM public.ecr.aws/lambda/python:3.11
+FROM mcr.microsoft.com/cbl-mariner/base/python:3.11
 
-# Install build dependencies
-RUN yum install -y gcc gcc-c++ make unzip
+RUN tdnf install -y gcc gcc-c++ make unzip ca-certificates && tdnf clean all
 
 # Copy and extract SAP NW RFC SDK
 COPY nwrfc750P_*.zip /tmp/
@@ -90,111 +103,77 @@ RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \
 ENV SAPNWRFC_HOME=/opt/sap
 ENV LD_LIBRARY_PATH=/opt/sap/lib:$LD_LIBRARY_PATH
 
-# Install PyRFC
-RUN pip install pyrfc --target /opt/python/
+# Install PyRFC and Azure SDK dependencies
+RUN pip install --no-cache-dir pyrfc
 
-# Copy SDK libraries to layer
-RUN mkdir -p /opt/lib && \
-    cp /opt/sap/lib/*.so* /opt/lib/ 2>/dev/null || true
+# Validate installation
+RUN python3 -c "import pyrfc; print(f'pyrfc {pyrfc.__version__} OK')"
 
-# Package the layer
-RUN cd /opt && zip -r /tmp/pyrfc-layer.zip python/ lib/
-
-CMD ["echo", "Layer built successfully"]
+CMD ["python3", "-c", "import pyrfc; print('PyRFC ready')"]
 DOCKERFILE
 
 cd "${BUILD_DIR}"
-if ! docker build -t migrate4hana-pyrfc-builder .; then
+if ! docker build -t migrate4hana-pyrfc-base .; then
     echo "ERROR: Docker build failed" >&2
     exit 1
 fi
-if ! docker run --rm -v "${OUTPUT_DIR}:/output" migrate4hana-pyrfc-builder \
-    sh -c "cp /tmp/pyrfc-layer.zip /output/"; then
-    echo "ERROR: Docker run failed" >&2
-    exit 1
-fi
 
-if [ ! -f "${OUTPUT_DIR}/pyrfc-layer.zip" ]; then
-    echo "ERROR: Layer zip not created" >&2
-    exit 1
-fi
+echo "  ✓ Base image built: migrate4hana-pyrfc-base"
 
-echo "  ✓ Layer built: ${OUTPUT_DIR}/pyrfc-layer.zip"
-
-# ── Step 4: Publish to AWS ──
+# ── Step 4: Validate the image ──
 echo ""
-echo "Step 4: Publishing Lambda layer to AWS..."
+echo "Step 4: Validating the image..."
 
-LAYER_ARN=$(aws lambda publish-layer-version \
-    --layer-name "migrate4hana-pyrfc" \
-    --description "PyRFC + SAP NW RFC SDK for SAP connectivity" \
-    --zip-file "fileb://${OUTPUT_DIR}/pyrfc-layer.zip" \
-    --compatible-runtimes python3.11 \
-    --query 'LayerVersionArn' \
-    --output text)
-
-echo "  ✓ Layer published!"
-echo ""
-echo "  Layer ARN: ${LAYER_ARN}"
-
-# ── Step 5: Validate the layer ──
-echo ""
-echo "Step 5: Validating the layer..."
-
-# Check layer size (Lambda limit = 250 MB unzipped)
-LAYER_SIZE=$(stat -f%z "${OUTPUT_DIR}/pyrfc-layer.zip" 2>/dev/null || stat -c%s "${OUTPUT_DIR}/pyrfc-layer.zip")
-LAYER_SIZE_MB=$((LAYER_SIZE / 1024 / 1024))
-echo "  Layer size: ${LAYER_SIZE_MB} MB"
-
-if [ ${LAYER_SIZE_MB} -gt 200 ]; then
-    echo "  ⚠ WARNING: Layer is ${LAYER_SIZE_MB} MB — close to Lambda's 250 MB limit"
-    echo "  Consider stripping debug symbols: strip lib/*.so"
-fi
-
-# Functional test: verify pyrfc can import inside a Lambda-like container
-echo "  Running import validation in Lambda container..."
-docker run --rm \
-    -v "${OUTPUT_DIR}/pyrfc-layer.zip:/tmp/layer.zip" \
-    public.ecr.aws/lambda/python:3.11 \
-    sh -c "cd /opt && unzip -q /tmp/layer.zip && \
-           export LD_LIBRARY_PATH=/opt/lib:\$LD_LIBRARY_PATH && \
-           python3 -c 'import pyrfc; print(f\"  ✓ pyrfc {pyrfc.__version__} imported successfully\")' 2>&1"
+docker run --rm migrate4hana-pyrfc-base \
+    python3 -c "import pyrfc; print(f'  ✓ pyrfc {pyrfc.__version__} imported successfully')"
 
 if [ $? -eq 0 ]; then
-    echo "  ✓ Layer validation passed — pyrfc imports successfully"
+    echo "  ✓ Image validation passed — pyrfc imports successfully"
 else
-    echo "  ✗ Layer validation FAILED — pyrfc cannot import"
-    echo "  Check that the SAP NW RFC SDK .so libraries are included in lib/"
+    echo "  ✗ Image validation FAILED — pyrfc cannot import"
+    echo "  Check that the SAP NW RFC SDK .so libraries are correctly installed"
     exit 1
 fi
 
-# ── Step 6: Update Terraform variables ──
+# ── Step 5: Push to Azure Container Registry ──
 echo ""
-echo "Step 6: Updating Terraform configuration..."
+echo "Step 5: Pushing to Azure Container Registry (ACR)..."
 
-TFVARS="${PROJECT_DIR}/terraform/environments/dev/terraform.tfvars"
-if [ -f "${TFVARS}" ]; then
-    # Update or add pyrfc_layer_arn
-    if grep -q "pyrfc_layer_arn" "${TFVARS}"; then
-        sed -i "s|pyrfc_layer_arn.*=.*|pyrfc_layer_arn = \"${LAYER_ARN}\"|" "${TFVARS}"
-        echo "  ✓ Updated pyrfc_layer_arn in terraform.tfvars"
-    else
-        echo "pyrfc_layer_arn = \"${LAYER_ARN}\"" >> "${TFVARS}"
-        echo "  ✓ Added pyrfc_layer_arn to terraform.tfvars"
+# Get ACR name from terraform or environment
+ACR_NAME="${ACR_NAME:-}"
+if [ -z "$ACR_NAME" ]; then
+    TFVARS="${PROJECT_DIR}/terraform/environments/dev/terraform.tfvars"
+    if [ -f "$TFVARS" ]; then
+        ACR_NAME=$(grep -oP 'acr_name\s*=\s*"\K[^"]+' "$TFVARS" 2>/dev/null || echo "")
     fi
-else
-    mkdir -p "$(dirname ${TFVARS})"
-    echo "pyrfc_layer_arn = \"${LAYER_ARN}\"" > "${TFVARS}"
-    echo "  ✓ Created terraform.tfvars with pyrfc_layer_arn"
 fi
+
+if [ -z "$ACR_NAME" ]; then
+    echo "  ⚠ ACR_NAME not set — skipping push to Azure Container Registry."
+    echo "  Set ACR_NAME environment variable or configure acr_name in terraform.tfvars"
+    echo ""
+    echo "  To push manually later:"
+    echo "    export ACR_NAME=youracr.azurecr.io"
+    echo "    az acr login --name \$ACR_NAME"
+    echo "    docker tag migrate4hana-pyrfc-base \$ACR_NAME/migrate4hana-pyrfc-base:latest"
+    echo "    docker push \$ACR_NAME/migrate4hana-pyrfc-base:latest"
+else
+    az acr login --name "$ACR_NAME"
+    docker tag migrate4hana-pyrfc-base "${ACR_NAME}/migrate4hana-pyrfc-base:latest"
+    docker push "${ACR_NAME}/migrate4hana-pyrfc-base:latest"
+    echo "  ✓ Image pushed to ${ACR_NAME}/migrate4hana-pyrfc-base:latest"
+fi
+
+echo ""
 echo "============================================="
-echo "  Layer ARN: ${LAYER_ARN}"
+echo "  ✅ PyRFC base image ready!"
 echo "============================================="
 echo ""
 echo "NEXT STEPS:"
-echo "  1. Verify the layer ARN above is correct"
-echo "  2. terraform.tfvars has been auto-updated with pyrfc_layer_arn"
-echo "  3. Run: cd terraform/environments/dev && terraform plan && terraform apply"
+echo "  1. The base image 'migrate4hana-pyrfc-base' is available locally"
+echo "  2. Container Apps stages (discovery-engine, code-analyzer, data-loader)"
+echo "     will use this as their base image via the ecs/Dockerfile"
+echo "  3. Deploy infrastructure: cd terraform/environments/dev && terraform apply"
 echo ""
 
 # ── Cleanup ──

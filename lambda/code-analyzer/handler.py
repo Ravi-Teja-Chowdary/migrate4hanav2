@@ -20,7 +20,6 @@ import json
 import os
 import re
 import logging
-import boto3
 import sys
 
 # Append path to load internal logic modules
@@ -32,13 +31,12 @@ from rule_router import get_simplification_rules
 from genai_router import route_analysis
 
 from logger import log_stage_event
+from storage_client import put_object
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 
 
 # =============================================================================
@@ -551,11 +549,12 @@ def lambda_handler(event, context):
                         fixed_source, changes = auto_remediate_with_ast_engine(source)
                         if changes:
                             remediated_count += 1
-                            # Save remediated source to S3
-                            s3.put_object(
-                                Bucket=STAGING_BUCKET,
-                                Key=f"migrations/{run_id}/code-analysis/remediated/{prog['name']}.abap",
-                                Body=fixed_source,
+                            # Save remediated source to storage
+                            put_object(
+                                STAGING_CONTAINER,
+                                f"migrations/{run_id}/code-analysis/remediated/{prog['name']}.abap",
+                                fixed_source,
+                                content_type="text/plain",
                             )
                     else:
                         if issues:
@@ -634,13 +633,13 @@ def lambda_handler(event, context):
             "atc_quick_fixes": atc_quick_fixes[:200],
         }
 
-        # Save to S3
+        # Save to storage
         s3_key = f"migrations/{run_id}/code-analysis/analysis-report.json"
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=s3_key,
-            Body=json.dumps(analysis_result, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_CONTAINER,
+            s3_key,
+            json.dumps(analysis_result, indent=2, default=str),
+            content_type="application/json",
         )
 
         logger.info(

@@ -22,18 +22,17 @@ import json
 import os
 import sys
 import logging
-import boto3
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_BUCKET = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 
 
 # =============================================================================
@@ -410,9 +409,9 @@ def lambda_handler(event, context):
     try:
         # Load full config from S3 if available
         try:
-            response = s3.get_object(
-                Bucket=STAGING_BUCKET,
-                Key=f"migrations/{run_id}/config/s4-config.json",
+            response = get_object(
+                STAGING_BUCKET,
+                f"migrations/{run_id}/config/s4-config.json",
             )
             body = response["Body"] if isinstance(response["Body"], str) else response["Body"].read().decode("utf-8")
             full_config = json.loads(body)
@@ -492,8 +491,7 @@ def lambda_handler(event, context):
         try:
             from pyrfc import Connection
             s4_params = json.loads(
-                boto3.client("secretsmanager")
-                .get_secret_value(SecretId=os.environ.get("S4_SECRETS_ARN", os.environ.get("SECRETS_ARN", "")))
+                get_secret_value(os.environ.get("S4_SECRET_NAME", "s4hana-credentials"))
                 ["SecretString"]
             )
             conn = Connection(**s4_params)
@@ -580,11 +578,10 @@ def lambda_handler(event, context):
             logger.warning(f"Config applier completed with {len(all_errors)} errors: {json.dumps(all_errors[:5], default=str)}")
 
         # Save to S3
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/config-applier.json",
-            Body=json.dumps(results, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/execution/config-applier.json",
+            json.dumps(results, indent=2, default=str),
         )
 
         log_stage_event("config-applier", "Config Applied", "SUCCESS", results.get("summary", {}), (__import__('time').time() - _stage_start) * 1000)

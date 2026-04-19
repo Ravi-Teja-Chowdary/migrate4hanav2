@@ -2,9 +2,9 @@
 RFC Connection Pool — Thread-safe SAP RFC connection management
 ================================================================
 Prevents SAP Gateway bottlenecks by reusing RFC connections across
-Lambda invocations within the same execution environment.
+function invocations within the same execution environment.
 
-Without pooling, each Lambda call opens a new RFC connection which:
+Without pooling, each function call opens a new RFC connection which:
 - Causes SAP Gateway saturation (max ~100 concurrent connections per instance)
 - Adds 200-500ms latency per connection handshake
 - Can trigger SAP ICM watchdog alerts (looks like a DDoS)
@@ -13,7 +13,7 @@ Usage:
     from rfc_pool import RFCConnectionPool
 
     pool = RFCConnectionPool(max_connections=5)
-    with pool.get_connection(secret_arn="arn:aws:...") as conn:
+    with pool.get_connection(secret_name="sap-ecc-credentials") as conn:
         result = conn.call("RFC_READ_TABLE", QUERY_TABLE="T001")
 """
 
@@ -130,8 +130,8 @@ class RFCConnectionPool:
         self._stats = {"connections_created": 0, "connections_reused": 0,
                        "connections_recycled": 0, "health_check_failures": 0}
 
-    def _resolve_params(self, secret_arn: str = "", conn_params: dict = None) -> dict:
-        """Resolve connection parameters from Secrets Manager or direct dict.
+    def _resolve_params(self, secret_name: str = "", conn_params: dict = None) -> dict:
+        """Resolve connection parameters from Azure Key Vault or direct dict.
         
         Caches secrets for up to max_age seconds, then re-fetches to pick up
         rotated credentials automatically.
@@ -139,22 +139,21 @@ class RFCConnectionPool:
         if conn_params:
             return conn_params
 
-        if not secret_arn:
-            raise ValueError("Either secret_arn or conn_params must be provided")
+        if not secret_name:
+            raise ValueError("Either secret_name or conn_params must be provided")
 
         # Check cache — re-fetch if older than max_age
-        cached = self._secret_cache.get(secret_arn)
+        cached = self._secret_cache.get(secret_name)
         if cached:
             params, fetched_at = cached
             if time.monotonic() - fetched_at < self._max_age:
                 return params
 
-        import boto3
-        secrets_client = boto3.client("secretsmanager")
+        from utils.secrets_client import get_secret_value
         secret = json.loads(
-            secrets_client.get_secret_value(SecretId=secret_arn)["SecretString"]
+            get_secret_value(secret_name)["SecretString"]
         )
-        self._secret_cache[secret_arn] = (secret, time.monotonic())
+        self._secret_cache[secret_name] = (secret, time.monotonic())
         return secret
 
     def _params_hash(self, params: dict) -> str:
@@ -178,19 +177,19 @@ class RFCConnectionPool:
         return _PooledConnection(conn, params_key)
 
     @contextmanager
-    def get_connection(self, secret_arn: str = "", conn_params: dict = None):
+    def get_connection(self, secret_name: str = "", conn_params: dict = None):
         """
         Borrow a healthy RFC connection from the pool.
 
         Usage:
-            with pool.get_connection(secret_arn="arn:aws:...") as conn:
+            with pool.get_connection(secret_name="sap-ecc-credentials") as conn:
                 result = conn.call("RFC_READ_TABLE", QUERY_TABLE="T001")
 
         The connection is automatically returned to the pool on exit.
         If the connection raises an exception, it is discarded (not returned).
         On auth failure, credentials are re-fetched and a fresh connection is tried once.
         """
-        params = self._resolve_params(secret_arn, conn_params)
+        params = self._resolve_params(secret_name, conn_params)
         params_key = self._params_hash(params)
 
         # Cache params for reconnection

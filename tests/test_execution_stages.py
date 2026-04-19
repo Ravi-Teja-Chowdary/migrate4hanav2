@@ -26,23 +26,23 @@ def mock_env():
 
 
 def _load_handler(stage_dir):
-    """Load a Lambda handler module with boto3/pyrfc mocked."""
+    """Load a Function handler module with Azure SDK/pyrfc mocked."""
     handler_path = os.path.join(PROJECT_DIR, "lambda", stage_dir)
     sys.path.insert(0, handler_path)
     module_name = f"handler_{stage_dir.replace('-', '_')}"
 
-    # Mock boto3 at module level so imports don't fail
-    mock_s3 = MagicMock()
-    mock_s3.get_object.return_value = {"Body": MagicMock(read=lambda: b'{"test": true}')}
-    mock_s3.put_object.return_value = {}
+    # Mock Azure SDK at module level so imports don't fail
+    mock_storage = MagicMock()
+    mock_storage.get_object.return_value = {"Body": MagicMock(read=lambda: b'{"test": true}')}
+    mock_storage.put_object.return_value = {}
 
-    mock_secrets = MagicMock()
-    mock_secrets.get_secret_value.return_value = {
+    mock_keyvault = MagicMock()
+    mock_keyvault.get_secret_value.return_value = {
         "SecretString": json.dumps({"host": "mock", "sysnr": "00", "client": "100", "user": "RFC", "passwd": "x"})
     }
 
-    mock_boto3 = MagicMock()
-    mock_boto3.client.side_effect = lambda svc, **kw: mock_s3 if svc == "s3" else mock_secrets
+    mock_azure = MagicMock()
+    mock_azure.client.side_effect = lambda svc, **kw: mock_storage if svc == "s3" else mock_keyvault
 
     with patch.dict("sys.modules", {}):
         # Clear cached handler modules
@@ -53,13 +53,13 @@ def _load_handler(stage_dir):
     import handler
     importlib.reload(handler)
 
-    # Patch the module-level s3 client
+    # Patch the module-level storage client
     if hasattr(handler, "s3"):
-        handler.s3 = mock_s3
+        handler.s3 = mock_storage
     if hasattr(handler, "secrets"):
-        handler.secrets = mock_secrets
+        handler.secrets = mock_keyvault
 
-    return handler, mock_s3
+    return handler, mock_storage
 
 
 # =============================================================================
@@ -68,7 +68,7 @@ def _load_handler(stage_dir):
 class TestMaintenancePlanner:
     def test_maintenance_planner_basic(self):
         """Test maintenance planner validation returns correct structure."""
-        # Since the Lambda handler may not exist yet, test the local runner
+        # Since the Function handler may not exist yet, test the local runner
         sys.path.insert(0, PROJECT_DIR)
         from run_local_pipeline import run_stage_2_maintenance_planner
 
@@ -243,8 +243,8 @@ class TestSUMOrchestrator:
 # =============================================================================
 class TestCutoverOrchestrator:
     def test_go_decision_with_all_stages_passed(self):
-        with patch.dict(os.environ, {"AWS_DEFAULT_REGION": "us-east-1"}):
-            handler, mock_s3 = _load_handler("cutover-orchestrator")
+        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
+            handler, mock_storage = _load_handler("cutover-orchestrator")
 
         event = {
             "metadata": {"run_id": "test-001", "input": {"dry_run": False}},
@@ -261,7 +261,7 @@ class TestCutoverOrchestrator:
         assert go == "GO"
 
     def test_dry_run_mode(self):
-        with patch.dict(os.environ, {"AWS_DEFAULT_REGION": "us-east-1"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             handler, _ = _load_handler("cutover-orchestrator")
 
         event = {
@@ -282,7 +282,7 @@ class TestCutoverOrchestrator:
 # =============================================================================
 class TestCodeDeployer:
     def test_deploy_programs_dry_run(self):
-        handler, mock_s3 = _load_handler("code-deployer")
+        handler, mock_storage = _load_handler("code-deployer")
 
         event = {
             "metadata": {
@@ -526,7 +526,7 @@ class TestRuleRouter:
     def test_fallback_rules_count(self):
         """Verify fallback rules have at least 25 rules."""
         sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
-        with patch.dict(os.environ, {"AWS_DEFAULT_REGION": "us-east-1"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             import importlib
             import rule_router
             importlib.reload(rule_router)
@@ -535,7 +535,7 @@ class TestRuleRouter:
 
     def test_fallback_rules_category_filter(self):
         sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
-        with patch.dict(os.environ, {"AWS_DEFAULT_REGION": "us-east-1"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             import importlib
             import rule_router
             importlib.reload(rule_router)
@@ -545,7 +545,7 @@ class TestRuleRouter:
 
     def test_fallback_rules_data_model(self):
         sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
-        with patch.dict(os.environ, {"AWS_DEFAULT_REGION": "us-east-1"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             import importlib
             import rule_router
             importlib.reload(rule_router)
@@ -556,7 +556,7 @@ class TestRuleRouter:
 
     def test_fallback_rules_structure(self):
         sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
-        with patch.dict(os.environ, {"AWS_DEFAULT_REGION": "us-east-1"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             import importlib
             import rule_router
             importlib.reload(rule_router)
@@ -656,7 +656,7 @@ class TestDITLGenerator:
 # =============================================================================
 class TestRollbackManager:
     def test_rollback_dry_run(self):
-        handler, mock_s3 = _load_handler("rollback-manager")
+        handler, mock_storage = _load_handler("rollback-manager")
         event = {
             "run_id": "test-rollback-001",
             "error_context": {"failed_stage": "data-loader", "error": "Test error"},
@@ -673,7 +673,7 @@ class TestRollbackManager:
         assert result["summary"]["total_items"] >= 2
 
     def test_rollback_includes_acdoca(self):
-        handler, mock_s3 = _load_handler("rollback-manager")
+        handler, mock_storage = _load_handler("rollback-manager")
         event = {
             "run_id": "test-acdoca-rollback",
             "error_context": {"failed_stage": "config-applier"},
@@ -685,7 +685,7 @@ class TestRollbackManager:
         assert "acdoca_reversals" in result.get("report", {})
 
     def test_rollback_includes_spro(self):
-        handler, mock_s3 = _load_handler("rollback-manager")
+        handler, mock_storage = _load_handler("rollback-manager")
         event = {
             "run_id": "test-spro-rollback",
             "error_context": {"failed_stage": "role-provisioner"},
@@ -728,7 +728,7 @@ class TestConfigApplierValidation:
 class TestErrorHandling:
     def test_cutover_with_missing_stages(self):
         """Cutover should handle event with missing planning stage results."""
-        with patch.dict(os.environ, {"AWS_DEFAULT_REGION": "us-east-1"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             handler, _ = _load_handler("cutover-orchestrator")
         event = {
             "metadata": {"run_id": "test-missing", "input": {"dry_run": False}},

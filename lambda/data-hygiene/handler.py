@@ -28,7 +28,7 @@ from mdm_data_cleanser import execute_cleaning_batch
 
 
 def lambda_handler(event, context):
-    """AWS Lambda entry point for data hygiene processing."""
+    """Azure Function entry point for data hygiene processing."""
     logger.info("Data Hygiene handler invoked")
 
     try:

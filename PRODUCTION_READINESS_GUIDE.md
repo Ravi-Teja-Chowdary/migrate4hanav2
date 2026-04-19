@@ -12,9 +12,9 @@
 
 1. [Current State Assessment](#1-current-state-assessment)
 2. [Prerequisites & Accounts Required](#2-prerequisites--accounts-required)
-3. [Phase 1 — PyRFC Functions Extension Build](#3-phase-1--pyrfc-container-build)
+3. [Phase 1 — PyRFC Container Build](#3-phase-1--pyrfc-container-build)
 4. [Phase 2 — Azure Infrastructure Deployment](#4-phase-2--azure-infrastructure-deployment)
-5. [Phase 2A — Anthropic Claude Opus 4.6 Setup (GenAI — Standard Path)](#5-phase-2a--claude-opus-46-setup-genai)
+5. [Phase 2A — Claude Opus 4.6 Setup (GenAI)](#5-phase-2a--claude-opus-46-setup-genai)
 6. [Phase 2B — Air-Gapped LLM Setup (GenAI — High-Security Path)](#6-phase-2b--air-gapped-llm-setup-genai--high-security-path)
 7. [Phase 3 — SAP System Connectivity](#7-phase-3--sap-system-connectivity)
 8. [Phase 4 — API Server Hardening](#8-phase-4--api-server-hardening)
@@ -79,9 +79,9 @@
 | Improvement | What Changed |
 |-------------|-------------|
 | ~~Azure Functions 15-min limit for heavy stages~~ | **RESOLVED** — Stages 1 (Discovery), 5 (Code Analyzer), 12 (Data Loader), and 12A (Reconciliation) migrated from Azure Functions to **Azure Container Apps** with 4 vCPU / 16 GB RAM. No 15-minute timeout — tasks run up to 4 hours with Azure Durable Functions `waitForTaskToken` callback pattern |
-| ~~No container infrastructure~~ | **RESOLVED** — New `terraform/modules/container-apps/main.tf`: Azure Container Registry (ACR) repository with lifecycle policy, Azure Container Apps environment with Azure Monitor container insights, Fargate task definition (4096 CPU / 16384 MiB), execution role, task role with Blob Storage/Cosmos DB/Claude/KeyVault/StepFunctions permissions, Network NSG (NSG) with full egress |
+| ~~No container infrastructure~~ | **RESOLVED** — New `terraform/modules/container-apps/main.tf`: Azure Container Registry (ACR) repository with lifecycle policy, Azure Container Apps environment with Azure Monitor container insights, Container Apps job definition (4096 CPU / 16384 MiB), execution role, task role with Blob Storage/Cosmos DB/Claude/KeyVault/DurableFunctions permissions, Network NSG (NSG) with full egress |
 | ~~No Docker image for migration workers~~ | **RESOLVED** — `ecs/Dockerfile`: multi-stage build on Azure Linux (CBL-Mariner), SAP NW RFC SDK + PyRFC compilation, non-root `appuser`, copies all `lambda/` handler source code. Build: `docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .` |
-| ~~No Container Apps entrypoint wrapper~~ | **RESOLVED** — `ecs/entrypoint.py`: unified Docker wrapper with dynamic handler selection via `STAGE_TARGET` env var, heartbeat thread (120s interval), `_FargateContext` shim for Function context compatibility, Azure Durable Functions `SendTaskSuccess`/`SendTaskFailure` callbacks |
+| ~~No Container Apps entrypoint wrapper~~ | **RESOLVED** — `ecs/entrypoint.py`: unified Docker wrapper with dynamic handler selection via `STAGE_TARGET` env var, heartbeat thread (120s interval), `_Container AppsContext` shim for Function context compatibility, Azure Durable Functions `SendTaskSuccess`/`SendTaskFailure` callbacks |
 | ~~Dead Function definitions for Container Apps stages~~ | **RESOLVED** — Removed Azure Function definitions for `discovery-engine`, `code-analyzer`, and `data-loader` from all 3 environments (dev/staging/prod). Python source code preserved in `lambda/` for Azure Container Apps Docker image and `run_local_pipeline.py` |
 | ~~Azure Durable Functions not wired to Container Apps~~ | **RESOLVED** — `terraform/modules/durable-functions/main.tf` updated: 4 stages replaced with `containerapp job start` using `waitForTaskToken` pattern, ContainerOverrides pass `STAGE_TARGET`, `SFN_TASK_TOKEN`, and `SFN_INPUT` env vars. RBAC expanded with `containerapp job start/StopTask/DescribeTasks` + `Managed Identity assignment` for both Container Apps roles. HeartbeatSeconds=300, configurable TimeoutSeconds per stage (1h–4h) |
 
@@ -91,7 +91,7 @@
 |-------------|-------------|
 | ~~CI/CD SAP License Paradox~~ | **RESOLVED** — `deploy.yml` now downloads the proprietary SAP NW RFC SDK from a private Blob Storage container (`https://migrate4hanasapbinaries.blob.core.windows.net/binaries/nwrfc750P_linux_x86_64.zip`) at build time via `az storage blob download`, injects it into `ecs/` before `docker build`, and cleans up post-build. SDK never committed to Git |
 | ~~Terraform Container Apps Chicken-and-Egg~~ | **RESOLVED** — Azure Container Apps job definition in `terraform/modules/container-apps/main.tf` now uses `alpine:latest` as a placeholder image with `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infrastructure only; CI/CD deploys the real image to ACR and updates the task definition |
-| ~~Data Gravity OOM Risk~~ | **RESOLVED** — Stage 12A reconciliation in `lambda/data-loader/handler.py` rewritten with streamed aggregation. New `_read_table_chunked()` generator (50K rows/chunk via ROWSKIPS/ROWCOUNT pagination) aggregates running totals in-flight — only one chunk in memory at a time. Prevents OOM on large data volumes (500M+ BSEG rows on 16 GB Fargate). Aggregated totals persisted to Blob Storage for audit trail via `_persist_aggregated_totals()` |
+| ~~Data Gravity OOM Risk~~ | **RESOLVED** — Stage 12A reconciliation in `lambda/data-loader/handler.py` rewritten with streamed aggregation. New `_read_table_chunked()` generator (50K rows/chunk via ROWSKIPS/ROWCOUNT pagination) aggregates running totals in-flight — only one chunk in memory at a time. Prevents OOM on large data volumes (500M+ BSEG rows on 16 GB Container Apps). Aggregated totals persisted to Blob Storage for audit trail via `_persist_aggregated_totals()` |
 | ~~Data Factory Credentials Hardcoded~~ | **RESOLVED** — All 3 environments (dev/staging/prod) now fetch database connection strings from Azure Key Vault via `data.azurerm_key_vault_secret`. Hardcoded `"mock_password"` in dev and `var.ecc_db_password` / `var.s4_db_password` in staging/prod replaced. Password variables removed from staging/prod `variables.tf` |
 
 ### What Was Built in v5.0 (Production Hardening Pass)
@@ -190,7 +190,7 @@ Azure VNet ──→ SAP S/4HANA (RFC/3300, OData/443)
 
 ---
 
-## 3. Phase 1 — PyRFC Functions Extension Build
+## 3. Phase 1 — PyRFC Container Build
 
 **This is the single most critical step.** Without PyRFC, every Function handler falls back to mock data.
 
@@ -201,7 +201,7 @@ Azure VNet ──→ SAP S/4HANA (RFC/3300, OData/443)
 3. Download `nwrfc750P_*-linux-x86_64.zip` (Linux x64 version)
 4. Place it in the project root: `migrate4hana-main/nwrfc750P_*.zip`
 
-### Step 1.2 — Build the Functions Extension
+### Step 1.2 — Build the PyRFC Container Layer
 
 ```bash
 cd migrate4hana-main
@@ -215,36 +215,38 @@ chmod +x scripts/setup-pyrfc.sh
 ```
 
 **What this does:**
-1. Spins up `mcr.microsoft.com/azure-functions/python:4-python3.11` Docker container (Azure Linux)
+1. Spins up a `python:3.11-slim` Docker container (Debian-based)
 2. Extracts SAP NW RFC SDK to `/opt/sap/nwrfcsdk/`
 3. Installs `pyrfc` Python package
 4. Copies shared libraries (`.so` files) for RFC connectivity
-5. Packages everything into `pyrfc-layer.zip`
-6. Publishes as Azure Functions Extension via `az functionapp deployment`
+5. Packages everything into a container layer for Azure Functions
+6. Pushes the container image to Azure Container Registry (ACR)
 
-### Step 1.3 — Record the Layer ARN
+### Step 1.3 — Record the Container Image Reference
 
 The script outputs something like:
 ```
-Layer ARN: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Web/sites/eastus:123456789012:layer:migrate4hana-pyrfc:1
+Container image: migrate4hanaacr.azurecr.io/migrate4hana-pyrfc:1
 ```
 
 **Save this.** You'll need it in the next phase.
 
-### Step 1.4 — Verify Layer
+### Step 1.4 — Verify PyRFC Container
 
 ```bash
-# Quick verification: create a test Azure Functions
+# Quick verification: create a test Function App with the PyRFC image
 az functionapp create \
-  --function-name pyrfc-test \
-  --runtime python3.11 \
-  --handler lambda_function.lambda_handler \
-  --role /subscriptions/{sub}/providers/Microsoft.Authorization/YOUR_ACCOUNT:role/lambda-basic \
-  --zip-file fileb://test_pyrfc.zip \
-  --layers "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Web/sites/eastus:YOUR_ACCOUNT:layer:migrate4hana-pyrfc:1"
+  --name pyrfc-test-func \
+  --resource-group migrate4hana-dev-rg \
+  --storage-account migrate4hanastagingdev \
+  --plan migrate4hana-func-plan \
+  --runtime python \
+  --runtime-version 3.11 \
+  --functions-version 4
 
+# Deploy a test function that imports pyrfc
 # Test function should contain:
-# def lambda_handler(event, context):
+# def main(req):
 #     from pyrfc import Connection
 #     return {"statusCode": 200, "body": "PyRFC imported successfully"}
 ```
@@ -1313,30 +1315,30 @@ Set this in the frontend environment so the LogViewer component connects to real
 ### Step 6.1 — Network Security
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Azure VNet (10.10.0.0/16)                                      │
-│                                                             │
-│  ┌──────────────┐   ┌──────────────┐                        │
-│  │ Public Subnet │   │ Public Subnet │  ← Application Gateway, NAT Gateway  │
-│  │ 10.10.101.0   │   │ 10.10.102.0   │                      │
-│  └──────────────┘   └──────────────┘                        │
-│                                                             │
-│  ┌──────────────┐   ┌──────────────┐                        │
-│  │ Private Subnet│   │ Private Subnet│  ← Azure Functions, Data Factory, LLM  │
-│  │ 10.10.1.0     │   │ 10.10.2.0     │                      │
-│  └──────────────┘   └──────────────┘                        │
-│                                                             │
-│  Azure VPN Gateway ─────────→ On-prem SAP (172.16.0.0/12)         │
-│  VNet Endpoints ───────→ Claude, Blob Storage, Key Vault        │
-│  Air-gapped LLM ─────→ No internet, VNet-only egress         │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│ Azure VNet (10.10.0.0/16)                                           │
+│                                                                     │
+│  ┌──────────────┐   ┌──────────────┐                                │
+│  │ Public Subnet │   │ Public Subnet │  ← App Gateway, NAT Gateway  │
+│  │ 10.10.101.0   │   │ 10.10.102.0   │                              │
+│  └──────────────┘   └──────────────┘                                │
+│                                                                     │
+│  ┌──────────────┐   ┌──────────────┐                                │
+│  │ Private Subnet│   │ Private Subnet│  ← Functions, ADMS, LLM      │
+│  │ 10.10.1.0     │   │ 10.10.2.0     │                              │
+│  └──────────────┘   └──────────────┘                                │
+│                                                                     │
+│  VPN Gateway ─────────────→ On-prem SAP (172.16.0.0/12)             │
+│  Private Endpoints ───────→ Key Vault, Blob Storage                 │
+│  Air-gapped LLM ─────────→ No internet, VNet-only egress            │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Security groups to validate:**
+**NSGs (Network Security Groups) to validate:**
 - Functions NSG: Outbound to SAP (port 3300) + Blob Storage/Key Vault Private Endpoints
-- Data Factory NSG: Outbound to SAP ECC (3200) + SAP HANA (30015)
-- LLM SG: Inbound from Functions NSG (8000) only, **no internet egress**
-- Application Gateway SG: Inbound 443 from allowed CIDRs only
+- ADMS NSG: Outbound to SAP ECC (3200) + SAP HANA (30015)
+- LLM NSG: Inbound from Functions subnet (8000) only, **no internet egress**
+- App Gateway NSG: Inbound 443 from allowed CIDRs only
 
 ### Step 6.2 — WAF Configuration
 
@@ -1610,7 +1612,7 @@ Runs on every push and PR to `main` and `develop`:
 │  └──────────────┘  └──────────────┘  └───────────────┘  │
 │                                                          │
 │  ┌──────────────┐  ┌──────────────────────────────────┐  │
-│  │package-lambdas│  │ terraform-validate               │  │
+│  │package-functions│  │ terraform-validate               │  │
 │  │ zip 21 funcs  │  │ fmt + init + validate (x3 envs) │  │
 │  └──────────────┘  └──────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
@@ -1621,7 +1623,7 @@ Runs on every push and PR to `main` and `develop`:
 | `python-test` | Runs `pytest tests/ -v` with JUnit XML output |
 | `security-scan` | Bandit static analysis on `lambda/` and `api_server.py` |
 | `frontend-build` | `npm ci && npm run build` — validates frontend compiles |
-| `package-lambdas` | Zips all 21 Azure Functions with dependencies |
+| `package-functions` | Zips all 21 Azure Functions with dependencies |
 | `terraform-validate` | `terraform fmt -check` + `terraform validate` across dev/staging/prod |
 
 ### CD Pipeline (`.github/workflows/deploy.yml`)
@@ -1668,17 +1670,28 @@ Runs on merge to `develop` (→ staging) and `main` (→ production):
 ### Setup Service Principal (GitHub → Azure)
 
 ```bash
-# 1. Create Service Principal in Azure
-az ad sp create-for-rbac \
-  --url https://token.actions.githubusercontent.com \
-  --client-id-list sts.azure.com \
-  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+# Create Azure AD App Registration + Federated Credential for GitHub Actions OIDC
+az ad app create --display-name migrate4hana-github-deploy
+APP_ID=$(az ad app list --display-name migrate4hana-github-deploy --query "[0].appId" -o tsv)
 
-# 2. Create Managed Identity with trust policy for your repo
-# Trust policy: Allow GitHub Actions from your-org/migrate4hana repo
-# Permissions: Full access to Azure Functions, Blob Storage, Terraform state, Azure Durable Functions, etc.
+# Create federated credential for GitHub Actions
+az ad app federated-credential create --id $APP_ID --parameters '{
+  "name": "github-actions-deploy",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:YOUR_ORG/migrate4hana:ref:refs/heads/main",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
 
-# 3. Add role ARN to GitHub repo secrets as AZURE_DEPLOY_SP_CREDENTIALS
+# Create Service Principal and assign Contributor role
+az ad sp create --id $APP_ID
+az role assignment create --assignee $APP_ID \
+  --role Contributor \
+  --scope /subscriptions/YOUR_SUBSCRIPTION_ID
+
+# Store these as GitHub Actions secrets:
+# - AZURE_CLIENT_ID: $APP_ID
+# - AZURE_TENANT_ID: (your tenant ID)
+# - AZURE_SUBSCRIPTION_ID: (your subscription ID)
 ```
 ### Staging & Production Environments
 
@@ -1712,9 +1725,9 @@ Dashboard: migrate4hana-dashboard-dev
 ├── Azure Functions Errors (per function, error rate %)
 ├── Azure Functions Duration (p50, p90, p99)
 ├── Azure Durable Functions Execution Status (succeeded/failed/running)
-├── Data Factory Replication Latency (seconds)
-├── Data Factory CDC throughput (rows/sec)
-├── Blob Storage Bucket Size (staging bucket)
+├── ADMS Replication Latency (seconds)
+├── ADMS CDC throughput (rows/sec)
+├── Blob Storage container size (staging container)
 └── Custom Metrics:
     ├── ProgramsScanned (discovery-engine)
     ├── IssuesDetected (code-analyzer)
@@ -1725,33 +1738,42 @@ Dashboard: migrate4hana-dashboard-dev
 ### Step 9.2 — Alarms
 
 ```
-Service Bus Topic: migrate4hana-alerts-dev → your-email@company.com
+Event Grid topic: migrate4hana-alerts-dev → your-email@company.com
 
 Alarms configured:
 ├── Azure Functions error rate > 5% (any function) → ALARM
 ├── Azure Durable Functions execution failed → ALARM
-├── Data Factory replication latency > 300s → ALARM
+├── ADMS replication latency > 300s → ALARM
 ├── Azure Functions duration > 80% of timeout → WARNING
 └── Blob Storage container size > 100 GB → INFO
 ```
 
-### Step 9.3 — Add Application Insights distributed tracing Tracing (Recommended)
+### Step 9.3 — Add Application Insights Distributed Tracing (Recommended)
 
 ```hcl
-# Add to each Azure Function in Terraform
+# Application Insights distributed tracing (terraform/modules/functions/main.tf)
+resource "azurerm_application_insights" "main" {
+  name                = "migrate4hana-insights-${var.environment}"
+  resource_group_name = var.resource_group_name
+  location            = var.azure_location
+  application_type    = "web"
+  sampling_percentage = 10  # Sample 10% of requests
+}
+
+# Functions automatically integrate with Application Insights
 resource "azurerm_function_app" "each_function" {
   # ...existing config...
-  tracing_config {
-    mode = "Active"
+  app_settings = {
+    APPINSIGHTS_INSTRUMENTATIONKEY = azurerm_application_insights.main.instrumentation_key
   }
 }
 ```
 
 Then in Python handlers:
 ```python
-from azure_monitor_opentelemetry.core import xray_recorder
-from azure_monitor_opentelemetry.core import patch_all
-patch_all()  # Auto-instruments Azure SDK for Python, requests, etc.
+from opencensus.ext.azure.trace_exporter import AzureExporter
+from opencensus.trace.tracer import Tracer
+tracer = Tracer(exporter=AzureExporter())  # Auto-instruments Azure SDK, requests, etc.
 ```
 
 ### Step 9.4 — Structured Log Queries
@@ -1782,7 +1804,7 @@ fields @timestamp, payload_snippet
 
 ### Pre-Deployment Checklist
 
-- [ ] Phase 1 complete: PyRFC Functions Extension published and tested
+- [ ] Phase 1 complete: PyRFC container layer published and tested
 - [ ] Phase 2 complete: All Terraform resources deployed and healthy
 - [ ] Phase 3 complete: RFC connectivity to both ECC and S/4HANA verified
 - [ ] Phase 4 complete: API server running on HTTPS with proper auth
@@ -1876,11 +1898,11 @@ Steps:
 T-minus checklist:
 ├── T-7 days:  Final cutover plan approved by all stakeholders
 ├── T-3 days:  Freeze ECC changes (no transports)
-├── T-1 day:   Final Data Factory full-load sync
+├── T-1 day:   Final ADMS full-load sync
 ├── T-0:       Start cutover window
 │   ├── Lock ECC client (SCC4 → "No changes allowed")
-│   ├── Final Data Factory CDC catch-up (verify latency < 30s)
-│   ├── Stop Data Factory replication
+│   ├── Final ADMS CDC catch-up (verify latency < 30s)
+│   ├── Stop ADMS replication
 │   ├── Execute Phase 3: Conversion (SUM/DMO)
 │   ├── Execute Phase 4: Post-conversion (deploy, load, configure)
 │   ├── Execute Phase 5: Validate + DITL test
@@ -1921,43 +1943,38 @@ T-minus checklist:
 
 ```hcl
 # Enabled in terraform/modules/cosmosdb/main.tf:
-resource "azurerm_cosmosdb_sql_container" "rules" {
-  point_in_time_recovery {
-    enabled = true   # 35-day continuous backup, restore to any second
+resource "azurerm_cosmosdb_account" "main" {
+  # ... existing config ...
+  backup {
+    type                = "Continuous"
+    interval_in_minutes = 240
+    retention_in_hours  = 840  # 35-day continuous backup, restore to any second
   }
 }
 ```
 
-### Cosmos DB Idempotency Table (NEW v5.0)
+### Cosmos DB Idempotency Container (NEW v5.0)
 
-The data-loader Azure Functions requires an idempotency table to prevent duplicate processing on retries:
+The data-loader Azure Functions requires an idempotency container to prevent duplicate processing on retries:
 
 ```hcl
 # Add to terraform/modules/cosmosdb/main.tf or create separately:
 resource "azurerm_cosmosdb_sql_container" "idempotency" {
-  name         = "migrate4hana-idempotency"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "pk"    # Format: "{run_id}#{stage}"
-  range_key    = "sk"    # Format: entity identifier (e.g., doc number, BP ID)
+  name                = "idempotency"
+  resource_group_name = var.resource_group_name
+  account_name        = azurerm_cosmosdb_account.main.name
+  database_name       = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths  = ["/pk"]    # Format: "{run_id}#{stage}"
 
-  attribute {
-    name = "pk"
-    type = "S"
-  }
-  attribute {
-    name = "sk"
-    type = "S"
-  }
+  default_ttl = 604800  # Auto-expire entries after 7 days
 
-  ttl {
-    attribute_name = "ttl"
-    enabled        = true   # Auto-expire entries after 7 days
-  }
-
-  point_in_time_recovery {
-    enabled = true
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/*" }
   }
 }
+# Note: sk (sort key) is stored as a property within each document
+# Cosmos DB handles point reads via partition key + id
 ```
 
 ### Backup Procedure
@@ -2103,7 +2120,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | G6 | Air-gapped LLM has no outputs (instance ID, private IP, endpoint) | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added `instance_id`, `private_ip`, and `llm_endpoint` outputs |
 | G7 | No Claude setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2A with 7 steps: model access, Private Endpoints, Azure RBAC, env vars, testing, cost, routing |
 | G8 | No Air-Gapped LLM setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2B with 7 steps: VM Image, model loading, bootstrap, Azure Functions config, testing, cost optimization, security |
-| G9 | Dev/main.tf GenAI variables not wired through to Functions module | `terraform/environments/dev/main.tf`, `variables.tf` | ✅ **Fixed** | Added `bedrock_model_id`, `local_llm_endpoint`, `ast_change_threshold`, `gpu_vm_image_id`, `llm_model_s3_*` variables |
+| G9 | Dev/main.tf GenAI variables not wired through to Functions module | `terraform/environments/dev/main.tf`, `variables.tf` | ✅ **Fixed** | Added `anthropic_model`, `local_llm_endpoint`, `ast_change_threshold`, `gpu_vm_size` variables |
 
 ### Medium Priority (Should fix before enterprise clients)
 
@@ -2116,7 +2133,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | 20 | JWT uses HS256 symmetric | `api_server.py` | Low | **Acceptable for now** — Switch to RS256 if multi-service JWT verification needed |
 | 21 | No API versioning | `api_server.py` | Low | **Pending** — Add `/api/v1/` prefix when breaking changes needed |
 | 22 | No OpenAPI/Swagger docs | `api_server.py` | Free with FastAPI | ✅ **RESOLVED** — FastAPI auto-generates at `/docs` and `/redoc` |
-| 23 | ~~Data Factory credentials hardcoded in dev/main.tf~~ | `terraform/environments/*/main.tf` | Low | ✅ **RESOLVED** — Data Factory passwords now fetched from Azure Key Vault via `data.azurerm_key_vault_secret` across all 3 environments (dev/staging/prod). Password variables removed from staging/prod `variables.tf` |
+| 23 | ~~Data Factory credentials hardcoded in dev/main.tf~~ | `terraform/environments/*/main.tf` | Low | ✅ **RESOLVED** — Database Migration Service passwords now fetched from Azure Key Vault via `data.azurerm_key_vault_secret` across all 3 environments (dev/staging/prod). Password variables removed from staging/prod `variables.tf` |
 | 24 | VNet module missing `default_security_group_id` output | `terraform/modules/vnet/main.tf` | Low | **Pending** — Add output or use `azurerm_virtual_network.main.default_security_group_id` |
 
 ### Code Hardening (Resolved in v3.0)
@@ -2161,11 +2178,11 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | R1 | PyRFC incompatible with Azure Functions runtime | Low | Critical | Test in Docker first; fallback to Azure VM-based execution |
 | R2 | SAP RFC calls behave differently than mock | High | High | Integration testing (Phase 7); run discovery-only pass first |
 | R3 | Large customer data causes Function timeout (15 min) | Medium | High | ✅ **Mitigated** — Distributed Map fans out to 4 parallel streams, each with its own 15-min window + retry. Stage 12A reconciliation uses streamed aggregation (`_read_table_chunked()` generator with running totals) to prevent OOM on large data volumes (500M+ BSEG rows) |
-| R4 | SUM/DMO stage takes longer than expected | High | Critical | Monitor via Data Factory latency; have SAP Basis team on standby; set SUM timeout to 7200s |
+| R4 | SUM/DMO stage takes longer than expected | High | Critical | Monitor via ADMS latency; have SAP Basis team on standby; set SUM timeout to 7200s |
 | R5 | Rollback fails to undo all changes | Medium | Critical | ✅ **Mitigated** — Rollback now has Blob Storage state persistence, resume support, post-rollback verification, batch commits (25/batch), and client unlock via SCCR_UNLOCK_CLIENT |
 | R6 | VPN latency degrades RFC performance | Medium | Medium | ✅ **Mitigated** — `call_rfc_with_timeout()` prevents indefinite hangs (120s default). Use ExpressRoute for production; benchmark with iperf before migration |
-| R7 | Secret Manager throttling under load | Low | Medium | ✅ **Mitigated** — RFC pool caches connections in Azure Functions memory AND caches Key Vault credentials with 300s TTL, reducing API calls by 95%+ |
-| R8 | Air-gapped LLM GPU instance unavailable | Low | Low | Fall back to Claude API route (already implemented in Azure Durable Functions Choice state) |
+| R7 | Key Vault throttling under load | Low | Medium | ✅ **Mitigated** — RFC pool caches connections in Azure Functions memory AND caches Key Vault credentials with 300s TTL, reducing API calls by 95%+ |
+| R8 | Air-gapped LLM GPU instance unavailable | Low | Low | Fall back to Claude API route (already implemented in Durable Functions conditional logic) |
 | R9 | Customer has custom ABAP not covered by AST rules | High | Medium | 160 rules cover most patterns; manual review for unlisted patterns; add custom rules |
 | R10 | Data volume exceeds Blob Storage/Azure Functions limits | Low | High | Use Blob Storage multipart upload; stream large datasets via Data Factory instead of Azure Functions |
 
@@ -2177,7 +2194,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                        STEP FUNCTIONS PIPELINE                       │
+│                        DURABLE FUNCTIONS PIPELINE                     │
 │                                                                      │
 │  ┌─────────┐   ┌──────────────┐   ┌────────────────┐                │
 │  │PreFlight│──→│ 1.Discovery  │──→│ 1A.ProcessMine │                │
@@ -2216,7 +2233,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
 │  │9.Pre-Convert │─→│ GO/NO-GO     │─→│10.SUM/DMO    │               │
 │  │  Gate        │  │  Decision    │  │  Execution   │               │
-│  │  (Data Factory CDC)   │  └──────────────┘  │  (7200s max) │               │
+│  │  (ADMS CDC)   │  └──────────────┘  │  (7200s max) │               │
 │  └──────────────┘                    └──────┬───────┘               │
 │                                              ▼                       │
 │  PHASE 4: POST-CONVERSION                                           │
@@ -2255,11 +2272,11 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `STORAGE_STAGING_CONTAINER` | Yes | `migrate4hana-staging-dev` | Blob Storage container for all artifacts |
-| `SACRETS_ARN` | Yes | `""` | Key Vault ARN for ECC RFC credentials |
-| `S4_SACRETS_ARN` | Yes | Falls back to `SACRETS_ARN` | Key Vault ARN for S/4HANA credentials |
-| `Data Factory_REPLICATION_TASK_ARN` | Phase 3 | `""` | Data Factory task ARN for CDC monitoring |
+| `SECRETS_VAULT_URL` | Yes | `""` | Key Vault secret URL for ECC RFC credentials |
+| `S4_SECRETS_VAULT_URL` | Yes | Falls back to `SECRETS_VAULT_URL` | Key Vault secret URL for S/4HANA credentials |
+| `DMS_REPLICATION_TASK_ID` | Phase 3 | `""` | ADMS task ID for CDC monitoring |
 | `CDC_LATENCY_THRESHOLD_SEC` | Phase 3 | `30` | Max acceptable CDC latency |
-| `Azure Web PubSub_ALERT_TOPIC_ARN` | Alerting | `""` | Azure Web PubSub topic for failure alerts |
+| `ALERT_TOPIC_ID` | Alerting | `""` | Event Grid topic for failure alerts |
 | `CURRENT_RUN_ID` | Tracking | `manual-run` | Unique pipeline run identifier |
 | `TELEMETRY_WS_ENDPOINT` | Telemetry | `""` | WebSocket management URL |
 | `TELEMETRY_WS_CONNECTIONS_TABLE` | Telemetry | `""` | Cosmos DB connections table |
@@ -2310,7 +2327,7 @@ migrate4hana-main/
 │   ├── config-replicator/         ← Global config (56 countries)
 │   ├── role-migrator/             ← PFCG role assessment
 │   ├── integration-mapper/        ← RFC/IDoc mapping
-│   ├── cutover-orchestrator/      ← Data Factory CDC + client lock
+│   ├── cutover-orchestrator/      ← ADMS CDC + client lock
 │   ├── sum-orchestrator/          ← SUM/DMO execution (94 known errors)
 │   ├── code-deployer/             ← Transport + ABAP deployment
 │   ├── data-loader/               ← BP creation, FI posting, Distributed Map (4 streams), Penny-Perfect Reconciliation [Azure Container Apps]
@@ -2340,20 +2357,20 @@ migrate4hana-main/
 │   │   ├── staging/               ← Staging (10.20/16, 2 AZ, WAF+Audit) (NEW v4.0)
 │   │   └── prod/                  ← Production (10.30/16, 3 AZ, WAF+Audit) (NEW v4.0)
 │   └── modules/
-│       ├── vpc/                   ← VNet + subnets + VPN
-│       ├── lambda/                ← 18 Function definitions (15 pipeline + 3 support)
-│       ├── ecs/                   ← Azure Container Apps cluster, ACR, task definition (4 vCPU/16 GB) (NEW v6.0)
+│       ├── vnet/                   ← VNet + subnets + VPN
+│       ├── functions/                ← 18 Function definitions (15 pipeline + 3 support)
+│       ├── container-apps/                   ← Azure Container Apps cluster, ACR, task definition (4 vCPU/16 GB) (NEW v6.0)
 │       ├── durable-functions/        ← 22+ state pipeline (incl. Container Apps waitForTaskToken, Distributed Map + Reconciliation)
-│       ├── s3-staging/            ← Key Vault-encrypted, versioned
-│       ├── dms/                   ← Oracle → HANA replication
-│       ├── dynamodb/              ← Rules table
-│       ├── cloudwatch/            ← Dashboard + alarms
-│       ├── waf/                   ← Azure Front Door WAF: rate limit, OWASP, SQLi, IP reputation (NEW v4.0)
+│       ├── blob-staging/            ← Key Vault-encrypted, versioned
+│       ├── adms/                   ← Oracle → HANA replication
+│       ├── cosmosdb/              ← Rules table
+│       ├── monitoring/            ← Dashboard + alarms
+│       ├── frontdoor-waf/                   ← Azure Front Door WAF: rate limit, OWASP, SQLi, IP reputation (NEW v4.0)
 │       ├── audit/                 ← Azure Monitor Activity Logs + Blob Storage WORM + compliance metrics (NEW v4.0)
 │       ├── airgapped-llm/        ← Standard_NC8as_T4_v3 GPU (no internet)
-│       ├── entity-resolution/     ← ML BP dedup
-│       ├── websocket-telemetry/   ← Real-time streaming
-│       └── private-endpoints/         ← Claude PrivateLink
+│       ├── data-factory-matching/     ← ML BP dedup
+│       ├── webpubsub-telemetry/   ← Real-time streaming
+│       └── private-endpoints/         ← Anthropic API access
 ├── scripts/
 │   ├── deploy.sh                  ← Package + build + terraform apply
 │   └── setup-pyrfc.sh             ← Build PyRFC Functions extension
@@ -2385,12 +2402,12 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 
 | Component | Change |
 |-----------|--------|
-| **Azure Container Apps Module** | New `terraform/modules/container-apps/main.tf` — Azure Container Registry (ACR) repository, Azure Container Apps environment with Azure Monitor container insights, Fargate task definition (4 vCPU / 16 GB), execution role, task role with Blob Storage/Cosmos DB/Claude/KeyVault/StepFunctions permissions, Network NSG (NSG) |
+| **Azure Container Apps Module** | New `terraform/modules/container-apps/main.tf` — Azure Container Registry (ACR) repository, Azure Container Apps environment with Azure Monitor container insights, Container Apps job definition (4 vCPU / 16 GB), execution role, task role with Blob Storage/Cosmos DB/Claude/KeyVault/DurableFunctions permissions, Network NSG (NSG) |
 | **Docker Image** | `ecs/Dockerfile` — Multi-stage build on Azure Linux (CBL-Mariner), SAP NW RFC SDK + PyRFC compilation, non-root user, copies all handler source code from `lambda/` |
-| **Container Apps Entrypoint** | `ecs/entrypoint.py` — Unified Docker wrapper: `STAGE_TARGET` env var selects handler, heartbeat thread (120s), `_FargateContext` Azure Functions shim, `SendTaskSuccess`/`SendTaskFailure` callbacks |
+| **Container Apps Entrypoint** | `ecs/entrypoint.py` — Unified Docker wrapper: `STAGE_TARGET` env var selects handler, heartbeat thread (120s), `_Container AppsContext` Azure Functions shim, `SendTaskSuccess`/`SendTaskFailure` callbacks |
 | **Azure Durable Functions → Container Apps** | Stages 1, 5, 12, 12A now use `containerapp job start` with `waitForTaskToken` callback pattern instead of Azure Functions invoke. HeartbeatSeconds=300, TimeoutSeconds=3600–14400 per stage |
 | **Dead Azure Functions Cleanup** | Removed `discovery-engine`, `code-analyzer`, `data-loader` Function definitions from dev, staging, and prod environments |
-| **Container Apps Wiring** | All 3 environments (dev/staging/prod) now pass Azure Container Apps environment ARN, task definition ARN, Network NSG (NSG), subnets, and role ARNs into the Azure Durable Functions module |
+| **Container Apps Wiring** | All 3 environments (dev/staging/prod) now pass Azure Container Apps environment ID, job definition ID, Network NSG (NSG), subnets, and role assignments into the Azure Durable Functions module |
 | **Docker Context** | `.dockerignore` at project root excludes `__pycache__`, `.git`, `node_modules`, `test-output`, `frontend`, `terraform`, `docs`, `mock-ecc`, `tests`, `scripts` |
 | **Terraform Modules** | 13 → 14 modules (added `ecs/`) |
 

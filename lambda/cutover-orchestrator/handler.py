@@ -19,19 +19,18 @@ import json
 import os
 import sys
 import logging
-import boto3
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
 from validation import validate_event
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_BUCKET = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 
 
 # =============================================================================
@@ -147,96 +146,126 @@ def lock_source_system(conn, lock=True):
 
 
 # =============================================================================
-# DMS CDC LATENCY MONITORING
+# AZURE DATA FACTORY CDC MONITORING
 # =============================================================================
-dms_client = boto3.client("dms")
-
-DMS_REPLICATION_TASK_ARN = os.environ.get("DMS_REPLICATION_TASK_ARN", "")
+ADF_PIPELINE_NAME = os.environ.get("AZURE_DATA_FACTORY_PIPELINE", "sap-migration")
 CDC_LATENCY_THRESHOLD_SEC = int(os.environ.get("CDC_LATENCY_THRESHOLD_SEC", "30"))
+
+_ADF_SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
+_ADF_RESOURCE_GROUP = os.environ.get("AZURE_RESOURCE_GROUP", "")
+_ADF_FACTORY_NAME = os.environ.get("AZURE_DATA_FACTORY_NAME", "")
+
+
+def _get_adf_client():
+    """Lazy-initialise Azure Data Factory management client."""
+    from azure.identity import DefaultAzureCredential
+    from azure.mgmt.datafactory import DataFactoryManagementClient
+    return DataFactoryManagementClient(DefaultAzureCredential(), _ADF_SUBSCRIPTION_ID)
 
 
 def monitor_dms_cdc_latency() -> dict:
     """
-    Check DMS CDC replication task status and latency.
+    Check Azure Data Factory pipeline run status and latency.
 
-    Queries CloudWatch via the DMS DescribeReplicationTasks API to get:
-    - Task status (running, stopped, error)
-    - CDC latency (seconds behind source)
-    - Full-load completion percentage
+    Queries the latest pipeline run for the configured ADF pipeline to get:
+    - Run status (InProgress, Succeeded, Failed, Cancelled)
+    - Run duration as a proxy for CDC latency
+    - Completion status
 
     Returns a dict with task_status, cdc_latency_seconds, and a pass/fail verdict.
     """
-    if not DMS_REPLICATION_TASK_ARN:
-        logger.warning("DMS_REPLICATION_TASK_ARN not configured — skipping CDC check")
-        return {"status": "skipped", "reason": "DMS task ARN not configured"}
+    if not ADF_PIPELINE_NAME:
+        logger.warning("AZURE_DATA_FACTORY_PIPELINE not configured — skipping CDC check")
+        return {"status": "skipped", "reason": "ADF pipeline not configured"}
 
     try:
-        response = dms_client.describe_replication_tasks(
-            Filters=[{"Name": "replication-task-arn", "Values": [DMS_REPLICATION_TASK_ARN]}]
+        from azure.mgmt.datafactory.models import RunFilterParameters, RunQueryFilter
+        adf_client = _get_adf_client()
+
+        run_filter = RunFilterParameters(
+            last_updated_after=datetime(2000, 1, 1),
+            last_updated_before=datetime.utcnow(),
+            filters=[RunQueryFilter(operand="PipelineName", operator="Equals", values=[ADF_PIPELINE_NAME])],
         )
-        tasks = response.get("ReplicationTasks", [])
-        if not tasks:
-            return {"status": "error", "reason": "Replication task not found"}
+        runs = adf_client.pipeline_runs.query_by_factory(
+            _ADF_RESOURCE_GROUP, _ADF_FACTORY_NAME, run_filter
+        )
+        if not runs.value:
+            return {"status": "error", "reason": "No pipeline runs found"}
 
-        task = tasks[0]
-        task_status = task.get("Status", "unknown")
-        stats = task.get("ReplicationTaskStats", {})
-        cdc_latency = stats.get("CDCLatencyTarget", 0)
-        full_load_pct = stats.get("FullLoadProgressPercent", 0)
-        tables_loaded = stats.get("TablesLoaded", 0)
-        tables_errored = stats.get("TablesErrored", 0)
+        latest = runs.value[0]
+        task_status = (latest.status or "unknown").lower()
+        run_duration = 0
+        if latest.run_end and latest.run_start:
+            run_duration = int((latest.run_end - latest.run_start).total_seconds())
 
-        latency_ok = cdc_latency <= CDC_LATENCY_THRESHOLD_SEC
+        latency_ok = run_duration <= CDC_LATENCY_THRESHOLD_SEC
 
         result = {
             "status": "ok" if latency_ok else "high_latency",
             "task_status": task_status,
-            "cdc_latency_seconds": cdc_latency,
+            "cdc_latency_seconds": run_duration,
             "latency_threshold": CDC_LATENCY_THRESHOLD_SEC,
             "latency_acceptable": latency_ok,
-            "full_load_percent": full_load_pct,
-            "tables_loaded": tables_loaded,
-            "tables_errored": tables_errored,
+            "full_load_percent": 100 if task_status == "succeeded" else 0,
+            "tables_loaded": 0,
+            "tables_errored": 0,
         }
-        logger.info(f"DMS CDC status: {task_status}, latency: {cdc_latency}s, threshold: {CDC_LATENCY_THRESHOLD_SEC}s")
+        logger.info(f"ADF CDC status: {task_status}, duration: {run_duration}s, threshold: {CDC_LATENCY_THRESHOLD_SEC}s")
         return result
 
     except Exception as e:
-        logger.error(f"DMS CDC monitoring failed: {e}")
+        logger.error(f"ADF CDC monitoring failed: {e}")
         return {"status": "error", "reason": str(e)}
 
 
 def finalize_dms_cdc() -> dict:
     """
-    Stop the DMS CDC replication task during cutover.
+    Cancel the Azure Data Factory pipeline run during cutover.
 
     Called after the source system is locked and CDC latency has converged to
-    near-zero. Stops the ongoing CDC task so the final data state is frozen
-    for the execution stages.
+    near-zero. Cancels the ongoing pipeline run so the final data state is
+    frozen for the execution stages.
     """
-    if not DMS_REPLICATION_TASK_ARN:
-        return {"status": "skipped", "reason": "DMS task ARN not configured"}
+    if not ADF_PIPELINE_NAME:
+        return {"status": "skipped", "reason": "ADF pipeline not configured"}
 
     try:
-        dms_client.stop_replication_task(ReplicationTaskArn=DMS_REPLICATION_TASK_ARN)
-        logger.info("DMS CDC replication task stop initiated")
+        from azure.mgmt.datafactory.models import RunFilterParameters, RunQueryFilter
+        adf_client = _get_adf_client()
 
-        # Wait briefly and verify
+        run_filter = RunFilterParameters(
+            last_updated_after=datetime(2000, 1, 1),
+            last_updated_before=datetime.utcnow(),
+            filters=[RunQueryFilter(operand="PipelineName", operator="Equals", values=[ADF_PIPELINE_NAME])],
+        )
+        runs = adf_client.pipeline_runs.query_by_factory(
+            _ADF_RESOURCE_GROUP, _ADF_FACTORY_NAME, run_filter
+        )
+        if not runs.value:
+            return {"status": "skipped", "reason": "No active pipeline runs"}
+
+        latest = runs.value[0]
+        if (latest.status or "").lower() == "inprogress":
+            adf_client.pipeline_runs.cancel(
+                _ADF_RESOURCE_GROUP, _ADF_FACTORY_NAME, latest.run_id
+            )
+            logger.info("ADF pipeline run cancellation initiated")
+
         import time
         time.sleep(5)
-        response = dms_client.describe_replication_tasks(
-            Filters=[{"Name": "replication-task-arn", "Values": [DMS_REPLICATION_TASK_ARN]}]
+        updated = adf_client.pipeline_runs.get(
+            _ADF_RESOURCE_GROUP, _ADF_FACTORY_NAME, latest.run_id
         )
-        tasks = response.get("ReplicationTasks", [])
-        final_status = tasks[0].get("Status", "unknown") if tasks else "unknown"
+        final_status = (updated.status or "unknown").lower()
 
         return {
-            "status": "stopped" if final_status in ("stopped", "stopping") else final_status,
-            "task_arn": DMS_REPLICATION_TASK_ARN,
+            "status": "stopped" if final_status in ("cancelled", "canceling") else final_status,
+            "pipeline_name": ADF_PIPELINE_NAME,
         }
 
     except Exception as e:
-        logger.error(f"Failed to stop DMS CDC task: {e}")
+        logger.error(f"Failed to cancel ADF pipeline run: {e}")
         return {"status": "error", "reason": str(e)}
 
 
@@ -257,11 +286,10 @@ def create_checkpoint(run_id, event):
         ],
     }
 
-    s3.put_object(
-        Bucket=STAGING_BUCKET,
-        Key=f"migrations/{run_id}/execution/checkpoint.json",
-        Body=json.dumps(checkpoint, indent=2, default=str),
-        ContentType="application/json",
+    put_object(
+        STAGING_BUCKET,
+        f"migrations/{run_id}/execution/checkpoint.json",
+        json.dumps(checkpoint, indent=2, default=str),
     )
     return checkpoint
 
@@ -318,8 +346,7 @@ def lambda_handler(event, context):
         # 2. Check S/4HANA target connectivity
         try:
             s4_params = json.loads(
-                boto3.client("secretsmanager")
-                .get_secret_value(SecretId=os.environ.get("S4_SECRETS_ARN", os.environ.get("SECRETS_ARN", "")))
+                get_secret_value(os.environ.get("S4_SECRET_NAME", "s4hana-credentials"))
                 ["SecretString"]
             )
             connectivity = check_s4_connectivity(s4_params)
@@ -371,8 +398,7 @@ def lambda_handler(event, context):
             try:
                 from pyrfc import Connection
                 ecc_params = json.loads(
-                    boto3.client("secretsmanager")
-                    .get_secret_value(SecretId=os.environ.get("SECRETS_ARN", ""))
+                    get_secret_value(os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials"))
                     ["SecretString"]
                 )
                 ecc_conn = Connection(**ecc_params)
@@ -393,11 +419,10 @@ def lambda_handler(event, context):
             logger.info(f"DMS CDC finalization: {cdc_final.get('status')}")
 
         # Save results
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/cutover-orchestrator.json",
-            Body=json.dumps(results, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/execution/cutover-orchestrator.json",
+            json.dumps(results, indent=2, default=str),
         )
 
         result = {

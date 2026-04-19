@@ -1,7 +1,7 @@
 """
 mdm_data_cleanser.py - Master Data Management (MDM) Data Hygiene Engine
 Cleanses common SAP ERP source inconsistencies before S/4HANA migration.
-Works in the early planning phase ahead of standard AWS DMS execution.
+Works in the early planning phase ahead of standard data migration execution.
 """
 import logging
 from typing import List, Dict, Any

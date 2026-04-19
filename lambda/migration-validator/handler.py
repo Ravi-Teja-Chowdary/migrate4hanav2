@@ -24,18 +24,17 @@ import json
 import os
 import sys
 import logging
-import boto3
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_BUCKET = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 
 
 # =============================================================================
@@ -943,8 +942,7 @@ def lambda_handler(event, context):
             try:
                 from pyrfc import Connection
                 s4_params = json.loads(
-                    boto3.client("secretsmanager")
-                    .get_secret_value(SecretId=os.environ.get("S4_SECRETS_ARN", os.environ.get("SECRETS_ARN", "")))
+                    get_secret_value(os.environ.get("S4_SECRET_NAME", "s4hana-credentials"))
                     ["SecretString"]
                 )
                 conn = Connection(**s4_params)
@@ -1113,19 +1111,17 @@ def lambda_handler(event, context):
         results["scorecard"] = generate_scorecard(results["validations"])
 
         # Save to S3
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/migration-validator.json",
-            Body=json.dumps(results, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/execution/migration-validator.json",
+            json.dumps(results, indent=2, default=str),
         )
 
         # Save final scorecard separately
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/go-live-scorecard.json",
-            Body=json.dumps(results["scorecard"], indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/execution/go-live-scorecard.json",
+            json.dumps(results["scorecard"], indent=2, default=str),
         )
 
         result = {

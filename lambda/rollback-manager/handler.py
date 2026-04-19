@@ -1,6 +1,6 @@
 """
 Automated Rollback Manager (Part of Automation Edge Cases)
-Invoked by AWS Step Functions Catch/Error states during execution failures.
+Invoked by Durable Functions Catch/Error states during execution failures.
 Safely reverses any intermediate changes applied dynamically to S/4HANA.
 
 Capabilities:
@@ -17,18 +17,18 @@ import json
 import os
 import sys
 import logging
-import boto3
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
 from validation import validate_event
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 ROLLBACK_BATCH_SIZE = int(os.environ.get("ROLLBACK_BATCH_SIZE", "25"))
 
 try:
@@ -39,11 +39,10 @@ except ImportError:
     logger.warning("pyrfc not available — rollback will operate in simulation mode")
 
 
-def _get_sap_connection(secret_arn: str):
-    """Obtain SAP RFC connection from Secrets Manager."""
-    secrets_client = boto3.client("secretsmanager")
+def _get_sap_connection(secret_name: str):
+    """Obtain SAP RFC connection from secrets vault."""
     secret = json.loads(
-        secrets_client.get_secret_value(SecretId=secret_arn)["SecretString"]
+        get_secret_value(secret_name)["SecretString"]
     )
     return RFCConnection(**secret)
 
@@ -417,9 +416,9 @@ def rollback_spro_configurations(conn, config_changes: list) -> list:
 def _load_checkpoint(run_id: str) -> dict:
     """Load the cutover checkpoint to determine what needs rollback."""
     try:
-        obj = s3.get_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/checkpoint.json",
+        obj = get_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/execution/checkpoint.json",
         )
         return json.loads(obj["Body"].read().decode())
     except Exception as e:
@@ -428,21 +427,20 @@ def _load_checkpoint(run_id: str) -> dict:
 
 
 def _save_rollback_report(run_id: str, report: dict):
-    """Persist rollback report to S3 for audit trail."""
-    s3.put_object(
-        Bucket=STAGING_BUCKET,
-        Key=f"migrations/{run_id}/execution/rollback-report.json",
-        Body=json.dumps(report, indent=2, default=str),
-        ContentType="application/json",
+    """Persist rollback report for audit trail."""
+    put_object(
+        STAGING_CONTAINER,
+        f"migrations/{run_id}/execution/rollback-report.json",
+        json.dumps(report, indent=2, default=str),
     )
 
 
 def _load_stage_results(run_id: str, stage_name: str) -> dict:
-    """Load execution results for a completed stage from S3."""
+    """Load execution results for a completed stage."""
     try:
-        obj = s3.get_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/{stage_name}.json",
+        obj = get_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/execution/{stage_name}.json",
         )
         return json.loads(obj["Body"].read().decode())
     except Exception as e:
@@ -453,9 +451,9 @@ def _load_stage_results(run_id: str, stage_name: str) -> dict:
 def _load_rollback_state(run_id: str) -> dict:
     """Load prior rollback state to support resume after partial failure."""
     try:
-        obj = s3.get_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/rollback-state.json",
+        obj = get_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/execution/rollback-state.json",
         )
         return json.loads(obj["Body"].read().decode())
     except Exception:
@@ -464,11 +462,10 @@ def _load_rollback_state(run_id: str) -> dict:
 
 def _save_rollback_state(run_id: str, state: dict):
     """Persist rollback state for resume support."""
-    s3.put_object(
-        Bucket=STAGING_BUCKET,
-        Key=f"migrations/{run_id}/execution/rollback-state.json",
-        Body=json.dumps(state, indent=2, default=str),
-        ContentType="application/json",
+    put_object(
+        STAGING_CONTAINER,
+        f"migrations/{run_id}/execution/rollback-state.json",
+        json.dumps(state, indent=2, default=str),
     )
 
 
@@ -751,10 +748,10 @@ def lambda_handler(event, context):
             for p in idoc_partners_to_delete
         ]
     else:
-        secret_arn = os.environ.get("SECRETS_ARN", "")
+        secret_name = os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials")
         conn = None
         try:
-            conn = _get_sap_connection(secret_arn)
+            conn = _get_sap_connection(secret_name)
 
             # Stage 8: Reverse financial postings
             if documents_to_reverse:
@@ -835,8 +832,8 @@ def lambda_handler(event, context):
     verification_results = {}
     if PYRFC_AVAILABLE and not report.get("connection_error"):
         try:
-            secret_arn = os.environ.get("SECRETS_ARN", "")
-            verify_conn = _get_sap_connection(secret_arn) if secret_arn else None
+            secret_name = os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials")
+            verify_conn = _get_sap_connection(secret_name) if secret_name else None
             if verify_conn:
                 for category_key in ["financial_reversals", "bp_deletions", "role_deletions"]:
                     items = report.get(category_key, [])

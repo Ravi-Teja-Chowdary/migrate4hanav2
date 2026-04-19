@@ -1,232 +1,141 @@
-###############################################################################
-# Migrate4HANA — WAF Module
-# AWS WAFv2 Web ACL with rate limiting, managed rule groups, and DDoS protection
-###############################################################################
+resource "azurerm_cdn_frontdoor_profile" "this" {
+  count               = var.enable_waf ? 1 : 0
+  name                = "migrate4hana-fd-${var.environment}"
+  resource_group_name = var.resource_group_name
+  sku_name            = "Premium_AzureFrontDoor"
 
-variable "environment" {
-  type = string
+  tags = var.tags
 }
 
-variable "rate_limit" {
-  type        = number
-  description = "Max requests per 5-minute window per IP"
-  default     = 1000
+resource "azurerm_cdn_frontdoor_firewall_policy" "this" {
+  count                             = var.enable_waf ? 1 : 0
+  name                              = "migrate4hanawaf${var.environment}"
+  resource_group_name               = var.resource_group_name
+  sku_name                          = azurerm_cdn_frontdoor_profile.this[0].sku_name
+  enabled                           = true
+  mode                              = "Prevention"
+
+  managed_rule {
+    type    = "Microsoft_DefaultRuleSet"
+    version = "2.1"
+    action  = "Block"
+  }
+
+  managed_rule {
+    type    = "Microsoft_BotManagerRuleSet"
+    version = "1.0"
+    action  = "Block"
+  }
+
+  custom_rule {
+    name     = "RateLimit"
+    enabled  = true
+    type     = "RateLimitRule"
+    action   = "Block"
+    priority = 100
+
+    rate_limit_threshold          = 1000
+    rate_limit_duration_in_minutes = 5
+
+    match_condition {
+      match_variable = "RemoteAddr"
+      operator       = "IPMatch"
+      negation_condition = true
+      match_values   = ["0.0.0.0/0"]
+    }
+  }
+
+  custom_rule {
+    name     = "BlockSQLi"
+    enabled  = true
+    type     = "MatchRule"
+    action   = "Block"
+    priority = 200
+
+    match_condition {
+      match_variable = "QueryString"
+      operator       = "Contains"
+      transforms     = ["UrlDecode"]
+      match_values   = ["SELECT", "UNION", "DROP", "INSERT", "--", "1=1"]
+    }
+  }
+
+  tags = var.tags
 }
 
-# ─────────────────────────────────────────────
-# WAFv2 Web ACL
-# ─────────────────────────────────────────────
-resource "aws_wafv2_web_acl" "main" {
-  name        = "migrate4hana-waf-${var.environment}"
-  description = "Migrate4HANA API protection — rate limiting, common exploits, SQLi, XSS"
-  scope       = "REGIONAL"
+resource "azurerm_cdn_frontdoor_endpoint" "this" {
+  count                    = var.enable_waf ? 1 : 0
+  name                     = "migrate4hana-ep-${var.environment}"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.this[0].id
 
-  default_action {
-    allow {}
+  tags = var.tags
+}
+
+resource "azurerm_cdn_frontdoor_origin_group" "this" {
+  count                    = var.enable_waf ? 1 : 0
+  name                     = "migrate4hana-origin-group-${var.environment}"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.this[0].id
+  session_affinity_enabled = false
+
+  load_balancing {
+    sample_size                 = 4
+    successful_samples_required = 3
   }
 
-  # Rule 1: Rate limiting per IP
-  rule {
-    name     = "rate-limit"
-    priority = 1
-
-    action {
-      block {}
-    }
-
-    statement {
-      rate_based_statement {
-        limit              = var.rate_limit
-        aggregate_key_type = "IP"
-      }
-    }
-
-    visibility_config {
-      sampled_requests_enabled   = true
-      cloudwatch_metrics_enabled = true
-      metric_name                = "migrate4hana-rate-limit-${var.environment}"
-    }
-  }
-
-  # Rule 2: AWS Managed Rules — Common Rule Set (OWASP Top 10)
-  rule {
-    name     = "aws-common-rules"
-    priority = 2
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        vendor_name = "AWS"
-        name        = "AWSManagedRulesCommonRuleSet"
-      }
-    }
-
-    visibility_config {
-      sampled_requests_enabled   = true
-      cloudwatch_metrics_enabled = true
-      metric_name                = "migrate4hana-common-rules-${var.environment}"
-    }
-  }
-
-  # Rule 3: SQL Injection protection
-  rule {
-    name     = "sql-injection"
-    priority = 3
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        vendor_name = "AWS"
-        name        = "AWSManagedRulesSQLiRuleSet"
-      }
-    }
-
-    visibility_config {
-      sampled_requests_enabled   = true
-      cloudwatch_metrics_enabled = true
-      metric_name                = "migrate4hana-sqli-${var.environment}"
-    }
-  }
-
-  # Rule 4: Known bad inputs
-  rule {
-    name     = "known-bad-inputs"
-    priority = 4
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        vendor_name = "AWS"
-        name        = "AWSManagedRulesKnownBadInputsRuleSet"
-      }
-    }
-
-    visibility_config {
-      sampled_requests_enabled   = true
-      cloudwatch_metrics_enabled = true
-      metric_name                = "migrate4hana-bad-inputs-${var.environment}"
-    }
-  }
-
-  # Rule 5: IP reputation list (blocks known malicious IPs)
-  rule {
-    name     = "ip-reputation"
-    priority = 5
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        vendor_name = "AWS"
-        name        = "AWSManagedRulesAmazonIpReputationList"
-      }
-    }
-
-    visibility_config {
-      sampled_requests_enabled   = true
-      cloudwatch_metrics_enabled = true
-      metric_name                = "migrate4hana-ip-reputation-${var.environment}"
-    }
-  }
-
-  visibility_config {
-    sampled_requests_enabled   = true
-    cloudwatch_metrics_enabled = true
-    metric_name                = "migrate4hana-waf-${var.environment}"
-  }
-
-  tags = {
-    Name        = "migrate4hana-waf-${var.environment}"
-    Component   = "Security"
-    Environment = var.environment
+  health_probe {
+    path                = "/health"
+    protocol            = "Https"
+    interval_in_seconds = 30
+    request_type        = "HEAD"
   }
 }
 
-# ─────────────────────────────────────────────
-# WAF Logging to CloudWatch
-# ─────────────────────────────────────────────
-resource "aws_cloudwatch_log_group" "waf" {
-  name              = "aws-waf-logs-migrate4hana-${var.environment}"
-  retention_in_days = 90
+resource "azurerm_cdn_frontdoor_origin" "this" {
+  count                          = var.enable_waf ? 1 : 0
+  name                           = "migrate4hana-origin-${var.environment}"
+  cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.this[0].id
+  enabled                        = true
 
-  tags = {
-    Component   = "Security"
-    Environment = var.environment
-  }
+  host_name          = var.backend_host
+  origin_host_header = var.backend_host
+  http_port          = 80
+  https_port         = 443
+  priority           = 1
+  weight             = 1000
+
+  certificate_name_check_enabled = true
 }
 
-resource "aws_wafv2_web_acl_logging_configuration" "main" {
-  log_destination_configs = [aws_cloudwatch_log_group.waf.arn]
-  resource_arn            = aws_wafv2_web_acl.main.arn
+resource "azurerm_cdn_frontdoor_route" "this" {
+  count                         = var.enable_waf ? 1 : 0
+  name                          = "migrate4hana-route-${var.environment}"
+  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.this[0].id
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.this[0].id
+  cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.this[0].id]
 
-  logging_filter {
-    default_behavior = "KEEP"
+  supported_protocols    = ["Http", "Https"]
+  patterns_to_match      = ["/*"]
+  forwarding_protocol    = "HttpsOnly"
+  https_redirect_enabled = true
+  link_to_default_domain = true
+}
 
-    filter {
-      behavior    = "KEEP"
-      requirement = "MEETS_ANY"
+resource "azurerm_cdn_frontdoor_security_policy" "this" {
+  count                    = var.enable_waf ? 1 : 0
+  name                     = "migrate4hana-secpol-${var.environment}"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.this[0].id
 
-      condition {
-        action_condition {
-          action = "BLOCK"
+  security_policies {
+    firewall {
+      cdn_frontdoor_firewall_policy_id = azurerm_cdn_frontdoor_firewall_policy.this[0].id
+
+      association {
+        domain {
+          cdn_frontdoor_domain_id = azurerm_cdn_frontdoor_endpoint.this[0].id
         }
-      }
 
-      condition {
-        action_condition {
-          action = "COUNT"
-        }
+        patterns_to_match = ["/*"]
       }
     }
   }
-}
-
-# ─────────────────────────────────────────────
-# CloudWatch Alarm — WAF blocked requests spike
-# ─────────────────────────────────────────────
-resource "aws_cloudwatch_metric_alarm" "waf_blocked_requests" {
-  alarm_name          = "migrate4hana-waf-blocked-${var.environment}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "BlockedRequests"
-  namespace           = "AWS/WAFV2"
-  period              = 300
-  statistic           = "Sum"
-  threshold           = 100
-  alarm_description   = "WAF blocked > 100 requests in 5 min — possible attack"
-
-  dimensions = {
-    WebACL = aws_wafv2_web_acl.main.name
-    Rule   = "ALL"
-    Region = "us-east-1"
-  }
-
-  tags = {
-    Component   = "Security"
-    Environment = var.environment
-  }
-}
-
-# ─────────────────────────────────────────────
-# Outputs
-# ─────────────────────────────────────────────
-output "web_acl_arn" {
-  value       = aws_wafv2_web_acl.main.arn
-  description = "WAF Web ACL ARN — attach to ALB or API Gateway"
-}
-
-output "web_acl_id" {
-  value       = aws_wafv2_web_acl.main.id
-  description = "WAF Web ACL ID"
 }

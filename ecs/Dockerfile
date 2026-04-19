@@ -1,8 +1,8 @@
 ###############################################################################
-# Migrate4HANA — Fargate Worker Image
+# Migrate4HANA — Azure Container Apps Worker Image
 #
 # Packages the Python handlers with the SAP NW RFC SDK so that
-# Stages 1, 5, 12 and 12A can run without Lambda's 15-min limit.
+# Stages 1, 5, 12 and 12A can run without time limits.
 #
 # BUILD PREREQUISITES:
 #   Place the SAP NW RFC SDK zip in the ecs/ directory before building:
@@ -11,21 +11,19 @@
 # BUILD (from project root — build context must be the repo root):
 #   docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .
 #
-# PUSH (after ECR login):
-#   ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-#   REGION=us-east-1
-#   aws ecr get-login-password --region $REGION | \
-#       docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.$REGION.amazonaws.com
-#   docker tag  migrate4hana-worker:latest $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/migrate4hana/worker:latest
-#   docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/migrate4hana/worker:latest
+# PUSH (after ACR login):
+#   ACR_NAME=<your-acr>.azurecr.io
+#   az acr login --name "$ACR_NAME"
+#   docker tag  migrate4hana-worker:latest $ACR_NAME/migrate4hana/worker:latest
+#   docker push $ACR_NAME/migrate4hana/worker:latest
 ###############################################################################
 
 # ── Stage 1: Build PyRFC + SAP NW RFC SDK ────
-FROM public.ecr.aws/amazonlinux/amazonlinux:2023 AS builder
+FROM mcr.microsoft.com/cbl-mariner/base/core:2.0 AS builder
 
-RUN dnf install -y python3.11 python3.11-pip python3.11-devel \
-    gcc gcc-c++ make unzip && \
-    dnf clean all
+RUN tdnf install -y python3 python3-pip python3-devel \
+    gcc gcc-c++ make unzip ca-certificates && \
+    tdnf clean all
 
 # Copy and extract SAP NW RFC SDK (from ecs/ directory in build context)
 # NOTE: You must provide the SAP NW RFC SDK zip (nwrfc750P_*.zip) in the ecs/
@@ -33,7 +31,6 @@ RUN dnf install -y python3.11 python3.11-pip python3.11-devel \
 # The SDK is required for live RFC connections to SAP ECC/S4HANA.
 COPY ecs/nwrfc750P_*.zip /tmp/
 RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \
-    # The SDK extracts into nwrfcsdk/ — flatten if needed
     if [ -d /opt/sap/nwrfcsdk ]; then \
         cp -r /opt/sap/nwrfcsdk/* /opt/sap/ ; \
     fi
@@ -41,21 +38,21 @@ RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \
 ENV SAPNWRFC_HOME=/opt/sap
 ENV LD_LIBRARY_PATH=/opt/sap/lib:$LD_LIBRARY_PATH
 
-# Install Python dependencies
-RUN python3.11 -m pip install --target /opt/python \
-    pyrfc boto3
+# Install Python dependencies (requests replaces boto3)
+RUN python3 -m pip install --target /opt/python \
+    pyrfc requests
 
 # ── Stage 2: Slim runtime image ─────────────
-FROM public.ecr.aws/amazonlinux/amazonlinux:2023
+FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
 
-RUN dnf install -y python3.11 && dnf clean all
+RUN tdnf install -y python3 ca-certificates && tdnf clean all
 
 # SAP NW RFC SDK shared libraries
 COPY --from=builder /opt/sap/lib /opt/sap/lib
 ENV SAPNWRFC_HOME=/opt/sap
 ENV LD_LIBRARY_PATH=/opt/sap/lib:$LD_LIBRARY_PATH
 
-# Python packages (pyrfc, boto3)
+# Python packages (pyrfc, requests)
 COPY --from=builder /opt/python /opt/python
 ENV PYTHONPATH=/opt/python:$PYTHONPATH
 
@@ -63,7 +60,6 @@ ENV PYTHONPATH=/opt/python:$PYTHONPATH
 WORKDIR /app
 
 # Copy ALL lambda directories (handlers + utils + shared modules)
-# Build context is project root, so lambda/ is directly accessible
 COPY --chown=1000:1000 lambda/ /app/lambda/
 
 # Copy the unified entrypoint
@@ -73,4 +69,4 @@ COPY --chown=1000:1000 ecs/entrypoint.py /app/entrypoint.py
 RUN useradd -r -u 1000 -s /bin/false appuser
 USER appuser
 
-ENTRYPOINT ["python3.11", "/app/entrypoint.py"]
+ENTRYPOINT ["python3", "/app/entrypoint.py"]

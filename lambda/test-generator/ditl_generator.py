@@ -1305,11 +1305,10 @@ def lambda_handler(event, context):
     try:
         from pyrfc import Connection
         import os
-        import boto3
+        from utils.secrets_client import get_secret_value
 
-        secrets = boto3.client("secretsmanager")
-        secrets_arn = os.environ.get("SECRETS_ARN", "")
-        secret_response = secrets.get_secret_value(SecretId=secrets_arn)
+        secret_name = os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials")
+        secret_response = get_secret_value(secret_name)
         import json as _json
         conn_params = _json.loads(secret_response["SecretString"])
 

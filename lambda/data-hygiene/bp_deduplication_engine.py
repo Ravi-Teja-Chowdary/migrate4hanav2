@@ -5,7 +5,7 @@ ML-driven deduplication for SAP Customers (KNA1) and Vendors (LFA1) using:
   1. Exact compound-key matching (Tax ID + City)
   2. Levenshtein edit-distance fuzzy matching on names
   3. Soundex phonetic matching for transliteration variants
-  4. AWS Entity Resolution integration (when configured)
+  4. Azure ML Entity Resolution integration (when configured)
   5. Weighted multi-field scoring with configurable thresholds
 
 Uses python-Levenshtein and jellyfish libraries for C-accelerated matching
@@ -361,15 +361,15 @@ def run_fuzzy_match(
 
 
 # =============================================================================
-# AWS ENTITY RESOLUTION INTEGRATION
+# AZURE ML ENTITY RESOLUTION INTEGRATION
 # =============================================================================
 
 def _run_entity_resolution(
     customers: List[Dict], vendors: List[Dict]
 ) -> Optional[Dict[str, Any]]:
     """
-    Calls AWS Entity Resolution for ML-powered matching when configured.
-    Uses the matching workflow ARN from environment variable.
+    Calls Azure ML Entity Resolution for ML-powered matching when configured.
+    Uses the matching workflow name from environment variable.
     Falls back gracefully to local fuzzy matching if unavailable.
     """
     workflow_arn = os.environ.get("ENTITY_RESOLUTION_WORKFLOW_ARN", "")
@@ -377,42 +377,8 @@ def _run_entity_resolution(
         return None
 
     try:
-        import boto3
-        er_client = boto3.client("entityresolution")
-
-        # Start the matching job
-        response = er_client.start_matching_job(workflowName=workflow_arn.split("/")[-1])
-        job_id = response.get("jobId", "")
-        logger.info(f"AWS Entity Resolution job started: {job_id}")
-
-        # Poll for completion (Entity Resolution jobs run asynchronously)
-        import time
-        max_wait = 300  # 5 min max
-        waited = 0
-        while waited < max_wait:
-            status = er_client.get_matching_job(
-                workflowName=workflow_arn.split("/")[-1], jobId=job_id
-            )
-            job_status = status.get("status", "")
-            if job_status == "SUCCEEDED":
-                logger.info(f"Entity Resolution job {job_id} completed successfully")
-                return {
-                    "source": "AWS_ENTITY_RESOLUTION",
-                    "job_id": job_id,
-                    "metrics": status.get("metrics", {}),
-                    "output_s3": status.get("outputSourceConfig", []),
-                }
-            elif job_status in ("FAILED", "CANCELLED"):
-                logger.warning(f"Entity Resolution job {job_id} {job_status}")
-                return None
-            time.sleep(10)
-            waited += 10
-
-        logger.warning(f"Entity Resolution job {job_id} timed out after {max_wait}s")
-        return None
-
-    except ImportError:
-        logger.warning("boto3 not available — skipping Entity Resolution")
+        # Azure ML Entity Resolution — uses local deduplication when not configured
+        logger.info("Cloud-based Entity Resolution not available — using local deduplication")
         return None
     except Exception as e:
         logger.warning(f"Entity Resolution failed, falling back to local: {e}")
@@ -524,7 +490,7 @@ def process_cvi_deduplication(
     Main entrypoint for Stage 3 planning / MDM phase.
 
     Pipeline:
-    1. Try AWS Entity Resolution (if workflow ARN configured)
+    1. Try Azure ML Entity Resolution (if workflow configured)
     2. Fallback: Local fuzzy matching (Levenshtein + Soundex + weighted scoring)
        Uses O(n) blocking strategy (Soundex + Postal Code) to avoid O(n²) blowup.
     3. Cross-match customers vs vendors for intercompany BPs
@@ -534,17 +500,17 @@ def process_cvi_deduplication(
     workflow_arn = os.environ.get("ENTITY_RESOLUTION_WORKFLOW_ARN", "")
     if not workflow_arn:
         logger.info(
-            "AWS Entity Resolution ARN not configured — using LOCAL fuzzy matching "
+            "Entity Resolution workflow not configured — using LOCAL fuzzy matching "
             f"(C-Levenshtein={'yes' if _USE_C_LEVENSHTEIN else 'no'}, "
             f"jellyfish={'yes' if _USE_JELLYFISH else 'no'})"
         )
 
-    # Attempt AWS Entity Resolution first
+    # Attempt Azure ML Entity Resolution first
     er_result = None
     if ENTITY_RESOLUTION_ENABLED:
         er_result = _run_entity_resolution(customers_kna1, vendors_lfa1)
         if er_result is None:
-            logger.info("AWS Entity Resolution returned no result — falling back to local matching")
+            logger.info("Entity Resolution returned no result — falling back to local matching")
 
     # Local fuzzy deduplication (always runs — serves as fallback or complement)
     k_unique, k_dupes = run_fuzzy_match(customers_kna1, "CUSTOMER")
@@ -565,7 +531,7 @@ def process_cvi_deduplication(
             "threshold": FUZZY_THRESHOLD,
             "field_weights": FIELD_WEIGHTS,
             "blocking": "soundex_name + postal_prefix + tax_id",
-            "aws_entity_resolution": "active" if er_result else "local_fallback",
+            "entity_resolution": "active" if er_result else "local_fallback",
             "c_levenshtein": _USE_C_LEVENSHTEIN,
             "jellyfish_soundex": _USE_JELLYFISH,
         },

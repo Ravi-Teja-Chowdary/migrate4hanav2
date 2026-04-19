@@ -22,7 +22,6 @@ What we extract:
 import json
 import os
 import logging
-import boto3
 import sys
 
 # Ensure global config module can be imported natively
@@ -31,12 +30,13 @@ from global_config_framework import generate_spro_payload
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_BUCKET = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 
 
 # =============================================================================
@@ -340,8 +340,7 @@ def lambda_handler(event, context):
         try:
             from pyrfc import Connection
             conn_params = json.loads(
-                boto3.client("secretsmanager")
-                .get_secret_value(SecretId=os.environ.get("SECRETS_ARN", ""))
+                get_secret_value(os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials"))
                 ["SecretString"]
             )
             conn = Connection(**conn_params)
@@ -385,28 +384,28 @@ def lambda_handler(event, context):
         global_config_payload = generate_spro_payload(discovered_company_codes)
 
         # Save everything to S3
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/config/ecc-config-dump.json",
-            Body=json.dumps(config_data, indent=2, default=str),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/config/ecc-config-dump.json",
+            json.dumps(config_data, indent=2, default=str),
         )
 
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/config/s4-config-checklist.json",
-            Body=json.dumps(checklist, indent=2),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/config/s4-config-checklist.json",
+            json.dumps(checklist, indent=2),
         )
 
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/config/global-config-payload.json",
-            Body=json.dumps(global_config_payload, indent=2),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/config/global-config-payload.json",
+            json.dumps(global_config_payload, indent=2),
         )
 
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/config/s4-new-config-reference.json",
-            Body=json.dumps(S4_NEW_CONFIG, indent=2),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/config/s4-new-config-reference.json",
+            json.dumps(S4_NEW_CONFIG, indent=2),
         )
 
         total_entries = sum(

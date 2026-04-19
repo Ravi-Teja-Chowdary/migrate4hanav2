@@ -1,133 +1,178 @@
 """
-logger.py - Granular structured telemetry logging
-==================================================
-Used by all Lambda stages to emit consistent, structured JSON logs.
+logger.py — Web PubSub telemetry logger for Migrate4HANA
+=========================================================
+Structured telemetry logging for all pipeline stages. Uses Azure
+Web PubSub to broadcast events to connected WebSocket clients
+in real time, with Azure Monitor / Application Insights capture.
+
 Broadcasts to:
-  1. CloudWatch Logs (always)
-  2. API Gateway WebSocket (when deployed — real-time UI streaming)
-  3. Local API server (when running locally via run_local_pipeline.py)
+  1. Python logger (always — captured by Azure Monitor / Application Insights)
+  2. Azure Web PubSub (when configured — real-time UI streaming)
+
+Environment:
+    AZURE_WEB_PUBSUB_CONNECTION_STRING  — Web PubSub connection string
+    AZURE_WEB_PUBSUB_HUB               — Hub name (default "telemetry")
+
+Graceful fallback:
+    If Web PubSub is not configured, events are logged only to the
+    standard Python logger so the pipeline never breaks.
 """
+
 import json
 import time
 import logging
 import os
 import uuid
-from typing import Any, Dict
+import threading
+from typing import Any, Dict, Optional
 
-logging.basicConfig(level=logging.INFO)
-cw_logger = logging.getLogger("Migrate4HANA_Telemetry")
-cw_logger.setLevel(logging.INFO)
+logger = logging.getLogger("Migrate4HANA_Telemetry")
+logger.setLevel(logging.INFO)
 
-# WebSocket configuration from environment (set by Terraform Lambda env vars)
-_WS_API_ENDPOINT = os.environ.get("TELEMETRY_WS_ENDPOINT", "")
-_WS_CONNECTIONS_TABLE = os.environ.get("TELEMETRY_WS_CONNECTIONS_TABLE", "")
+# ── Configuration ─────────────────────────────────────────────────────────────
+_WEB_PUBSUB_CONNECTION_STRING = os.environ.get("AZURE_WEB_PUBSUB_CONNECTION_STRING", "")
+_WEB_PUBSUB_HUB = os.environ.get("AZURE_WEB_PUBSUB_HUB", "telemetry")
 
-# Cached boto3 clients (lazy-init to avoid import cost when not deployed)
-_apigw_client = None
-_dynamodb_resource = None
+# Thread-safe cached client
+_lock = threading.Lock()
+_pubsub_client = None
+_pubsub_available: Optional[bool] = None
 
 
-def _get_apigw_client():
-    global _apigw_client
-    if _apigw_client is None and _WS_API_ENDPOINT:
-        try:
-            import boto3
-            # Extract the base URL for the management API
-            # WebSocket endpoint: wss://abc123.execute-api.us-east-1.amazonaws.com/dev
-            # Management API:     https://abc123.execute-api.us-east-1.amazonaws.com/dev
-            endpoint_url = _WS_API_ENDPOINT.replace("wss://", "https://")
-            _apigw_client = boto3.client(
-                "apigatewaymanagementapi", endpoint_url=endpoint_url
+def _get_pubsub_client():
+    """
+    Return a cached WebPubSubServiceClient, creating it on first call.
+    Returns None if Web PubSub is not configured.
+    Thread-safe initialisation.
+    """
+    global _pubsub_client, _pubsub_available
+
+    if _pubsub_available is False:
+        return None
+
+    if _pubsub_client is not None:
+        return _pubsub_client
+
+    with _lock:
+        if _pubsub_client is not None:
+            return _pubsub_client
+
+        if not _WEB_PUBSUB_CONNECTION_STRING:
+            logger.info(
+                "AZURE_WEB_PUBSUB_CONNECTION_STRING not set — "
+                "telemetry will log to Python logger only"
             )
-        except Exception:
-            pass
-    return _apigw_client
+            _pubsub_available = False
+            return None
 
-
-def _get_connections_table():
-    global _dynamodb_resource
-    if _dynamodb_resource is None and _WS_CONNECTIONS_TABLE:
         try:
-            import boto3
-            _dynamodb_resource = boto3.resource("dynamodb")
-        except Exception:
-            pass
-    if _dynamodb_resource and _WS_CONNECTIONS_TABLE:
-        return _dynamodb_resource.Table(_WS_CONNECTIONS_TABLE)
-    return None
+            from azure.messaging.webpubsubservice import WebPubSubServiceClient
+
+            _pubsub_client = WebPubSubServiceClient.from_connection_string(
+                connection_string=_WEB_PUBSUB_CONNECTION_STRING,
+                hub=_WEB_PUBSUB_HUB,
+            )
+            _pubsub_available = True
+            logger.info(
+                "WebPubSubServiceClient initialised for hub '%s'", _WEB_PUBSUB_HUB
+            )
+            return _pubsub_client
+
+        except ImportError:
+            logger.warning(
+                "azure-messaging-webpubsubservice package not installed — "
+                "telemetry will log to Python logger only"
+            )
+            _pubsub_available = False
+            return None
+        except Exception as exc:
+            logger.warning(
+                "Failed to initialise Web PubSub client: %s — "
+                "telemetry will log to Python logger only",
+                exc,
+            )
+            _pubsub_available = False
+            return None
 
 
-def log_stage_event(stage_name: str, action: str, status: str, payload: Any, duration_ms: float = 0.0) -> None:
-    """Emit a structured JSON telemetry event to CloudWatch + WebSocket UI."""
+# ═══════════════════════════════════════════════════════════════════════════════
+# PUBLIC API
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    # Safely snippet payload
-    payload_str = str(payload)
-    if len(payload_str) > 300:
-        snippet = payload_str[:297] + "..."
+
+def log_stage_event(
+    stage: str,
+    action: str,
+    status: str,
+    details: Any = None,
+    duration_ms: float = 0.0,
+) -> None:
+    """
+    Emit a structured JSON telemetry event.
+
+    Broadcasts to:
+      1. Python logger (always — Azure Monitor / App Insights)
+      2. Azure Web PubSub (when configured — real-time UI)
+
+    Args:
+        stage:       Pipeline stage name (e.g. "code-analyzer").
+        action:      What happened (e.g. "ast_analysis_complete").
+        status:      "ok", "warning", "error", "skipped".
+        details:     Optional payload (will be snippeted if > 300 chars).
+        duration_ms: Elapsed time in milliseconds.
+    """
+    details_str = str(details) if details is not None else ""
+    if len(details_str) > 300:
+        snippet = details_str[:297] + "..."
     else:
-        snippet = payload_str
+        snippet = details_str
 
-    log_entry = {
+    log_entry: Dict[str, Any] = {
         "event_id": str(uuid.uuid4()),
-        "stage": stage_name,
+        "stage": stage,
         "action": action,
         "status": status,
         "duration_ms": duration_ms,
         "timestamp": int(time.time() * 1000),
-        "payload_snippet": snippet
+        "payload_snippet": snippet,
     }
 
-    # 1. Always emit to CloudWatch
-    cw_logger.info(json.dumps(log_entry))
+    # 1. Always emit to Python logger (captured by Azure Monitor)
+    logger.info(json.dumps(log_entry))
 
-    # 2. Broadcast to connected WebSocket clients
-    _broadcast_to_websocket(log_entry)
+    # 2. Broadcast to Web PubSub connected clients
+    broadcast_message(log_entry)
 
 
-def _broadcast_to_websocket(log_entry: Dict[str, Any]) -> None:
-    """Push log event to all connected WebSocket clients via API Gateway Management API."""
-    apigw = _get_apigw_client()
-    table = _get_connections_table()
+def broadcast_message(message_dict: Dict[str, Any]) -> None:
+    """
+    Send a JSON message to all connected WebSocket clients via Azure Web PubSub.
 
-    if not apigw or not table:
+    If Web PubSub is not configured, this is a no-op (graceful fallback).
+    Telemetry broadcast is best-effort — failures never break the pipeline.
+
+    Args:
+        message_dict: Message payload to broadcast as JSON.
+    """
+    client = _get_pubsub_client()
+    if client is None:
         return
 
-    message = json.dumps(log_entry).encode("utf-8")
-
-    # API Gateway WebSocket has a 128KB frame limit
-    if len(message) > 131072:
-        log_entry["payload_snippet"] = log_entry.get("payload_snippet", "")[:200] + "...[truncated]"
-        message = json.dumps(log_entry).encode("utf-8")
-
     try:
-        # Scan all active connections
-        response = table.scan(ProjectionExpression="connectionId")
-        connections = response.get("Items", [])
+        payload = json.dumps(message_dict)
 
-        stale_connections = []
-        for conn in connections:
-            connection_id = conn["connectionId"]
-            try:
-                apigw.post_to_connection(
-                    ConnectionId=connection_id, Data=message
-                )
-            except apigw.exceptions.GoneException:
-                # Client disconnected — mark for cleanup
-                stale_connections.append(connection_id)
-            except Exception as exc:
-                # Check for 410 Gone returned as ClientError
-                if hasattr(exc, 'response') and exc.response.get('ResponseMetadata', {}).get('HTTPStatusCode') == 410:
-                    stale_connections.append(connection_id)
-                # Non-fatal — don't let telemetry failures break pipeline
+        # Azure Web PubSub has a 1 MB message size limit
+        if len(payload) > 1_048_576:
+            message_dict["payload_snippet"] = (
+                message_dict.get("payload_snippet", "")[:200] + "...[truncated]"
+            )
+            payload = json.dumps(message_dict)
 
-        # Clean up stale connections
-        for cid in stale_connections:
-            try:
-                table.delete_item(Key={"connectionId": cid})
-            except Exception:
-                pass
+        client.send_to_all(
+            message=payload,
+            content_type="application/json",
+        )
 
-    except Exception:
+    except Exception as exc:
         # Telemetry broadcast is best-effort — never break the pipeline
-        pass
-
+        logger.debug("Web PubSub broadcast failed (non-fatal): %s", exc)

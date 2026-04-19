@@ -23,16 +23,15 @@ import json
 import os
 import sys
 import logging
-import boto3
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_BUCKET = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 
 
 # =============================================================================
@@ -287,8 +286,7 @@ def lambda_handler(event, context):
         try:
             from pyrfc import Connection
             conn_params = json.loads(
-                boto3.client("secretsmanager")
-                .get_secret_value(SecretId=os.environ.get("SECRETS_ARN", ""))
+                get_secret_value(os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials"))
                 ["SecretString"]
             )
             conn = Connection(**conn_params)
@@ -309,29 +307,29 @@ def lambda_handler(event, context):
         auth_impacts = check_auth_object_changes(roles)
 
         # Save results
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/roles/role-definitions.json",
-            Body=json.dumps(roles, indent=2, default=str),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/roles/role-definitions.json",
+            json.dumps(roles, indent=2, default=str),
         )
 
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/roles/fiori-mapping.json",
-            Body=json.dumps(fiori_mapping, indent=2),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/roles/fiori-mapping.json",
+            json.dumps(fiori_mapping, indent=2),
         )
 
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/roles/auth-impact-analysis.json",
-            Body=json.dumps(auth_impacts, indent=2),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/roles/auth-impact-analysis.json",
+            json.dumps(auth_impacts, indent=2),
         )
 
         # Save the T-code to Fiori master mapping for reference
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/roles/tcode-fiori-master-mapping.json",
-            Body=json.dumps(TCODE_TO_FIORI, indent=2),
+        put_object(
+            STAGING_BUCKET,
+            f"migrations/{run_id}/roles/tcode-fiori-master-mapping.json",
+            json.dumps(TCODE_TO_FIORI, indent=2),
         )
 
         result = {

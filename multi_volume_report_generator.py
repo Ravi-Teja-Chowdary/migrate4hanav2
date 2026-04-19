@@ -793,7 +793,7 @@ def _build_section_3_code(pipeline_results):
     # Summary paragraph always shown
     story.append(Paragraph(
         f"Programs where the AST engine found fewer than {ast_threshold} deterministic "
-        "changes were escalated to the GenAI router (Bedrock or Air-Gapped LLM) for "
+        "changes were escalated to the GenAI router (Claude Opus 4.6 or Air-Gapped LLM) for "
         "deeper semantic analysis.",
         ss["Body"],
     ))
@@ -804,7 +804,7 @@ def _build_section_3_code(pipeline_results):
         ["Programs Successfully Resolved", str(genai_resolved)],
         ["Programs Unsuccessful", str(genai_failed_total)],
         ["Issues Unresolved by GenAI", str(genai_unresolved_issues)],
-        ["GenAI Backend (Primary)", "Amazon Bedrock (Claude)"],
+        ["GenAI Backend (Primary)", "Anthropic Claude Opus 4.6"],
         ["GenAI Backend (Fallback)", "Air-Gapped Local LLM"],
     ]
     story.append(_make_table(
@@ -823,7 +823,7 @@ def _build_section_3_code(pipeline_results):
             genai_rows.append([
                 esc.get("program", ""),
                 str(esc.get("issues_sent", 0)),
-                esc.get("backend", "Bedrock"),
+                esc.get("backend", "Claude"),
                 esc.get("findings", ""),
                 status_display,
             ])

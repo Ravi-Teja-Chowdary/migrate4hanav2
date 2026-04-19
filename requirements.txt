@@ -1,24 +1,32 @@
-# Migrate4HANA — Python Dependencies
-# ====================================
-# Install: pip install -r requirements.txt
-#
-# NOTE: pyrfc requires the SAP NW RFC SDK to be installed separately.
-#       See: https://github.com/SAP/PyRFC#installation
+# Azure SDK
+azure-storage-blob>=12.19.0
+azure-identity>=1.15.0
+azure-cosmos>=4.5.0
+azure-keyvault-secrets>=4.7.0
+azure-messaging-webpubsubservice>=1.0.0
 
-# ── Core (API Server) ──────────────────────
+# GenAI
+anthropic>=0.40.0
+
+# SAP
+pyrfc>=3.0; sys_platform == "linux"
+
+# Web framework
 fastapi>=0.104.0
 uvicorn>=0.24.0
-pydantic>=2.0
+python-multipart>=0.0.6
 
-# ── AWS SDK ─────────────────────────────────
-boto3>=1.26.0
-
-# ── SAP RFC (requires NW RFC SDK) ──────────
-pyrfc>=3.0
-
-# ── PDF Report Generation ──────────────────
+# PDF
 reportlab>=4.0
+Pillow>=10.0
 
-# ── Dev / Testing ───────────────────────────
-pytest>=7.4.0
-locust>=2.20.0
+# Data processing
+pandas>=2.0
+openpyxl>=3.1.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
+pydantic>=2.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4

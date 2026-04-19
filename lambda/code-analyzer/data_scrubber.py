@@ -1,7 +1,7 @@
 """
 data_scrubber.py - High Security Data Masking for GenAI pipelines.
 Guarantees zero PII leakage by stripping string literals, comments, 
-and sensitive constants before dispatching payloads to Bedrock/Local LLMs.
+and sensitive constants before dispatching payloads to Claude/Local LLMs.
 """
 import re
 import logging
