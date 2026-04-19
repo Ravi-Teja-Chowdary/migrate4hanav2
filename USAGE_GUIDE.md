@@ -539,7 +539,7 @@ az login
 ```
 After login:
 - **Select subscription:** Use `az account set --subscription <subscription-id>` if you have multiple subscriptions
-- **Default region:** Set via Terraform variables (e.g. `westeurope` — pick the region closest to your SAP systems)
+- **Default region:** Set via Terraform variables (e.g. `southindia` — pick the region closest to your SAP systems)
 
 ### Step 3: Edit Terraform Variables
 ```bash
@@ -554,7 +554,7 @@ nano terraform/environments/dev/terraform.tfvars
 Set these values in the file:
 ```hcl
 # Azure region — pick the region closest to your SAP systems
-azure_region = "westeurope"
+azure_region = "southindia"
 
 # VNet network ranges (use defaults unless your network team specifies otherwise)
 vnet_cidr            = "10.0.0.0/16"

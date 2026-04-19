@@ -5,7 +5,7 @@
 
 # General
 environment = "dev"
-location    = "eastus2"
+location    = "southindia"
 alert_email = "your-team@example.com"
 
 # GPU VM (set to true to provision air-gapped LLM VM)

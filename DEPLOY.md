@@ -293,7 +293,7 @@ Open `terraform/environments/dev/terraform.tfvars` in your editor and configure:
 # ──────────────────────────────────────────────────────────
 
 environment = "dev"
-location    = "eastus2"         # Choose your preferred Azure region
+location    = "southindia"         # Azure South India region
 alert_email = "your-email@example.com"  # Receives monitoring alerts
 
 # ──────────────────────────────────────────────────────────

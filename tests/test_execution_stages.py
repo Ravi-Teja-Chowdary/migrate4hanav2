@@ -243,7 +243,7 @@ class TestSUMOrchestrator:
 # =============================================================================
 class TestCutoverOrchestrator:
     def test_go_decision_with_all_stages_passed(self):
-        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "southindia"}):
             handler, mock_storage = _load_handler("cutover-orchestrator")
 
         event = {
@@ -261,7 +261,7 @@ class TestCutoverOrchestrator:
         assert go == "GO"
 
     def test_dry_run_mode(self):
-        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "southindia"}):
             handler, _ = _load_handler("cutover-orchestrator")
 
         event = {
@@ -526,7 +526,7 @@ class TestRuleRouter:
     def test_fallback_rules_count(self):
         """Verify fallback rules have at least 25 rules."""
         sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "utils"))
-        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "southindia"}):
             import importlib
             import rule_router
             importlib.reload(rule_router)
@@ -535,7 +535,7 @@ class TestRuleRouter:
 
     def test_fallback_rules_category_filter(self):
         sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "utils"))
-        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "southindia"}):
             import importlib
             import rule_router
             importlib.reload(rule_router)
@@ -545,7 +545,7 @@ class TestRuleRouter:
 
     def test_fallback_rules_data_model(self):
         sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "utils"))
-        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "southindia"}):
             import importlib
             import rule_router
             importlib.reload(rule_router)
@@ -556,7 +556,7 @@ class TestRuleRouter:
 
     def test_fallback_rules_structure(self):
         sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "utils"))
-        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "southindia"}):
             import importlib
             import rule_router
             importlib.reload(rule_router)
@@ -728,7 +728,7 @@ class TestConfigApplierValidation:
 class TestErrorHandling:
     def test_cutover_with_missing_stages(self):
         """Cutover should handle event with missing planning stage results."""
-        with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
+        with patch.dict(os.environ, {"AZURE_REGION": "southindia"}):
             handler, _ = _load_handler("cutover-orchestrator")
         event = {
             "metadata": {"run_id": "test-missing", "input": {"dry_run": False}},

@@ -6,7 +6,7 @@ module "migrate4hana" {
   source = "../../"
 
   environment          = "dev"
-  location             = "eastus2"
+  location             = "southindia"
   alert_email          = var.alert_email
   enable_gpu_vm        = false
   enable_waf           = false

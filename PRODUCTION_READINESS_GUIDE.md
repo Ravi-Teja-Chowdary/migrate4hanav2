@@ -263,13 +263,13 @@ Create the Azure Storage Account backend for Terraform state **before** running 
 # Create resource group for Terraform state
 az group create \
   --name migrate4hana-tfstate-rg \
-  --location eastus
+  --location southindia
 
 # Create storage account for state
 az storage account create \
   --name migrate4hanatfstate \
   --resource-group migrate4hana-tfstate-rg \
-  --location eastus \
+  --location southindia \
   --sku Standard_LRS \
   --encryption-services blob
 
@@ -307,7 +307,7 @@ terraform {
 Edit `terraform/environments/dev/terraform.tfvars`:
 
 ```hcl
-azure_location       = "eastus"                                  # Your preferred Azure region
+azure_location       = "southindia"                               # Azure South India region
 environment          = "dev"                                     # Start with dev
 resource_group_name  = "migrate4hana-dev-rg"                     # Resource group for all resources
 vnet_cidr            = "10.10.0.0/16"                            # Must not conflict with on-prem SAP network
@@ -386,7 +386,7 @@ docker push $ACR_NAME.azurecr.io/migrate4hana-worker:latest
 az keyvault create \
   --name migrate4hana-kv-dev \
   --resource-group migrate4hana-dev-rg \
-  --location eastus
+  --location southindia
 
 # ECC source system credentials
 az keyvault secret set \
@@ -1851,7 +1851,7 @@ T-minus checklist:
 
 ```hcl
 # Already configured in prod environment (terraform/environments/prod/main.tf):
-# - Source: eastus  →  Replica: westus2
+# - Source: southindia  →  Replica: centralindia
 # - Scope: migrate4hana-staging-prod bucket
 # - Includes: Key Vault-encrypted objects, delete markers
 ```
@@ -1920,9 +1920,9 @@ Post-Failure Recovery:
 ### Failover Procedure
 
 ```
-If primary region (eastus) becomes unavailable:
-1. Update DNS to point API to westus2 (Azure DNS / Traffic Manager failover routing)
-2. Deploy Terraform to westus2 using prod/ environment
+If primary region (southindia) becomes unavailable:
+1. Update DNS to point API to centralindia (Azure DNS / Traffic Manager failover routing)
+2. Deploy Terraform to centralindia using prod/ environment
 3. Blob Storage geo-redundant replica becomes primary (data already replicated)
 4. Cosmos DB multi-region writes (if enabled) auto-failover
 5. Re-establish VPN tunnel to SAP from new region
