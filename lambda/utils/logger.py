@@ -94,17 +94,15 @@ def _broadcast_to_websocket(log_entry: Dict[str, Any]) -> None:
 
     message = json.dumps(log_entry).encode("utf-8")
 
+    # API Gateway WebSocket has a 128KB frame limit
+    if len(message) > 131072:
+        log_entry["payload_snippet"] = log_entry.get("payload_snippet", "")[:200] + "...[truncated]"
+        message = json.dumps(log_entry).encode("utf-8")
+
     try:
-        # Scan all active connections (paginated)
-        connections = []
+        # Scan all active connections
         response = table.scan(ProjectionExpression="connectionId")
-        connections.extend(response.get("Items", []))
-        while "LastEvaluatedKey" in response:
-            response = table.scan(
-                ProjectionExpression="connectionId",
-                ExclusiveStartKey=response["LastEvaluatedKey"]
-            )
-            connections.extend(response.get("Items", []))
+        connections = response.get("Items", [])
 
         stale_connections = []
         for conn in connections:
@@ -113,11 +111,14 @@ def _broadcast_to_websocket(log_entry: Dict[str, Any]) -> None:
                 apigw.post_to_connection(
                     ConnectionId=connection_id, Data=message
                 )
-            except Exception as post_err:
-                # Client disconnected (GoneException) — mark for cleanup
-                err_code = getattr(post_err, 'response', {}).get('Error', {}).get('Code', '')
-                if err_code == 'GoneException' or 'Gone' in str(post_err):
+            except apigw.exceptions.GoneException:
+                # Client disconnected — mark for cleanup
+                stale_connections.append(connection_id)
+            except Exception as exc:
+                # Check for 410 Gone returned as ClientError
+                if hasattr(exc, 'response') and exc.response.get('ResponseMetadata', {}).get('HTTPStatusCode') == 410:
                     stale_connections.append(connection_id)
+                # Non-fatal — don't let telemetry failures break pipeline
 
         # Clean up stale connections
         for cid in stale_connections:

@@ -25,7 +25,6 @@ import os
 import sys
 import logging
 import boto3
-import time
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
@@ -911,7 +910,7 @@ def lambda_handler(event, context):
     """
     logger.info("Migration Validator started")
     log_stage_event("migration-validator", "Pipeline Start", "IN_PROGRESS", {"stage": 13})
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     dry_run = event.get("metadata", {}).get("input", {}).get("dry_run", False)
@@ -950,9 +949,7 @@ def lambda_handler(event, context):
                 )
                 conn = Connection(**s4_params)
                 has_rfc = True
-            except ImportError:
-                logger.warning(f"No RFC to S/4HANA — generating simulated validation")
-            except Exception as e:
+            except (ImportError, Exception) as e:
                 logger.warning(f"No RFC to S/4HANA — generating simulated validation: {e}")
 
         if has_rfc:
@@ -1137,7 +1134,7 @@ def lambda_handler(event, context):
             "results": results,
             "run_id": run_id,
         }
-        log_stage_event("migration-validator", "Validation Complete", "SUCCESS", results.get("scorecard", {}), (time.time() - _stage_start) * 1000)
+        log_stage_event("migration-validator", "Validation Complete", "SUCCESS", results.get("scorecard", {}), (__import__('time').time() - _stage_start) * 1000)
         return result
 
     except Exception as e:

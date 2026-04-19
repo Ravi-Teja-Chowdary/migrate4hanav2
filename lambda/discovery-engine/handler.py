@@ -18,7 +18,6 @@ import os
 import sys
 import logging
 import boto3
-import time
 from datetime import datetime
 
 # Structured telemetry logger for real-time UI streaming
@@ -275,7 +274,7 @@ def scan_org_structure(conn):
         ],
     )
     org["company_codes"] = []
-    for row in result["DATA"]:
+    for row in result.get("DATA", []):
         fields = row["WA"].split("|")
         if len(fields) >= 4:
             org["company_codes"].append({
@@ -298,7 +297,7 @@ def scan_org_structure(conn):
         ],
     )
     org["plants"] = []
-    for row in result["DATA"]:
+    for row in result.get("DATA", []):
         fields = row["WA"].split("|")
         if len(fields) >= 4:
             org["plants"].append({
@@ -319,7 +318,7 @@ def scan_org_structure(conn):
         ],
     )
     org["sales_orgs"] = []
-    for row in result["DATA"]:
+    for row in result.get("DATA", []):
         fields = row["WA"].split("|")
         if len(fields) >= 2:
             org["sales_orgs"].append({
@@ -338,7 +337,7 @@ def scan_org_structure(conn):
         ],
     )
     org["controlling_areas"] = []
-    for row in result["DATA"]:
+    for row in result.get("DATA", []):
         fields = row["WA"].split("|")
         if len(fields) >= 2:
             org["controlling_areas"].append({
@@ -611,7 +610,7 @@ def lambda_handler(event, context):
     """
     logger.info(f"Discovery Engine started: {json.dumps(event)}")
     log_stage_event("discovery-engine", "Pipeline Start", "IN_PROGRESS", {"mode": event.get("input", {}).get("mode", "full")})
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     # Validate input at system boundary
     validation_errors = validate_event(event, required_fields=["metadata.run_id"])
@@ -684,7 +683,7 @@ def lambda_handler(event, context):
         )
 
         logger.info(f"Discovery complete: {json.dumps(summary)}")
-        log_stage_event("discovery-engine", "Discovery Complete", "SUCCESS", summary, (time.time() - _stage_start) * 1000)
+        log_stage_event("discovery-engine", "Discovery Complete", "SUCCESS", summary, (__import__('time').time() - _stage_start) * 1000)
 
         return {
             "status": "success",

@@ -6,6 +6,7 @@ import {
   FileJson, FileSpreadsheet, ArrowUpDown, AlertOctagon,
 } from 'lucide-react';
 import { STAGES, PHASES } from '../data/sampleData';
+import { apiFetch } from '../api';
 
 const WS_URL = import.meta.env.VITE_TELEMETRY_WS_URL || '';
 
@@ -65,75 +66,169 @@ export default function Telemetry() {
     setLogs(prev => [...prev.slice(-999), entry]); // Keep 1000 entries for the dedicated page
   }, []);
 
-  // WebSocket / mock connection
+  // WebSocket / API polling / mock connection
   useEffect(() => {
     if (!isLive) return;
 
-    if (WS_URL) {
-      const connect = () => {
-        setConnectionStatus('connecting');
-        const ws = new WebSocket(WS_URL);
-        wsRef.current = ws;
-        ws.onopen = () => setConnectionStatus('connected');
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
+    // Primary: Poll /api/progress for real-time pipeline events
+    let apiPollActive = true;
+    let stepIndex = 0;
+    let pipelineStatus = 'idle';
+
+    const pollProgress = async () => {
+      try {
+        const r = await apiFetch(`/api/progress?since=${stepIndex}`);
+        if (!r.ok) throw new Error('API not available');
+        const data = await r.json();
+        pipelineStatus = data.status;
+
+        if (data.steps && data.steps.length > 0) {
+          for (const step of data.steps) {
             addLog({
-              id: data.event_id || crypto.randomUUID?.() || Math.random().toString(36).substring(2, 14),
-              timestamp: data.timestamp || new Date().toISOString(),
-              stage: data.stage || 'unknown',
-              action: data.action || '',
-              status: data.status || 'IN_PROGRESS',
-              details: data.details || {},
-              payload: typeof data.details === 'object' ? JSON.stringify(data.details) : String(data.details || ''),
-              duration_ms: data.duration_ms,
-            });
-          } catch {
-            addLog({
-              id: crypto.randomUUID?.() || Math.random().toString(36).substring(2, 14),
-              timestamp: new Date().toISOString(),
-              stage: 'system',
-              action: 'message',
-              status: 'IN_PROGRESS',
-              details: {},
-              payload: event.data,
+              id: step.event_id || crypto.randomUUID?.() || Math.random().toString(36).substr(2, 12),
+              timestamp: step.timestamp || new Date().toISOString(),
+              stage: step.stage || 'pipeline',
+              action: step.action || '',
+              status: step.status || 'IN_PROGRESS',
+              details: step.details || {},
+              payload: typeof step.details === 'object' ? JSON.stringify(step.details) : String(step.details || ''),
+              duration_ms: step.duration_ms,
             });
           }
-        };
-        ws.onclose = () => {
-          setConnectionStatus('disconnected');
-          wsRef.current = null;
-          reconnectTimer.current = setTimeout(connect, 3000);
-        };
-        ws.onerror = () => ws.close();
-      };
-      connect();
-      return () => {
-        clearTimeout(reconnectTimer.current);
-        if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
-      };
-    }
+          stepIndex = data.total_steps;
+        }
 
-    // Mock mode
-    setConnectionStatus('mock');
-    let idx = 0;
-    const mockInterval = setInterval(() => {
-      const stageIdx = idx % MOCK_STAGES.length;
-      const actionIdx = idx % MOCK_ACTIONS.length;
-      const statusIdx = idx % MOCK_STATUSES.length;
-      addLog({
-        id: crypto.randomUUID?.() || Math.random().toString(36).substring(2, 14),
-        timestamp: new Date().toISOString(),
-        stage: MOCK_STAGES[stageIdx],
-        action: MOCK_ACTIONS[actionIdx],
-        status: MOCK_STATUSES[statusIdx],
-        details: { mock: true, cycle: Math.floor(idx / MOCK_STAGES.length) + 1 },
-        payload: JSON.stringify({ mock: true, cycle: Math.floor(idx / MOCK_STAGES.length) + 1 }),
-        duration_ms: Math.floor(Math.random() * 5000) + 100,
-      });
-      idx++;
-    }, 1500);
-    return () => clearInterval(mockInterval);
+        // Update connection status based on pipeline state
+        if (data.status === 'running') {
+          setConnectionStatus('connected');
+        } else if (data.status === 'completed' || data.status === 'failed') {
+          setConnectionStatus('connected');
+        }
+      } catch {
+        // API not available — will fall through to WS or mock
+      }
+    };
+
+    // Check if API is available; if so, poll it
+    let apiAvailable = false;
+    const checkAndPoll = async () => {
+      try {
+        const r = await apiFetch('/api/progress');
+        if (r.ok) {
+          apiAvailable = true;
+          setConnectionStatus('connected');
+          const data = await r.json();
+          pipelineStatus = data.status;
+          // Load existing steps
+          if (data.steps && data.steps.length > 0) {
+            for (const step of data.steps) {
+              addLog({
+                id: step.event_id || crypto.randomUUID?.() || Math.random().toString(36).substr(2, 12),
+                timestamp: step.timestamp || new Date().toISOString(),
+                stage: step.stage || 'pipeline',
+                action: step.action || '',
+                status: step.status || 'IN_PROGRESS',
+                details: step.details || {},
+                payload: typeof step.details === 'object' ? JSON.stringify(step.details) : String(step.details || ''),
+                duration_ms: step.duration_ms,
+              });
+            }
+            stepIndex = data.total_steps;
+          }
+        }
+      } catch {
+        apiAvailable = false;
+      }
+
+      if (apiAvailable) {
+        // Poll API for real-time updates
+        const apiInterval = setInterval(() => {
+          if (!apiPollActive) return;
+          pollProgress();
+        }, 1500);
+        return () => {
+          apiPollActive = false;
+          clearInterval(apiInterval);
+        };
+      }
+
+      // Fallback: WebSocket mode
+      if (WS_URL) {
+        const connect = () => {
+          setConnectionStatus('connecting');
+          const ws = new WebSocket(WS_URL);
+          wsRef.current = ws;
+          ws.onopen = () => setConnectionStatus('connected');
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              addLog({
+                id: data.event_id || crypto.randomUUID?.() || Math.random().toString(36).substr(2, 12),
+                timestamp: data.timestamp || new Date().toISOString(),
+                stage: data.stage || 'unknown',
+                action: data.action || '',
+                status: data.status || 'IN_PROGRESS',
+                details: data.details || {},
+                payload: typeof data.details === 'object' ? JSON.stringify(data.details) : String(data.details || ''),
+                duration_ms: data.duration_ms,
+              });
+            } catch {
+              addLog({
+                id: crypto.randomUUID?.() || Math.random().toString(36).substr(2, 12),
+                timestamp: new Date().toISOString(),
+                stage: 'system',
+                action: 'message',
+                status: 'IN_PROGRESS',
+                details: {},
+                payload: event.data,
+              });
+            }
+          };
+          ws.onclose = () => {
+            setConnectionStatus('disconnected');
+            wsRef.current = null;
+            reconnectTimer.current = setTimeout(connect, 3000);
+          };
+          ws.onerror = () => ws.close();
+        };
+        connect();
+        return () => {
+          clearTimeout(reconnectTimer.current);
+          if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+        };
+      }
+
+      // Final fallback: Mock mode
+      setConnectionStatus('mock');
+      let idx = 0;
+      const mockInterval = setInterval(() => {
+        const stageIdx = idx % MOCK_STAGES.length;
+        const actionIdx = idx % MOCK_ACTIONS.length;
+        const statusIdx = idx % MOCK_STATUSES.length;
+        addLog({
+          id: crypto.randomUUID?.() || Math.random().toString(36).substr(2, 12),
+          timestamp: new Date().toISOString(),
+          stage: MOCK_STAGES[stageIdx],
+          action: MOCK_ACTIONS[actionIdx],
+          status: MOCK_STATUSES[statusIdx],
+          details: { mock: true, cycle: Math.floor(idx / MOCK_STAGES.length) + 1 },
+          payload: JSON.stringify({ mock: true, cycle: Math.floor(idx / MOCK_STAGES.length) + 1 }),
+          duration_ms: Math.floor(Math.random() * 5000) + 100,
+        });
+        idx++;
+      }, 1500);
+      return () => clearInterval(mockInterval);
+    };
+
+    let cleanupFn = null;
+    checkAndPoll().then(fn => { cleanupFn = fn; });
+
+    return () => {
+      apiPollActive = false;
+      if (cleanupFn) cleanupFn();
+      clearTimeout(reconnectTimer.current);
+      if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+    };
   }, [isLive, addLog]);
 
   // Auto-scroll
@@ -289,7 +384,7 @@ export default function Telemetry() {
           >
             Live <span className="gradient-text">Telemetry</span>
           </motion.h1>
-          <p className="text-sm text-white/40 mt-1">Real-time pipeline events with search, filter & export</p>
+          <p className="text-sm text-white/40 mt-1">Real-time pipeline progress — auto-connects to API, WebSocket, or mock</p>
         </div>
         <div className="flex items-center gap-2">
           <span className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full glass ${

@@ -18,7 +18,6 @@ import os
 import sys
 import logging
 import boto3
-import time
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
@@ -602,7 +601,7 @@ def verify_rollback_category(conn, category: str, items: list) -> dict:
 def lambda_handler(event, context):
     logger.info(f"Initiating Rollback Sequence. Payload: {json.dumps(event)}")
     log_stage_event("rollback-manager", "Rollback Start", "IN_PROGRESS", {"stage": "rollback"})
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     # Validate input
     validation_errors = validate_event(event)
@@ -913,7 +912,7 @@ def lambda_handler(event, context):
         "rfc_destination_deletions": len(report["rfc_destination_deletions"]),
         "idoc_partner_deletions": len(report["idoc_partner_deletions"]),
     }
-    log_stage_event("rollback-manager", f"Rollback {status}", "SUCCESS" if not failed else "ERROR", summary, (time.time() - _stage_start) * 1000)
+    log_stage_event("rollback-manager", f"Rollback {status}", "SUCCESS" if not failed else "ERROR", summary, (__import__('time').time() - _stage_start) * 1000)
 
     return {
         "status": status,

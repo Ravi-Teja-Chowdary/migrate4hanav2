@@ -55,8 +55,8 @@ def validate_event(event: dict, required_fields: list = None) -> list:
             errors.append(f"Invalid ecc_client (must be 3 digits): {ecc_client}")
 
         mode = inp.get("mode")
-        if mode is not None and mode not in ("full", "quick", "delta"):
-            errors.append(f"Invalid mode (must be full/quick/delta): {mode}")
+        if mode is not None and mode not in ("full", "quick", "delta", "ecc_full"):
+            errors.append(f"Invalid mode (must be full/quick/delta/ecc_full): {mode}")
 
         dry_run = inp.get("dry_run")
         if dry_run is not None and not isinstance(dry_run, bool):

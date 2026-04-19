@@ -59,8 +59,10 @@ def live_conn():
     if not LIVE_SAP:
         pytest.skip("SAP_TEST_* env vars not set — skipping live tests")
     conn = _get_live_connection()
-    yield conn
-    conn.close()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 @pytest.fixture(params=["mock"] + (["live"] if LIVE_SAP else []))
@@ -70,8 +72,10 @@ def conn(request, mock_conn):
         yield mock_conn
     else:
         live = _get_live_connection()
-        yield live
-        live.close()
+        try:
+            yield live
+        finally:
+            live.close()
 
 
 # ═══════════════════════════════════════════════════════════════

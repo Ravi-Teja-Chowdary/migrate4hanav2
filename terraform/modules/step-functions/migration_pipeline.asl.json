@@ -1,5 +1,5 @@
 {
-  "Comment": "Migrate4HANA - 17-Stage SAP Activate Pipeline with LLM Routing (5 Phases)",
+  "Comment": "Migrate4HANA - 17-Stage SAP Activate Pipeline (5 Phases)",
   "StartAt": "PreFlightChecks",
   "States": {
     "PreFlightChecks": {
@@ -86,36 +86,8 @@
     "Stage5_CodeAnalysis": {
       "Type": "Task",
       "Resource": "${CodeAnalyzerArn}",
-      "Next": "DetermineLLMPath",
+      "Next": "InvokeBedrockLLM",
       "ResultPath": "$.CodeRemediationContext",
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "Next": "RollbackManager"
-        }
-      ]
-    },
-    "DetermineLLMPath": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.LLMRoutingPreference",
-          "StringEquals": "AIRGAPPED_LOCAL",
-          "Next": "InvokeLocalAirGappedLLM"
-        },
-        {
-          "Variable": "$.LLMRoutingPreference",
-          "StringEquals": "AMAZON_BEDROCK",
-          "Next": "InvokeBedrockLLM"
-        }
-      ],
-      "Default": "InvokeBedrockLLM"
-    },
-    "InvokeLocalAirGappedLLM": {
-      "Type": "Task",
-      "Resource": "${LocalLLMConnectorArn}",
-      "Next": "Stage6_DataHygiene",
-      "ResultPath": "$.RemediatedCode",
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],

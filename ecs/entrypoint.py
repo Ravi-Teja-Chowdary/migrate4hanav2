@@ -95,10 +95,7 @@ def main():
     logger.info("  PID   : %d", os.getpid())
 
     # ── Parse input payload ──
-    try:
-        event = json.loads(input_json)
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"Invalid JSON in SFN_INPUT: {exc}")
+    event = json.loads(input_json)
 
     # ── Set up Python path so the handler's relative imports work ──
     handler_dir = f"/app/lambda/{stage}"
@@ -142,7 +139,7 @@ def main():
     except Exception as exc:
         error_msg = str(exc)[:256]
         cause = traceback.format_exc()[:32768]
-        logger.error("Stage %s FAILED (%s): %s\n%s", stage, type(exc).__name__, exc, cause)
+        logger.error("Stage %s FAILED:\n%s", stage, cause)
 
         try:
             sfn.send_task_failure(
@@ -151,12 +148,15 @@ def main():
                 cause=cause,
             )
         except Exception as cb_exc:
-            logger.error("Failed to send task failure callback: %s", cb_exc)
+            logger.critical("CRITICAL: Failed to notify Step Functions of failure: %s", cb_exc)
+            sys.exit(2)
         sys.exit(1)
 
     finally:
         stop_event.set()
-        hb_thread.join(timeout=5)
+        hb_thread.join(timeout=10)
+        if hb_thread.is_alive():
+            logger.warning("Heartbeat thread did not terminate within timeout")
 
 
 if __name__ == "__main__":

@@ -24,7 +24,6 @@ import os
 import sys
 import logging
 import boto3
-import time
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
@@ -280,7 +279,7 @@ def lambda_handler(event, context):
     """Role & Authorization Migrator main handler."""
     logger.info("Role Migrator started")
     log_stage_event("role-migrator", "Pipeline Start", "IN_PROGRESS", {"stage": 5})
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
 
@@ -294,9 +293,7 @@ def lambda_handler(event, context):
             )
             conn = Connection(**conn_params)
             has_rfc = True
-        except ImportError:
-            has_rfc = False
-        except Exception:
+        except (ImportError, Exception):
             has_rfc = False
 
         if has_rfc:
@@ -345,7 +342,7 @@ def lambda_handler(event, context):
             "s3_key": f"migrations/{run_id}/roles/",
             "run_id": run_id,
         }
-        log_stage_event("role-migrator", "Role Migration Complete", "SUCCESS", result, (time.time() - _stage_start) * 1000)
+        log_stage_event("role-migrator", "Role Migration Complete", "SUCCESS", result, (__import__('time').time() - _stage_start) * 1000)
         return result
 
     except Exception as e:

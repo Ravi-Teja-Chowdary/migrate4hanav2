@@ -5,11 +5,11 @@ import {
   Code, Database, Settings, Shield, Plug, Search,
   PlayCircle, Upload, HardDrive, Wrench, UserCheck, Zap, ArrowDown,
   ClipboardCheck, ShieldCheck, ListChecks, ShieldAlert, DollarSign,
-  TestTube2, Rocket, AlertOctagon, Activity,
+  TestTube2, Rocket, AlertOctagon, Activity, Download,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { STAGES, PHASES, PHASE_COLORS, SAMPLE_RUN, getStageDuration } from '../data/sampleData';
-import { apiFetch } from '../api';
+import { apiFetch, getAuthUrl } from '../api';
 import LogViewer from '../components/LogViewer';
 
 const ICONS = {
@@ -111,7 +111,7 @@ export default function Pipeline() {
   const [currentStage, setCurrentStage] = useState(-1);
   const [stageStatuses, setStageStatuses] = useState({});
   const [elapsed, setElapsed] = useState({});
-  const [apiMode, setApiMode] = useState(null); // null | 'assess' | 'convert' | 'complete' | 'full'
+  const [apiMode, setApiMode] = useState(null); // null | 'assess' | 'ecc_full' | 'convert' | 'complete' | 'full'
   const [apiStatus, setApiStatus] = useState('idle');
   const [apiError, setApiError] = useState(null);
   const timerRef = useRef(null);
@@ -122,6 +122,7 @@ export default function Pipeline() {
   // Get stages for a given mode
   function getStagesForMode(mode) {
     if (mode === 'assess') return STAGES.filter((s) => s.phaseNumber <= 2);
+    if (mode === 'ecc_full') return STAGES.filter((s) => s.phaseNumber <= 2);
     if (mode === 'convert') return STAGES.filter((s) => s.phaseNumber === 3);
     if (mode === 'complete') return STAGES.filter((s) => s.phaseNumber >= 4);
     return STAGES; // 'full' runs all 17 stages end-to-end
@@ -166,6 +167,21 @@ export default function Pipeline() {
       const data = await r.json();
       if (data.error) { setApiError(data.error); setApiStatus('error'); return; }
       startVisualRun('assess');
+      startPolling();
+    } catch {
+      setApiError('Cannot reach API server. Start it with: python api_server.py');
+      setApiStatus('error');
+    }
+  }
+
+  async function triggerEccFull() {
+    setApiStatus('polling');
+    setApiError(null);
+    try {
+      const r = await apiFetch('/api/pipeline/ecc_full', { method: 'POST' });
+      const data = await r.json();
+      if (data.error) { setApiError(data.error); setApiStatus('error'); return; }
+      startVisualRun('ecc_full');
       startPolling();
     } catch {
       setApiError('Cannot reach API server. Start it with: python api_server.py');
@@ -219,7 +235,7 @@ export default function Pipeline() {
   }
 
   function startPolling() {
-    clearInterval(pollRef.current);
+    if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
         const r = await apiFetch('/api/status');
@@ -250,10 +266,11 @@ export default function Pipeline() {
   }, []);
 
   const completedCount = Object.values(stageStatuses).filter((s) => s === 'completed').length;
-  const totalStages = apiMode === 'assess' ? 8 : apiMode === 'convert' ? 2 : apiMode === 'complete' ? 7 : 17;
+  const totalStages = apiMode === 'assess' ? 8 : apiMode === 'ecc_full' ? 8 : apiMode === 'convert' ? 2 : apiMode === 'complete' ? 7 : 17;
 
   const modeLabel = {
     assess: 'Running Assessment (Phases 1-2, read-only)...',
+    ecc_full: 'Running Full ECC Assessment (Phases 1-2 + Report Generation)...',
     convert: 'Running Conversion (Phase 3, Stages 9-10)...',
     complete: 'Running Completion (Phases 4-5, Stages 11-17)...',
     full: 'Running Full Migration (All 5 Phases, 17 Stages)...',
@@ -290,6 +307,17 @@ export default function Pipeline() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.015 }}
+                onClick={triggerEccFull}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-blue/20 to-accent-green/20
+                           text-white text-sm font-bold hover:from-accent-blue/30 hover:to-accent-green/30
+                           transition-all duration-300 border border-accent-cyan/20 animate-pulse-glow"
+              >
+                <Rocket size={15} /> Run Full Assessment
+              </motion.button>
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.03 }}
                 onClick={triggerConvert}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 text-amber-400 text-sm font-semibold
                            hover:bg-amber-500/20 transition-all duration-300 border border-amber-500/20"
@@ -299,7 +327,7 @@ export default function Pipeline() {
               <motion.button
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.03 }}
+                transition={{ delay: 0.045 }}
                 onClick={triggerComplete}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-500/10 text-green-400 text-sm font-semibold
                            hover:bg-green-500/20 transition-all duration-300 border border-green-500/20"
@@ -309,7 +337,7 @@ export default function Pipeline() {
               <motion.button
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.045 }}
+                transition={{ delay: 0.06 }}
                 onClick={triggerFull}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-blue/20 to-accent-green/20
                            text-white text-sm font-bold hover:from-accent-blue/30 hover:to-accent-green/30
@@ -384,6 +412,7 @@ export default function Pipeline() {
       {PHASES.map((phase) => {
         const phaseStages = STAGES.filter((s) => s.phaseNumber === phase.id);
         const isOutOfScope = (apiMode === 'assess' && phase.id > 2)
+          || (apiMode === 'ecc_full' && phase.id > 2)
           || (apiMode === 'convert' && phase.id !== 3)
           || (apiMode === 'complete' && phase.id < 4);
 
@@ -486,11 +515,17 @@ export default function Pipeline() {
                 <CheckCircle2 size={32} className="text-accent-green" />
               </motion.div>
               <h3 className="text-xl font-bold text-white">
-                {apiMode === 'assess' ? 'Assessment Complete' : apiMode === 'convert' ? 'Conversion Complete' : apiMode === 'complete' ? 'Migration Complete' : 'Full Migration Complete'}
+                {apiMode === 'assess' ? 'Assessment Complete'
+                  : apiMode === 'ecc_full' ? 'Full ECC Assessment Complete'
+                  : apiMode === 'convert' ? 'Conversion Complete'
+                  : apiMode === 'complete' ? 'Migration Complete'
+                  : 'Full Migration Complete'}
               </h3>
               <p className="text-sm text-white/40 mt-1">
                 {apiMode === 'assess'
                   ? 'Phases 1-2 finished. Review results on the Scorecard and Report pages.'
+                  : apiMode === 'ecc_full'
+                  ? 'Full ECC assessment finished. Review results on the Scorecard and Report pages.'
                   : apiMode === 'convert'
                   ? 'Phase 3 conversion (Stages 9-10) finished successfully.'
                   : apiMode === 'complete'
@@ -503,6 +538,17 @@ export default function Pipeline() {
                 </p>
               )}
               <div className="flex items-center justify-center gap-3 mt-5">
+                <button
+                  onClick={async () => {
+                    const url = await getAuthUrl('/api/runs/latest/pdf');
+                    window.open(url, '_blank');
+                  }}
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-green/20 to-accent-cyan/20
+                             text-white text-sm font-bold border border-accent-green/30 hover:from-accent-green/30 hover:to-accent-cyan/30
+                             transition-all duration-300 animate-pulse-glow"
+                >
+                  <Download size={15} /> Download Report
+                </button>
                 <Link
                   to="/telemetry"
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent-blue/10 text-accent-blue text-xs font-medium border border-accent-blue/20 hover:bg-accent-blue/20 transition-all"

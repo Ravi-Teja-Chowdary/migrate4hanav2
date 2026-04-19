@@ -24,7 +24,6 @@ import os
 import sys
 import logging
 import boto3
-import time
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
@@ -154,11 +153,23 @@ def orchestrate_fins_migration(connection):
 
                 for entry in progress_entries:
                     table_name = entry.get("TABLE_NAME", "")
+                    try:
+                        records_processed = int(entry.get("RECORDS_PROCESSED", 0))
+                    except (ValueError, TypeError):
+                        records_processed = 0
+                    try:
+                        total_records = int(entry.get("TOTAL_RECORDS", 0))
+                    except (ValueError, TypeError):
+                        total_records = 0
+                    try:
+                        percent_complete = float(entry.get("PERCENT_COMPLETE", 0))
+                    except (ValueError, TypeError):
+                        percent_complete = 0.0
                     fins_result["progress"][table_name] = {
                         "status": entry.get("STATUS", ""),
-                        "records_processed": int(entry.get("RECORDS_PROCESSED", 0)),
-                        "total_records": int(entry.get("TOTAL_RECORDS", 0)),
-                        "percent_complete": float(entry.get("PERCENT_COMPLETE", 0)),
+                        "records_processed": records_processed,
+                        "total_records": total_records,
+                        "percent_complete": percent_complete,
                     }
 
                 if overall_status in ("COMPLETED", "FINISHED"):
@@ -819,10 +830,7 @@ def _get_s4_connection(dry_run):
             ["SecretString"]
         )
         return Connection(**s4_params), True
-    except ImportError:
-        logger.warning(f"No RFC to S/4HANA — simulating")
-        return None, False
-    except Exception as e:
+    except (ImportError, Exception) as e:
         logger.warning(f"No RFC to S/4HANA — simulating: {e}")
         return None, False
 
@@ -900,7 +908,7 @@ def _handle_stream_load(event, stream_type, run_id, dry_run, start_time):
             conn.close()
 
         result["status"] = "success"
-        duration_ms = (time.time() - start_time) * 1000
+        duration_ms = (__import__('time').time() - start_time) * 1000
         log_stage_event("data-loader", f"Stream Complete: {stream_type}", "SUCCESS", result, duration_ms)
         return result
 
@@ -980,7 +988,7 @@ def _handle_reconciliation(event, run_id, dry_run, start_time):
         ContentType="application/json",
     )
 
-    duration_ms = (time.time() - start_time) * 1000
+    duration_ms = (__import__('time').time() - start_time) * 1000
     log_stage_event("data-loader", "Reconciliation Complete", "SUCCESS",
                     report.get("reconciliation", {}).get("variance_summary", {}), duration_ms)
 
@@ -1007,7 +1015,7 @@ def lambda_handler(event, context):
     3. Reconciliation (stage=reconciliation): penny-perfect GL balance check
     """
     logger.info("Data Loader started")
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     # Validate input at system boundary
     validation_errors = validate_event(event)
@@ -1067,9 +1075,7 @@ def lambda_handler(event, context):
                 )
                 conn = Connection(**s4_params)
                 has_rfc = True
-            except ImportError:
-                logger.warning(f"No RFC to S/4HANA — simulating data load")
-            except Exception as e:
+            except (ImportError, Exception) as e:
                 logger.warning(f"No RFC to S/4HANA — simulating data load: {e}")
 
         # --- Finance: ACDOCA ---
@@ -1229,7 +1235,7 @@ def lambda_handler(event, context):
             ContentType="application/json",
         )
 
-        log_stage_event("data-loader", "Data Loading Complete", "SUCCESS", results.get("summary", {}), (time.time() - _stage_start) * 1000)
+        log_stage_event("data-loader", "Data Loading Complete", "SUCCESS", results.get("summary", {}), (__import__('time').time() - _stage_start) * 1000)
         return {"status": "success", "results": results, "run_id": run_id}
 
     except Exception as e:

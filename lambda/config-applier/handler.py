@@ -23,7 +23,6 @@ import os
 import sys
 import logging
 import boto3
-import time
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
@@ -387,7 +386,7 @@ def lambda_handler(event, context):
     """
     logger.info("Config Applier started")
     log_stage_event("config-applier", "Pipeline Start", "IN_PROGRESS", {"stage": 10})
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     dry_run = event.get("metadata", {}).get("input", {}).get("dry_run", False)
@@ -499,9 +498,7 @@ def lambda_handler(event, context):
             )
             conn = Connection(**s4_params)
             has_rfc = True
-        except ImportError:
-            logger.warning(f"No RFC to S/4HANA — simulating config apply")
-        except Exception as e:
+        except (ImportError, Exception) as e:
             logger.warning(f"No RFC to S/4HANA — simulating config apply: {e}")
 
         # Apply each configuration area
@@ -590,7 +587,7 @@ def lambda_handler(event, context):
             ContentType="application/json",
         )
 
-        log_stage_event("config-applier", "Config Applied", "SUCCESS", results.get("summary", {}), (time.time() - _stage_start) * 1000)
+        log_stage_event("config-applier", "Config Applied", "SUCCESS", results.get("summary", {}), (__import__('time').time() - _stage_start) * 1000)
         return {"status": "success", "results": results, "run_id": run_id}
 
     except Exception as e:

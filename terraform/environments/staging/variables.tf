@@ -62,29 +62,9 @@ variable "bedrock_model_id" {
   default = "anthropic.claude-3-sonnet-20240229-v1:0"
 }
 
-variable "local_llm_endpoint" {
-  type    = string
-  default = ""
-}
-
 variable "ast_change_threshold" {
   type    = number
   default = 3
-}
-
-variable "gpu_ami_id" {
-  type    = string
-  default = "ami-0123456789abcdef0"
-}
-
-variable "llm_model_s3_path" {
-  type    = string
-  default = "s3://migrate4hana-llm-models-staging/llama-3-8b/"
-}
-
-variable "llm_model_s3_bucket" {
-  type    = string
-  default = "migrate4hana-llm-models-staging"
 }
 
 # ── WAF ──────────────────────────────────────

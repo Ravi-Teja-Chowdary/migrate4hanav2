@@ -36,7 +36,7 @@ const LogViewer = ({ runId }) => {
           try {
             const data = JSON.parse(event.data);
             addLog({
-              id: data.event_id || Math.random().toString(36).substring(2, 11),
+              id: data.event_id || Math.random().toString(36).substr(2, 9),
               timestamp: data.timestamp || new Date().toISOString(),
               stage: data.stage || 'unknown',
               action: data.action || '',
@@ -47,7 +47,7 @@ const LogViewer = ({ runId }) => {
           } catch {
             // non-JSON message — show as raw
             addLog({
-              id: Math.random().toString(36).substring(2, 11),
+              id: Math.random().toString(36).substr(2, 9),
               timestamp: new Date().toISOString(),
               stage: 'system',
               action: 'message',
@@ -65,6 +65,7 @@ const LogViewer = ({ runId }) => {
         };
 
         ws.onerror = () => {
+          clearTimeout(reconnectTimer.current);
           ws.close();
         };
       };
@@ -89,7 +90,7 @@ const LogViewer = ({ runId }) => {
     const mockInterval = setInterval(() => {
       const i = idx % stages.length;
       addLog({
-        id: Math.random().toString(36).substring(2, 11),
+        id: Math.random().toString(36).substr(2, 9),
         timestamp: new Date().toISOString(),
         stage: stages[i],
         action: actions[i],
@@ -145,7 +146,7 @@ const LogViewer = ({ runId }) => {
         ) : (
             logs.map(log => (
             <div key={log.id} className="flex gap-4 opacity-90 hover:opacity-100 hover:bg-gray-800/50 p-1 rounded">
-                <span className="text-gray-500 shrink-0">[{log.timestamp.split('T')[1].slice(0, -1)}]</span>
+                <span className="text-gray-500 shrink-0">[{log.timestamp?.split('T')[1]?.slice(0, -1) || 'N/A'}]</span>
                 <span className="text-blue-400 font-semibold w-36 shrink-0 truncate">[{log.stage}]</span>
                 <span className={`w-24 shrink-0 truncate ${
                     log.status === 'ERROR' ? 'text-red-500 font-bold' : 

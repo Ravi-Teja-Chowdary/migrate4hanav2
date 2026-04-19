@@ -61,13 +61,13 @@ WORKDIR /app
 
 # Copy ALL lambda directories (handlers + utils + shared modules)
 # Build context is project root, so lambda/ is directly accessible
-COPY lambda/ /app/lambda/
+COPY --chown=1000:1000 lambda/ /app/lambda/
 
 # Copy the unified entrypoint
-COPY ecs/entrypoint.py /app/entrypoint.py
+COPY --chown=1000:1000 ecs/entrypoint.py /app/entrypoint.py
 
 # Non-root user for security
-RUN useradd -r -s /bin/false appuser
+RUN useradd -r -u 1000 -s /bin/false appuser
 USER appuser
 
 ENTRYPOINT ["python3.11", "/app/entrypoint.py"]

@@ -29,7 +29,6 @@ import json
 import os
 import logging
 import boto3
-import time
 import sys
 from datetime import datetime
 
@@ -345,15 +344,18 @@ def transform_bp_data(customers, vendors):
             assignment["overlap_analysis"],
             assignment["strategy_used"],
         )
+        crosswalk_s3_status = "success"
     except Exception as e:
         logger.warning(f"S3 crosswalk persistence failed (non-fatal): {e}")
         crosswalk_keys = {}
+        crosswalk_s3_status = "failed"
 
     return {
         "status": "Deduplicated",
         "clean_bp_list": assignment["bp_records"],
         "crosswalk": assignment["crosswalk"],
         "crosswalk_s3_keys": crosswalk_keys,
+        "crosswalk_s3_status": crosswalk_s3_status,
         "repointing_instructions": repointing,
         "pre_validation": pre_validation,
         "remediation_report": remediation_report,
@@ -621,7 +623,7 @@ def lambda_handler(event, context):
     """
     logger.info(f"Data Assessment & CVI Preparation started")
     log_stage_event("data-assessment", "Pipeline Start", "IN_PROGRESS", {"stage": 3})
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     discovery = event.get("discovery", {})
@@ -645,10 +647,7 @@ def lambda_handler(event, context):
             from pyrfc import Connection
             conn = Connection(**conn_params)
             has_rfc = True
-        except ImportError:
-            has_rfc = False
-            logger.warning("No RFC — generating migration plan only")
-        except Exception:
+        except (ImportError, Exception):
             has_rfc = False
             logger.warning("No RFC — generating migration plan only")
 
@@ -827,7 +826,7 @@ def lambda_handler(event, context):
             "finance_score": finance_readiness.get("acdoca_compatibility_score", 0) if isinstance(finance_readiness, dict) else 0,
             "data_quality_issues": len(data_quality_issues),
             "sum_readiness": results["data_quality_report"]["sum_readiness"],
-        }, (time.time() - _stage_start) * 1000)
+        }, (__import__('time').time() - _stage_start) * 1000)
         return {
             "status": "success",
             "results": results,

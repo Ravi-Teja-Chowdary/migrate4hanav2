@@ -32,6 +32,11 @@ from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Optional
 
+# Windows Python 3.7 uses SelectorEventLoop by default, which does not support
+# asyncio.create_subprocess_exec. Switch to ProactorEventLoop on Windows.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI, Request, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -44,6 +49,29 @@ CONNECTIONS_FILE = os.path.join(PROJECT_DIR, "connections.json")
 # Shared state for active runs
 _active_run = {"status": "idle", "results": None, "run_id": None}
 _lock = asyncio.Lock()
+
+# Real-time progress steps for telemetry
+_progress_steps = []
+_progress_lock = asyncio.Lock()
+
+# In-memory ECC password (set after successful connection test, never persisted)
+_ecc_passwd = ""
+
+
+def _add_progress_step(stage, action, status="IN_PROGRESS", details=None, duration_ms=None):
+    """Add a progress step to the real-time telemetry feed."""
+    import asyncio as _aio
+    step = {
+        "event_id": secrets.token_hex(6),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "stage": stage,
+        "action": action,
+        "status": status,
+        "details": details or {},
+        "duration_ms": duration_ms,
+    }
+    _progress_steps.append(step)
+    return step
 
 # =============================================================================
 # AUTHENTICATION
@@ -77,7 +105,7 @@ def _b64url_encode(data: bytes) -> str:
 
 
 def _b64url_decode(s: str) -> bytes:
-    s += "=" * (-len(s) % 4)
+    s += "=" * (4 - len(s) % 4)
     return base64.urlsafe_b64decode(s)
 
 
@@ -96,7 +124,7 @@ def generate_jwt(subject: str = "migrate4hana", expiry_hours: int = 24) -> str:
     return f"{signing_input}.{_b64url_encode(sig)}"
 
 
-def verify_jwt(token: str) -> dict | None:
+def verify_jwt(token: str) -> Optional[dict]:
     """Verify a HS256 JWT. Returns the payload dict or None if invalid."""
     _ensure_jwt_secret()
     try:
@@ -161,11 +189,8 @@ async def require_auth(
 # =============================================================================
 def _load_connections():
     if os.path.isfile(CONNECTIONS_FILE):
-        try:
-            with open(CONNECTIONS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, ValueError):
-            return {"ecc": None, "s4hana": None}
+        with open(CONNECTIONS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
     return {"ecc": None, "s4hana": None}
 
 
@@ -175,28 +200,42 @@ def _save_connections(data):
 
 
 def test_ecc_connection(params):
+    global _ecc_passwd
     host = params.get("ashost", "")
     sysnr = params.get("sysnr", "")
     client = params.get("client", "")
     user = params.get("user", "")
+    passwd = params.get("passwd", "")
     if not all([host, sysnr, client, user]):
         return {"status": "error", "message": "Missing required fields: ashost, sysnr, client, user"}
     try:
         import pyrfc
-        conn_params = {"ashost": host, "sysnr": sysnr, "client": client, "user": user, "passwd": params.get("passwd", "")}
+        conn_params = {"ashost": host, "sysnr": sysnr, "client": client, "user": user, "passwd": passwd}
         if params.get("saprouter"):
             conn_params["saprouter"] = params["saprouter"]
         conn = pyrfc.Connection(**conn_params)
-        result = conn.call("RFC_SYSTEM_INFO")
-        sys_info = result.get("RFCSI_EXPORT", {})
-        conn.close()
-        return {
-            "status": "connected", "system_id": sys_info.get("RFCSYSID", ""),
-            "host": sys_info.get("RFCHOST", host), "db_system": sys_info.get("RFCDBSYS", ""),
-            "sap_release": sys_info.get("RFCSAPRL", ""), "kernel": sys_info.get("RFCKERNRL", ""),
-            "client": client,
-            "message": f"Connected to {sys_info.get('RFCSYSID', host)} (ECC {sys_info.get('RFCSAPRL', '')})",
-        }
+        try:
+            result = conn.call("RFC_SYSTEM_INFO")
+            sys_info = result.get("RFCSI_EXPORT", {})
+            # Store password in memory for pipeline use
+            _ecc_passwd = passwd
+            # Auto-save connection details on successful test so pipeline can find them
+            conns = _load_connections()
+            conns["ecc"] = {
+                "ashost": host, "sysnr": sysnr, "client": client,
+                "user": user, "saprouter": params.get("saprouter", ""),
+                "saved_at": datetime.now().isoformat(),
+            }
+            _save_connections(conns)
+            return {
+                "status": "connected", "system_id": sys_info.get("RFCSYSID", ""),
+                "host": sys_info.get("RFCHOST", host), "db_system": sys_info.get("RFCDBSYS", ""),
+                "sap_release": sys_info.get("RFCSAPRL", ""), "kernel": sys_info.get("RFCKERNRL", ""),
+                "client": client,
+                "message": f"Connected to {sys_info.get('RFCSYSID', host)} (ECC {sys_info.get('RFCSAPRL', '')})",
+            }
+        finally:
+            conn.close()
     except ImportError:
         return {"status": "mock", "system_id": "BIS", "host": host, "sap_release": "ECC 6.0 EHP8",
                 "client": client, "message": f"PyRFC not installed - mock mode active. Connection to {host} will be simulated."}
@@ -218,9 +257,11 @@ def test_s4hana_connection(params):
         try:
             import pyrfc
             conn = pyrfc.Connection(ashost=host, sysnr=sysnr, client=client, user=user, passwd=params.get("passwd", ""))
-            result = conn.call("RFC_SYSTEM_INFO")
-            sys_info = result.get("RFCSI_EXPORT", {})
-            conn.close()
+            try:
+                result = conn.call("RFC_SYSTEM_INFO")
+                sys_info = result.get("RFCSI_EXPORT", {})
+            finally:
+                conn.close()
             return {"status": "connected", "system_id": sys_info.get("RFCSYSID", ""), "host": host,
                     "sap_release": sys_info.get("RFCSAPRL", ""),
                     "message": f"Connected to S/4HANA {sys_info.get('RFCSYSID', host)}"}
@@ -262,7 +303,7 @@ def get_run(run_id):
         return json.load(f)
 
 
-async def start_pipeline_async(mode="full"):
+async def start_pipeline_async(mode="full", generate_pdf_after=False):
     global _active_run
     async with _lock:
         if _active_run["status"] == "running":
@@ -276,50 +317,191 @@ async def start_pipeline_async(mode="full"):
             if not last_results or not last_results.get("sum_dmo"):
                 return {"error": "Phase 3 must be completed before running Phases 4-5 (complete)"}
         _active_run = {"status": "running", "results": None, "run_id": None,
-                       "started": time.time(), "mode": mode}
+                       "started": time.time(), "mode": mode,
+                       "generate_pdf_after": generate_pdf_after}
+
+    # Clear old progress steps
+    _progress_steps.clear()
+    _add_progress_step("pipeline", "Pipeline started", "IN_PROGRESS", {"mode": mode})
 
     async def _run():
         global _active_run
         try:
-            import subprocess
             cmd = [sys.executable, os.path.join(PROJECT_DIR, "run_local_pipeline.py")]
+
+            # Determine if live ECC connection is available
+            conns = _load_connections()
+            ecc_conf = conns.get("ecc") or {}
+            has_ecc = bool(ecc_conf.get("ashost"))
+            use_live = has_ecc and _ecc_passwd
+
+            if use_live:
+                cmd.append("--live")
+                _add_progress_step("connection", "Using live ECC connection", "SUCCESS",
+                                   {"host": ecc_conf.get("ashost", "")})
+            elif has_ecc and not _ecc_passwd:
+                # Connection is saved but password expired (server restarted).
+                # Don't silently fall back to mock — tell the user to re-test.
+                _add_progress_step("connection",
+                                   "ECC connection saved but session expired. "
+                                   "Please re-test the connection on the Connections page to re-authenticate.",
+                                   "ERROR")
+                async with _lock:
+                    _active_run = {"status": "failed",
+                                   "error": "ECC password not in memory. Re-test the connection to re-authenticate.",
+                                   "results": None}
+                return
+            else:
+                _add_progress_step("connection", "Using mock ECC data (no live connection)", "WARNING")
+
             if mode == "assess":
                 cmd.append("--assess-only")
+            elif mode == "ecc_full":
+                cmd.extend(["--mode", "ecc_full"])
+
+            _add_progress_step("extraction", "Starting ECC data extraction", "IN_PROGRESS")
+
             env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+            if use_live:
+                env["M4H_ECC_PASSWD"] = _ecc_passwd
+
+            # Stream stdout line-by-line for real-time progress
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                 cwd=PROJECT_DIR, env=env)
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
+
+            # Read stdout lines in real-time for progress updates
+            async def _read_stdout():
+                while True:
+                    line = await proc.stdout.readline()
+                    if not line:
+                        break
+                    text = line.decode("utf-8", errors="replace").strip()
+                    if not text:
+                        continue
+                    # Parse pipeline output for meaningful progress steps
+                    _parse_pipeline_output(text)
+
+            async def _read_stderr():
+                data = await proc.stderr.read()
+                return data.decode("utf-8", errors="replace") if data else ""
+
+            stderr_task = asyncio.create_task(_read_stderr())
+            try:
+                await asyncio.wait_for(_read_stdout(), timeout=600)
+            except asyncio.TimeoutError:
+                pass
+            stderr_text = await stderr_task
+            await asyncio.wait_for(proc.wait(), timeout=30)
+
             if proc.returncode != 0:
-                err_msg = (stderr.decode("utf-8", errors="replace") or stdout.decode("utf-8", errors="replace") or "Unknown error").strip()[-500:]
+                err_msg = (stderr_text or "Unknown error").strip()[-500:]
                 print(f"  [API] Pipeline subprocess failed (exit {proc.returncode}): {err_msg}")
+                _add_progress_step("pipeline", f"Pipeline failed (exit {proc.returncode})", "ERROR",
+                                   {"error": err_msg[:200]})
+
+            _add_progress_step("extraction", "ECC data extraction completed", "SUCCESS")
+
             runs = list_runs()
             latest = runs[0] if runs else None
+
+            # Generate PDF if requested
+            pdf_generated = False
+            if latest and generate_pdf_after:
+                _add_progress_step("pdf-generation", "Generating PDF report", "IN_PROGRESS")
+                t0 = time.time()
+                try:
+                    pdf_path = generate_pdf_for_run(latest["id"])
+                    if pdf_path and os.path.isfile(pdf_path):
+                        pdf_generated = True
+                        _add_progress_step("pdf-generation",
+                                           f"PDF report generated ({os.path.getsize(pdf_path) // 1024} KB)",
+                                           "SUCCESS", {"path": pdf_path},
+                                           duration_ms=int((time.time() - t0) * 1000))
+                    else:
+                        _add_progress_step("pdf-generation", "PDF generation returned no file", "WARNING")
+                except Exception as e:
+                    _add_progress_step("pdf-generation", f"PDF generation failed: {str(e)[:200]}", "ERROR")
+
             async with _lock:
                 if latest:
                     _active_run = {"status": "completed", "run_id": latest["id"],
                                    "results": latest["results"], "mode": mode,
-                                   "duration": time.time() - _active_run.get("started", time.time())}
+                                   "duration": time.time() - _active_run.get("started", time.time()),
+                                   "pdf_generated": pdf_generated}
+                    _add_progress_step("pipeline", "Pipeline completed successfully", "SUCCESS",
+                                       {"run_id": latest["id"], "pdf_generated": pdf_generated},
+                                       duration_ms=int(_active_run["duration"] * 1000))
                 else:
-                    err_msg = (stderr.decode("utf-8", errors="replace") or stdout.decode("utf-8", errors="replace") or "Pipeline produced no output").strip()[-500:]
+                    err_msg = (stderr_text or "Pipeline produced no output").strip()[-500:]
                     _active_run = {"status": "failed", "error": f"Pipeline failed: {err_msg}", "results": None}
+                    _add_progress_step("pipeline", "Pipeline failed — no output produced", "ERROR",
+                                       {"error": err_msg[:200]})
         except asyncio.TimeoutError:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
             async with _lock:
                 _active_run = {"status": "failed", "error": "Pipeline timed out after 600s", "results": None}
+            _add_progress_step("pipeline", "Pipeline timed out after 600s", "ERROR")
         except Exception as e:
+            err_detail = f"{type(e).__name__}: {e}" if str(e) else f"{type(e).__name__}: {repr(e)}"
+            print(f"  [API] Pipeline exception: {err_detail}")
             async with _lock:
-                _active_run = {"status": "failed", "error": str(e), "results": None}
+                _active_run = {"status": "failed", "error": err_detail, "results": None}
+            _add_progress_step("pipeline", f"Pipeline error: {err_detail[:200]}", "ERROR")
 
     asyncio.create_task(_run())
     return {"status": "started", "mode": mode}
 
 
+def _parse_pipeline_output(line):
+    """Parse a line of pipeline stdout and emit meaningful progress steps."""
+    low = line.lower()
+
+    # Detect stage headers
+    if "[stage " in low or "stage " in low and "/17]" in low:
+        _add_progress_step("pipeline-stage", line.strip(" =\t"), "IN_PROGRESS")
+    elif "phase " in low and (":" in line or "--" in line):
+        _add_progress_step("pipeline-phase", line.strip(" =\t"), "IN_PROGRESS")
+    # Detect completion markers
+    elif any(kw in low for kw in ["complete", "finished", "done", "saved", "generated"]):
+        _add_progress_step("pipeline-step", line.strip(), "SUCCESS")
+    # Detect warnings
+    elif any(kw in low for kw in ["warning", "caution", "deprecated"]):
+        _add_progress_step("pipeline-step", line.strip(), "WARNING")
+    # Detect errors
+    elif any(kw in low for kw in ["error", "failed", "exception", "traceback"]):
+        _add_progress_step("pipeline-step", line.strip(), "ERROR")
+    # Detect scanning/analysis actions
+    elif any(kw in low for kw in ["scanning", "analyzing", "extracting", "checking",
+                                   "validating", "running", "processing", "loading",
+                                   "reconcil", "migrat", "converting"]):
+        _add_progress_step("pipeline-step", line.strip(), "IN_PROGRESS")
+    # Detect section markers (lines with ">" prefix from pipeline)
+    elif line.strip().startswith(">"):
+        _add_progress_step("pipeline-section", line.strip().lstrip("> "), "IN_PROGRESS")
+    # Status lines with checkmarks or bullet markers
+    elif any(line.strip().startswith(m) for m in ["V ", "o ", "! ", "X "]):
+        marker = line.strip()[0]
+        status = {"V": "SUCCESS", "o": "IN_PROGRESS", "!": "WARNING", "X": "ERROR"}.get(marker, "IN_PROGRESS")
+        _add_progress_step("pipeline-detail", line.strip()[2:].strip(), status)
+
+
 def generate_pdf_for_run(run_id):
     run_dir = os.path.join(OUTPUT_DIR, run_id)
-    json_path = os.path.join(run_dir, "post-migration-report.json")
     pdf_path = os.path.join(run_dir, "post-migration-report.pdf")
     if os.path.isfile(pdf_path):
         return pdf_path
+    # Check reports/ subdirectory for multi-volume PDFs
+    reports_dir = os.path.join(run_dir, "reports")
+    if os.path.isdir(reports_dir):
+        pdf_files = sorted(f for f in os.listdir(reports_dir) if f.endswith(".pdf"))
+        if pdf_files:
+            return os.path.join(reports_dir, pdf_files[0])
+    json_path = os.path.join(run_dir, "post-migration-report.json")
     if not os.path.isfile(json_path):
         final_path = os.path.join(run_dir, "final-report.json")
         if not os.path.isfile(final_path):
@@ -381,7 +563,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("M4H_CORS_ORIGINS", "*").split(","),
+    allow_origins=os.environ.get("M4H_CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -445,6 +627,17 @@ async def test_ecc(body: ECCConnection):
     return test_ecc_connection(body.model_dump())
 
 
+@app.get("/api/connections/ecc/status", dependencies=[Depends(require_auth)])
+async def ecc_connection_status():
+    """Check if a live ECC connection is ready (saved + password in memory)."""
+    conns = _load_connections()
+    has_ecc = bool((conns.get("ecc") or {}).get("ashost"))
+    has_passwd = bool(_ecc_passwd)
+    return {"live_ready": has_ecc and has_passwd,
+            "has_connection": has_ecc,
+            "has_password": has_passwd}
+
+
 @app.post("/api/connections/s4hana/test", dependencies=[Depends(require_auth)])
 async def test_s4(body: S4HANAConnection):
     return test_s4hana_connection(body.model_dump())
@@ -468,6 +661,15 @@ async def pipeline_complete():
 @app.post("/api/pipeline/full", dependencies=[Depends(require_auth)])
 async def pipeline_full():
     return await start_pipeline_async(mode="full")
+
+@app.post("/api/pipeline/ecc_full", dependencies=[Depends(require_auth)])
+async def pipeline_ecc_full():
+    return await start_pipeline_async(mode="ecc_full")
+
+@app.post("/api/pipeline/run_and_report", dependencies=[Depends(require_auth)])
+async def pipeline_run_and_report():
+    """Unified endpoint: run full ECC extraction + conversion + PDF generation."""
+    return await start_pipeline_async(mode="ecc_full", generate_pdf_after=True)
 
 @app.post("/api/pipeline/migrate", dependencies=[Depends(require_auth)])
 async def pipeline_migrate():
@@ -501,6 +703,20 @@ async def legacy_run():
 async def pipeline_status():
     return _active_run
 
+@app.get("/api/progress", dependencies=[Depends(require_auth)])
+async def pipeline_progress(since: int = 0):
+    """Return real-time progress steps. Use ?since=N to get only steps after index N."""
+    steps = _progress_steps[since:] if since > 0 else _progress_steps
+    return {
+        "status": _active_run.get("status", "idle"),
+        "mode": _active_run.get("mode"),
+        "run_id": _active_run.get("run_id"),
+        "pdf_generated": _active_run.get("pdf_generated", False),
+        "total_steps": len(_progress_steps),
+        "since": since,
+        "steps": steps,
+    }
+
 @app.get("/api/runs", dependencies=[Depends(require_auth)])
 async def get_runs():
     return list_runs()
@@ -527,6 +743,53 @@ async def get_run_pdf(run_id: str):
         return FileResponse(pdf_path, media_type="application/pdf",
                             filename=f"migration-report-{run_id}.pdf")
     raise HTTPException(status_code=404, detail="Report not available for this run")
+
+
+@app.get("/api/v1/reports/{run_id}/volumes", dependencies=[Depends(require_auth)])
+async def get_report_volumes(run_id: str):
+    """List all PDF volumes for a given run."""
+    if run_id == "latest":
+        runs = list_runs()
+        run_id = runs[0]["id"] if runs else None
+    if not run_id:
+        raise HTTPException(status_code=404, detail="No runs found")
+    reports_dir = os.path.join(OUTPUT_DIR, run_id, "reports")
+    if not os.path.isdir(reports_dir):
+        raise HTTPException(status_code=404, detail="No report volumes found for this run")
+    volumes = []
+    for fname in sorted(os.listdir(reports_dir)):
+        if fname.endswith(".pdf"):
+            fpath = os.path.join(reports_dir, fname)
+            volumes.append({
+                "filename": fname,
+                "size_bytes": os.path.getsize(fpath),
+                "size_kb": round(os.path.getsize(fpath) / 1024, 1),
+            })
+    if not volumes:
+        raise HTTPException(status_code=404, detail="No PDF volumes found")
+    return {"run_id": run_id, "total_volumes": len(volumes), "volumes": volumes}
+
+
+@app.get("/api/v1/reports/{run_id}/download/{volume_number}", dependencies=[Depends(require_auth)])
+async def download_report_volume(run_id: str, volume_number: int):
+    """Download a specific PDF volume by number (1-based)."""
+    if run_id == "latest":
+        runs = list_runs()
+        run_id = runs[0]["id"] if runs else None
+    if not run_id:
+        raise HTTPException(status_code=404, detail="No runs found")
+    reports_dir = os.path.join(OUTPUT_DIR, run_id, "reports")
+    if not os.path.isdir(reports_dir):
+        raise HTTPException(status_code=404, detail="No report volumes found")
+    pdf_files = sorted(f for f in os.listdir(reports_dir) if f.endswith(".pdf"))
+    if not pdf_files:
+        raise HTTPException(status_code=404, detail="No PDF volumes found in reports directory")
+    if volume_number < 1 or volume_number > len(pdf_files):
+        raise HTTPException(status_code=404,
+                            detail=f"Volume {volume_number} not found. Available: 1-{len(pdf_files)}")
+    pdf_path = os.path.join(reports_dir, pdf_files[volume_number - 1])
+    return FileResponse(pdf_path, media_type="application/pdf",
+                        filename=pdf_files[volume_number - 1])
 
 
 # =============================================================================
@@ -563,10 +826,13 @@ def main():
     print(f"    POST /api/pipeline/convert    - Run Phase 3 (stages 9-10)")
     print(f"    POST /api/pipeline/complete   - Run Phases 4-5 (stages 11-17)")
     print(f"    POST /api/pipeline/full       - Run all 5 phases (stages 1-17)")
+    print(f"    POST /api/pipeline/ecc_full   - Run ECC-only mode (stages 1-9.6)")
     print(f"    GET  /api/status              - Pipeline status")
     print(f"    GET  /api/runs                - List all runs")
     print(f"    GET  /api/runs/ID             - Get run results")
     print(f"    GET  /api/runs/ID/pdf         - Download PDF report")
+    print(f"    GET  /api/v1/reports/ID/volumes  - List PDF volumes")
+    print(f"    GET  /api/v1/reports/ID/download/N - Download volume N")
     print(f"    GET  /docs                    - OpenAPI/Swagger documentation\n")
 
     uvicorn.run("api_server:app", host=host, port=port, workers=workers,

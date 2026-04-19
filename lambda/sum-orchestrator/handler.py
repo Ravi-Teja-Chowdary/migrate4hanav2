@@ -42,7 +42,6 @@ import os
 import sys
 import logging
 import boto3
-import time
 from datetime import datetime
 
 # Structured telemetry logger for real-time UI streaming
@@ -3852,7 +3851,7 @@ def lambda_handler(event, context):
         "target_release": event.get("input", {}).get("target_release", "2023"),
         "sum_host": event.get("input", {}).get("sum_host", ""),
     })
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     s3_prefix = f"migrations/{run_id}/sum-orchestrator"
@@ -3955,7 +3954,7 @@ def lambda_handler(event, context):
         logger.info(f"SUM Orchestrator complete: {json.dumps(summary)}")
         log_stage_event(
             "sum-orchestrator", "SUM Orchestration Complete", "SUCCESS",
-            summary, (time.time() - _stage_start) * 1000
+            summary, (__import__('time').time() - _stage_start) * 1000
         )
 
         return {

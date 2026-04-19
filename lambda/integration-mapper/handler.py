@@ -22,7 +22,6 @@ import os
 import sys
 import logging
 import boto3
-import time
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
@@ -331,7 +330,7 @@ def lambda_handler(event, context):
     """Integration Mapper main handler."""
     logger.info("Integration Mapper started")
     log_stage_event("integration-mapper", "Pipeline Start", "IN_PROGRESS", {"stage": 6})
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
 
@@ -345,9 +344,7 @@ def lambda_handler(event, context):
             )
             conn = Connection(**conn_params)
             has_rfc = True
-        except ImportError:
-            has_rfc = False
-        except Exception:
+        except (ImportError, Exception):
             has_rfc = False
 
         if has_rfc:
@@ -395,7 +392,7 @@ def lambda_handler(event, context):
             "s3_key": f"migrations/{run_id}/integrations/",
             "run_id": run_id,
         }
-        log_stage_event("integration-mapper", "Integration Mapping Complete", "SUCCESS", result, (time.time() - _stage_start) * 1000)
+        log_stage_event("integration-mapper", "Integration Mapping Complete", "SUCCESS", result, (__import__('time').time() - _stage_start) * 1000)
         return result
 
     except Exception as e:

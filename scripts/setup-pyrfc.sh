@@ -43,8 +43,8 @@ if ! command -v docker &> /dev/null; then
 fi
 echo "  ✓ Docker found"
 
-NWRFC_SDK_PATH="${SCRIPT_DIR}/nwrfc750P_*.zip"
-if ! ls ${NWRFC_SDK_PATH} 1> /dev/null 2>&1; then
+NWRFC_SDK_FILE=$(ls -1 "${SCRIPT_DIR}"/nwrfc750P_*.zip 2>/dev/null | head -1)
+if [ -z "$NWRFC_SDK_FILE" ]; then
     echo ""
     echo "ERROR: SAP NW RFC SDK not found!"
     echo ""
@@ -60,7 +60,7 @@ if ! ls ${NWRFC_SDK_PATH} 1> /dev/null 2>&1; then
     echo "The file will be named something like: nwrfc750P_12-70002752.zip"
     exit 1
 fi
-echo "  ✓ SAP NW RFC SDK found"
+echo "  ✓ SAP NW RFC SDK found: ${NWRFC_SDK_FILE}"
 
 # ── Step 2: Set up build directory ──
 echo ""
@@ -69,7 +69,7 @@ rm -rf "${BUILD_DIR}" "${OUTPUT_DIR}"
 mkdir -p "${BUILD_DIR}/python" "${BUILD_DIR}/lib" "${OUTPUT_DIR}"
 
 # Copy the SDK zip
-cp ${NWRFC_SDK_PATH} "${BUILD_DIR}/"
+cp "${NWRFC_SDK_FILE}" "${BUILD_DIR}/"
 
 # ── Step 3: Build the layer using Docker ──
 echo ""
@@ -104,9 +104,20 @@ CMD ["echo", "Layer built successfully"]
 DOCKERFILE
 
 cd "${BUILD_DIR}"
-docker build -t migrate4hana-pyrfc-builder .
-docker run --rm -v "${OUTPUT_DIR}:/output" migrate4hana-pyrfc-builder \
-    sh -c "cp /tmp/pyrfc-layer.zip /output/"
+if ! docker build -t migrate4hana-pyrfc-builder .; then
+    echo "ERROR: Docker build failed" >&2
+    exit 1
+fi
+if ! docker run --rm -v "${OUTPUT_DIR}:/output" migrate4hana-pyrfc-builder \
+    sh -c "cp /tmp/pyrfc-layer.zip /output/"; then
+    echo "ERROR: Docker run failed" >&2
+    exit 1
+fi
+
+if [ ! -f "${OUTPUT_DIR}/pyrfc-layer.zip" ]; then
+    echo "ERROR: Layer zip not created" >&2
+    exit 1
+fi
 
 echo "  ✓ Layer built: ${OUTPUT_DIR}/pyrfc-layer.zip"
 

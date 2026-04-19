@@ -99,7 +99,7 @@ def _metric_box(label, value, color=NAVY):
 
 
 def _severity_color(sev):
-    return {"HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN}.get(sev or "", GRAY)
+    return {"HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN}.get(sev, GRAY)
 
 
 def _table_style_base():
@@ -128,8 +128,18 @@ def generate_pdf(report_data, output_path):
         report_data: dict â€” the post_migration_report section
         output_path: str â€” where to save the PDF
     """
-    if not isinstance(report_data, dict) or not report_data:
-        raise ValueError("report_data must be a non-empty dictionary")
+    # Hard-delete stale cache files to prevent reading previous run data
+    import os as _os
+    _cache_files = ['assessment_summary.json', 'temp_metadata.db']
+    _out_dir = _os.path.dirname(output_path) if output_path else '.'
+    for _cf in _cache_files:
+        for _sd in [_out_dir, '.', 'test-output']:
+            _cp = _os.path.join(_sd, _cf)
+            if _os.path.exists(_cp):
+                try:
+                    _os.remove(_cp)
+                except OSError:
+                    pass
 
     ss = _styles()
     doc = SimpleDocTemplate(
@@ -279,10 +289,10 @@ def generate_pdf(report_data, output_path):
     story.append(HRFlowable(width="100%", thickness=1, color=GREEN))
     story.append(Spacer(1, 4 * mm))
 
-    dm = report_data.get("data_migration", {})
-    fin = dm.get("finance", {})
-    bp = dm.get("business_partner_conversion", {})
-    ct = dm.get("custom_tables", {})
+    dm = report_data.get("data_migration") or {}
+    fin = dm.get("finance") or {}
+    bp = dm.get("business_partner_conversion") or {}
+    ct = dm.get("custom_tables") or {}
 
     story.append(Paragraph("Financial Data (BKPF/BSEG â†’ ACDOCA)", ss["SubH"]))
     fin_data = [
@@ -514,8 +524,12 @@ def generate_pdf(report_data, output_path):
 
 def generate_pdf_from_file(json_path, output_path=None):
     """Load a JSON report file and generate PDF."""
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Error: {json_path} is not valid JSON: {e}")
+        return None
 
     if output_path is None:
         output_path = json_path.replace(".json", ".pdf")

@@ -23,7 +23,6 @@ import json
 import os
 import logging
 import boto3
-import time
 import sys
 
 # Ensure global config module can be imported natively
@@ -332,7 +331,7 @@ def lambda_handler(event, context):
     """Config & Org Structure Replicator main handler."""
     logger.info("Config Replicator started")
     log_stage_event("config-replicator", "Pipeline Start", "IN_PROGRESS", {"stage": 4})
-    _stage_start = time.time()
+    _stage_start = __import__('time').time()
 
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
 
@@ -348,12 +347,17 @@ def lambda_handler(event, context):
             conn = Connection(**conn_params)
             has_rfc = True
         except ImportError:
+            logger.error("pyrfc not available — cannot connect to SAP")
             has_rfc = False
-        except Exception:
+        except Exception as e:
+            logger.error(f"RFC connection error: {e}")
             has_rfc = False
 
         if has_rfc:
-            config_data = extract_config_tables(conn)
+            try:
+                config_data = extract_config_tables(conn)
+            finally:
+                conn.close()
         else:
             logger.warning("No RFC — generating config template only")
             config_data = {
@@ -421,7 +425,7 @@ def lambda_handler(event, context):
             "global_config_generated": True,
             "mapped_regions": len(discovered_company_codes)
         }
-        log_stage_event("config-replicator", "Config Replication Complete", "SUCCESS", result, (time.time() - _stage_start) * 1000)
+        log_stage_event("config-replicator", "Config Replication Complete", "SUCCESS", result, (__import__('time').time() - _stage_start) * 1000)
         return result
 
     except Exception as e:

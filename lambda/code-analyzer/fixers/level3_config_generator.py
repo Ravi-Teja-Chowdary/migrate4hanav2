@@ -47,7 +47,7 @@ class S4HANAConfigGenerator:
                 "assignments": [{"cc": c.get("BUKRS"), "name": c.get("BUTXT"), "currency": c.get("WAERS"), "ledger": "0L"} for c in ccs]}
 
     def _gen_bp(self, data):
-        custs, vends = len(data.get("customers") or []), len(data.get("vendors") or [])
+        custs, vends = len(data.get("customers", [])), len(data.get("vendors", []))
         return {"description": "BP Conversion", "transaction": "BUCF", "status": "AUTO_GENERATED",
                 "number_range": {"object": "BU_PARTNER", "from": "0000000001", "to": "0009999999"},
                 "groupings": {"customer": "BP01", "vendor": "BP02"},
