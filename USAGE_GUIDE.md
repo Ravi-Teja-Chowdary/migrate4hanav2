@@ -23,7 +23,7 @@ Complete guide to using the **Migrate4HANA** Smart Orchestrator for SAP ECC to S
 8. [Downloading the PDF Report](#8-downloading-the-pdf-report)
 9. [Running from Command Line (No UI)](#9-running-from-command-line-no-ui)
 10. [API Reference](#10-api-reference)
-11. [AWS Deployment (Production)](#11-aws-deployment-production)
+11. [Azure Deployment (Production)](#11-azure-deployment-production)
 12. [SAP Tool Requirements](#12-sap-tool-requirements)
 13. [SUM/DMO Prerequisites](#13-sumdmo-prerequisites)
 14. [LLM Setup & Data Privacy](#14-llm-setup--data-privacy)
@@ -47,9 +47,9 @@ Migrate4HANA is a **17-stage Smart Orchestrator** that automates the pre-convers
 | **Phase 4: Realize — Post-Conversion** (11–14) | SPAU/SPDD + Code Deploy, FINS Migration, Material Ledger + Config, Roles + Integrations | Post-conversion code deployment, finance migration, Material Ledger activation, role and integration provisioning |
 | **Phase 5: Deploy & Run** (15–17) | Business Process Testing, Go-Live Cutover, Validation & Scorecard | Automated DITL testing, go-live cutover orchestration, 85-check validation with GO-LIVE scorecard |
 
-Additionally, **4 support Lambdas** run alongside the pipeline:
+Additionally, **4 support Functions** run alongside the pipeline:
 - **rollback-manager** — Automated reversal on failure (full post-conversion rollback)
-- **data-hygiene** — BP deduplication with fuzzy matching + ML (Entity Resolution)
+- **data-hygiene** — BP deduplication with fuzzy matching + ML (Azure Data Factory matching)
 - **process-miner** — ST03N workload analysis
 - **test-generator** — DITL test case generation
 
@@ -493,15 +493,15 @@ curl -X POST http://localhost:8000/api/connections/ecc/test \
 
 ---
 
-## 11. AWS Deployment (Production)
+## 11. Azure Deployment (Production)
 
-Step-by-step instructions for deploying Migrate4HANA to AWS. No SAP or cloud expertise required — follow each step exactly.
+Step-by-step instructions for deploying Migrate4HANA to Azure. No SAP or cloud expertise required — follow each step exactly.
 
 ### Prerequisites
 
 You need:
-- An **AWS account** with admin access
-- **AWS CLI** installed and configured (`aws configure` with your Access Key and Secret Key)
+- An **Azure subscription** with Contributor access
+- **Azure CLI** installed and configured (`az login` to authenticate)
 - **Terraform** v1.5+ installed — [Download](https://developer.hashicorp.com/terraform/install)
 - **Git** installed — [Download](https://git-scm.com/downloads)
 - **Python 3.10+** installed — [Download](https://www.python.org/downloads/)
@@ -509,18 +509,18 @@ You need:
 
 ### Architecture
 ```
-  SAP ECC  ──RFC──▶  Lambda Functions (21)  ──▶  S/4HANA
+  SAP ECC  ──RFC──▶  Azure Functions (21)  ──▶  S/4HANA
                           │
-                     Step Functions
-                     (orchestrates 17 stages
-                      across 5 SAP Activate phases)
-                          │
-                ┌─────────┼─────────┐
-            S3 Staging  DynamoDB  CloudWatch
+                   Durable Functions
+                   (orchestrates 17 stages
+                    across 5 SAP Activate phases)
                           │
                 ┌─────────┼─────────┐
-            DMS (CDC)  Entity Res.  WebSocket
-                                   Telemetry
+          Blob Storage  Cosmos DB  Application Insights
+                          │            + Log Analytics
+                ┌─────────┼─────────┐
+         Azure Data Factory   Data Factory   Web PubSub
+                     matching       Telemetry
 ```
 
 ### Step 1: Clone and Enter the Repository
@@ -529,19 +529,17 @@ git clone <repository-url>
 cd migrate4hana
 ```
 
-### Step 2: Configure AWS Credentials
+### Step 2: Configure Azure Credentials
 ```bash
-# Check AWS CLI is installed
-aws --version
+# Check Azure CLI is installed
+az --version
 
-# Configure credentials (enter your Access Key, Secret Key, and region when prompted)
-aws configure
+# Log in to Azure (opens a browser for authentication)
+az login
 ```
-When prompted:
-- **AWS Access Key ID:** Your IAM access key
-- **AWS Secret Access Key:** Your IAM secret key
-- **Default region name:** e.g. `us-east-1` (pick the region closest to your SAP systems)
-- **Default output format:** `json`
+After login:
+- **Select subscription:** Use `az account set --subscription <subscription-id>` if you have multiple subscriptions
+- **Default region:** Set via Terraform variables (e.g. `westeurope` — pick the region closest to your SAP systems)
 
 ### Step 3: Edit Terraform Variables
 ```bash
@@ -555,15 +553,15 @@ nano terraform/environments/dev/terraform.tfvars
 
 Set these values in the file:
 ```hcl
-# AWS region — must match your "aws configure" region
-aws_region = "us-east-1"
+# Azure region — pick the region closest to your SAP systems
+azure_region = "westeurope"
 
-# VPC network ranges (use defaults unless your network team specifies otherwise)
-vpc_cidr           = "10.0.0.0/16"
+# VNet network ranges (use defaults unless your network team specifies otherwise)
+vnet_cidr            = "10.0.0.0/16"
 private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
 public_subnet_cidrs  = ["10.0.101.0/24", "10.0.102.0/24"]
 
-# SAP ECC connection (stored in AWS Secrets Manager — NOT in plaintext)
+# SAP ECC connection (stored in Azure Key Vault — NOT in plaintext)
 ecc_host          = "ecc-prod.company.com"
 ecc_system_number = "00"
 ecc_client        = "100"
@@ -572,8 +570,8 @@ ecc_client        = "100"
 s4hana_host       = "s4hana.company.com"
 s4hana_client     = "100"
 
-# LLM mode: "AMAZON_BEDROCK" (standard) or "AIRGAPPED_LOCAL" (banks/defense)
-llm_mode = "AMAZON_BEDROCK"
+# LLM mode: "CLAUDE_OPUS" (standard) or "AIRGAPPED_LOCAL" (banks/defense)
+llm_mode = "CLAUDE_OPUS"
 
 # Enable real-time log streaming to the frontend
 enable_websocket_telemetry = true
@@ -597,41 +595,43 @@ terraform plan
 terraform apply
 ```
 
-This creates all 13 AWS modules:
-- **VPC** with private subnets (for SAP connectivity)
-- **21 Lambda Functions** (17 pipeline stages + 4 support Lambdas, all with telemetry env vars)
-- **Step Functions** (17-stage state machine across 5 SAP Activate phases with error chaining to rollback-manager)
-- **S3 Bucket** (staging area for intermediate data)
-- **CloudWatch** (monitoring, alerts, durable log retention)
-- **DMS** (full-load + CDC continuous data sync with checkpoint/retry)
-- **DynamoDB** (encrypted at rest — country rules, simplification tables, migration state, idempotency)
-- **VPC Endpoints** (PrivateLink for Amazon Bedrock — no public internet)
-- **Air-Gapped LLM** (isolated GPU EC2 for local LLM in high-security environments)
-- **Entity Resolution** (ML-powered BP deduplication with schema mapping)
-- **WebSocket Telemetry** (API Gateway WebSocket for real-time log streaming)
-- **WAF** (WAFv2 rate limiting, OWASP Core Rules, SQLi, IP reputation)
-- **Audit** (CloudTrail + S3 WORM 7-year retention + compliance metric alarms)
+This creates all 13 Azure modules:
+- **VNet** with private subnets (for SAP connectivity)
+- **21 Azure Functions** (17 pipeline stages + 4 support Functions, all with telemetry env vars)
+- **Durable Functions** (17-stage orchestration across 5 SAP Activate phases with error chaining to rollback-manager)
+- **Blob Storage container** (staging area for intermediate data)
+- **Application Insights + Log Analytics** (monitoring, alerts, durable log retention)
+- **Azure Database Migration Service** (full-load + CDC continuous data sync with checkpoint/retry)
+- **Cosmos DB** (encrypted at rest — country rules, simplification tables, migration state, idempotency)
+- **Private Endpoints** (Private Link for Anthropic Claude Opus 4.6 — no public internet)
+- **Air-Gapped LLM** (isolated GPU VM for local LLM in high-security environments)
+- **Azure Data Factory matching** (ML-powered BP deduplication with schema mapping)
+- **Web PubSub Telemetry** (Azure Web PubSub for real-time log streaming)
+- **WAF** (Azure Front Door WAF rate limiting, OWASP Core Rules, SQLi, IP reputation)
+- **Audit** (Azure Activity Log + Blob Storage WORM 7-year retention + compliance metric alarms)
 
-### Step 5: Deploy Lambda Code
+### Step 5: Deploy Function Code
 ```bash
 # Return to project root
 cd ../../..
 
-# Package and deploy all Lambda functions
+# Package and deploy all Azure Functions
 bash scripts/deploy.sh
 ```
 
-### Step 6: Store SAP Credentials in AWS Secrets Manager
+### Step 6: Store SAP Credentials in Azure Key Vault
 ```bash
 # Store ECC credentials (replace with real values)
-aws secretsmanager create-secret \
-  --name migrate4hana/ecc-credentials \
-  --secret-string '{"user":"MIGRATION_USER","passwd":"YOUR_PASSWORD"}'
+az keyvault secret set \
+  --vault-name migrate4hana-kv \
+  --name ecc-credentials \
+  --value '{"user":"MIGRATION_USER","passwd":"YOUR_PASSWORD"}'
 
 # Store S/4HANA credentials (replace with real values)
-aws secretsmanager create-secret \
-  --name migrate4hana/s4hana-credentials \
-  --secret-string '{"user":"ADMIN_USER","passwd":"YOUR_PASSWORD"}'
+az keyvault secret set \
+  --vault-name migrate4hana-kv \
+  --name s4hana-credentials \
+  --value '{"user":"ADMIN_USER","passwd":"YOUR_PASSWORD"}'
 ```
 
 ### Step 7: Note the Outputs
@@ -642,38 +642,42 @@ cd terraform/environments/dev
 terraform output
 ```
 Key outputs:
-- `state_machine_arn` — needed to start migrations
-- `api_gateway_url` — WebSocket endpoint for telemetry
-- `dms_task_arn` — DMS replication task
-- `s3_bucket_name` — staging data bucket
+- `orchestrator_url` — needed to start migrations
+- `web_pubsub_url` — Web PubSub endpoint for telemetry
+- `dms_task_id` — Azure Database Migration Service task
+- `blob_container_name` — staging data container
 
 ### Step 8: Run an Assessment (Phases 1–2, Read-Only)
 ```bash
 # Start an assessment run (read-only, safe to run anytime)
-aws stepfunctions start-execution \
-  --state-machine-arn <STATE_MACHINE_ARN from Step 7> \
+az functionapp durable start-new \
+  --resource-group migrate4hana-rg \
+  --name migrate4hana-orchestrator \
+  --function-name OrchestratorFunction \
   --input '{"mode":"assess","ecc_client":"100","execute":false}'
 ```
 
 ### Step 9: Run a Full Migration (When Ready)
 ```bash
 # Start full execution (all 5 phases — WRITES to S/4HANA — back up first!)
-aws stepfunctions start-execution \
-  --state-machine-arn <STATE_MACHINE_ARN from Step 7> \
+az functionapp durable start-new \
+  --resource-group migrate4hana-rg \
+  --name migrate4hana-orchestrator \
+  --function-name OrchestratorFunction \
   --input '{"mode":"full","ecc_client":"100","execute":true}'
 ```
 
-### Step 10: Monitor in AWS Console
-1. Open **AWS Console** → **Step Functions** → click your state machine
-2. Click the running execution to see a live visual of each stage across all 5 phases
-3. Open **CloudWatch Logs** to see detailed Lambda output
-4. If using the frontend, set `VITE_TELEMETRY_WS_URL` to the WebSocket endpoint from Step 7
+### Step 10: Monitor in Azure Portal
+1. Open **Azure Portal** → **Function Apps** → click your Durable Functions orchestrator
+2. Click the running instance to see a live visual of each stage across all 5 phases
+3. Open **Log Analytics** to see detailed Function output
+4. If using the frontend, set `VITE_TELEMETRY_WS_URL` to the Web PubSub endpoint from Step 7
 
 ### Destroying the Infrastructure (When Done)
 ```bash
 cd terraform/environments/dev
 terraform destroy
-# Type "yes" when prompted — this removes ALL AWS resources
+# Type "yes" when prompted — this removes ALL Azure resources
 ```
 
 ---
@@ -738,25 +742,25 @@ Before running Phase 3 (Technical Conversion), ensure the following are prepared
 
 Because Migrate4HANA routes complex SAP codebase transformations (AST structures) through Generative AI, you must define the `llm_mode` upon execution.
 
-### Option A: Standard Enterprise (Amazon Bedrock)
-Set `llm_mode="AMAZON_BEDROCK"`. Terraform will automatically provision VPC Endpoints (`terraform/modules/vpc-endpoints`) so payload traffic never crosses the public internet. Uses Claude / Titan.
+### Option A: Standard Enterprise (Anthropic Claude Opus 4.6)
+Set `llm_mode="CLAUDE_OPUS"`. Terraform will automatically provision Private Endpoints (`terraform/modules/private-endpoints`) so payload traffic never crosses the public internet. Uses Anthropic Claude Opus 4.6.
 
 ### Option B: "Air-Gapped" Local (Banks / Defense)
-Set `llm_mode="AIRGAPPED_LOCAL"`. Deploy the `airgapped-llm` module in Terraform which spins up a generic GPU (`g5.2xlarge`) EC2 instance isolated within your private subnet.
-- The `data_scrubber.py` Lambda will automatically strip ABAP comments and obfuscate PII from payloads before hitting the Local LLM (Llama 3/Mistral setup).
+Set `llm_mode="AIRGAPPED_LOCAL"`. Deploy the `airgapped-llm` module in Terraform which spins up a generic GPU VM (`Standard_NC8as_T4_v3`) isolated within your private subnet.
+- The `data_scrubber.py` Function will automatically strip ABAP comments and obfuscate PII from payloads before hitting the Local LLM (Llama 3/Mistral setup).
 
 ### Data Privacy Controls
 - **Data Scrubber** — Automatically masks PII, passwords, code comments, and literal structures before any GenAI dispatch
-- **VPC Endpoints** — All Bedrock traffic stays within AWS private network (no public internet)
+- **Private Endpoints** — All Claude Opus traffic stays within Azure private network (no public internet)
 - **Air-Gapped Isolation** — Zero outbound internet access for the local LLM instance
-- **Entity Resolution** — BP data processed within your AWS account, never exported
+- **Azure Data Factory matching** — BP data processed within your Azure subscription, never exported
 
 ---
 
 ## 15. Real-Time Telemetry Setup
 
-### WebSocket Configuration (AWS Deployment)
-The `websocket-telemetry` Terraform module provisions an API Gateway WebSocket API that streams live stage events to the frontend.
+### WebSocket Configuration (Azure Deployment)
+The `websocket-telemetry` Terraform module provisions an Azure Web PubSub service that streams live stage events to the frontend.
 
 ```bash
 # In terraform.tfvars:
@@ -767,7 +771,7 @@ enable_websocket_telemetry = true
 Set the WebSocket URL in your frontend environment:
 ```bash
 # In frontend/.env.local:
-VITE_TELEMETRY_WS_URL=wss://<api-id>.execute-api.<region>.amazonaws.com/prod
+VITE_TELEMETRY_WS_URL=wss://<web-pubsub-name>.webpubsub.azure.com/client/hubs/telemetry
 ```
 
 ### Local Development
@@ -776,15 +780,15 @@ For local development, the LogViewer operates in polling mode. Set up the enviro
 VITE_TELEMETRY_WS_URL=ws://localhost:8000/ws
 ```
 
-### Entity Resolution Configuration
+### Azure Data Factory Matching Configuration
 For ML-powered BP deduplication in production:
 ```bash
 # In terraform.tfvars:
 enable_entity_resolution = true
 
-# In Lambda environment:
+# In Function App environment:
 BP_FUZZY_THRESHOLD=0.82           # Fuzzy matching confidence threshold (0.0–1.0)
-ENTITY_RESOLUTION_WORKFLOW_ARN=arn:aws:entityresolution:...  # Set by Terraform output
+DATA_FACTORY_PIPELINE_ID=/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.DataFactory/factories/<factory>/pipelines/<pipeline>  # Set by Terraform output
 ```
 
 ---
@@ -885,29 +889,29 @@ Before deploying Migrate4HANA against a real SAP ECC → S/4HANA conversion:
 
 ### Completed (Pre-Configured)
 - [x] **API authentication** — JWT + API key auth implemented in `api_server.py`.
-- [x] **DynamoDB encryption-at-rest** — `server_side_encryption { enabled = true }` in `terraform/modules/dynamodb/main.tf`.
-- [x] **Entity Resolution workflow** — `aws_entityresolution_matching_workflow` fully provisioned with ML_MATCHING in Terraform.
-- [x] **DynamoDB fallback rules** — 30 static rules across 8 categories in `rule_router.py`.
+- [x] **Cosmos DB encryption-at-rest** — encryption enabled by default in `terraform/modules/cosmosdb/main.tf`.
+- [x] **Azure Data Factory matching workflow** — `azurerm_data_factory_pipeline` fully provisioned with ML matching in Terraform.
+- [x] **Cosmos DB fallback rules** — 30 static rules across 8 categories in `rule_router.py`.
 - [x] **Config applier error handling** — Structured error collection + dry_run validation.
 - [x] **Rollback coverage** — Full post-conversion rollback: FI docs, transports, ACDOCA, SPRO, BPs, materials, roles, users, RFC, IDoc. Batch commits (25/batch) with BAPI_TRANSACTION_COMMIT.
 - [x] **Test suite** — 114 tests covering pipeline stages, rule router, ST03N analyzer, DITL generator, rollback manager, config applier, error handling, and 52 SAP integration tests.
 - [x] **RFC call timeouts** — `call_rfc_with_timeout()` prevents indefinite hangs (default 120s, configurable via `RFC_CALL_TIMEOUT_SECONDS`).
 - [x] **Paginated table reads** — `read_table_chunked()` generator with ROWSKIPS/ROWCOUNT pagination (default 5000 rows/page via `RFC_PAGE_SIZE`).
-- [x] **Input validation** — Shared `lambda/utils/validation.py` validates Lambda events (run_id, ecc_client, mode, dry_run, stage) across 4 handlers.
-- [x] **Idempotency** — DynamoDB-backed duplicate detection for data-loader prevents reprocessing on Lambda retries (7-day TTL).
-- [x] **Credential refresh** — Secrets Manager credential caching with 300s TTL + auth-failure auto-retry in RFC pool.
+- [x] **Input validation** — Shared `lambda/utils/validation.py` validates Function events (run_id, ecc_client, mode, dry_run, stage) across 4 handlers.
+- [x] **Idempotency** — Cosmos DB-backed duplicate detection for data-loader prevents reprocessing on Function retries (7-day TTL).
+- [x] **Credential refresh** — Key Vault credential caching with 300s TTL + auth-failure auto-retry in RFC pool.
 - [x] **Source system locking** — SCCR_LOCK_CLIENT + BAPI_USER_LOCK (cutover) / SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK (rollback).
 - [x] **FINS configurable polling** — `FINS_MAX_POLLS` (480) × `FINS_POLL_INTERVAL` (30s) with adaptive backoff.
-- [x] **DMS CDC checkpoint/retry** — CDC error behavior, batch apply, stream buffer, full-load settings configured in Terraform.
+- [x] **Azure Database Migration Service CDC checkpoint/retry** — CDC error behavior, batch apply, stream buffer, full-load settings configured in Terraform.
 - [x] **DITL test scripts** — Runnable Cypress scripts with real Fiori selectors and OData intercepts.
 
 ### Must Complete (Environment-Specific)
 - [ ] **Install PyRFC + SAP NW RFC SDK** — Required for real SAP connectivity. See `scripts/setup-pyrfc.sh`.
-- [ ] **Configure AWS Secrets Manager** — Store SAP credentials securely (never in plaintext config files).
+- [ ] **Configure Azure Key Vault** — Store SAP credentials securely (never in plaintext config files).
 - [ ] **Restrict CORS** — Change wildcard CORS (`*`) in `api_server.py` to your specific frontend domain.
-- [ ] **Set Terraform variables** — Edit `terraform/environments/dev/terraform.tfvars` with your AWS region, VPC CIDRs, SAP connection details.
-- [ ] **Choose LLM mode** — Set `llm_mode` to `AMAZON_BEDROCK` (standard) or `AIRGAPPED_LOCAL` (high-security).
-- [ ] **Create idempotency DynamoDB table** — `migrate4hana-idempotency` with pk/sk string keys and TTL on `ttl` attribute (see PRODUCTION_READINESS_GUIDE.md).
+- [ ] **Set Terraform variables** — Edit `terraform/environments/dev/terraform.tfvars` with your Azure region, VNet CIDRs, SAP connection details.
+- [ ] **Choose LLM mode** — Set `llm_mode` to `CLAUDE_OPUS` (standard) or `AIRGAPPED_LOCAL` (high-security).
+- [ ] **Create idempotency Cosmos DB container** — `migrate4hana-idempotency` with pk/sk string keys and TTL on `ttl` attribute (see PRODUCTION_READINESS_GUIDE.md).
 - [ ] **Configure new environment variables** — Set `RFC_CALL_TIMEOUT_SECONDS`, `RFC_PAGE_SIZE`, `FINS_MAX_POLLS`, `FINS_POLL_INTERVAL`, `ROLLBACK_BATCH_SIZE`, `IDEMPOTENCY_TABLE` as needed (all have sensible defaults).
 
 ### SAP Tool Prerequisites
@@ -933,6 +937,6 @@ Before deploying Migrate4HANA against a real SAP ECC → S/4HANA conversion:
 - [ ] Run assessment (Phases 1–2) first to review findings
 - [ ] Review all SAP readiness check results
 - [ ] Review GO-LIVE scorecard before proceeding to conversion
-- [ ] Confirm DMS CDC latency is within threshold
+- [ ] Confirm Azure Database Migration Service CDC latency is within threshold
 - [ ] SUM/DMO prerequisites met (see Section 13)
 - [ ] Take SAP ECC system snapshot/backup before Phase 3

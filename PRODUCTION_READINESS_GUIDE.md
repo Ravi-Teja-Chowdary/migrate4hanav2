@@ -4,7 +4,7 @@
 
 **Document Version:** 6.0  
 **Date:** April 1, 2026  
-**Status:** Production-Ready Deployment Playbook — ECS Fargate Compute Upgrade Complete (All Infrastructure + Code Hardening Gaps Closed)
+**Status:** Production-Ready Deployment Playbook — Azure Container Apps Compute Upgrade Complete (All Infrastructure + Code Hardening Gaps Closed)
 
 ---
 
@@ -12,9 +12,9 @@
 
 1. [Current State Assessment](#1-current-state-assessment)
 2. [Prerequisites & Accounts Required](#2-prerequisites--accounts-required)
-3. [Phase 1 — PyRFC Lambda Layer Build](#3-phase-1--pyrfc-lambda-layer-build)
-4. [Phase 2 — AWS Infrastructure Deployment](#4-phase-2--aws-infrastructure-deployment)
-5. [Phase 2A — AWS Bedrock Setup (GenAI — Standard Path)](#5-phase-2a--aws-bedrock-setup-genai--standard-path)
+3. [Phase 1 — PyRFC Functions Extension Build](#3-phase-1--pyrfc-container-build)
+4. [Phase 2 — Azure Infrastructure Deployment](#4-phase-2--azure-infrastructure-deployment)
+5. [Phase 2A — Anthropic Claude Opus 4.6 Setup (GenAI — Standard Path)](#5-phase-2a--claude-opus-46-setup-genai)
 6. [Phase 2B — Air-Gapped LLM Setup (GenAI — High-Security Path)](#6-phase-2b--air-gapped-llm-setup-genai--high-security-path)
 7. [Phase 3 — SAP System Connectivity](#7-phase-3--sap-system-connectivity)
 8. [Phase 4 — API Server Hardening](#8-phase-4--api-server-hardening)
@@ -39,8 +39,8 @@
 
 | Component | Count | Status |
 |-----------|-------|--------|
-| Lambda handlers | 18 functions (200–3800 lines each) — 15 on Lambda, 3 on ECS Fargate | Structurally complete, mock-tested |
-| ECS Fargate tasks | Stages 1, 5, 12, 12A (4 vCPU / 16 GB RAM) | **NEW v6.0** — Heavy-compute stages moved off Lambda |
+| Function handlers | 18 functions (200–3800 lines each) — 15 on Azure Functions, 3 on Azure Container Apps | Structurally complete, mock-tested |
+| Azure Container Apps tasks | Stages 1, 5, 12, 12A (4 vCPU / 16 GB RAM) | **NEW v6.0** — Heavy-compute stages moved off Azure Functions |
 | Docker image | `migrate4hana/worker` — unified multi-stage build | **NEW v6.0** — `ecs/Dockerfile` + `ecs/entrypoint.py` |
 | AST transform rules | 160 rules (AST-001 → AST-160) | Complete |
 | Country compliance rules | 710+ rules across 45+ countries | Complete |
@@ -51,12 +51,12 @@
 | IDoc partner profiles | 225+ mock profiles | Complete |
 | Extended ABAP programs | 102 test programs | Complete |
 | Global config framework | 56 countries, 200+ compliance modules | Complete |
-| Terraform modules | 14 modules (VPC, Lambda, ECS, Step Functions, DMS, S3, etc.) | Written, never deployed |
+| Terraform modules | 14 modules (VNet, Azure Functions, Container Apps, Azure Durable Functions, Data Factory, Blob Storage, etc.) | Written, never deployed |
 | Frontend | React SPA, 7 pages, WebSocket telemetry | Functional against mock API |
 | API server (FastAPI) | 15 REST endpoints, JWT + API-key auth, Pydantic validation, CORS, TLS-ready, auto-generated OpenAPI docs | **Production-grade** (rewritten from stdlib) |
-| Step Functions pipeline | 22+ states across 5 phases (incl. ECS waitForTaskToken, Distributed Map + Reconciliation) | Defined in Terraform |
+| Durable Functions pipeline | 22+ states across 5 phases (incl. Container Apps waitForTaskToken, Distributed Map + Reconciliation) | Defined in Terraform |
 | RFC Connection Pool | Thread-safe pool with health check, auto-reconnect, connection aging, call timeouts, credential refresh, paginated table reads | **Enhanced** — `lambda/utils/rfc_pool.py` |
-| Input Validation | Shared Lambda event validation (run_id, ecc_client, mode, dry_run, stage) | **New** — `lambda/utils/validation.py` |
+| Input Validation | Shared Function event validation (run_id, ecc_client, mode, dry_run, stage) | **New** — `lambda/utils/validation.py` |
 | Integration test suite | 15 test classes, 52 test methods covering all 33 BAPI/RFC functions | **New** — `tests/test_sap_integration.py` |
 | Total test suite | 114 passing tests (unit + integration, excluding load tests) | **Verified** — `pytest tests/ --ignore=tests/load_test.py` |
 | PDF report generator | 10-section A4 reports | Working |
@@ -67,32 +67,32 @@
 | Improvement | What Changed |
 |-------------|-------------|
 | ~~Production API framework~~ | **RESOLVED** — Rewrote `api_server.py` from stdlib `http.server` → FastAPI + uvicorn. Async routes, Pydantic validation, CORS middleware, JWT + API-key auth, TLS-ready, multi-worker, auto-generated OpenAPI docs at `/docs` |
-| ~~Connection pooling~~ | **RESOLVED** — Created `lambda/utils/rfc_pool.py`: thread-safe pool with RFC_PING health checks, auto-reconnect, connection aging (300s TTL), borrow/return pattern, Lambda warm-start reuse |
+| ~~Connection pooling~~ | **RESOLVED** — Created `lambda/utils/rfc_pool.py`: thread-safe pool with RFC_PING health checks, auto-reconnect, connection aging (300s TTL), borrow/return pattern, Functions warm-start reuse |
 | ~~No integration tests~~ | **RESOLVED** — Created `tests/test_sap_integration.py`: 15 test classes, 52 test methods covering all 33 RFC/BAPI functions. Dual-mode: runs against MockRFCConnection by default, live SAP when `SAP_TEST_HOST` is set |
-| ~~Lambda timeout for large data~~ | **RESOLVED** — Stage 12 now uses Step Functions Distributed Map with 4 parallel streams (finance, business_partner, material_documents, custom_tables), each with its own 15-min Lambda window |
-| ~~No financial reconciliation~~ | **RESOLVED** — Added Stage 12A: penny-perfect GL balance comparison between ECC (BSEG/BKPF) and S/4HANA (ACDOCA) with variance reporting to S3 |
-| ~~Weak rollback~~ | **RESOLVED** — Rollback manager now has S3 state persistence, resume support across retries, post-rollback verification via RFC_READ_TABLE, and client unlock via SCCR_UNLOCK_CLIENT |
-| ~~PyRFC build script too basic~~ | **RESOLVED** — Enhanced `scripts/setup-pyrfc.sh`: Docker build, import validation in Lambda container, layer size check, auto-updates terraform.tfvars, clear error messages for missing SDK |
+| ~~Function timeout for large data~~ | **RESOLVED** — Stage 12 now uses Durable Functions fan-out/fan-in with 4 parallel streams (finance, business_partner, material_documents, custom_tables), each with its own 15-min Azure Functions window |
+| ~~No financial reconciliation~~ | **RESOLVED** — Added Stage 12A: penny-perfect GL balance comparison between ECC (BSEG/BKPF) and S/4HANA (ACDOCA) with variance reporting to Blob Storage |
+| ~~Weak rollback~~ | **RESOLVED** — Rollback manager now has Blob Storage state persistence, resume support across retries, post-rollback verification via RFC_READ_TABLE, and client unlock via SCCR_UNLOCK_CLIENT |
+| ~~PyRFC build script too basic~~ | **RESOLVED** — Enhanced `scripts/setup-pyrfc.sh`: Docker build, import validation in Functions container, layer size check, auto-updates terraform.tfvars, clear error messages for missing SDK |
 
-### What Was Built in v6.0 (ECS Fargate Compute Upgrade)
+### What Was Built in v6.0 (Azure Container Apps Compute Upgrade)
 
 | Improvement | What Changed |
 |-------------|-------------|
-| ~~Lambda 15-min limit for heavy stages~~ | **RESOLVED** — Stages 1 (Discovery), 5 (Code Analyzer), 12 (Data Loader), and 12A (Reconciliation) migrated from Lambda to **ECS Fargate** with 4 vCPU / 16 GB RAM. No 15-minute timeout — tasks run up to 4 hours with Step Functions `waitForTaskToken` callback pattern |
-| ~~No container infrastructure~~ | **RESOLVED** — New `terraform/modules/ecs/main.tf`: ECR repository with lifecycle policy, ECS cluster with Container Insights, Fargate task definition (4096 CPU / 16384 MiB), execution role, task role with S3/DynamoDB/Bedrock/SecretsManager/StepFunctions permissions, security group with full egress |
-| ~~No Docker image for migration workers~~ | **RESOLVED** — `ecs/Dockerfile`: multi-stage build on Amazon Linux 2023, SAP NW RFC SDK + PyRFC compilation, non-root `appuser`, copies all `lambda/` handler source code. Build: `docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .` |
-| ~~No ECS entrypoint wrapper~~ | **RESOLVED** — `ecs/entrypoint.py`: unified Docker wrapper with dynamic handler selection via `STAGE_TARGET` env var, heartbeat thread (120s interval), `_FargateContext` shim for Lambda context compatibility, Step Functions `SendTaskSuccess`/`SendTaskFailure` callbacks |
-| ~~Dead Lambda definitions for ECS stages~~ | **RESOLVED** — Removed Lambda function definitions for `discovery-engine`, `code-analyzer`, and `data-loader` from all 3 environments (dev/staging/prod). Python source code preserved in `lambda/` for ECS Docker image and `run_local_pipeline.py` |
-| ~~Step Functions not wired to ECS~~ | **RESOLVED** — `terraform/modules/step-functions/main.tf` updated: 4 stages replaced with `ecs:RunTask` using `waitForTaskToken` pattern, ContainerOverrides pass `STAGE_TARGET`, `SFN_TASK_TOKEN`, and `SFN_INPUT` env vars. IAM expanded with `ecs:RunTask/StopTask/DescribeTasks` + `iam:PassRole` for both ECS roles. HeartbeatSeconds=300, configurable TimeoutSeconds per stage (1h–4h) |
+| ~~Azure Functions 15-min limit for heavy stages~~ | **RESOLVED** — Stages 1 (Discovery), 5 (Code Analyzer), 12 (Data Loader), and 12A (Reconciliation) migrated from Azure Functions to **Azure Container Apps** with 4 vCPU / 16 GB RAM. No 15-minute timeout — tasks run up to 4 hours with Azure Durable Functions `waitForTaskToken` callback pattern |
+| ~~No container infrastructure~~ | **RESOLVED** — New `terraform/modules/container-apps/main.tf`: Azure Container Registry (ACR) repository with lifecycle policy, Azure Container Apps environment with Azure Monitor container insights, Fargate task definition (4096 CPU / 16384 MiB), execution role, task role with Blob Storage/Cosmos DB/Claude/KeyVault/StepFunctions permissions, Network NSG (NSG) with full egress |
+| ~~No Docker image for migration workers~~ | **RESOLVED** — `ecs/Dockerfile`: multi-stage build on Azure Linux (CBL-Mariner), SAP NW RFC SDK + PyRFC compilation, non-root `appuser`, copies all `lambda/` handler source code. Build: `docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .` |
+| ~~No Container Apps entrypoint wrapper~~ | **RESOLVED** — `ecs/entrypoint.py`: unified Docker wrapper with dynamic handler selection via `STAGE_TARGET` env var, heartbeat thread (120s interval), `_FargateContext` shim for Function context compatibility, Azure Durable Functions `SendTaskSuccess`/`SendTaskFailure` callbacks |
+| ~~Dead Function definitions for Container Apps stages~~ | **RESOLVED** — Removed Azure Function definitions for `discovery-engine`, `code-analyzer`, and `data-loader` from all 3 environments (dev/staging/prod). Python source code preserved in `lambda/` for Azure Container Apps Docker image and `run_local_pipeline.py` |
+| ~~Azure Durable Functions not wired to Container Apps~~ | **RESOLVED** — `terraform/modules/durable-functions/main.tf` updated: 4 stages replaced with `containerapp job start` using `waitForTaskToken` pattern, ContainerOverrides pass `STAGE_TARGET`, `SFN_TASK_TOKEN`, and `SFN_INPUT` env vars. RBAC expanded with `containerapp job start/StopTask/DescribeTasks` + `Managed Identity assignment` for both Container Apps roles. HeartbeatSeconds=300, configurable TimeoutSeconds per stage (1h–4h) |
 
 ### What Was Built in v6.1 (Architectural Fixes)
 
 | Improvement | What Changed |
 |-------------|-------------|
-| ~~CI/CD SAP License Paradox~~ | **RESOLVED** — `deploy.yml` now downloads the proprietary SAP NW RFC SDK from a private S3 bucket (`s3://migrate4hana-sap-binaries-prod/nwrfc750P_linux_x86_64.zip`) at build time via `aws s3 cp`, injects it into `ecs/` before `docker build`, and cleans up post-build. SDK never committed to Git |
-| ~~Terraform ECS Chicken-and-Egg~~ | **RESOLVED** — ECS task definition in `terraform/modules/ecs/main.tf` now uses `alpine:latest` as a placeholder image with `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infrastructure only; CI/CD deploys the real image to ECR and updates the task definition |
-| ~~Data Gravity OOM Risk~~ | **RESOLVED** — Stage 12A reconciliation in `lambda/data-loader/handler.py` rewritten with streamed aggregation. New `_read_table_chunked()` generator (50K rows/chunk via ROWSKIPS/ROWCOUNT pagination) aggregates running totals in-flight — only one chunk in memory at a time. Prevents OOM on large data volumes (500M+ BSEG rows on 16 GB Fargate). Aggregated totals persisted to S3 for audit trail via `_persist_aggregated_totals()` |
-| ~~DMS Credentials Hardcoded~~ | **RESOLVED** — All 3 environments (dev/staging/prod) now fetch DMS database passwords from AWS Secrets Manager via `data.aws_secretsmanager_secret_version`. Hardcoded `"mock_password"` in dev and `var.ecc_db_password` / `var.s4_db_password` in staging/prod replaced. Password variables removed from staging/prod `variables.tf` |
+| ~~CI/CD SAP License Paradox~~ | **RESOLVED** — `deploy.yml` now downloads the proprietary SAP NW RFC SDK from a private Blob Storage container (`https://migrate4hanasapbinaries.blob.core.windows.net/binaries/nwrfc750P_linux_x86_64.zip`) at build time via `az storage blob download`, injects it into `ecs/` before `docker build`, and cleans up post-build. SDK never committed to Git |
+| ~~Terraform Container Apps Chicken-and-Egg~~ | **RESOLVED** — Azure Container Apps job definition in `terraform/modules/container-apps/main.tf` now uses `alpine:latest` as a placeholder image with `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infrastructure only; CI/CD deploys the real image to ACR and updates the task definition |
+| ~~Data Gravity OOM Risk~~ | **RESOLVED** — Stage 12A reconciliation in `lambda/data-loader/handler.py` rewritten with streamed aggregation. New `_read_table_chunked()` generator (50K rows/chunk via ROWSKIPS/ROWCOUNT pagination) aggregates running totals in-flight — only one chunk in memory at a time. Prevents OOM on large data volumes (500M+ BSEG rows on 16 GB Fargate). Aggregated totals persisted to Blob Storage for audit trail via `_persist_aggregated_totals()` |
+| ~~Data Factory Credentials Hardcoded~~ | **RESOLVED** — All 3 environments (dev/staging/prod) now fetch database connection strings from Azure Key Vault via `data.azurerm_key_vault_secret`. Hardcoded `"mock_password"` in dev and `var.ecc_db_password` / `var.s4_db_password` in staging/prod replaced. Password variables removed from staging/prod `variables.tf` |
 
 ### What Was Built in v5.0 (Production Hardening Pass)
 
@@ -100,9 +100,9 @@
 |-------------|-------------|
 | ~~RFC call timeouts~~ | **RESOLVED** — `call_rfc_with_timeout()` in `rfc_pool.py`: ThreadPoolExecutor-based timeout wrapper (default 120s via `RFC_CALL_TIMEOUT_SECONDS`), prevents indefinite hangs on unresponsive SAP systems |
 | ~~Data volume chunking~~ | **RESOLVED** — `read_table_chunked()` generator in `rfc_pool.py`: ROWSKIPS/ROWCOUNT pagination (default 5000 rows via `RFC_PAGE_SIZE`), max_rows safety cap. Discovery engine converted from unbounded reads to paginated scans |
-| ~~Credential refresh~~ | **RESOLVED** — RFC pool `_resolve_params()` now caches Secrets Manager credentials with configurable TTL (default 300s). Auto-retry on auth failures with credential cache invalidation in `get_connection()` |
+| ~~Credential refresh~~ | **RESOLVED** — RFC pool `_resolve_params()` now caches Key Vault credentials with configurable TTL (default 300s). Auto-retry on auth failures with credential cache invalidation in `get_connection()` |
 | ~~Input validation~~ | **RESOLVED** — New `lambda/utils/validation.py`: shared event validation for `run_id` (alphanumeric+hyphens, 1-64 chars), `ecc_client` (3-digit), `mode` (full/quick/delta), `dry_run` (boolean), `stage` (1-50 chars). Wired into discovery-engine, data-loader, cutover-orchestrator, rollback-manager |
-| ~~Idempotency~~ | **RESOLVED** — DynamoDB-backed idempotency in data-loader: `_check_idempotency()` / `_mark_processed()` with composite key (`run_id#stage`, entity ID), 7-day TTL. Prevents duplicate processing on Lambda retries. Requires `IDEMPOTENCY_TABLE` env var |
+| ~~Idempotency~~ | **RESOLVED** — Cosmos DB-backed idempotency in data-loader: `_check_idempotency()` / `_mark_processed()` with composite key (`run_id#stage`, entity ID), 7-day TTL. Prevents duplicate processing on Azure Functions retries. Requires `IDEMPOTENCY_TABLE` env var |
 | ~~FINS polling timeout~~ | **RESOLVED** — FINS_MASS_DATA_MONITOR polling now configurable via `FINS_MAX_POLLS` (default 480) and `FINS_POLL_INTERVAL` (default 30s) with adaptive backoff (interval increases 10% every 60 polls) |
 | ~~Rollback partial-failure risk~~ | **RESOLVED** — Rollback manager now commits in batches (`ROLLBACK_BATCH_SIZE`, default 25) with BAPI_TRANSACTION_COMMIT after each batch. Applied to all 5 rollback functions (finance, BP, materials, universal journal, user assignments) |
 | ~~Source system locking~~ | **RESOLVED** — Cutover orchestrator `lock_source_system()` uses SCCR_LOCK_CLIENT + BAPI_USER_LOCK. Rollback manager `unlock_source_system()` uses SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK |
@@ -112,47 +112,47 @@
 | Gap | Impact |
 |-----|--------|
 | Real SAP RFC connectivity (PyRFC never installed/deployed) | **Blocker** — tool has never talked to a real SAP system |
-| AWS deployment (no `.tfstate`, no deployed resources) | **Blocker** — infrastructure exists only as code |
+| Azure deployment (no `.tfstate`, no deployed resources) | **Blocker** — infrastructure exists only as code |
 | ~~Integration tests against real SAP~~ | ~~**Blocker**~~ → **RESOLVED** — `tests/test_sap_integration.py` (52 tests, dual-mode mock + live) |
 | ~~HTTPS / TLS on API server~~ | ~~**Blocker**~~ → **RESOLVED** — FastAPI with `M4H_SSL_KEY`/`M4H_SSL_CERT` env vars for direct TLS |
 | ~~Production API framework~~ | ~~**High**~~ → **RESOLVED** — FastAPI + uvicorn with async, workers, graceful shutdown |
 | ~~CI/CD pipeline~~ | ~~**High**~~ → **RESOLVED** — GitHub Actions CI/CD with lint, test, build, terraform plan/apply, smoke tests (`.github/workflows/ci.yml` + `deploy.yml`) |
 | ~~Staging/Production Terraform environments~~ | ~~**High**~~ → **RESOLVED** — Created `terraform/environments/staging/` and `terraform/environments/prod/` with WAF + audit modules enabled |
-| ~~WAF / rate limiting / DDoS protection~~ | ~~**High**~~ → **RESOLVED** — `terraform/modules/waf/` with rate limiting (1K req/5min), AWS Managed Rules (OWASP), SQLi, bad inputs, IP reputation |
-| ~~Audit trail / compliance logging (SOX, GxP)~~ | ~~**High**~~ → **RESOLVED** — `terraform/modules/audit/` with CloudTrail, S3 WORM (7-year retention), CloudWatch metric filters for unauthorized access, IAM changes, pipeline executions |
-| ~~Disaster recovery / backup strategy~~ | ~~**Medium**~~ → **RESOLVED** — Documented DR plan with RTO/RPO targets, S3 cross-region replication, DynamoDB PITR, automated backup strategy (see Phase 12) |
+| ~~WAF / rate limiting / DDoS protection~~ | ~~**High**~~ → **RESOLVED** — `terraform/modules/frontdoor-waf/` with rate limiting (1K req/5min), Azure Managed Rules (OWASP), SQLi, bad inputs, IP reputation |
+| ~~Audit trail / compliance logging (SOX, GxP)~~ | ~~**High**~~ → **RESOLVED** — `terraform/modules/audit/` with Azure Monitor Activity Logs, Blob Storage WORM (7-year retention), Azure Monitor metric filters for unauthorized access, RBAC changes, pipeline executions |
+| ~~Disaster recovery / backup strategy~~ | ~~**Medium**~~ → **RESOLVED** — Documented DR plan with RTO/RPO targets, Blob Storage cross-region replication, Cosmos DB PITR, automated backup strategy (see Phase 12) |
 | ~~Load testing results~~ | ~~**Medium**~~ → **RESOLVED** — Locust load test suite (`tests/load_test.py`) with API user simulation, performance targets documented (see Phase 13) |
 | ~~Connection pooling / RFC session management~~ | ~~**Medium**~~ → **RESOLVED** — `lambda/utils/rfc_pool.py` with thread-safe pool |
-| ~~DMS credentials hardcoded~~ | ~~**Medium**~~ → **RESOLVED** — All 3 environments use `aws_secretsmanager_secret_version` data sources for DMS database passwords |
+| ~~Data Factory credentials hardcoded~~ | ~~**Medium**~~ → **RESOLVED** — All 3 environments use `azurerm_key_vault_secret` data sources for database connection strings |
 | Multi-tenant isolation | **Low** — single-tenant design (acceptable for most SAP migrations) |
 
 ---
 
 ## 2. Prerequisites & Accounts Required
 
-### AWS Account
+### Azure Subscription
 
 ```
-AWS Account with the following services enabled:
-├── Lambda (with VPC access)
-├── ECS Fargate (for heavy-compute stages 1, 5, 12, 12A)
-├── ECR (Elastic Container Registry for Docker images)
-├── Step Functions
-├── S3
-├── DynamoDB
-├── Secrets Manager
-├── API Gateway (WebSocket)
-├── CloudWatch
-├── DMS (Database Migration Service)
-├── EC2 (for air-gapped LLM GPU instance)
-├── VPC (with VPN Gateway if connecting to on-prem SAP)
-├── KMS (for encryption)
-├── SNS (for alerting)
-├── IAM
-└── Entity Resolution (for BP deduplication)
+Azure Subscription with the following services enabled:
+├── Azure Functions (with VNet integration)
+├── Azure Container Apps (for heavy-compute stages 1, 5, 12, 12A)
+├── Azure Container Registry (ACR) (for Docker images)
+├── Durable Functions
+├── Blob Storage
+├── Cosmos DB
+├── Azure Key Vault
+├── Azure Web PubSub
+├── Application Insights + Log Analytics
+├── Azure Database Migration Service
+├── Azure VM (for air-gapped LLM GPU instance)
+├── VNet (with Azure VPN Gateway if connecting to on-prem SAP)
+├── Azure Key Vault (for encryption)
+├── Azure Event Grid (for alerting)
+├── Azure RBAC / Managed Identity
+└── Azure Data Factory matching (for BP deduplication)
 ```
 
-**Estimated monthly cost (dev):** ~$500–800/mo (primarily DMS instance + GPU instance when running)  
+**Estimated monthly cost (dev):** ~$500–800/mo (primarily Data Factory instance + GPU instance when running)  
 **Estimated monthly cost (prod):** ~$2,000–5,000/mo depending on migration volume
 
 ### SAP Access
@@ -169,10 +169,10 @@ AWS Account with the following services enabled:
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Docker | 20.10+ | Building PyRFC Lambda layer |
+| Docker | 20.10+ | Building PyRFC Functions extension |
 | Terraform | >= 1.5.0 | Infrastructure deployment |
-| AWS CLI v2 | Latest | AWS resource management |
-| Python | 3.11 | Lambda runtime matching |
+| Azure CLI | Latest | Azure resource management |
+| Python | 3.11 | Azure Functions runtime matching |
 | Node.js | 18+ | Frontend build |
 | Git | Latest | Version control |
 | SAP NW RFC SDK | 7.50 | PyRFC dependency (download from SAP) |
@@ -180,19 +180,19 @@ AWS Account with the following services enabled:
 ### Network
 
 ```
-Developer Machine ──→ AWS (HTTPS/443)
-AWS VPC (10.10.0.0/16) ──→ SAP ECC (RFC/3300) via:
-    Option A: AWS Site-to-Site VPN
-    Option B: AWS Direct Connect
-    Option C: SAP on EC2 (same VPC)
-AWS VPC ──→ SAP S/4HANA (RFC/3300, OData/443)
+Developer Machine ──→ Azure (HTTPS/443)
+Azure VNet (10.10.0.0/16) ──→ SAP ECC (RFC/3300) via:
+    Option A: Azure VPN Gateway (site-to-site)
+    Option B: Azure ExpressRoute
+    Option C: SAP on Azure VM (same VNet)
+Azure VNet ──→ SAP S/4HANA (RFC/3300, OData/443)
 ```
 
 ---
 
-## 3. Phase 1 — PyRFC Lambda Layer Build
+## 3. Phase 1 — PyRFC Functions Extension Build
 
-**This is the single most critical step.** Without PyRFC, every Lambda handler falls back to mock data.
+**This is the single most critical step.** Without PyRFC, every Function handler falls back to mock data.
 
 ### Step 1.1 — Download SAP NW RFC SDK
 
@@ -201,7 +201,7 @@ AWS VPC ──→ SAP S/4HANA (RFC/3300, OData/443)
 3. Download `nwrfc750P_*-linux-x86_64.zip` (Linux x64 version)
 4. Place it in the project root: `migrate4hana-main/nwrfc750P_*.zip`
 
-### Step 1.2 — Build the Lambda Layer
+### Step 1.2 — Build the Functions Extension
 
 ```bash
 cd migrate4hana-main
@@ -215,18 +215,18 @@ chmod +x scripts/setup-pyrfc.sh
 ```
 
 **What this does:**
-1. Spins up `public.ecr.aws/lambda/python:3.11` Docker container (Amazon Linux 2)
+1. Spins up `mcr.microsoft.com/azure-functions/python:4-python3.11` Docker container (Azure Linux)
 2. Extracts SAP NW RFC SDK to `/opt/sap/nwrfcsdk/`
 3. Installs `pyrfc` Python package
 4. Copies shared libraries (`.so` files) for RFC connectivity
 5. Packages everything into `pyrfc-layer.zip`
-6. Publishes as AWS Lambda Layer via `aws lambda publish-layer-version`
+6. Publishes as Azure Functions Extension via `az functionapp deployment`
 
 ### Step 1.3 — Record the Layer ARN
 
 The script outputs something like:
 ```
-Layer ARN: arn:aws:lambda:us-east-1:123456789012:layer:migrate4hana-pyrfc:1
+Layer ARN: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Web/sites/eastus:123456789012:layer:migrate4hana-pyrfc:1
 ```
 
 **Save this.** You'll need it in the next phase.
@@ -234,14 +234,14 @@ Layer ARN: arn:aws:lambda:us-east-1:123456789012:layer:migrate4hana-pyrfc:1
 ### Step 1.4 — Verify Layer
 
 ```bash
-# Quick verification: create a test Lambda
-aws lambda create-function \
+# Quick verification: create a test Azure Functions
+az functionapp create \
   --function-name pyrfc-test \
   --runtime python3.11 \
   --handler lambda_function.lambda_handler \
-  --role arn:aws:iam::YOUR_ACCOUNT:role/lambda-basic \
+  --role /subscriptions/{sub}/providers/Microsoft.Authorization/YOUR_ACCOUNT:role/lambda-basic \
   --zip-file fileb://test_pyrfc.zip \
-  --layers "arn:aws:lambda:us-east-1:YOUR_ACCOUNT:layer:migrate4hana-pyrfc:1"
+  --layers "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Web/sites/eastus:YOUR_ACCOUNT:layer:migrate4hana-pyrfc:1"
 
 # Test function should contain:
 # def lambda_handler(event, context):
@@ -251,37 +251,34 @@ aws lambda create-function \
 
 ---
 
-## 4. Phase 2 — AWS Infrastructure Deployment
+## 4. Phase 2 — Azure Infrastructure Deployment
 
 ### Step 2.1 — Configure Terraform Backend (Remote State)
 
-Create the S3 backend for Terraform state **before** running Terraform:
+Create the Azure Storage Account backend for Terraform state **before** running Terraform:
 
 ```bash
-# Create state bucket
-aws s3api create-bucket \
-  --bucket migrate4hana-tfstate \
-  --region us-east-1
+# Create resource group for Terraform state
+az group create \
+  --name migrate4hana-tfstate-rg \
+  --location eastus
 
-# Enable versioning
-aws s3api put-bucket-versioning \
-  --bucket migrate4hana-tfstate \
-  --versioning-configuration Status=Enabled
+# Create storage account for state
+az storage account create \
+  --name migrate4hanatfstate \
+  --resource-group migrate4hana-tfstate-rg \
+  --location eastus \
+  --sku Standard_LRS \
+  --encryption-services blob
 
-# Enable encryption
-aws s3api put-bucket-encryption \
-  --bucket migrate4hana-tfstate \
-  --server-side-encryption-configuration '{
-    "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
-  }'
+# Create blob container for state files
+az storage container create \
+  --name tfstate \
+  --account-name migrate4hanatfstate
 
-# Create DynamoDB lock table
-aws dynamodb create-table \
-  --table-name migrate4hana-tflock \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
+# Note: Azure Blob Storage uses lease-based locking for Terraform state
+# No separate lock table is needed (unlike Cosmos DB). The azurerm backend
+# handles locking automatically via blob leases.
 ```
 
 ### Step 2.2 — Uncomment Terraform Backend
@@ -292,14 +289,13 @@ In `terraform/environments/dev/main.tf`, uncomment the backend block (lines 17�
 terraform {
   required_version = ">= 1.5.0"
   required_providers {
-    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+    azurerm = { source = "hashicorp/azurerm", version = "~> 3.0" }
   }
-  backend "s3" {
-    bucket         = "migrate4hana-tfstate"
-    key            = "dev/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "migrate4hana-tflock"
-    encrypt        = true
+  backend "azurerm" {
+    resource_group_name  = "migrate4hana-tfstate-rg"
+    storage_account_name = "migrate4hanatfstate"
+    container_name       = "tfstate"
+    key                  = "dev/terraform.tfstate"
   }
 }
 ```
@@ -309,17 +305,17 @@ terraform {
 Edit `terraform/environments/dev/terraform.tfvars`:
 
 ```hcl
-aws_region           = "us-east-1"                              # Your preferred region
+azure_location       = "eastus"                                  # Your preferred Azure region
 environment          = "dev"                                     # Start with dev
-vpc_cidr             = "10.10.0.0/16"                            # Must not conflict with on-prem SAP network
-availability_zones   = ["us-east-1a", "us-east-1b"]
-private_subnet_cidrs = ["10.10.1.0/24", "10.10.2.0/24"]
+resource_group_name  = "migrate4hana-dev-rg"                     # Resource group for all resources
+vnet_cidr            = "10.10.0.0/16"                            # Must not conflict with on-prem SAP network
+subnet_cidrs         = ["10.10.1.0/24", "10.10.2.0/24"]
 public_subnet_cidrs  = ["10.10.101.0/24", "10.10.102.0/24"]
 enable_vpn_gateway   = true                                      # Set true if SAP is on-prem
 on_prem_cidr         = "172.16.0.0/12"                           # Your SAP network CIDR
-s3_staging_bucket    = "migrate4hana-staging-dev"                # Unique bucket name
-pyrfc_layer_arn      = "arn:aws:lambda:us-east-1:ACCT:layer:migrate4hana-pyrfc:1"  # FROM PHASE 1
-alert_email          = "sap-migration-team@yourcompany.com"      # SNS alert recipient
+storage_account_name = "migrate4hanastagingdev"                  # Unique storage account name
+acr_name             = "migrate4hanaacr"                         # Azure Container Registry name
+alert_email          = "sap-migration-team@yourcompany.com"      # Event Grid alert recipient
 ```
 
 ### Step 2.4 — Deploy Infrastructure
@@ -334,18 +330,18 @@ terraform init
 terraform plan -out=tfplan
 
 # Expected resources created:
-#   - 1 VPC + subnets + NAT gateway + VPN gateway
-#   - 18 Lambda functions with IAM roles
-#   - 1 ECS Fargate cluster + task definition + ECR repo
-#   - 1 Step Functions state machine (with ECS waitForTaskToken)
-#   - 1 S3 bucket (KMS-encrypted, versioned)
-#   - 1 DynamoDB table (simplification rules)
-#   - 1 DMS replication instance + endpoints
-#   - 1 CloudWatch dashboard + alarms
-#   - 1 API Gateway WebSocket + Lambda handler
-#   - 2 Secrets Manager secrets (ECC + S/4HANA)
-#   - 1 Entity Resolution workflow
-#   - VPC endpoints for Bedrock PrivateLink
+#   - 1 VNet + subnets + NAT gateway + VPN gateway
+#   - 18 Azure Functions with Managed Identity
+#   - 1 Azure Container Apps environment + ACR repository
+#   - 1 Durable Functions orchestration (with activity function callbacks)
+#   - 1 Blob Storage account (encrypted, versioned)
+#   - 1 Cosmos DB container (simplification rules)
+#   - 1 Azure Database Migration Service instance + endpoints
+#   - 1 Azure Monitor dashboard + alerts
+#   - 1 Azure Web PubSub + Function handler
+#   - 2 Key Vault secrets (ECC + S/4HANA)
+#   - 1 Azure Data Factory matching workflow
+#   - Private Endpoints for Anthropic API connectivity
 
 # Apply (type 'yes' when prompted)
 terraform apply tfplan
@@ -354,42 +350,47 @@ terraform apply tfplan
 terraform output > ../../deployment_outputs.txt
 ```
 
-### Step 2.5a — Build & Push ECS Docker Image
+### Step 2.5a — Build & Push Azure Container Apps Docker Image
 
-The ECS Fargate stages require the Docker image to be built and pushed to ECR:
+The Azure Container Apps stages require the Docker image to be built and pushed to ACR:
 
 ```bash
-# Get ECR repository URL from Terraform output
-ECR_URL=$(terraform output -raw ecr_repository_url)
-AWS_REGION=$(terraform output -raw aws_region)
+# Get ACR name from Terraform output
+ACR_NAME=$(terraform output -raw acr_name)
 
-# Authenticate Docker with ECR
-aws ecr get-login-password --region $AWS_REGION | \
-  docker login --username AWS --password-stdin $ECR_URL
+# Authenticate Docker with ACR
+az acr login --name $ACR_NAME
 
 # Build the image (run from project root — requires SAP NW RFC SDK zip in ecs/)
 # NOTE: The CI/CD pipeline (deploy.yml) automates this — it downloads the SAP NW RFC
-# SDK from a private S3 bucket before building. For local builds, manually place the
-# SDK zip in ecs/ first.
+# SDK from a private Blob Storage container before building. For local builds, manually
+# place the SDK zip in ecs/ first.
 cd ../../..  # back to project root
 docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .
 
 # Tag and push
-docker tag migrate4hana-worker:latest $ECR_URL:latest
-docker push $ECR_URL:latest
+docker tag migrate4hana-worker:latest $ACR_NAME.azurecr.io/migrate4hana-worker:latest
+docker push $ACR_NAME.azurecr.io/migrate4hana-worker:latest
 ```
 
 > **Note:** The Dockerfile expects the SAP NW RFC SDK zip file. Without it, PyRFC compilation will fail and the container will fall back to mock mode.
 >
-> **CI/CD Automation:** The `deploy.yml` pipeline handles this automatically — it downloads the SDK from a private S3 bucket, builds the image, and pushes to ECR. For initial bootstrap, Terraform uses an `alpine:latest` placeholder image with `lifecycle { ignore_changes = [container_definitions] }` so that `terraform apply` succeeds before the first CI/CD image push.
+> **CI/CD Automation:** The `deploy.yml` pipeline handles this automatically — it downloads the SDK from a private Blob Storage container, builds the image, and pushes to ACR. For initial bootstrap, Terraform uses an `alpine:latest` placeholder image with `lifecycle { ignore_changes = [container_definitions] }` so that `terraform apply` succeeds before the first CI/CD image push.
 
-### Step 2.5b — Store SAP Credentials in Secrets Manager
+### Step 2.5b — Store SAP Credentials in Key Vault
 
 ```bash
+# Create Key Vault (if not already created by Terraform)
+az keyvault create \
+  --name migrate4hana-kv-dev \
+  --resource-group migrate4hana-dev-rg \
+  --location eastus
+
 # ECC source system credentials
-aws secretsmanager put-secret-value \
-  --secret-id "migrate4hana/dev/sap-credentials" \
-  --secret-string '{
+az keyvault secret set \
+  --vault-name migrate4hana-kv-dev \
+  --name sap-credentials \
+  --value '{
     "host": "10.10.1.100",
     "sysnr": "00",
     "client": "100",
@@ -399,9 +400,10 @@ aws secretsmanager put-secret-value \
   }'
 
 # S/4HANA target system credentials
-aws secretsmanager put-secret-value \
-  --secret-id "migrate4hana/dev/s4hana-credentials" \
-  --secret-string '{
+az keyvault secret set \
+  --vault-name migrate4hana-kv-dev \
+  --name s4hana-credentials \
+  --value '{
     "host": "10.10.2.200",
     "sysnr": "00",
     "client": "100",
@@ -411,242 +413,215 @@ aws secretsmanager put-secret-value \
   }'
 ```
 
-### Step 2.6 — Verify ECS Cluster Health
+### Step 2.6 — Verify Container Apps Cluster Health
 
-After deployment, verify the ECS cluster and task definition are ready:
+After deployment, verify the Azure Container Apps environment and task definition are ready:
 
 ```bash
-# List ECS clusters
-aws ecs list-clusters --query "clusterArns[?contains(@, 'migrate4hana')]" --output table
-
-# Describe cluster
-aws ecs describe-clusters \
-  --clusters migrate4hana-${ENV} \
-  --query "clusters[*].{Name:clusterName,Status:status,Insights:settings}" \
+# List Container Apps environments
+az containerapp env list \
+  --resource-group migrate4hana-${ENV}-rg \
+  --query "[?contains(name, 'migrate4hana')].{Name:name,Status:provisioningState}" \
   --output table
 
-# Verify task definition
-aws ecs describe-task-definition \
-  --task-definition migrate4hana-worker-${ENV} \
-  --query "taskDefinition.{CPU:cpu,Memory:memory,Status:status}" \
+# Describe Container Apps environment
+az containerapp env show \
+  --name migrate4hana-env-${ENV} \
+  --resource-group migrate4hana-${ENV}-rg \
   --output table
-# Expected: CPU=4096, Memory=16384
+
+# Verify container app configuration
+az containerapp show \
+  --name migrate4hana-worker-${ENV} \
+  --resource-group migrate4hana-${ENV}-rg \
+  --query "{CPU:properties.template.containers[0].resources.cpu,Memory:properties.template.containers[0].resources.memory}" \
+  --output table
+# Expected: CPU=4.0, Memory=16Gi
 ```
 
 ### Step 2.7 — Configure VPN to SAP Network
 
-**Option A: Site-to-Site VPN (SAP on-premises)**
+**Option A: Azure VPN Gateway (SAP on-premises)**
 
 ```bash
-# Get VPN gateway ID from Terraform output
-VGW_ID=$(terraform output -raw vpn_gateway_id)
+# Get VPN gateway details from Terraform output
+VPN_GW_NAME=$(terraform output -raw vpn_gateway_name)
+VPN_GW_RG=$(terraform output -raw resource_group_name)
 
-# Create Customer Gateway (your SAP firewall's public IP)
-aws ec2 create-customer-gateway \
-  --type ipsec.1 \
-  --public-ip YOUR_SAP_FIREWALL_PUBLIC_IP \
-  --bgp-asn 65000
+# Create Local Network Gateway (your SAP firewall's public IP)
+az network local-gateway create \
+  --name sap-onprem-lgw \
+  --resource-group $VPN_GW_RG \
+  --gateway-ip-address YOUR_SAP_FIREWALL_PUBLIC_IP \
+  --local-address-prefixes 172.16.0.0/12
 
 # Create VPN connection
-aws ec2 create-vpn-connection \
-  --type ipsec.1 \
-  --customer-gateway-id cgw-xxxxxxxx \
-  --vpn-gateway-id $VGW_ID \
-  --options '{"StaticRoutesOnly": true}'
-
-# Add route to SAP network
-aws ec2 create-vpn-connection-route \
-  --vpn-connection-id vpn-xxxxxxxx \
-  --destination-cidr-block 172.16.0.0/12
+az network vpn-connection create \
+  --name sap-vpn-connection \
+  --resource-group $VPN_GW_RG \
+  --vnet-gateway1 $VPN_GW_NAME \
+  --local-gateway2 sap-onprem-lgw \
+  --shared-key YOUR_SHARED_KEY \
+  --connection-protocol IKEv2
 ```
 
-**Option B: SAP on EC2 (same VPC)** — No VPN needed. Ensure SAP EC2 instances are in the private subnets.
+**Option B: SAP on Azure VM (same VNet)** — No VPN needed. Ensure SAP Azure VMs are in the private subnets.
 
-**Option C: AWS Direct Connect** — Work with your network team for dedicated 1Gbps/10Gbps link to AWS.
+**Option C: Azure ExpressRoute** — Work with your network team for dedicated 1Gbps/10Gbps private link to Azure.
 
 ### Step 2.8 — Verify Connectivity
 
 ```bash
-# Test ECS-based discovery-engine (Stage 1) — now runs on Fargate
-# Note: Stages 1, 5, 12, 12A are triggered via Step Functions (ECS RunTask)
+# Test Container Apps-based discovery-engine (Stage 1) — now runs on Container Apps
+# Note: Stages 1, 5, 12, 12A are triggered via Durable Functions (activity functions)
 # Direct invocation for testing requires running the full pipeline or
-# manually starting an ECS task:
-aws ecs run-task \
-  --cluster migrate4hana-${ENV} \
-  --task-definition migrate4hana-worker-${ENV} \
-  --launch-type FARGATE \
-  --network-configuration '{
-    "awsvpcConfiguration": {
-      "subnets": ["subnet-xxx"],
-      "securityGroups": ["sg-xxx"],
-      "assignPublicIp": "DISABLED"
-    }
-  }' \
-  --overrides '{
-    "containerOverrides": [{
-      "name": "migration-worker",
-      "environment": [
-        {"name": "STAGE_TARGET", "value": "discovery-engine"},
-        {"name": "SFN_INPUT", "value": "{\"action\":\"health_check\"}"}
-      ]
-    }]
-  }'
+# manually starting a container app execution:
+az containerapp job start \
+  --name migrate4hana-worker-${ENV} \
+  --resource-group migrate4hana-${ENV}-rg \
+  --env-vars \
+    STAGE_TARGET=discovery-engine \
+    SFN_INPUT='{"action":"health_check"}'
 
-# Watch task logs in CloudWatch
-aws logs tail /ecs/migrate4hana-worker --follow
+# Watch container logs in Log Analytics
+az containerapp logs show \
+  --name migrate4hana-worker-${ENV} \
+  --resource-group migrate4hana-${ENV}-rg \
+  --follow
 ```
 
 ---
 
-## 5. Phase 2A — AWS Bedrock Setup (GenAI — Standard Path)
+## 5. Phase 2A — Claude Opus 4.6 Setup (GenAI)
 
-The code-analyzer Lambda uses a dual-path GenAI strategy: the deterministic AST engine runs first (160 rules), and when it finds fewer than `AST_CHANGE_THRESHOLD` changes, it escalates to a GenAI backend for deeper semantic analysis. **AWS Bedrock is the primary GenAI path** — it uses Anthropic Claude via VPC PrivateLink with zero internet egress.
+The code-analyzer function uses a dual-path GenAI strategy: the deterministic AST engine runs first (160 rules), and when it finds fewer than `AST_CHANGE_THRESHOLD` changes, it escalates to a GenAI backend for deeper semantic analysis. **Anthropic Claude Opus 4.6 is the primary GenAI path** — it calls the Anthropic API directly with API key authentication.
 
-**Code reference:** `lambda/code-analyzer/genai_router.py` — `_invoke_bedrock()` calls `bedrock-runtime` via `boto3`.
+**Code reference:** `lambda/code-analyzer/genai_router.py` — `_invoke_claude()` calls the Anthropic API via `anthropic` Python SDK.
 
-### Step 2A.1 — Enable Bedrock Model Access
+### Step 2A.1 — Obtain Anthropic API Key
 
-AWS retired the legacy **Model access** page. In new and existing commercial accounts, serverless foundation models are auto-enabled when first invoked. For Anthropic models, AWS now prompts for **Use Case Details** during first invocation.
+Claude Opus 4.6 is accessed directly via the Anthropic API. No cloud-provider-specific setup is needed.
 
-Use this invoke-to-enable workflow:
-
-1. Open the **AWS Console** → **Amazon Bedrock** → **Playgrounds** (Chat or Text)
-2. Select **Anthropic Claude 3 Sonnet** from the model picker
-3. Send a test prompt (for example: "Hello")
-4. When prompted, submit the required **Use Case Details**
-5. Wait for AWS to approve the request (if review is required)
-6. Re-run the test prompt and confirm the model responds successfully
+1. Sign up at [console.anthropic.com](https://console.anthropic.com/)
+2. Create an API key under **Settings → API Keys**
+3. Store the API key in Azure Key Vault (see Step 2A.3)
+4. Test the key with a simple curl request (see Step 2A.5)
 
 Primary models for this project:
 
 | Provider | Model | Model ID | Purpose |
 |----------|-------|----------|--------|
-| **Anthropic** | Claude 3 Sonnet | `anthropic.claude-3-sonnet-20240229-v1:0` | Primary analysis model (default) |
-| **Anthropic** | Claude 3 Haiku | `anthropic.claude-3-haiku-20240307-v1:0` | Faster/cheaper fallback |
-| **Amazon** | Titan Text Express | `amazon.titan-text-express-v1` | Alternative if Anthropic unavailable |
+| **Anthropic** | Claude Opus 4.6 | `claude-opus-4-6-20250515` | Primary analysis model (default) |
+| **Anthropic** | Claude Sonnet 4 | `claude-sonnet-4-20250514` | Faster/cheaper fallback |
 
-> **Important:** There is no separate manual enable step anymore. The first successful invocation path (Playground or API) is now the activation path.
+> **Important:** The Anthropic API is region-agnostic. Your Azure deployment region does not affect model availability.
 
-> **Region note:** Bedrock availability varies by region. Claude 3 Sonnet is available in `us-east-1`, `us-west-2`, `eu-west-1`, `ap-northeast-1`. Ensure your deployment region supports your chosen model.
+### Step 2A.2 — Configure Outbound Access for Anthropic API
 
-### Step 2A.2 — Verify VPC Endpoints for Bedrock
+Since Claude Opus 4.6 is accessed via the Anthropic API (not a cloud-managed service), your Azure Functions and Container Apps need outbound HTTPS access to `api.anthropic.com`.
 
-The Terraform module `terraform/modules/vpc-endpoints/main.tf` already creates two VPC endpoints:
+**Network configuration:**
 
-```
-com.amazonaws.{region}.bedrock-runtime      ← Model invocation (InvokeModel API)
-com.amazonaws.{region}.bedrock-agent-runtime ← Agent runtime (optional)
-```
-
-**Verify after `terraform apply`:**
+If your functions are VNet-integrated, ensure the NSG on the functions subnet allows outbound HTTPS (port 443) to the internet, or configure a NAT Gateway for egress.
 
 ```bash
-# List VPC endpoints
-aws ec2 describe-vpc-endpoints \
-  --filters "Name=tag:Name,Values=Bedrock-PrivateLink" \
-  --query "VpcEndpoints[*].{ID:VpcEndpointId,Service:ServiceName,State:State}" \
+# Verify NSG allows outbound HTTPS
+az network nsg rule list \
+  --nsg-name migrate4hana-functions-nsg \
+  --resource-group migrate4hana-dev-rg \
+  --query "[?direction=='Outbound' && destinationPortRange=='443']" \
   --output table
 
-# Expected output:
-# ┌──────────────────────┬──────────────────────────────────────────────────────┬───────────┐
-# │         ID           │                     Service                          │   State   │
-# ├──────────────────────┼──────────────────────────────────────────────────────┼───────────┤
-# │ vpce-0abc123def456   │ com.amazonaws.us-east-1.bedrock-runtime              │ available │
-# │ vpce-0def789abc012   │ com.amazonaws.us-east-1.bedrock-agent-runtime        │ available │
-# └──────────────────────┴──────────────────────────────────────────────────────┴───────────┘
+# If missing, add the rule:
+az network nsg rule create \
+  --nsg-name migrate4hana-functions-nsg \
+  --resource-group migrate4hana-dev-rg \
+  --name AllowAnthropicAPI \
+  --priority 100 \
+  --direction Outbound \
+  --protocol Tcp \
+  --destination-port-range 443 \
+  --access Allow
 ```
 
-**Security group requirement:** The VPC endpoint security group (`vpce_security_group_id` in `dev/main.tf`) must allow **inbound HTTPS (port 443)** from the Lambda security group. If you're using the VPC module's default SG, verify this:
+> **Note:** For high-security environments that cannot allow direct internet egress, use the air-gapped LLM path (Phase 2B) instead.
+
+### Step 2A.3 — Store Anthropic API Key in Azure Key Vault
+
+Store the Anthropic API key in Azure Key Vault so the functions can access it securely via Managed Identity:
 
 ```bash
-# Check the SG allows Lambda → Bedrock traffic
-aws ec2 describe-security-groups \
-  --group-ids $(terraform output -raw vpce_security_group_id) \
-  --query "SecurityGroups[*].IpPermissions"
+# Store the API key
+az keyvault secret set \
+  --vault-name migrate4hana-kv-dev \
+  --name anthropic-api-key \
+  --value "sk-ant-YOUR_API_KEY_HERE"
 
-# If missing, add the rule:
-aws ec2 authorize-security-group-ingress \
-  --group-id $VPCE_SG_ID \
-  --protocol tcp \
-  --port 443 \
-  --source-group $LAMBDA_SG_ID
-```
+# Grant the Function App's Managed Identity access to Key Vault
+FUNC_PRINCIPAL_ID=$(az functionapp identity show \
+  --name migrate4hana-code-analyzer-dev \
+  --resource-group migrate4hana-dev-rg \
+  --query principalId -o tsv)
 
-### Step 2A.3 — Add Bedrock IAM Permissions to Lambda Role
-
-**IMPORTANT:** The current `terraform/modules/lambda/main.tf` is missing `bedrock:InvokeModel` permission. This must be added or Lambda calls to Bedrock will fail with `AccessDeniedException`.
-
-Add this statement to the Lambda IAM policy in `terraform/modules/lambda/main.tf`:
-
-```hcl
-# In the aws_iam_role_policy "lambda" resource, add to the Statement array:
-{
-  Effect = "Allow"
-  Action = [
-    "bedrock:InvokeModel",
-    "bedrock:InvokeModelWithResponseStream"
-  ]
-  Resource = "arn:aws:bedrock:*::foundation-model/*"
-}
+az keyvault set-policy \
+  --name migrate4hana-kv-dev \
+  --object-id $FUNC_PRINCIPAL_ID \
+  --secret-permissions get list
 ```
 
 > This has been applied to the Terraform code as part of this guide update.
 
-### Step 2A.4 — Configure Lambda Environment Variables for Bedrock
+### Step 2A.4 — Configure Function Environment Variables for Claude
 
 The `genai_router.py` reads these environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BEDROCK_MODEL_ID` | `anthropic.claude-3-sonnet-20240229-v1:0` | Which Bedrock model to invoke |
+| `CLAUDE_MODEL_ID` | `claude-opus-4-6-20250515` | Which Anthropic model to invoke |
 | `AST_CHANGE_THRESHOLD` | `3` | If AST finds fewer than this many changes, escalate to GenAI |
+| `ANTHROPIC_API_KEY_VAULT_URL` | `""` | Key Vault secret URL for the Anthropic API key |
 | `LOCAL_LLM_ENDPOINT` | `""` (empty = disabled) | Air-gapped LLM URL (see Phase 2B) |
 
-These are now set in `terraform/modules/lambda/main.tf` via the Lambda environment block.
+These are now set in `terraform/modules/functions/main.tf` via the Function App configuration.
 
-To override the default model, set `BEDROCK_MODEL_ID` in `terraform/environments/dev/terraform.tfvars`:
+To override the default model, set `CLAUDE_MODEL_ID` in `terraform/environments/dev/terraform.tfvars`:
 
 ```hcl
-# Optional: override the Bedrock model
-bedrock_model_id = "anthropic.claude-3-sonnet-20240229-v1:0"  # Default
-# bedrock_model_id = "anthropic.claude-3-haiku-20240307-v1:0"  # Cheaper/faster
-# bedrock_model_id = "amazon.titan-text-express-v1"            # Amazon alternative
+# Optional: override the Claude model
+claude_model_id = "claude-opus-4-6-20250515"     # Default (best quality)
+# claude_model_id = "claude-sonnet-4-20250514"    # Faster/cheaper
 ```
 
-### Step 2A.5 — Test Bedrock Connectivity from Lambda
+### Step 2A.5 — Test Claude Opus 4.6 Connectivity from Azure Functions
 
 ```bash
 # Invoke the code-analyzer with a small ABAP snippet
-aws lambda invoke \
-  --function-name migrate4hana-code-analyzer-dev \
-  --payload '{
+az functionapp function invoke \
+  --name migrate4hana-code-analyzer-dev \
+  --resource-group migrate4hana-dev-rg \
+  --function-name analyze \
+  --body '{
     "action": "analyze",
-    "source_code": "REPORT ztest_bedrock.\nSELECT * FROM bseg INTO TABLE lt_bseg.",
+    "source_code": "REPORT ztest_claude.\nSELECT * FROM bseg INTO TABLE lt_bseg.",
     "force_genai": true
-  }' \
-  --cli-binary-format raw-in-base64-out \
-  bedrock_test.json
+  }'
 
-cat bedrock_test.json | python -m json.tool
-
-# Expected: backend_used = "bedrock" with findings array
+# Expected: backend_used = "claude" with findings array
 # If backend_used = "ast_engine", the AST found enough changes (working correctly)
-# If you see "Both Bedrock and Local LLM unavailable", check:
-#   1. IAM permissions (bedrock:InvokeModel)
-#   2. VPC endpoint state (should be "available")
-#   3. First invocation approval (Use Case Details submitted/approved for the selected model)
-#   4. Security group (Lambda SG → VPCE SG port 443)
+# If you see "Both Claude and Local LLM unavailable", check:
+#   1. Key Vault secret (anthropic-api-key) is set and accessible
+#   2. Managed Identity has Key Vault access policy
+#   3. NSG allows outbound HTTPS to api.anthropic.com
 ```
 
-### Step 2A.6 — Bedrock Cost Estimation
+### Step 2A.6 — Claude Opus 4.6 Cost Estimation
 
 | Model | Input Cost | Output Cost | Typical Migration Usage |
 |-------|-----------|-------------|------------------------|
-| Claude 3 Sonnet | $3.00 / 1M tokens | $15.00 / 1M tokens | 500-2,000 programs × ~2K tokens each = $3-15 per migration |
-| Claude 3 Haiku | $0.25 / 1M tokens | $1.25 / 1M tokens | Same volume = $0.25-1.25 per migration |
-| Titan Text Express | $0.20 / 1M tokens | $0.60 / 1M tokens | Same volume = $0.20-0.60 per migration |
+| Claude Opus 4.6 | $15.00 / 1M tokens | $75.00 / 1M tokens | 500-2,000 programs × ~2K tokens each = $15-75 per migration |
+| Claude Sonnet 4 | $3.00 / 1M tokens | $15.00 / 1M tokens | Same volume = $3-15 per migration |
 
-> **Note:** Most programs are handled by the deterministic AST engine (160 rules) and never reach Bedrock. In testing, only ~10-15% of programs escalate to GenAI. Actual Bedrock costs for a typical migration are **under $20**.
+> **Note:** Most programs are handled by the deterministic AST engine (160 rules) and never reach Claude. In testing, only ~10-15% of programs escalate to GenAI. Actual Claude API costs for a typical migration are **under $50**.
 
 ### Step 2A.7 — Routing Logic Summary
 
@@ -673,9 +648,9 @@ ABAP Source Code
   └────┘    └──────┬───────┘
                    │
                    ▼
-            ┌──────────────┐
-            │  Try Bedrock  │ ← Via VPC PrivateLink (no internet)
-            └──────┬───────┘
+            ┌────────────────┐
+            │ Try Claude API │ ← Via Anthropic API (HTTPS)
+            └───────┬────────┘
                    │
               Success?        
               │         │
@@ -701,101 +676,112 @@ ABAP Source Code
 
 ## 6. Phase 2B — Air-Gapped LLM Setup (GenAI — High-Security Path)
 
-The air-gapped LLM is an **optional, high-security alternative** to Bedrock for organizations that cannot send any data (even PII-scrubbed) to AWS-managed AI services. It runs a local LLM (e.g., Meta Llama 3 8B) on a GPU EC2 instance with **zero internet egress** — traffic is restricted to VPC-internal only.
+The air-gapped LLM is an **optional, high-security alternative** to the Claude Opus 4.6 API for organizations that cannot send any data (even PII-scrubbed) to external AI services. It runs a local LLM (e.g., Meta Llama 3 8B) on a GPU Azure VM with **zero internet egress** — traffic is restricted to VNet-internal only.
 
 **Code reference:** `lambda/code-analyzer/genai_router.py` — `_invoke_local_llm()` sends HTTP POST to port 8000 on the GPU instance.
 
-**Terraform reference:** `terraform/modules/airgapped-llm/main.tf` — provisions g5.2xlarge with encrypted 500GB EBS, zero-egress security group.
+**Terraform reference:** `terraform/modules/airgapped-llm/main.tf` — provisions Standard_NC8as_T4_v3 with encrypted 500GB managed disk, zero-egress NSG.
 
-### When to Use Air-Gapped vs Bedrock
+### When to Use Air-Gapped vs Claude
 
-| Criteria | Use Bedrock (Phase 2A) | Use Air-Gapped (Phase 2B) |
+| Criteria | Use Claude Opus 4.6 (Phase 2A) | Use Air-Gapped (Phase 2B) |
 |----------|----------------------|---------------------------|
-| Data sensitivity | PII-scrubbed code is acceptable to send to AWS | No data can leave your VPC, even scrubbed |
+| Data sensitivity | PII-scrubbed code is acceptable to send to Anthropic API | No data can leave your VNet, even scrubbed |
 | Compliance | Standard enterprise SOX/SOC2 | Government/defense (FedRAMP High, IL4+), classified |
-| Cost | Pay-per-token (~$3-15 per migration) | Fixed EC2 cost (~$1.21/hr while running) |
-| Quality | Claude 3 Sonnet (excellent) | Llama 3 8B (good, less nuanced) |
-| Setup effort | Low (enable model + VPC endpoint) | Medium (install model, configure server) |
-| Availability | Always on (serverless) | Must start/stop EC2 manually or via automation |
+| Cost | Pay-per-token (~$15-75 per migration) | Fixed VM cost (~$0.90/hr while running) |
+| Quality | Claude Opus 4.6 (excellent) | Llama 3 8B (good, less nuanced) |
+| Setup effort | Low (API key + Key Vault) | Medium (install model, configure server) |
+| Availability | Always on (API) | Must start/stop VM manually or via automation |
 
-> **Recommendation:** Use Bedrock for most deployments. Only deploy the air-gapped LLM if your security policy explicitly prohibits AWS-managed AI services.
+> **Recommendation:** Use Claude Opus 4.6 for most deployments. Only deploy the air-gapped LLM if your security policy explicitly prohibits external AI services.
 
-### Step 2B.1 — Choose Your GPU AMI
+### Step 2B.1 — Choose Your GPU VM Image
 
-The Terraform module uses a placeholder AMI (`ami-0123456789abcdef0`). Replace it with a real Deep Learning AMI:
+The Terraform module uses a placeholder VM image. Replace it with a real Azure GPU VM image:
 
 ```bash
-# Find the latest AWS Deep Learning AMI (Amazon Linux 2, GPU)
-aws ec2 describe-images \
-  --owners amazon \
-  --filters \
-    "Name=name,Values=Deep Learning AMI GPU PyTorch*Amazon Linux 2*" \
-    "Name=state,Values=available" \
-  --query "Images | sort_by(@, &CreationDate) | [-1].{ID:ImageId,Name:Name}" \
+# Find available NVIDIA GPU VM images
+az vm image list \
+  --publisher microsoft-dsvm \
+  --offer ubuntu-hpc \
+  --all \
+  --query "[?contains(sku, 'gpu')].{URN:urn,SKU:sku}" \
   --output table
 
-# Example output:
-# ┌──────────────────────┬──────────────────────────────────────────────────┐
-# │          ID          │                     Name                          │
-# ├──────────────────────┼──────────────────────────────────────────────────┤
-# │ ami-0a1b2c3d4e5f6789 │ Deep Learning AMI GPU PyTorch 2.2 (Amazon Linux 2)│
-# └──────────────────────┴──────────────────────────────────────────────────┘
+# Or use the Data Science VM with GPU support
+az vm image list \
+  --publisher microsoft-dsvm \
+  --offer ubuntu-2204 \
+  --all \
+  --output table
 ```
 
 Update `terraform/environments/dev/main.tf`:
 
 ```hcl
 module "airgapped_llm" {
-  source                      = "../../modules/airgapped-llm"
-  vpc_id                      = module.vpc.vpc_id
-  vpc_cidr                    = var.vpc_cidr
-  lambda_private_subnets_cidr = var.private_subnet_cidrs
-  isolated_subnet_id          = module.vpc.private_subnet_ids[0]
-  gpu_ami_id                  = "ami-0a1b2c3d4e5f6789"  # ← Replace with your AMI ID from above
+  source                       = "../../modules/airgapped-llm"
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = var.azure_location
+  vnet_id                      = module.vnet.vnet_id
+  vnet_cidr                    = var.vnet_cidr
+  functions_private_subnets    = var.subnet_cidrs
+  isolated_subnet_id           = module.vnet.private_subnet_ids[0]
+  gpu_vm_image_publisher       = "microsoft-dsvm"
+  gpu_vm_image_offer           = "ubuntu-hpc"
+  gpu_vm_image_sku             = "2204-gen2"
+  gpu_vm_size                  = "Standard_NC8as_T4_v3"
 }
 ```
 
 ### Step 2B.2 — Pre-Load the LLM Model onto the Instance
 
-Since the instance has **no internet access** (zero-egress security group), you must get model weights onto it via S3 or a pre-baked AMI.
+Since the instance has **no internet access** (zero-egress Network NSG (NSG)), you must get model weights onto it via Blob Storage or a pre-baked VM Image.
 
-**Option A: Model via S3 (recommended)**
+**Option A: Model via Blob Storage (recommended)**
 
 ```bash
 # 1. Download Llama 3 8B model weights to your workstation
 #    (Requires Meta license acceptance at https://llama.meta.com/)
 #    Or use HuggingFace: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct
 
-# 2. Upload to S3 (private bucket, KMS-encrypted)
-aws s3 mb s3://migrate4hana-llm-models-dev
-aws s3 cp ./Meta-Llama-3-8B-Instruct/ \
-  s3://migrate4hana-llm-models-dev/llama-3-8b/ \
-  --recursive --sse aws:kms
+# 2. Upload to Blob Storage (private container, encrypted)
+az storage container create \
+  --name llm-models \
+  --account-name migrate4hanastagingdev
 
-# 3. Add S3 VPC endpoint so the EC2 instance can reach S3 without internet
-#    (The vpc-endpoints module should include this — verify)
-aws ec2 describe-vpc-endpoints \
-  --filters "Name=service-name,Values=com.amazonaws.*.s3" \
-  --query "VpcEndpoints[*].State"
+az storage blob upload-batch \
+  --destination llm-models/llama-3-8b \
+  --source ./Meta-Llama-3-8B-Instruct/ \
+  --account-name migrate4hanastagingdev
 
-# 4. The instance user_data script (added to airgapped-llm/main.tf) handles:
+# 3. Add Private Endpoint for Blob Storage so the VM can reach storage without internet
+#    (The private-endpoints module should include this — verify)
+az network private-endpoint list \
+  --resource-group migrate4hana-dev-rg \
+  --query "[?contains(name, 'storage')].{Name:name,Status:privateLinkServiceConnections[0].privateLinkServiceConnectionState.status}" \
+  --output table
+
+# 4. The instance custom_data script (added to airgapped-llm/main.tf) handles:
 #    - Installing vLLM inference server
-#    - Downloading model from S3
+#    - Downloading model from Blob Storage
 #    - Starting the server on port 8000
 ```
 
-**Option B: Pre-baked AMI**
+**Option B: Pre-baked VM Image**
 
 ```bash
-# 1. Launch a temporary EC2 with internet access
+# 1. Launch a temporary Azure VM with internet access
 # 2. Install vLLM + download model
-# 3. Create AMI from that instance
-# 4. Use that AMI ID in Terraform (no S3 download needed at boot)
+# 3. Generalize and capture the VM image
+# 4. Use that image in Terraform (no Blob Storage download needed at boot)
 
-aws ec2 create-image \
-  --instance-id i-0abc123def456 \
-  --name "migrate4hana-llm-llama3-8b-vllm" \
-  --description "Pre-loaded Llama 3 8B with vLLM server"
+az vm deallocate --resource-group temp-rg --name llm-builder
+az vm generalize --resource-group temp-rg --name llm-builder
+az image create \
+  --resource-group migrate4hana-dev-rg \
+  --name migrate4hana-llm-llama3-8b-vllm \
+  --source llm-builder
 ```
 
 ### Step 2B.3 — Instance Bootstrap (User Data)
@@ -807,16 +793,21 @@ The `terraform/modules/airgapped-llm/main.tf` now includes a `user_data` script 
 set -e
 
 # ── Configuration ──
-MODEL_S3_PATH="s3://migrate4hana-llm-models-dev/llama-3-8b/"
+STORAGE_ACCOUNT="migrate4hanastagingdev"
+CONTAINER="llm-models"
+MODEL_BLOB_PATH="llama-3-8b"
 MODEL_LOCAL_PATH="/opt/llm/models/llama-3-8b"
 SERVE_PORT=8000
 
 # ── Install vLLM inference server ──
 pip install vllm>=0.4.0
 
-# ── Download model from S3 (via VPC endpoint, no internet) ──
+# ── Download model from Blob Storage (via Private Endpoint, no internet) ──
 mkdir -p $MODEL_LOCAL_PATH
-aws s3 cp $MODEL_S3_PATH $MODEL_LOCAL_PATH --recursive
+az storage blob download-batch \
+  --destination $MODEL_LOCAL_PATH \
+  --source $CONTAINER/$MODEL_BLOB_PATH \
+  --account-name $STORAGE_ACCOUNT
 
 # ── Start vLLM OpenAI-compatible server ──
 nohup python -m vllm.entrypoints.openai.api_server \
@@ -841,30 +832,33 @@ done
 
 > This script has been added to the Terraform module as part of this guide update.
 
-### Step 2B.4 — Configure Lambda to Use the Air-Gapped LLM
+### Step 2B.4 — Configure Azure Functions to Use the Air-Gapped LLM
 
-Set the `LOCAL_LLM_ENDPOINT` environment variable on Lambda functions:
+Set the `LOCAL_LLM_ENDPOINT` environment variable on Azure Functions:
 
 ```hcl
 # In terraform/environments/dev/terraform.tfvars:
 local_llm_endpoint = "http://10.10.1.X:8000/v1/completions"
-# Replace 10.10.1.X with the private IP of the GPU instance
+# Replace 10.10.1.X with the private IP of the GPU VM
 ```
 
-After `terraform apply`, get the instance's private IP:
+After `terraform apply`, get the VM's private IP:
 
 ```bash
 # Get the air-gapped LLM private IP
-aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=Migrate4HANA-AirGapped-LLM" \
-  --query "Reservations[*].Instances[*].{IP:PrivateIpAddress,State:State.Name}" \
+az vm show \
+  --name Migrate4HANA-AirGapped-LLM \
+  --resource-group migrate4hana-dev-rg \
+  --show-details \
+  --query "{PrivateIP:privateIps,State:powerState}" \
   --output table
 
-# Update the Lambda environment variable
-LLM_IP=$(aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=Migrate4HANA-AirGapped-LLM" \
-  --query "Reservations[0].Instances[0].PrivateIpAddress" \
-  --output text)
+# Get the private IP programmatically
+LLM_IP=$(az vm show \
+  --name Migrate4HANA-AirGapped-LLM \
+  --resource-group migrate4hana-dev-rg \
+  --show-details \
+  --query privateIps -o tsv)
 
 echo "LOCAL_LLM_ENDPOINT=http://${LLM_IP}:8000/v1/completions"
 ```
@@ -883,106 +877,115 @@ POST http://{LLM_IP}:8000/v1/completions
 ### Step 2B.5 — Test Air-Gapped LLM Connectivity
 
 ```bash
-# 1. Verify the instance is running
-aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=Migrate4HANA-AirGapped-LLM" \
-  --query "Reservations[*].Instances[*].State.Name"
-# Expected: "running"
+# 1. Verify the VM is running
+az vm get-instance-view \
+  --name Migrate4HANA-AirGapped-LLM \
+  --resource-group migrate4hana-dev-rg \
+  --query "instanceView.statuses[1].displayStatus" -o tsv
+# Expected: "VM running"
 
-# 2. Check vLLM server health (from a Lambda or bastion in the same VPC)
-# The security group only allows traffic from Lambda subnets on port 8000
+# 2. Check vLLM server health (from a Function or bastion in the same VNet)
+# The NSG only allows traffic from Functions subnets on port 8000
 
 # 3. Invoke code-analyzer with force_genai to bypass AST threshold
-aws lambda invoke \
-  --function-name migrate4hana-code-analyzer-dev \
-  --payload '{
+az functionapp function invoke \
+  --name migrate4hana-code-analyzer-dev \
+  --resource-group migrate4hana-dev-rg \
+  --function-name analyze \
+  --body '{
     "action": "analyze",
     "source_code": "REPORT ztest_llm.\nSELECT * FROM bseg INTO TABLE lt_bseg.",
     "force_genai": true,
     "prefer_local_llm": true
-  }' \
-  --cli-binary-format raw-in-base64-out \
-  llm_test.json
+  }'
 
-cat llm_test.json | python -m json.tool
 # Expected: backend_used = "local_llm"
 ```
 
 ### Step 2B.6 — Cost Optimization (Start/Stop Automation)
 
-The g5.2xlarge costs **~$1.21/hour**. Since it's only needed during code analysis (Phase 2 of the pipeline), automate start/stop:
+The Standard_NC8as_T4_v3 costs **~$0.90/hour**. Since it's only needed during code analysis (Phase 2 of the pipeline), automate start/stop:
 
 ```bash
 # Start before pipeline execution
-aws ec2 start-instances --instance-ids $LLM_INSTANCE_ID
+az vm start \
+  --name Migrate4HANA-AirGapped-LLM \
+  --resource-group migrate4hana-dev-rg
 
 # Wait for it to be healthy (vLLM needs ~3-5 min to load model)
-aws ec2 wait instance-running --instance-ids $LLM_INSTANCE_ID
+az vm wait \
+  --name Migrate4HANA-AirGapped-LLM \
+  --resource-group migrate4hana-dev-rg \
+  --created
 sleep 300  # Wait for vLLM to warm up
 
 # Run pipeline...
 
-# Stop after code analysis phase completes
-aws ec2 stop-instances --instance-ids $LLM_INSTANCE_ID
+# Deallocate after code analysis phase completes (stops billing)
+az vm deallocate \
+  --name Migrate4HANA-AirGapped-LLM \
+  --resource-group migrate4hana-dev-rg
 ```
 
-**Or automate via Step Functions:**
+**Or automate via Azure Durable Functions:**
 
 Add start/stop states around the code-analyzer stage:
 
-```json
-"StartLLMInstance": {
-  "Type": "Task",
-  "Resource": "arn:aws:states:::aws-sdk:ec2:startInstances",
-  "Parameters": { "InstanceIds": ["i-LLM_INSTANCE_ID"] },
-  "Next": "WaitForLLMReady"
-},
-"WaitForLLMReady": {
-  "Type": "Wait",
-  "Seconds": 300,
-  "Next": "Stage5_CodeAnalysis"
-},
-"StopLLMInstance": {
-  "Type": "Task",
-  "Resource": "arn:aws:states:::aws-sdk:ec2:stopInstances",
-  "Parameters": { "InstanceIds": ["i-LLM_INSTANCE_ID"] },
-  "Next": "Stage6_DataHygiene"
-}
+The Durable Functions orchestrator can automate VM start/stop around the code analysis stage using Azure SDK calls:
+
+```python
+# In the Durable Functions orchestrator:
+# Before code analysis
+yield context.call_activity("StartLLMVM", {"vm_name": "Migrate4HANA-AirGapped-LLM"})
+yield context.create_timer(context.current_utc_datetime + timedelta(seconds=300))
+
+# Run code analysis
+yield context.call_activity("Stage5_CodeAnalysis", input_data)
+
+# After code analysis
+yield context.call_activity("DeallocateLLMVM", {"vm_name": "Migrate4HANA-AirGapped-LLM"})
 ```
 
-> Monthly cost with start/stop: ~$5-20/migration (vs ~$870/month if left running 24/7).
+> Monthly cost with start/stop: ~$5-15/migration (vs ~$650/month if left running 24/7).
 
 ### Step 2B.7 — Security Verification
 
 The air-gapped LLM's security posture must be verified:
 
 ```bash
-# 1. Verify zero internet egress
-aws ec2 describe-security-groups \
-  --filters "Name=group-name,Values=airgapped-llm-sg" \
-  --query "SecurityGroups[*].IpPermissionsEgress"
+# 1. Verify NSG has no internet egress
+az network nsg rule list \
+  --nsg-name airgapped-llm-nsg \
+  --resource-group migrate4hana-dev-rg \
+  --query "[?direction=='Outbound']" \
+  --output table
 
-# Expected egress: ONLY to VPC CIDR (e.g., 10.10.0.0/16)
+# Expected egress: ONLY to VNet CIDR (e.g., 10.10.0.0/16)
 # Must NOT contain 0.0.0.0/0
 
-# 2. Verify ingress restricted to Lambda subnets
-aws ec2 describe-security-groups \
-  --filters "Name=group-name,Values=airgapped-llm-sg" \
-  --query "SecurityGroups[*].IpPermissions"
+# 2. Verify ingress restricted to Functions subnets
+az network nsg rule list \
+  --nsg-name airgapped-llm-nsg \
+  --resource-group migrate4hana-dev-rg \
+  --query "[?direction=='Inbound']" \
+  --output table
 
-# Expected ingress: port 8000 from Lambda private subnet CIDRs only
+# Expected ingress: port 8000 from Functions private subnet CIDRs only
 
-# 3. Verify instance has no public IP
-aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=Migrate4HANA-AirGapped-LLM" \
-  --query "Reservations[*].Instances[*].PublicIpAddress"
-# Expected: None/null
+# 3. Verify VM has no public IP
+az vm show \
+  --name Migrate4HANA-AirGapped-LLM \
+  --resource-group migrate4hana-dev-rg \
+  --show-details \
+  --query publicIps -o tsv
+# Expected: empty/null
 
-# 4. Verify EBS encryption
-aws ec2 describe-volumes \
-  --filters "Name=attachment.instance-id,Values=$LLM_INSTANCE_ID" \
-  --query "Volumes[*].{Encrypted:Encrypted,KmsKeyId:KmsKeyId}"
-# Expected: Encrypted = true
+# 4. Verify disk encryption
+az disk list \
+  --resource-group migrate4hana-dev-rg \
+  --query "[?contains(name, 'AirGapped')].{Name:name,Encryption:encryption.type}" \
+  --output table
+# Expected: Encryption = EncryptionAtRestWithPlatformKey (or CustomerKey)
 ```
 
 ---
@@ -996,7 +999,7 @@ aws ec2 describe-volumes \
 ```
 User ID:    MIGRATE4HANA_RFC
 User Type:  System (type B) — non-dialog, for RFC only
-Password:   [Strong password, store in Secrets Manager]
+Password:   [Strong password, store in Key Vault]
 
 Roles assigned:
 ├── SAP_BC_RFC_USER           (Basic RFC access)
@@ -1040,24 +1043,21 @@ Additional Objects:
         BAPI_BUPA_CREATE_FROM_DATA, PRGN_RFC_ROLE_CREATE, NUMBER_RANGE_*
 ```
 
-### Step 3.2 — Verify RFC Connectivity from Lambda
+### Step 3.2 — Verify RFC Connectivity from Azure Functions
 
 After deployment, run a targeted connectivity test:
 
 ```bash
 # Invoke discovery-engine with a minimal test
-aws lambda invoke \
-  --function-name migrate4hana-discovery-engine-dev \
-  --payload '{
+az functionapp function invoke \
+  --name migrate4hana-discovery-engine-dev \
+  --resource-group migrate4hana-dev-rg \
+  --function-name handler \
+  --body '{
     "run_id": "connectivity-test-001",
     "source_system": {"client": "100"},
     "dry_run": false
-  }' \
-  --cli-binary-format raw-in-base64-out \
-  output.json
-
-# Check the output
-cat output.json | python -m json.tool
+  }'
 
 # Expected: Real program count, role count, table list from ECC
 # If you see "mock_mode": true, PyRFC isn't loaded — revisit Phase 1
@@ -1123,7 +1123,7 @@ Each of these functions is called by the tool and must work against your SAP sys
 | `http.server.HTTPServer` | `uvicorn.run(app, ssl_keyfile=..., ssl_certfile=...)` |
 | Manual JWT with `hmac` HS256 | `hmac` HS256 JWT + `X-API-Key` alternative via `require_auth` dependency |
 | `Access-Control-Allow-Origin: *` | `CORSMiddleware` with configurable `M4H_CORS_ORIGINS` |
-| No rate limiting | Configurable via reverse proxy / ALB WAF |
+| No rate limiting | Configurable via reverse proxy / Front Door WAF |
 | No request validation | Pydantic models: `ECCConnection`, `S4HANAConnection`, `PipelineConfig`, `AuthRequest` |
 | No async | Full async with `asyncio` — pipeline runs as subprocess |
 | Port 8000 HTTP only | TLS-ready via `M4H_SSL_KEY` / `M4H_SSL_CERT` env vars |
@@ -1168,38 +1168,39 @@ pydantic>=2.5.0
 
 ### Remaining API Hardening (Deployment-Time)
 
-These require AWS infrastructure and are handled during deployment:
+These require Azure infrastructure and are handled during deployment:
 
 | Task | How |
 |------|-----|
-| ALB termination with ACM cert | Terraform ALB resource + ACM certificate |
-| WAF rate limiting | `aws_wafv2_web_acl` (see Phase 6) |
-| RS256 asymmetric JWT | Replace `M4H_JWT_SECRET` with RSA key pair if needed for multi-service auth |
+| Application Gateway termination with Azure-managed cert | Terraform Application Gateway resource + managed certificate |
+| WAF rate limiting | Azure Front Door WAF policy (see Phase 6) |
+| RS256 asymmetric JWT | Replace `M4H_JWT_SACRET` with RSA key pair if needed for multi-service auth |
 | API versioning | Add `/api/v1/` prefix when breaking changes are needed |
 
 ### HTTPS Deployment Options
 
-> The FastAPI server natively supports TLS via `M4H_SSL_KEY`/`M4H_SSL_CERT` env vars. For production AWS deployments, ALB termination is recommended.
+> The FastAPI server natively supports TLS via `M4H_SSL_KEY`/`M4H_SSL_CERT` env vars. For production Azure deployments, Application Gateway termination is recommended.
 
-**Option A: ALB termination (recommended for AWS)**
+**Option A: Application Gateway termination (recommended for Azure)**
 
 ```hcl
-# Add to Terraform: Application Load Balancer
-resource "aws_lb" "api" {
-  name               = "migrate4hana-api-${var.environment}"
-  internal           = true  # Internal only — no public access
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = module.vpc.private_subnet_ids
-}
+# Add to Terraform: Application Gateway
+resource "azurerm_application_gateway" "api" {
+  name                = "migrate4hana-api-${var.environment}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = var.azure_location
 
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.api.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = aws_acm_certificate.api.arn
-  # ...
+  sku {
+    name     = "Standard_v2"
+    tier     = "Standard_v2"
+    capacity = 2
+  }
+
+  ssl_policy {
+    policy_type = "Predefined"
+    policy_name = "AppGwSslPolicy20220101"
+  }
+  # ... backend pool, HTTP settings, listeners, etc.
 }
 ```
 
@@ -1220,7 +1221,7 @@ All 15 endpoints were preserved in the FastAPI rewrite with Pydantic validation:
 
 ```
 Public:
-  GET  /api/health              → Health check (ALB target group)
+  GET  /api/health              → Health check (Application Gateway backend pool)
   POST /api/auth/token          → JWT generation
 
 Authenticated:
@@ -1248,14 +1249,14 @@ Authenticated:
 Update `frontend/src/api.js` to point to the production API:
 
 ```javascript
-// Replace the development proxy URL with the production ALB URL
+// Replace the development proxy URL with the production Application Gateway URL
 const API_BASE = import.meta.env.VITE_API_URL || 'https://api.migrate4hana.internal';
 ```
 
 Create `frontend/.env.production`:
 ```
 VITE_API_URL=https://api.migrate4hana.internal
-VITE_WS_URL=wss://YOUR_API_GW_ID.execute-api.us-east-1.amazonaws.com/dev
+VITE_WS_URL=wss://YOUR_WEBPUBSUB_NAME.webpubsub.azure.com
 ```
 
 ### Step 5.2 — Build for Production
@@ -1267,32 +1268,40 @@ npm run build
 # Output: frontend/dist/
 ```
 
-### Step 5.3 — Serve via S3 + CloudFront (Recommended)
+### Step 5.3 — Serve via Blob Storage + Azure Front Door (Recommended)
 
 ```bash
-# Create S3 bucket for frontend
-aws s3 mb s3://migrate4hana-frontend-dev
+# Enable static website hosting on storage account
+az storage blob service-properties update \
+  --account-name migrate4hanafrontenddev \
+  --static-website \
+  --index-document index.html \
+  --404-document index.html
 
 # Upload build
-aws s3 sync dist/ s3://migrate4hana-frontend-dev/ --delete
+az storage blob upload-batch \
+  --destination '$web' \
+  --source dist/ \
+  --account-name migrate4hanafrontenddev \
+  --overwrite
 
-# Create CloudFront distribution with:
-# - Origin: S3 bucket
-# - SSL: ACM certificate
-# - WAF: Attach WebACL
+# Create Azure Front Door profile with:
+# - Origin: Blob Storage static website endpoint
+# - SSL: Azure-managed certificate
+# - WAF: Attach Front Door WAF policy
 # - SPA routing: Custom error page 403/404 → /index.html (200)
 ```
 
-**Or serve from the same ALB** using a path-based rule (`/` → S3/frontend, `/api/*` → API target group).
+**Or serve from the same Application Gateway** using a path-based rule (`/` → Blob Storage/frontend, `/api/*` → API backend pool).
 
 ### Step 5.4 — Configure WebSocket Telemetry
 
 The WebSocket URL comes from Terraform output:
 
 ```bash
-# Get the WebSocket URL
-terraform output websocket_url
-# e.g., wss://abc123def4.execute-api.us-east-1.amazonaws.com/dev
+# Get the Web PubSub URL
+terraform output webpubsub_url
+# e.g., wss://migrate4hana-wps.webpubsub.azure.com
 ```
 
 Set this in the frontend environment so the LogViewer component connects to real telemetry instead of generating mock events.
@@ -1305,70 +1314,79 @@ Set this in the frontend environment so the LogViewer component connects to real
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ AWS VPC (10.10.0.0/16)                                      │
+│ Azure VNet (10.10.0.0/16)                                      │
 │                                                             │
 │  ┌──────────────┐   ┌──────────────┐                        │
-│  │ Public Subnet │   │ Public Subnet │  ← ALB, NAT Gateway  │
+│  │ Public Subnet │   │ Public Subnet │  ← Application Gateway, NAT Gateway  │
 │  │ 10.10.101.0   │   │ 10.10.102.0   │                      │
 │  └──────────────┘   └──────────────┘                        │
 │                                                             │
 │  ┌──────────────┐   ┌──────────────┐                        │
-│  │ Private Subnet│   │ Private Subnet│  ← Lambda, DMS, LLM  │
+│  │ Private Subnet│   │ Private Subnet│  ← Azure Functions, Data Factory, LLM  │
 │  │ 10.10.1.0     │   │ 10.10.2.0     │                      │
 │  └──────────────┘   └──────────────┘                        │
 │                                                             │
-│  VPN Gateway ─────────→ On-prem SAP (172.16.0.0/12)         │
-│  VPC Endpoints ───────→ Bedrock, S3, Secrets Manager        │
-│  Air-gapped LLM ─────→ No internet, VPC-only egress         │
+│  Azure VPN Gateway ─────────→ On-prem SAP (172.16.0.0/12)         │
+│  VNet Endpoints ───────→ Claude, Blob Storage, Key Vault        │
+│  Air-gapped LLM ─────→ No internet, VNet-only egress         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **Security groups to validate:**
-- Lambda SG: Outbound to SAP (port 3300) + S3/Secrets Manager VPC endpoints
-- DMS SG: Outbound to SAP ECC (3200) + SAP HANA (30015)
-- LLM SG: Inbound from Lambda SG (8000) only, **no internet egress**
-- ALB SG: Inbound 443 from allowed CIDRs only
+- Functions NSG: Outbound to SAP (port 3300) + Blob Storage/Key Vault Private Endpoints
+- Data Factory NSG: Outbound to SAP ECC (3200) + SAP HANA (30015)
+- LLM SG: Inbound from Functions NSG (8000) only, **no internet egress**
+- Application Gateway SG: Inbound 443 from allowed CIDRs only
 
 ### Step 6.2 — WAF Configuration
 
-> **STATUS: ✅ IMPLEMENTED** — `terraform/modules/waf/main.tf` provides a complete WAFv2 Web ACL with 5 rule groups.
+> **STATUS: ✅ IMPLEMENTED** — `terraform/modules/frontdoor-waf/main.tf` provides a complete Azure Front Door WAF policy with 5 rule groups.
 
-The WAF module (`terraform/modules/waf/`) is included in both staging and production environments. It provides:
+The WAF module (`terraform/modules/frontdoor-waf/`) is included in both staging and production environments. It provides:
 
 | Rule | Priority | Description |
 |------|----------|-------------|
 | Rate Limit | 1 | Blocks IPs exceeding configurable threshold (default: 1000 req/5min prod, 2000 staging) |
-| AWS Common Rules | 2 | OWASP Top 10 coverage — XSS, path traversal, file inclusion, protocol abuse |
-| SQL Injection | 3 | AWS-managed SQLi detection across query strings, body, headers |
+| OWASP Core Rules | 2 | OWASP Top 10 coverage — XSS, path traversal, file inclusion, protocol abuse |
+| SQL Injection | 3 | Azure-managed SQLi detection across query strings, body, headers |
 | Known Bad Inputs | 4 | Blocks requests with known exploit patterns (Log4j, etc.) |
-| IP Reputation | 5 | Blocks requests from known malicious IPs (updated by AWS) |
+| Bot Protection | 5 | Blocks requests from known malicious bots and IPs |
 
 **Additional protections:**
-- WAF logs all BLOCK/COUNT actions to CloudWatch (`aws-waf-logs-migrate4hana-{env}`, 90-day retention)
-- CloudWatch alarm fires when blocked requests exceed 100 in 5 minutes (possible attack indicator)
-- Web ACL ARN is output for attachment to ALB or API Gateway
+- WAF logs all BLOCK/COUNT actions to Log Analytics workspace (`waf-logs-migrate4hana-{env}`, 90-day retention)
+- Azure Monitor alert fires when blocked requests exceed 100 in 5 minutes (possible attack indicator)
+- WAF policy ID is output for attachment to Application Gateway or Azure Front Door
 
-**Attach WAF to ALB:**
+**Attach WAF to Azure Front Door:**
 ```hcl
-resource "aws_wafv2_web_acl_association" "api" {
-  resource_arn = aws_lb.api.arn
-  web_acl_arn  = module.waf.web_acl_arn
+resource "azurerm_cdn_frontdoor_security_policy" "api" {
+  name                     = "migrate4hana-waf-policy"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.main.id
+  security_policies {
+    firewall {
+      cdn_frontdoor_firewall_policy_id = module.frontdoor_waf.policy_id
+      association { /* domain associations */ }
+    }
+  }
 }
 ```
 
-**AWS Shield Standard** is automatically enabled on all AWS accounts (no additional cost). For advanced DDoS protection with 24/7 response team, enable AWS Shield Advanced on production ALBs.
+**Azure DDoS Protection Standard** is available at the VNet level (additional cost). For basic DDoS protection, Azure DDoS Protection Basic is automatically enabled on all Azure subscriptions at no additional cost.
 
 ### Step 6.3 — Secrets Rotation
 
 ```hcl
 # Add automatic rotation for SAP credentials
-resource "aws_secretsmanager_secret_rotation" "sap_creds" {
-  secret_id           = aws_secretsmanager_secret.sap_credentials.id
-  rotation_lambda_arn = aws_lambda_function.secret_rotator.arn
-  rotation_rules {
-    automatically_after_days = 90
-  }
+# Azure Key Vault supports secret expiration and rotation policies
+resource "azurerm_key_vault_secret" "sap_creds" {
+  name         = "sap-credentials"
+  key_vault_id = azurerm_key_vault.main.id
+  value        = var.sap_credentials_json
+  expiration_date = timeadd(timestamp(), "2160h")  # 90 days
 }
+
+# Use an Azure Function with a timer trigger for automated rotation
+# The function reads from SAP, generates new credentials, and updates Key Vault
 ```
 
 ### Step 6.4 — Audit Trail (SOX / GxP Compliance)
@@ -1377,37 +1395,37 @@ resource "aws_secretsmanager_secret_rotation" "sap_creds" {
 
 The audit module (`terraform/modules/audit/`) is included in both staging and production environments. It provides:
 
-**CloudTrail:**
-- Tracks all Lambda invocations (`migrate4hana-*` functions)
-- Tracks all S3 data access on the staging bucket
+**Azure Monitor Activity Logs:**
+- Tracks all Function invocations (`migrate4hana-*` functions)
+- Tracks all Blob Storage data access on the staging bucket
 - Log file validation enabled (tamper detection via SHA-256 digest)
-- Logs delivered to both S3 (long-term) and CloudWatch (real-time alerting)
+- Logs delivered to both Blob Storage (long-term) and Azure Monitor (real-time alerting)
 
-**S3 Audit Log Bucket:**
-- KMS encryption (server-side)
+**Blob Storage Audit Log Container:**
+- Key Vault encryption (server-side)
 - Versioning enabled
 - Public access fully blocked
 - Object Lock in GOVERNANCE mode (WORM — prevents deletion for 7 years)
 - Lifecycle: 90d → STANDARD_IA, 365d → GLACIER, 7 years → expiry
 
-**SOX-Relevant CloudWatch Metric Filters & Alarms:**
+**SOX-Relevant Azure Monitor Metric Alerts & Alarms:**
 
 | Metric | Pattern | Alarm Threshold |
 |--------|---------|-----------------|
 | Unauthorized API Calls | `AccessDenied*`, `UnauthorizedAccess*` | > 5 in 5 min |
-| IAM Policy Changes | `CreateRole`, `DeleteRole`, `AttachRolePolicy`, `PutRolePolicy` | > 0 (any change) |
-| Secrets Manager Access | `GetSecretValue` from `secretsmanager.amazonaws.com` | Metric only (audit trail) |
-| Pipeline Executions | `StartExecution` from `states.amazonaws.com` | Metric only (audit trail) |
+| Azure RBAC Policy Changes | `CreateRole`, `DeleteRole`, `AttachRolePolicy`, `PutRolePolicy` | > 0 (any change) |
+| Key Vault Access | `GetSecretValue` from `keyvault.azure.com` | Metric only (audit trail) |
+| Pipeline Executions | `StartExecution` from `states.azure.com` | Metric only (audit trail) |
 
 **Compliance coverage:**
 
 | Standard | Requirement | How It's Met |
 |----------|-------------|--------------|
-| SOX Section 404 | Access controls audit trail | CloudTrail → S3 with WORM + CloudWatch alerts |
+| SOX Section 404 | Access controls audit trail | Azure Monitor Activity Logs → Blob Storage with WORM + Azure Monitor alerts |
 | SOX Section 302 | Management accountability | Immutable logs with 7-year retention, tamper detection |
 | GxP (21 CFR Part 11) | Electronic records/signatures | Log file validation (SHA-256), Object Lock |
-| SOC 2 Type II | Monitoring & alerting | Real-time CloudWatch metric filters + alarms |
-| GDPR Article 30 | Records of processing | All Lambda invocations logged with data access tracking |
+| SOC 2 Type II | Monitoring & alerting | Real-time Azure Monitor metric filters + alarms |
+| GDPR Article 30 | Records of processing | All Function invocations logged with data access tracking |
 
 ### Step 6.5 — Data Classification & PII Handling
 
@@ -1428,9 +1446,9 @@ Fields masked by data_scrubber.py:
 ```
 
 **Additional hardening needed:**
-- Enable S3 Object Lock for migration data (WORM — write once, read many)
-- Enable DynamoDB Point-in-Time Recovery
-- Encrypt all Lambda environment variables with KMS CMK
+- Enable Blob Storage immutability policies for migration data (WORM — write once, read many)
+- Enable Cosmos DB Point-in-Time Restore
+- Encrypt all Function App settings with Azure Key Vault managed key
 
 ---
 
@@ -1490,16 +1508,16 @@ python -m pytest tests/test_sap_integration.py -v -k "mock"
 > The test suite runs against mocks by default. To enable live SAP testing, set up a sandbox system:
 
 **Recommended:** Use SAP Cloud Appliance Library (CAL) to spin up:
-- **SAP ECC 6.0 EHP8** (IDES instance) — ~$2/hr on AWS
-- **SAP S/4HANA 2023** (Fully Activated Appliance) — ~$3/hr on AWS
+- **SAP ECC 6.0 EHP8** (IDES instance) — ~$2/hr on Azure
+- **SAP S/4HANA 2023** (Fully Activated Appliance) — ~$3/hr on Azure
 
 ```
 SAP CAL: https://cal.sap.com
 1. Create CAL account (use S-User)
-2. Connect AWS account
+2. Connect Azure subscription
 3. Launch "SAP S/4HANA 2023 Fully-Activated Appliance"
 4. Launch "SAP ECC 6.0 EhP8 - IDES"
-5. Note the private IPs (place in same VPC or peer)
+5. Note the private IPs (place in same VNet or peer)
 ```
 
 ### Step 7.2 — Integration Test Suite
@@ -1552,10 +1570,10 @@ Stage 4: ROLLBACK tests (SANDBOX ONLY)
   └── Confirm test program removed
 
 Stage 5: END-TO-END (SANDBOX ONLY)
-  ├── Full pipeline execution via Step Functions
+  ├── Full pipeline execution via Azure Durable Functions
   ├── Verify all 17 stages complete
   ├── Verify PDF report generated
-  └── Verify S3 artifacts created
+  └── Verify Blob Storage artifacts created
 ```
 
 ### Step 7.4 — Performance Baseline
@@ -1564,12 +1582,12 @@ Run the pipeline against real SAP and measure:
 
 | Metric | Target | How to Measure |
 |--------|--------|----------------|
-| Discovery scan time | < 30 min for 5K programs | CloudWatch StageDuration metric |
-| Code analysis time | < 60 min for 5K programs | CloudWatch StageDuration metric |
+| Discovery scan time | < 30 min for 5K programs | Azure Monitor StageDuration metric |
+| Code analysis time | < 60 min for 5K programs | Azure Monitor StageDuration metric |
 | BP conversion throughput | > 500 BPs/min | Count BAPI_BUPA_CREATE calls / duration |
 | FI document posting | > 200 docs/min | Count BAPI_ACC_DOCUMENT_POST / duration |
-| Full pipeline (Phases 1-2) | < 4 hours | Step Functions execution duration |
-| Full pipeline (all phases) | < 24 hours | Step Functions end-to-end |
+| Full pipeline (Phases 1-2) | < 4 hours | Azure Durable Functions execution duration |
+| Full pipeline (all phases) | < 24 hours | Azure Durable Functions end-to-end |
 
 ---
 
@@ -1603,7 +1621,7 @@ Runs on every push and PR to `main` and `develop`:
 | `python-test` | Runs `pytest tests/ -v` with JUnit XML output |
 | `security-scan` | Bandit static analysis on `lambda/` and `api_server.py` |
 | `frontend-build` | `npm ci && npm run build` — validates frontend compiles |
-| `package-lambdas` | Zips all 21 Lambda functions with dependencies |
+| `package-lambdas` | Zips all 21 Azure Functions with dependencies |
 | `terraform-validate` | `terraform fmt -check` + `terraform validate` across dev/staging/prod |
 
 ### CD Pipeline (`.github/workflows/deploy.yml`)
@@ -1621,12 +1639,12 @@ Runs on merge to `develop` (→ staging) and `main` (→ production):
 │                          │                               │
 │                          ▼                               │
 │                  terraform apply                         │
-│                  + S3 frontend deploy                    │
-│                  + Lambda code update                    │
+│                  + Blob Storage frontend deploy                    │
+│                  + Azure Functions code update                    │
 │                          │                               │
 │                          ▼                               │
 │                  smoke-test                              │
-│                  (Lambda invoke + Step Functions verify)  │
+│                  (Azure Functions invoke + Azure Durable Functions verify)  │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -1634,33 +1652,33 @@ Runs on merge to `develop` (→ staging) and `main` (→ production):
 |------|-------------|
 | `set-env` | Routes to `staging` (develop branch) or `prod` (main branch) |
 | `test` | Pre-deploy test gate — must pass before any deployment |
-| `download-sap-sdk` | Downloads SAP NW RFC SDK from private S3 bucket (`s3://migrate4hana-sap-binaries-prod/`) into `ecs/` — SDK is never committed to Git |
-| `build-ecs-image` | Builds Docker image with SDK present, pushes to ECR, updates ECS task definition with new image |
+| `download-sap-sdk` | Downloads SAP NW RFC SDK from private Blob Storage container (`https://migrate4hana-sap-binaries-prod/`) into `ecs/` — SDK is never committed to Git |
+| `build-ecs-image` | Builds Docker image with SDK present, pushes to ACR, updates Azure Container Apps job definition with new image |
 | `plan` | `terraform plan` against target environment |
-| `deploy` | `terraform apply` + S3 frontend sync + Lambda function code updates |
+| `deploy` | `terraform apply` + Blob Storage frontend sync + Azure Function code updates |
 | `cleanup` | Removes SAP SDK zip from runner to prevent artifact leakage |
-| `smoke-test` | Invokes key Lambda functions with `health_check` payload |
+| `smoke-test` | Invokes key Azure Functions with `health_check` payload |
 
 ### Prerequisites — GitHub Secrets
 
 | Secret | Description |
 |--------|-------------|
-| `AWS_DEPLOY_ROLE_ARN` | IAM role ARN for OIDC federation (GitHub → AWS) |
+| `AZURE_DEPLOY_SP_CREDENTIALS` | Service Principal credentials for federated identity (GitHub → Azure) |
 
-### Setup OIDC Federation (GitHub → AWS)
+### Setup Service Principal (GitHub → Azure)
 
 ```bash
-# 1. Create OIDC provider in AWS
-aws iam create-open-id-connect-provider \
+# 1. Create Service Principal in Azure
+az ad sp create-for-rbac \
   --url https://token.actions.githubusercontent.com \
-  --client-id-list sts.amazonaws.com \
+  --client-id-list sts.azure.com \
   --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
 
-# 2. Create IAM role with trust policy for your repo
+# 2. Create Managed Identity with trust policy for your repo
 # Trust policy: Allow GitHub Actions from your-org/migrate4hana repo
-# Permissions: Full access to Lambda, S3, Terraform state, Step Functions, etc.
+# Permissions: Full access to Azure Functions, Blob Storage, Terraform state, Azure Durable Functions, etc.
 
-# 3. Add role ARN to GitHub repo secrets as AWS_DEPLOY_ROLE_ARN
+# 3. Add role ARN to GitHub repo secrets as AZURE_DEPLOY_SP_CREDENTIALS
 ```
 ### Staging & Production Environments
 
@@ -1671,32 +1689,32 @@ Both staging and production environments include the WAF and Audit modules (not 
 | Setting | Dev | Staging | Production |
 |---------|-----|---------|------------|
 | `environment` | `dev` | `staging` | `prod` |
-| VPC CIDR | `10.10.0.0/16` | `10.20.0.0/16` | `10.30.0.0/16` |
+| VNet CIDR | `10.10.0.0/16` | `10.20.0.0/16` | `10.30.0.0/16` |
 | Availability Zones | 2 | 2 | 3 |
-| Lambda memory | 512–3008 MB | 512–3008 MB | 1024–3008 MB (higher baseline) |
+| Azure Functions memory | 512–3008 MB | 512–3008 MB | 1024–3008 MB (higher baseline) |
 | VPN | Optional | Required | Required |
 | WAF module | Not included | ✅ Included (2K req/5min) | ✅ Included (1K req/5min) |
 | Audit module | Not included | ✅ Included | ✅ Included |
 | Terraform backend key | `dev/terraform.tfstate` | `staging/terraform.tfstate` | `prod/terraform.tfstate` |
-| DMS credentials | Secrets Manager | Secrets Manager | Secrets Manager |
+| Data Factory credentials | Key Vault | Key Vault | Key Vault |
 
 ---
 
 ## 13. Phase 9 — Monitoring & Observability
 
-### Step 9.1 — CloudWatch Dashboard
+### Step 9.1 — Azure Monitor Dashboard
 
 The Terraform already creates a dashboard. Verify these widgets after deployment:
 
 ```
 Dashboard: migrate4hana-dashboard-dev
-├── Lambda Invocations (per function, 5-min intervals)
-├── Lambda Errors (per function, error rate %)
-├── Lambda Duration (p50, p90, p99)
-├── Step Functions Execution Status (succeeded/failed/running)
-├── DMS Replication Latency (seconds)
-├── DMS CDC throughput (rows/sec)
-├── S3 Bucket Size (staging bucket)
+├── Azure Functions Invocations (per function, 5-min intervals)
+├── Azure Functions Errors (per function, error rate %)
+├── Azure Functions Duration (p50, p90, p99)
+├── Azure Durable Functions Execution Status (succeeded/failed/running)
+├── Data Factory Replication Latency (seconds)
+├── Data Factory CDC throughput (rows/sec)
+├── Blob Storage Bucket Size (staging bucket)
 └── Custom Metrics:
     ├── ProgramsScanned (discovery-engine)
     ├── IssuesDetected (code-analyzer)
@@ -1707,21 +1725,21 @@ Dashboard: migrate4hana-dashboard-dev
 ### Step 9.2 — Alarms
 
 ```
-SNS Topic: migrate4hana-alerts-dev → your-email@company.com
+Service Bus Topic: migrate4hana-alerts-dev → your-email@company.com
 
 Alarms configured:
-├── Lambda error rate > 5% (any function) → ALARM
-├── Step Functions execution failed → ALARM
-├── DMS replication latency > 300s → ALARM
-├── Lambda duration > 80% of timeout → WARNING
-└── S3 bucket size > 100 GB → INFO
+├── Azure Functions error rate > 5% (any function) → ALARM
+├── Azure Durable Functions execution failed → ALARM
+├── Data Factory replication latency > 300s → ALARM
+├── Azure Functions duration > 80% of timeout → WARNING
+└── Blob Storage container size > 100 GB → INFO
 ```
 
-### Step 9.3 — Add X-Ray Tracing (Recommended)
+### Step 9.3 — Add Application Insights distributed tracing Tracing (Recommended)
 
 ```hcl
-# Add to each Lambda function in Terraform
-resource "aws_lambda_function" "each_function" {
+# Add to each Azure Function in Terraform
+resource "azurerm_function_app" "each_function" {
   # ...existing config...
   tracing_config {
     mode = "Active"
@@ -1731,14 +1749,14 @@ resource "aws_lambda_function" "each_function" {
 
 Then in Python handlers:
 ```python
-from aws_xray_sdk.core import xray_recorder
-from aws_xray_sdk.core import patch_all
-patch_all()  # Auto-instruments boto3, requests, etc.
+from azure_monitor_opentelemetry.core import xray_recorder
+from azure_monitor_opentelemetry.core import patch_all
+patch_all()  # Auto-instruments Azure SDK for Python, requests, etc.
 ```
 
 ### Step 9.4 — Structured Log Queries
 
-The `logger.py` utility emits structured JSON. Use CloudWatch Insights:
+The `logger.py` utility emits structured JSON. Use Azure Monitor Log Analytics:
 
 ```
 # Find all failed stages in the last 24 hours
@@ -1764,12 +1782,12 @@ fields @timestamp, payload_snippet
 
 ### Pre-Deployment Checklist
 
-- [ ] Phase 1 complete: PyRFC Lambda Layer published and tested
+- [ ] Phase 1 complete: PyRFC Functions Extension published and tested
 - [ ] Phase 2 complete: All Terraform resources deployed and healthy
 - [ ] Phase 3 complete: RFC connectivity to both ECC and S/4HANA verified
 - [ ] Phase 4 complete: API server running on HTTPS with proper auth
-- [ ] Phase 5 complete: Frontend built and served via CloudFront/ALB
-- [ ] Phase 6 complete: WAF, secrets rotation, CloudTrail active
+- [ ] Phase 5 complete: Frontend built and served via Azure Front Door/Application Gateway
+- [ ] Phase 6 complete: Azure Front Door WAF, secrets rotation, Azure Monitor Activity Logs active
 - [ ] Phase 7 complete: All 33 BAPI/RFC functions tested against real SAP
 - [ ] Phase 8 complete: CI/CD pipeline deploying to staging automatically
 - [ ] Phase 9 complete: Dashboard, alarms, and log queries configured
@@ -1777,7 +1795,7 @@ fields @timestamp, payload_snippet
 - [ ] **Rollback tested** — verify rollback-manager can undo all write operations
 - [ ] **PDF report reviewed** — sample report from real SAP data looks correct
 - [ ] **Sign-off from SAP Basis team** on RFC user authorizations
-- [ ] **Sign-off from Network team** on VPN/Direct Connect connectivity
+- [ ] **Sign-off from Network team** on VPN/ExpressRoute connectivity
 - [ ] **Sign-off from Security team** on WAF rules, encryption, audit trail
 
 ### Deployment Steps
@@ -1820,8 +1838,8 @@ Objective: Verify all 17 stages complete without errors
 Steps:
 1. Run full pipeline: POST /api/pipeline/full
 2. Monitor WebSocket telemetry in real-time
-3. Verify each stage transitions correctly in Step Functions console
-4. Check S3 artifacts for each stage
+3. Verify each stage transitions correctly in Azure Portal Durable Functions monitor
+4. Check Blob Storage artifacts for each stage
 5. Review PDF report
 6. Run rollback to clean up sandbox
 7. Document all issues → fix → repeat
@@ -1858,11 +1876,11 @@ Steps:
 T-minus checklist:
 ├── T-7 days:  Final cutover plan approved by all stakeholders
 ├── T-3 days:  Freeze ECC changes (no transports)
-├── T-1 day:   Final DMS full-load sync
+├── T-1 day:   Final Data Factory full-load sync
 ├── T-0:       Start cutover window
 │   ├── Lock ECC client (SCC4 → "No changes allowed")
-│   ├── Final DMS CDC catch-up (verify latency < 30s)
-│   ├── Stop DMS replication
+│   ├── Final Data Factory CDC catch-up (verify latency < 30s)
+│   ├── Stop Data Factory replication
 │   ├── Execute Phase 3: Conversion (SUM/DMO)
 │   ├── Execute Phase 4: Post-conversion (deploy, load, configure)
 │   ├── Execute Phase 5: Validate + DITL test
@@ -1883,40 +1901,40 @@ T-minus checklist:
 
 | Component | RTO | RPO | Strategy |
 |-----------|-----|-----|----------|
-| S3 Staging Bucket | < 1 hour | 0 (versioned + cross-region) | Cross-region replication + versioning + Object Lock |
-| DynamoDB Tables | < 15 min | < 5 min | Point-in-time recovery (PITR) enabled |
-| Terraform State | < 30 min | 0 (versioned S3 backend) | S3 versioning + DynamoDB lock table |
-| Audit Trail | < 1 hour | 0 (WORM) | S3 Object Lock GOVERNANCE mode, 7-year retention |
-| Lambda Code | < 10 min | 0 (versioned) | S3 versioning for deployment packages; redeploy from CI/CD |
-| Step Functions | Immediate | N/A (stateless definition) | Redeploy via Terraform; in-flight executions are durable |
+| Blob Storage Staging Bucket | < 1 hour | 0 (versioned + cross-region) | Cross-region replication + versioning + Object Lock |
+| Cosmos DB Tables | < 15 min | < 5 min | Point-in-time recovery (PITR) enabled |
+| Terraform State | < 30 min | 0 (versioned Blob Storage backend) | Blob Storage versioning + Cosmos DB lock table |
+| Audit Trail | < 1 hour | 0 (WORM) | Blob Storage immutability policies GOVERNANCE mode, 7-year retention |
+| Azure Functions Code | < 10 min | 0 (versioned) | Blob Storage versioning for deployment packages; redeploy from CI/CD |
+| Azure Durable Functions | Immediate | N/A (stateless definition) | Redeploy via Terraform; in-flight executions are durable |
 
-### S3 Cross-Region Replication
+### Blob Storage Geo-Redundant Replication
 
 ```hcl
 # Already configured in prod environment (terraform/environments/prod/main.tf):
-# - Source: us-east-1  →  Replica: us-west-2
+# - Source: eastus  →  Replica: westus2
 # - Scope: migrate4hana-staging-prod bucket
-# - Includes: KMS-encrypted objects, delete markers
+# - Includes: Key Vault-encrypted objects, delete markers
 ```
 
-### DynamoDB Point-in-Time Recovery
+### Cosmos DB Point-in-Time Restore
 
 ```hcl
-# Enabled in terraform/modules/dynamodb/main.tf:
-resource "aws_dynamodb_table" "rules" {
+# Enabled in terraform/modules/cosmosdb/main.tf:
+resource "azurerm_cosmosdb_sql_container" "rules" {
   point_in_time_recovery {
     enabled = true   # 35-day continuous backup, restore to any second
   }
 }
 ```
 
-### DynamoDB Idempotency Table (NEW v5.0)
+### Cosmos DB Idempotency Table (NEW v5.0)
 
-The data-loader Lambda requires an idempotency table to prevent duplicate processing on retries:
+The data-loader Azure Functions requires an idempotency table to prevent duplicate processing on retries:
 
 ```hcl
-# Add to terraform/modules/dynamodb/main.tf or create separately:
-resource "aws_dynamodb_table" "idempotency" {
+# Add to terraform/modules/cosmosdb/main.tf or create separately:
+resource "azurerm_cosmosdb_sql_container" "idempotency" {
   name         = "migrate4hana-idempotency"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "pk"    # Format: "{run_id}#{stage}"
@@ -1946,33 +1964,33 @@ resource "aws_dynamodb_table" "idempotency" {
 
 ```
 Daily (automated):
-├── S3 versioning retains all object versions indefinitely
-├── DynamoDB PITR continuously backs up table data
-├── CloudTrail logs shipped to audit bucket (7-year WORM)
-└── Terraform state versioned in S3 backend
+├── Blob Storage versioning retains all object versions indefinitely
+├── Cosmos DB PITR continuously backs up table data
+├── Azure Monitor Activity Logs logs shipped to audit bucket (7-year WORM)
+└── Terraform state versioned in Blob Storage backend
 
 Pre-Migration (manual):
-├── Snapshot DynamoDB rules table: aws dynamodb create-backup
-├── Verify S3 replication status: aws s3api get-bucket-replication
+├── Snapshot Cosmos DB rules table: az cosmosdb sql database restore
+├── Verify Blob Storage replication status: az storage account show --query geoReplicationStats
 ├── Export current Terraform state: terraform state pull > backup.tfstate
 └── Tag all resources with migration run ID
 
 Post-Failure Recovery:
-├── DynamoDB: aws dynamodb restore-table-to-point-in-time
-├── S3: aws s3api get-object --version-id <previous-version>
-├── Lambda: Redeploy via CI/CD pipeline (deploy.yml)
-├── Step Functions: terraform apply (idempotent)
+├── Cosmos DB: az cosmosdb sql database restore --restore-timestamp <timestamp>
+├── Blob Storage: az storage blob download --snapshot <snapshot-id>
+├── Azure Functions: Redeploy via CI/CD pipeline (deploy.yml)
+├── Azure Durable Functions: terraform apply (idempotent)
 └── Full environment: terraform destroy + terraform apply (nuclear option)
 ```
 
 ### Failover Procedure
 
 ```
-If primary region (us-east-1) becomes unavailable:
-1. Update DNS to point API to us-west-2 (Route 53 failover routing)
-2. Deploy Terraform to us-west-2 using prod/ environment
-3. S3 replica bucket becomes primary (data already replicated)
-4. DynamoDB global tables (if enabled) auto-failover
+If primary region (eastus) becomes unavailable:
+1. Update DNS to point API to westus2 (Azure DNS / Traffic Manager failover routing)
+2. Deploy Terraform to westus2 using prod/ environment
+3. Blob Storage geo-redundant replica becomes primary (data already replicated)
+4. Cosmos DB multi-region writes (if enabled) auto-failover
 5. Re-establish VPN tunnel to SAP from new region
 6. Resume pipeline from last successful stage checkpoint
 ```
@@ -2017,7 +2035,7 @@ M4H_API_KEY=your-key locust -f tests/load_test.py \
 | API p99 latency | < 500 ms | Locust stats |
 | Error rate | < 1% | Locust stats |
 | Concurrent users | 50+ | Sustained for 5 min |
-| Pipeline trigger | < 2 sec | Time to Step Functions start |
+| Pipeline trigger | < 2 sec | Time to Azure Durable Functions start |
 | WebSocket connect | < 200 ms | Locust stats |
 
 ### CI Integration
@@ -2053,7 +2071,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | # | Gap | File(s) Affected | Effort | Status |
 |---|-----|------------------|--------|--------|
 | 1 | PyRFC never installed | All handlers | Medium | **Build script enhanced** — `scripts/setup-pyrfc.sh` now has Docker build, import validation, auto-terraform update. Still needs SAP NW RFC SDK download + deployment |
-| 2 | Never deployed to AWS | `terraform/` | Medium | **Pending** — Run `terraform apply` (Phase 2), verify all 60+ resources created |
+| 2 | Never deployed to Azure | `terraform/` | Medium | **Pending** — Run `terraform apply` (Phase 2), verify all 60+ resources created |
 | 3 | No HTTPS on API server | `api_server.py` | Medium | ✅ **RESOLVED** — FastAPI with TLS support via `M4H_SSL_KEY`/`M4H_SSL_CERT` env vars |
 | 4 | Zero integration tests | `tests/` | High | ✅ **RESOLVED** — `tests/test_sap_integration.py` with 52 tests, 15 classes, dual-mode mock + live |
 | 5 | Client lock uses wrong BAPI | `cutover-orchestrator/handler.py` | Low | ✅ **RESOLVED** — Rollback manager now calls `SCCR_UNLOCK_CLIENT` for client lock reversal |
@@ -2064,11 +2082,11 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 
 | # | Gap | File(s) Affected | Effort | Status |
 |---|-----|------------------|--------|--------|
-| 8 | ~~No WAF~~ | `terraform/modules/waf/` | Medium | ✅ **RESOLVED** — WAFv2 Web ACL with 5 rules (rate limit, OWASP, SQLi, bad inputs, IP reputation) |
-| 9 | ~~No CloudTrail audit~~ | `terraform/modules/audit/` | Low | ✅ **RESOLVED** — CloudTrail + S3 WORM (7-year) + CloudWatch metrics + unauthorized-API alarm |
+| 8 | ~~No WAF~~ | `terraform/modules/frontdoor-waf/` | Medium | ✅ **RESOLVED** — Azure Front Door WAF policy with 5 rules (rate limit, OWASP, SQLi, bad inputs, IP reputation) |
+| 9 | ~~No Azure Monitor Activity Logs audit~~ | `terraform/modules/audit/` | Low | ✅ **RESOLVED** — Azure Monitor Activity Logs + Blob Storage WORM (7-year) + Azure Monitor metrics + unauthorized-API alarm |
 | 10 | ~~No CI/CD~~ | `.github/workflows/` | Medium | ✅ **RESOLVED** — CI (`ci.yml`) + CD (`deploy.yml`) with OIDC, Terraform plan/apply, smoke tests |
 | 11 | ~~No staging/prod Terraform~~ | `terraform/environments/` | Low | ✅ **RESOLVED** — Staging (10.20/16, 2 AZ) + Prod (10.30/16, 3 AZ) with WAF + Audit modules |
-| 12 | No X-Ray tracing | All handlers | Low | **Pending** — Add `aws_xray_sdk` and `tracing_config` |
+| 12 | No Application Insights distributed tracing | All handlers | Low | **Pending** — Add `azure_monitor_opentelemetry` and `tracing_config` |
 | 13 | API server stdlib HTTP | `api_server.py` | Medium | ✅ **RESOLVED** — Rewritten with FastAPI + uvicorn |
 | 14 | Frontend hardcoded samples | `frontend/src/data/` | Low | **Pending** — Remove sample data fallbacks when API connected |
 | 15 | No Dockerfile | Project root | Low | ✅ **PARTIALLY RESOLVED** — `ecs/Dockerfile` for migration worker stages. API server Dockerfile still pending |
@@ -2077,39 +2095,39 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 
 | # | Gap | File(s) Affected | Status | Fix Applied |
 |---|-----|------------------|--------|-------------|
-| G1 | Lambda missing `bedrock:InvokeModel` IAM permission | `terraform/modules/lambda/main.tf` | ✅ **Fixed** | Added `bedrock:InvokeModel` + `bedrock:InvokeModelWithResponseStream` to Lambda IAM policy |
-| G2 | Lambda missing GenAI env vars (`BEDROCK_MODEL_ID`, `LOCAL_LLM_ENDPOINT`, `AST_CHANGE_THRESHOLD`) | `terraform/modules/lambda/main.tf` | ✅ **Fixed** | Added all three env vars to Lambda environment block with configurable Terraform variables |
-| G3 | Air-gapped LLM placeholder AMI (`ami-0123456789abcdef0`) | `terraform/environments/dev/main.tf` | ✅ **Fixed** | Parameterized as `var.gpu_ami_id` with instructions to find real Deep Learning AMI |
-| G4 | Air-gapped LLM has no `user_data` (boots to bare OS) | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added full bootstrap script: installs vLLM, downloads model from S3, starts inference server on port 8000 |
-| G5 | Air-gapped LLM EC2 has no S3 access for model download | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added `aws_iam_role_policy.llm_s3_access` with scoped S3 GetObject/ListBucket |
+| G1 | Azure Functions missing `Anthropic API invoke` Azure RBAC permission | `terraform/modules/functions/main.tf` | ✅ **Fixed** | Added `Anthropic API invoke` + `Anthropic API invokeWithResponseStream` to Azure Functions RBAC policy |
+| G2 | Azure Functions missing GenAI env vars (`CLAUDE_MODEL_ID`, `LOCAL_LLM_ENDPOINT`, `AST_CHANGE_THRESHOLD`) | `terraform/modules/functions/main.tf` | ✅ **Fixed** | Added all three env vars to Azure Functions environment block with configurable Terraform variables |
+| G3 | Air-gapped LLM placeholder VM Image (`ami-0123456789abcdef0`) | `terraform/environments/dev/main.tf` | ✅ **Fixed** | Parameterized as `var.gpu_vm_image_id` with instructions to find real Deep Learning VM Image |
+| G4 | Air-gapped LLM has no `user_data` (boots to bare OS) | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added full bootstrap script: installs vLLM, downloads model from Blob Storage, starts inference server on port 8000 |
+| G5 | Air-gapped LLM VM has no Blob Storage access for model download | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added `azurerm_role_assignment.llm_s3_access` with scoped Blob Storage GetObject/ListBucket |
 | G6 | Air-gapped LLM has no outputs (instance ID, private IP, endpoint) | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added `instance_id`, `private_ip`, and `llm_endpoint` outputs |
-| G7 | No Bedrock setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2A with 7 steps: model access, VPC endpoints, IAM, env vars, testing, cost, routing |
-| G8 | No Air-Gapped LLM setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2B with 7 steps: AMI, model loading, bootstrap, Lambda config, testing, cost optimization, security |
-| G9 | Dev/main.tf GenAI variables not wired through to Lambda module | `terraform/environments/dev/main.tf`, `variables.tf` | ✅ **Fixed** | Added `bedrock_model_id`, `local_llm_endpoint`, `ast_change_threshold`, `gpu_ami_id`, `llm_model_s3_*` variables |
+| G7 | No Claude setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2A with 7 steps: model access, Private Endpoints, Azure RBAC, env vars, testing, cost, routing |
+| G8 | No Air-Gapped LLM setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2B with 7 steps: VM Image, model loading, bootstrap, Azure Functions config, testing, cost optimization, security |
+| G9 | Dev/main.tf GenAI variables not wired through to Functions module | `terraform/environments/dev/main.tf`, `variables.tf` | ✅ **Fixed** | Added `bedrock_model_id`, `local_llm_endpoint`, `ast_change_threshold`, `gpu_vm_image_id`, `llm_model_s3_*` variables |
 
 ### Medium Priority (Should fix before enterprise clients)
 
 | # | Gap | File(s) Affected | Effort | Status |
 |---|-----|------------------|--------|--------|
 | 16 | ~~No load testing~~ | `tests/load_test.py` | Medium | ✅ **RESOLVED** — Locust test suite with 2 user profiles, CI integration, performance targets |
-| 17 | ~~No disaster recovery plan~~ | Docs (Phase 12) | Low | ✅ **RESOLVED** — RTO/RPO targets, S3 cross-region replication, DynamoDB PITR, failover procedure |
-| 18 | No secrets rotation | `terraform/` | Medium | **Pending** — Add `aws_secretsmanager_secret_rotation` |
-| 19 | No multi-region support | `terraform/` | High | **Pending** — Cross-region replication for S3, DynamoDB global tables |
+| 17 | ~~No disaster recovery plan~~ | Docs (Phase 12) | Low | ✅ **RESOLVED** — RTO/RPO targets, Blob Storage cross-region replication, Cosmos DB PITR, failover procedure |
+| 18 | No secrets rotation | `terraform/` | Medium | **Pending** — Add `azurerm_key_vault_secret` |
+| 19 | No multi-region support | `terraform/` | High | **Pending** — Cross-region replication for Blob Storage, Cosmos DB multi-region writes |
 | 20 | JWT uses HS256 symmetric | `api_server.py` | Low | **Acceptable for now** — Switch to RS256 if multi-service JWT verification needed |
 | 21 | No API versioning | `api_server.py` | Low | **Pending** — Add `/api/v1/` prefix when breaking changes needed |
 | 22 | No OpenAPI/Swagger docs | `api_server.py` | Free with FastAPI | ✅ **RESOLVED** — FastAPI auto-generates at `/docs` and `/redoc` |
-| 23 | ~~DMS credentials hardcoded in dev/main.tf~~ | `terraform/environments/*/main.tf` | Low | ✅ **RESOLVED** — DMS passwords now fetched from AWS Secrets Manager via `data.aws_secretsmanager_secret_version` across all 3 environments (dev/staging/prod). Password variables removed from staging/prod `variables.tf` |
-| 24 | VPC module missing `default_security_group_id` output | `terraform/modules/vpc/main.tf` | Low | **Pending** — Add output or use `aws_vpc.main.default_security_group_id` |
+| 23 | ~~Data Factory credentials hardcoded in dev/main.tf~~ | `terraform/environments/*/main.tf` | Low | ✅ **RESOLVED** — Data Factory passwords now fetched from Azure Key Vault via `data.azurerm_key_vault_secret` across all 3 environments (dev/staging/prod). Password variables removed from staging/prod `variables.tf` |
+| 24 | VNet module missing `default_security_group_id` output | `terraform/modules/vnet/main.tf` | Low | **Pending** — Add output or use `azurerm_virtual_network.main.default_security_group_id` |
 
 ### Code Hardening (Resolved in v3.0)
 
 | # | Gap | File(s) Affected | Status | Fix Applied |
 |---|-----|------------------|--------|-------------|
-| H1 | No Distributed Map for large data volumes | `terraform/modules/step-functions/main.tf`, `lambda/data-loader/handler.py` | ✅ **Fixed** | Stage 12 now uses 4 parallel streams (finance, BP, materials, custom) via Step Functions Distributed Map with MaxConcurrency=4, per-stream 15-min timeout |
-| H2 | No financial reconciliation post-load | `terraform/modules/step-functions/main.tf`, `lambda/data-loader/handler.py` | ✅ **Fixed** | Added Stage 12A: penny-perfect GL balance comparison between ECC (BSEG/BKPF) and S/4HANA (ACDOCA), variance reporting to S3 |
-| H3 | Rollback is fire-and-forget | `lambda/rollback-manager/handler.py` | ✅ **Fixed** | Added S3 state persistence, resume across retries, post-rollback verification via RFC_READ_TABLE, client unlock via SCCR_UNLOCK_CLIENT |
-| H4 | PyRFC build script too basic | `scripts/setup-pyrfc.sh` | ✅ **Fixed** | Docker build, import validation in Lambda container, layer size check, auto-updates terraform.tfvars, clear error messages for missing SDK |
-| H5 | RFC connections not pooled | `lambda/utils/rfc_pool.py` | ✅ **Fixed** | Thread-safe pool with RFC_PING health checks, auto-reconnect, 300s connection aging, borrow/return pattern, Lambda warm-start reuse |
+| H1 | No Distributed Map for large data volumes | `terraform/modules/durable-functions/main.tf`, `lambda/data-loader/handler.py` | ✅ **Fixed** | Stage 12 now uses 4 parallel streams (finance, BP, materials, custom) via Durable Functions fan-out/fan-in with MaxConcurrency=4, per-stream 15-min timeout |
+| H2 | No financial reconciliation post-load | `terraform/modules/durable-functions/main.tf`, `lambda/data-loader/handler.py` | ✅ **Fixed** | Added Stage 12A: penny-perfect GL balance comparison between ECC (BSEG/BKPF) and S/4HANA (ACDOCA), variance reporting to Blob Storage |
+| H3 | Rollback is fire-and-forget | `lambda/rollback-manager/handler.py` | ✅ **Fixed** | Added Blob Storage state persistence, resume across retries, post-rollback verification via RFC_READ_TABLE, client unlock via SCCR_UNLOCK_CLIENT |
+| H4 | PyRFC build script too basic | `scripts/setup-pyrfc.sh` | ✅ **Fixed** | Docker build, import validation in Functions container, layer size check, auto-updates terraform.tfvars, clear error messages for missing SDK |
+| H5 | RFC connections not pooled | `lambda/utils/rfc_pool.py` | ✅ **Fixed** | Thread-safe pool with RFC_PING health checks, auto-reconnect, 300s connection aging, borrow/return pattern, Functions warm-start reuse |
 
 ### Production Hardening v5.0 (Resolved in this update)
 
@@ -2117,9 +2135,9 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 |---|-----|------------------|--------|-------------|
 | P1 | RFC calls can hang indefinitely | `lambda/utils/rfc_pool.py` | ✅ **Fixed** | `call_rfc_with_timeout()` — ThreadPoolExecutor wrapper with configurable timeout (default 120s via `RFC_CALL_TIMEOUT_SECONDS`) |
 | P2 | Unbounded table reads (ROWCOUNT=99999) | `lambda/utils/rfc_pool.py`, `lambda/discovery-engine/handler.py` | ✅ **Fixed** | `read_table_chunked()` generator with ROWSKIPS/ROWCOUNT pagination (default 5000 rows/page via `RFC_PAGE_SIZE`), max_rows safety cap. All 6 discovery scanners converted |
-| P3 | Credentials never refresh during long runs | `lambda/utils/rfc_pool.py` | ✅ **Fixed** | `_resolve_params()` caches Secrets Manager credentials with TTL (300s default). Auth-failure auto-retry with cache invalidation in `get_connection()` |
-| P4 | No Lambda event input validation | `lambda/utils/validation.py` + 4 handlers | ✅ **Fixed** | New `validate_event()` validates run_id, ecc_client, mode, dry_run, stage. Wired into discovery-engine, data-loader, cutover-orchestrator, rollback-manager |
-| P5 | No idempotency on Lambda retries | `lambda/data-loader/handler.py` | ✅ **Fixed** | DynamoDB-backed `_check_idempotency()` / `_mark_processed()` with composite key, 7-day TTL. Applied to finance, BP, and material document loading |
+| P3 | Credentials never refresh during long runs | `lambda/utils/rfc_pool.py` | ✅ **Fixed** | `_resolve_params()` caches Key Vault credentials with TTL (300s default). Auth-failure auto-retry with cache invalidation in `get_connection()` |
+| P4 | No Azure Functions event input validation | `lambda/utils/validation.py` + 4 handlers | ✅ **Fixed** | New `validate_event()` validates run_id, ecc_client, mode, dry_run, stage. Wired into discovery-engine, data-loader, cutover-orchestrator, rollback-manager |
+| P5 | No idempotency on Azure Functions retries | `lambda/data-loader/handler.py` | ✅ **Fixed** | Cosmos DB-backed `_check_idempotency()` / `_mark_processed()` with composite key, 7-day TTL. Applied to finance, BP, and material document loading |
 | P6 | FINS polling has no configurable timeout | `lambda/data-loader/handler.py` | ✅ **Fixed** | Configurable `FINS_MAX_POLLS` (480) and `FINS_POLL_INTERVAL` (30s) with adaptive backoff (+10% interval every 60 polls) |
 | P7 | Rollback commits all-or-nothing | `lambda/rollback-manager/handler.py` | ✅ **Fixed** | Batch commits via `ROLLBACK_BATCH_SIZE` (default 25) with BAPI_TRANSACTION_COMMIT after each batch. Applied to all 5 rollback functions |
 | P8 | Source system locking is stub only | `lambda/cutover-orchestrator/handler.py`, `lambda/rollback-manager/handler.py` | ✅ **Fixed** | Lock: SCCR_LOCK_CLIENT + BAPI_USER_LOCK. Unlock: SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK |
@@ -2129,9 +2147,9 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | # | Gap | File(s) | Effort | Description |
 |---|-----|---------|--------|-------------|
 | 25 | No progress percentage per stage | Handlers | Medium | Emit progress events (10%, 25%, 50%, 75%, 100%) |
-| 26 | No email notifications | `terraform/` | Low | SNS → SES for migration status emails |
-| 27 | No Slack/Teams integration | New Lambda | Low | SNS → Lambda → Webhook |
-| 28 | No cost estimation | Frontend | Medium | Estimate AWS costs based on discovered data volumes |
+| 26 | No email notifications | `terraform/` | Low | Azure Web PubSub → SES for migration status emails |
+| 27 | No Slack/Teams integration | New Azure Functions | Low | Azure Web PubSub → Azure Functions → Webhook |
+| 28 | No cost estimation | Frontend | Medium | Estimate Azure costs based on discovered data volumes |
 | 29 | No multi-language support | Frontend | Medium | i18n for DE, FR, JA, ZH |
 
 ---
@@ -2140,16 +2158,16 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|------|-----------|--------|------------|
-| R1 | PyRFC incompatible with Lambda runtime | Low | Critical | Test in Docker first; fallback to EC2-based execution |
+| R1 | PyRFC incompatible with Azure Functions runtime | Low | Critical | Test in Docker first; fallback to Azure VM-based execution |
 | R2 | SAP RFC calls behave differently than mock | High | High | Integration testing (Phase 7); run discovery-only pass first |
-| R3 | Large customer data causes Lambda timeout (15 min) | Medium | High | ✅ **Mitigated** — Distributed Map fans out to 4 parallel streams, each with its own 15-min window + retry. Stage 12A reconciliation uses streamed aggregation (`_read_table_chunked()` generator with running totals) to prevent OOM on large data volumes (500M+ BSEG rows) |
-| R4 | SUM/DMO stage takes longer than expected | High | Critical | Monitor via DMS latency; have SAP Basis team on standby; set SUM timeout to 7200s |
-| R5 | Rollback fails to undo all changes | Medium | Critical | ✅ **Mitigated** — Rollback now has S3 state persistence, resume support, post-rollback verification, batch commits (25/batch), and client unlock via SCCR_UNLOCK_CLIENT |
-| R6 | VPN latency degrades RFC performance | Medium | Medium | ✅ **Mitigated** — `call_rfc_with_timeout()` prevents indefinite hangs (120s default). Use Direct Connect for production; benchmark with iperf before migration |
-| R7 | Secret Manager throttling under load | Low | Medium | ✅ **Mitigated** — RFC pool caches connections in Lambda memory AND caches Secrets Manager credentials with 300s TTL, reducing API calls by 95%+ |
-| R8 | Air-gapped LLM GPU instance unavailable | Low | Low | Fall back to Bedrock API route (already implemented in Step Functions Choice state) |
+| R3 | Large customer data causes Function timeout (15 min) | Medium | High | ✅ **Mitigated** — Distributed Map fans out to 4 parallel streams, each with its own 15-min window + retry. Stage 12A reconciliation uses streamed aggregation (`_read_table_chunked()` generator with running totals) to prevent OOM on large data volumes (500M+ BSEG rows) |
+| R4 | SUM/DMO stage takes longer than expected | High | Critical | Monitor via Data Factory latency; have SAP Basis team on standby; set SUM timeout to 7200s |
+| R5 | Rollback fails to undo all changes | Medium | Critical | ✅ **Mitigated** — Rollback now has Blob Storage state persistence, resume support, post-rollback verification, batch commits (25/batch), and client unlock via SCCR_UNLOCK_CLIENT |
+| R6 | VPN latency degrades RFC performance | Medium | Medium | ✅ **Mitigated** — `call_rfc_with_timeout()` prevents indefinite hangs (120s default). Use ExpressRoute for production; benchmark with iperf before migration |
+| R7 | Secret Manager throttling under load | Low | Medium | ✅ **Mitigated** — RFC pool caches connections in Azure Functions memory AND caches Key Vault credentials with 300s TTL, reducing API calls by 95%+ |
+| R8 | Air-gapped LLM GPU instance unavailable | Low | Low | Fall back to Claude API route (already implemented in Azure Durable Functions Choice state) |
 | R9 | Customer has custom ABAP not covered by AST rules | High | Medium | 160 rules cover most patterns; manual review for unlisted patterns; add custom rules |
-| R10 | Data volume exceeds S3/Lambda limits | Low | High | Use S3 multipart upload; stream large datasets via DMS instead of Lambda |
+| R10 | Data volume exceeds Blob Storage/Azure Functions limits | Low | High | Use Blob Storage multipart upload; stream large datasets via Data Factory instead of Azure Functions |
 
 ---
 
@@ -2182,7 +2200,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 │  │5.Code        │─→│  LLM Route   │─→│6.Data        │               │
 │  │  Analysis    │  │ (Choice:     │  │  Hygiene     │               │
 │  │  + AST(160)  │  │  GPU vs      │  │  (BP dedup)  │               │
-│  │              │  │  Bedrock)    │  │              │               │
+│  │              │  │  Claude)    │  │              │               │
 │  └──────────────┘  └──────────────┘  └──────┬───────┘               │
 │                                              ▼                       │
 │  ┌──────────────┐  ┌──────────────┐                                  │
@@ -2198,7 +2216,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
 │  │9.Pre-Convert │─→│ GO/NO-GO     │─→│10.SUM/DMO    │               │
 │  │  Gate        │  │  Decision    │  │  Execution   │               │
-│  │  (DMS CDC)   │  └──────────────┘  │  (7200s max) │               │
+│  │  (Data Factory CDC)   │  └──────────────┘  │  (7200s max) │               │
 │  └──────────────┘                    └──────┬───────┘               │
 │                                              ▼                       │
 │  PHASE 4: POST-CONVERSION                                           │
@@ -2236,26 +2254,26 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `S3_STAGING_BUCKET` | Yes | `migrate4hana-staging-dev` | S3 bucket for all artifacts |
-| `SECRETS_ARN` | Yes | `""` | Secrets Manager ARN for ECC RFC credentials |
-| `S4_SECRETS_ARN` | Yes | Falls back to `SECRETS_ARN` | Secrets Manager ARN for S/4HANA credentials |
-| `DMS_REPLICATION_TASK_ARN` | Phase 3 | `""` | DMS task ARN for CDC monitoring |
+| `STORAGE_STAGING_CONTAINER` | Yes | `migrate4hana-staging-dev` | Blob Storage container for all artifacts |
+| `SACRETS_ARN` | Yes | `""` | Key Vault ARN for ECC RFC credentials |
+| `S4_SACRETS_ARN` | Yes | Falls back to `SACRETS_ARN` | Key Vault ARN for S/4HANA credentials |
+| `Data Factory_REPLICATION_TASK_ARN` | Phase 3 | `""` | Data Factory task ARN for CDC monitoring |
 | `CDC_LATENCY_THRESHOLD_SEC` | Phase 3 | `30` | Max acceptable CDC latency |
-| `SNS_ALERT_TOPIC_ARN` | Alerting | `""` | SNS topic for failure alerts |
+| `Azure Web PubSub_ALERT_TOPIC_ARN` | Alerting | `""` | Azure Web PubSub topic for failure alerts |
 | `CURRENT_RUN_ID` | Tracking | `manual-run` | Unique pipeline run identifier |
 | `TELEMETRY_WS_ENDPOINT` | Telemetry | `""` | WebSocket management URL |
-| `TELEMETRY_WS_CONNECTIONS_TABLE` | Telemetry | `""` | DynamoDB connections table |
-| `M4H_JWT_SECRET` | API | Auto-generated | JWT signing secret |
+| `TELEMETRY_WS_CONNECTIONS_TABLE` | Telemetry | `""` | Cosmos DB connections table |
+| `M4H_JWT_SACRET` | API | Auto-generated | JWT signing secret |
 | `M4H_API_KEY` | API | `""` | Alternative API key authentication |
 | `RFC_CALL_TIMEOUT_SECONDS` | RFC | `120` | Timeout for individual RFC/BAPI calls (seconds) |
 | `RFC_PAGE_SIZE` | RFC | `5000` | Row count per page for `read_table_chunked()` pagination |
 | `FINS_MAX_POLLS` | Phase 4 | `480` | Maximum polling iterations for FINS_MASS_DATA_MONITOR |
 | `FINS_POLL_INTERVAL` | Phase 4 | `30` | Base polling interval in seconds (adaptive backoff applied) |
 | `ROLLBACK_BATCH_SIZE` | Rollback | `25` | Number of items per BAPI_TRANSACTION_COMMIT batch in rollback |
-| `IDEMPOTENCY_TABLE` | Data Loader | `migrate4hana-idempotency` | DynamoDB table for Lambda retry idempotency |
-| `STAGE_TARGET` | ECS | `""` | Which handler to run inside ECS container (discovery-engine \| code-analyzer \| data-loader) |
-| `SFN_TASK_TOKEN` | ECS | `""` | Step Functions callback token (set via ContainerOverrides) |
-| `SFN_INPUT` | ECS | `""` | JSON-encoded state payload (set via ContainerOverrides) |
+| `IDEMPOTENCY_TABLE` | Data Loader | `migrate4hana-idempotency` | Cosmos DB table for Azure Functions retry idempotency |
+| `STAGE_TARGET` | Container Apps | `""` | Which handler to run inside Container Apps container (discovery-engine \| code-analyzer \| data-loader) |
+| `SFN_TASK_TOKEN` | Container Apps | `""` | Azure Durable Functions callback token (set via ContainerOverrides) |
+| `SFN_INPUT` | Container Apps | `""` | JSON-encoded state payload (set via ContainerOverrides) |
 
 ### File Structure Reference
 
@@ -2270,19 +2288,19 @@ migrate4hana-main/
 ├── run_10x_evaluation.py          ← 10x scale evaluation
 ├── pdf_report_generator.py        ← ReportLab PDF generation
 ├── .dockerignore                  ← Docker build context exclusions (NEW v6.0)
-├── ecs/                           ← ECS Fargate container (NEW v6.0)
-│   ├── Dockerfile                 ← Multi-stage build (Amazon Linux 2023 + SAP NW RFC SDK + PyRFC)
+├── ecs/                           ← Azure Container Apps container (NEW v6.0)
+│   ├── Dockerfile                 ← Multi-stage build (Azure Linux (CBL-Mariner) + SAP NW RFC SDK + PyRFC)
 │   └── entrypoint.py              ← Unified Docker wrapper (STAGE_TARGET dispatch + SFN callbacks)
 ├── lambda/
 │   ├── code-analyzer/             ← AST engine (160 rules), country rules (710+),
-│   │   │                            data scrubber, deep knowledge engine [ECS Fargate]
+│   │   │                            data scrubber, deep knowledge engine [Azure Container Apps]
 │   │   ├── handler.py
 │   │   ├── abap_ast_engine.py     ← 160 AST transform rules
 │   │   ├── country_rules.py       ← 710+ country compliance rules
 │   │   ├── data_scrubber.py       ← PII masking
 │   │   └── fixers/
 │   │       └── deep_knowledge_engine.py  ← 250+ table transformations
-│   ├── discovery-engine/          ← RFC_READ_TABLE scanner [ECS Fargate]
+│   ├── discovery-engine/          ← RFC_READ_TABLE scanner [Azure Container Apps]
 │   ├── process-miner/             ← ST03N analyzer (500+ Fiori maps)
 │   ├── maintenance-planner/       ← SAP Maintenance Planner integration
 │   ├── readiness-check/           ← Pre-migration readiness
@@ -2292,21 +2310,21 @@ migrate4hana-main/
 │   ├── config-replicator/         ← Global config (56 countries)
 │   ├── role-migrator/             ← PFCG role assessment
 │   ├── integration-mapper/        ← RFC/IDoc mapping
-│   ├── cutover-orchestrator/      ← DMS CDC + client lock
+│   ├── cutover-orchestrator/      ← Data Factory CDC + client lock
 │   ├── sum-orchestrator/          ← SUM/DMO execution (94 known errors)
 │   ├── code-deployer/             ← Transport + ABAP deployment
-│   ├── data-loader/               ← BP creation, FI posting, Distributed Map (4 streams), Penny-Perfect Reconciliation [ECS Fargate]
+│   ├── data-loader/               ← BP creation, FI posting, Distributed Map (4 streams), Penny-Perfect Reconciliation [Azure Container Apps]
 │   ├── config-applier/            ← SPRO config application
 │   ├── role-provisioner/          ← Role creation + assignment
 │   ├── integration-activator/     ← RFC dest + IDoc port creation
 │   ├── migration-validator/       ← Post-migration validation
 │   ├── test-generator/            ← DITL test generation (400+ OData maps)
-│   ├── rollback-manager/          ← 6-stage rollback, S3 state persistence, resume, post-rollback verification
+│   ├── rollback-manager/          ← 6-stage rollback, Blob Storage state persistence, resume, post-rollback verification
 │   └── utils/
-│       ├── logger.py              ← CloudWatch + WebSocket telemetry
+│       ├── logger.py              ← Azure Monitor + WebSocket telemetry
 │       ├── rule_router.py         ← Dynamic rule routing
 │       ├── rfc_pool.py            ← Thread-safe RFC pool + call timeouts + paginated reads + credential refresh (ENHANCED v5.0)
-│       └── validation.py          ← Shared Lambda event input validation (NEW v5.0)
+│       └── validation.py          ← Shared Azure Functions event input validation (NEW v5.0)
 ├── mock-ecc/
 │   ├── mock_data_generator.py     ← 225+ IDoc profiles, MockRFCConnection
 │   └── extended_abap_programs.py  ← 102 test ABAP programs
@@ -2322,23 +2340,23 @@ migrate4hana-main/
 │   │   ├── staging/               ← Staging (10.20/16, 2 AZ, WAF+Audit) (NEW v4.0)
 │   │   └── prod/                  ← Production (10.30/16, 3 AZ, WAF+Audit) (NEW v4.0)
 │   └── modules/
-│       ├── vpc/                   ← VPC + subnets + VPN
-│       ├── lambda/                ← 18 Lambda definitions (15 pipeline + 3 support)
-│       ├── ecs/                   ← ECS Fargate cluster, ECR, task definition (4 vCPU/16 GB) (NEW v6.0)
-│       ├── step-functions/        ← 22+ state pipeline (incl. ECS waitForTaskToken, Distributed Map + Reconciliation)
-│       ├── s3-staging/            ← KMS-encrypted, versioned
+│       ├── vpc/                   ← VNet + subnets + VPN
+│       ├── lambda/                ← 18 Function definitions (15 pipeline + 3 support)
+│       ├── ecs/                   ← Azure Container Apps cluster, ACR, task definition (4 vCPU/16 GB) (NEW v6.0)
+│       ├── durable-functions/        ← 22+ state pipeline (incl. Container Apps waitForTaskToken, Distributed Map + Reconciliation)
+│       ├── s3-staging/            ← Key Vault-encrypted, versioned
 │       ├── dms/                   ← Oracle → HANA replication
 │       ├── dynamodb/              ← Rules table
 │       ├── cloudwatch/            ← Dashboard + alarms
-│       ├── waf/                   ← WAFv2: rate limit, OWASP, SQLi, IP reputation (NEW v4.0)
-│       ├── audit/                 ← CloudTrail + S3 WORM + compliance metrics (NEW v4.0)
-│       ├── airgapped-llm/        ← g5.2xlarge GPU (no internet)
+│       ├── waf/                   ← Azure Front Door WAF: rate limit, OWASP, SQLi, IP reputation (NEW v4.0)
+│       ├── audit/                 ← Azure Monitor Activity Logs + Blob Storage WORM + compliance metrics (NEW v4.0)
+│       ├── airgapped-llm/        ← Standard_NC8as_T4_v3 GPU (no internet)
 │       ├── entity-resolution/     ← ML BP dedup
 │       ├── websocket-telemetry/   ← Real-time streaming
-│       └── vpc-endpoints/         ← Bedrock PrivateLink
+│       └── private-endpoints/         ← Claude PrivateLink
 ├── scripts/
 │   ├── deploy.sh                  ← Package + build + terraform apply
-│   └── setup-pyrfc.sh             ← Build PyRFC Lambda layer
+│   └── setup-pyrfc.sh             ← Build PyRFC Functions extension
 ├── tests/
 │   ├── test_execution_stages.py   ← ~30 mock tests (unit tests)
 │   ├── test_sap_integration.py    ← 52 integration tests, 15 classes, dual-mode mock + live (NEW)
@@ -2358,21 +2376,21 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 
 | Component | Change |
 |-----------|--------|
-| **CI/CD SAP SDK Download** | `deploy.yml` updated — downloads SAP NW RFC SDK from private S3 bucket (`aws s3 cp`) at build time, injects into `ecs/` before `docker build`, cleans up post-build. SDK never committed to Git |
-| **ECS Placeholder Bootstrap** | `terraform/modules/ecs/main.tf` — task definition uses `alpine:latest` placeholder image + `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infra; CI/CD deploys real image |
-| **Streamed Reconciliation** | `lambda/data-loader/handler.py` — Stage 12A `generate_reconciliation_report()` rewritten with `_read_table_chunked()` generator (50K rows/chunk) and running aggregation. Prevents OOM on 500M+ row tables. Totals persisted to S3 via `_persist_aggregated_totals()` |
-| **DMS Secrets Manager** | All 3 environments (dev/staging/prod) `main.tf` — DMS database passwords fetched from `aws_secretsmanager_secret_version` data sources. Hardcoded passwords and password variables removed |
+| **CI/CD SAP SDK Download** | `deploy.yml` updated — downloads SAP NW RFC SDK from private Blob Storage container (`az storage blob download`) at build time, injects into `ecs/` before `docker build`, cleans up post-build. SDK never committed to Git |
+| **Container Apps Placeholder Bootstrap** | `terraform/modules/container-apps/main.tf` — task definition uses `alpine:latest` placeholder image + `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infra; CI/CD deploys real image |
+| **Streamed Reconciliation** | `lambda/data-loader/handler.py` — Stage 12A `generate_reconciliation_report()` rewritten with `_read_table_chunked()` generator (50K rows/chunk) and running aggregation. Prevents OOM on 500M+ row tables. Totals persisted to Blob Storage via `_persist_aggregated_totals()` |
+| **Data Factory Key Vault** | All 3 environments (dev/staging/prod) `main.tf` — database connection strings fetched from `azurerm_key_vault_secret` data sources. Hardcoded passwords and password variables removed |
 
-### v6.0 ECS Fargate Compute Upgrade (April 1, 2026) — What Changed
+### v6.0 Azure Container Apps Compute Upgrade (April 1, 2026) — What Changed
 
 | Component | Change |
 |-----------|--------|
-| **ECS Fargate Module** | New `terraform/modules/ecs/main.tf` — ECR repository, ECS cluster with Container Insights, Fargate task definition (4 vCPU / 16 GB), execution role, task role with S3/DynamoDB/Bedrock/SecretsManager/StepFunctions permissions, security group |
-| **Docker Image** | `ecs/Dockerfile` — Multi-stage build on Amazon Linux 2023, SAP NW RFC SDK + PyRFC compilation, non-root user, copies all handler source code from `lambda/` |
-| **ECS Entrypoint** | `ecs/entrypoint.py` — Unified Docker wrapper: `STAGE_TARGET` env var selects handler, heartbeat thread (120s), `_FargateContext` Lambda shim, `SendTaskSuccess`/`SendTaskFailure` callbacks |
-| **Step Functions → ECS** | Stages 1, 5, 12, 12A now use `ecs:RunTask` with `waitForTaskToken` callback pattern instead of Lambda invoke. HeartbeatSeconds=300, TimeoutSeconds=3600–14400 per stage |
-| **Dead Lambda Cleanup** | Removed `discovery-engine`, `code-analyzer`, `data-loader` Lambda definitions from dev, staging, and prod environments |
-| **ECS Wiring** | All 3 environments (dev/staging/prod) now pass ECS cluster ARN, task definition ARN, security group, subnets, and role ARNs into the Step Functions module |
+| **Azure Container Apps Module** | New `terraform/modules/container-apps/main.tf` — Azure Container Registry (ACR) repository, Azure Container Apps environment with Azure Monitor container insights, Fargate task definition (4 vCPU / 16 GB), execution role, task role with Blob Storage/Cosmos DB/Claude/KeyVault/StepFunctions permissions, Network NSG (NSG) |
+| **Docker Image** | `ecs/Dockerfile` — Multi-stage build on Azure Linux (CBL-Mariner), SAP NW RFC SDK + PyRFC compilation, non-root user, copies all handler source code from `lambda/` |
+| **Container Apps Entrypoint** | `ecs/entrypoint.py` — Unified Docker wrapper: `STAGE_TARGET` env var selects handler, heartbeat thread (120s), `_FargateContext` Azure Functions shim, `SendTaskSuccess`/`SendTaskFailure` callbacks |
+| **Azure Durable Functions → Container Apps** | Stages 1, 5, 12, 12A now use `containerapp job start` with `waitForTaskToken` callback pattern instead of Azure Functions invoke. HeartbeatSeconds=300, TimeoutSeconds=3600–14400 per stage |
+| **Dead Azure Functions Cleanup** | Removed `discovery-engine`, `code-analyzer`, `data-loader` Function definitions from dev, staging, and prod environments |
+| **Container Apps Wiring** | All 3 environments (dev/staging/prod) now pass Azure Container Apps environment ARN, task definition ARN, Network NSG (NSG), subnets, and role ARNs into the Azure Durable Functions module |
 | **Docker Context** | `.dockerignore` at project root excludes `__pycache__`, `.git`, `node_modules`, `test-output`, `frontend`, `terraform`, `docs`, `mock-ecc`, `tests`, `scripts` |
 | **Terraform Modules** | 13 → 14 modules (added `ecs/`) |
 
@@ -2382,26 +2400,26 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 |-----------|--------|
 | **RFC Call Timeouts** | `call_rfc_with_timeout()` in `rfc_pool.py` — ThreadPoolExecutor wrapper preventing indefinite hangs (default 120s, configurable via `RFC_CALL_TIMEOUT_SECONDS`) |
 | **Paginated Table Reads** | `read_table_chunked()` generator — ROWSKIPS/ROWCOUNT pagination (default 5000 rows/page via `RFC_PAGE_SIZE`), max_rows safety cap. Discovery engine converted from unbounded reads |
-| **Credential Refresh** | RFC pool caches Secrets Manager credentials with 300s TTL. Auth-failure auto-retry with cache invalidation |
+| **Credential Refresh** | RFC pool caches Key Vault credentials with 300s TTL. Auth-failure auto-retry with cache invalidation |
 | **Input Validation** | New `lambda/utils/validation.py` — shared event validation wired into 4 handlers (discovery-engine, data-loader, cutover-orchestrator, rollback-manager) |
-| **Idempotency** | DynamoDB-backed idempotency in data-loader — prevents duplicate processing on Lambda retries (7-day TTL, requires `IDEMPOTENCY_TABLE` env var) |
+| **Idempotency** | Cosmos DB-backed idempotency in data-loader — prevents duplicate processing on Azure Functions retries (7-day TTL, requires `IDEMPOTENCY_TABLE` env var) |
 | **FINS Polling** | Configurable timeout: `FINS_MAX_POLLS` (480) × `FINS_POLL_INTERVAL` (30s) with adaptive backoff (+10% every 60 polls) |
 | **Batch Rollback** | Rollback manager commits in batches of 25 (`ROLLBACK_BATCH_SIZE`) with BAPI_TRANSACTION_COMMIT after each batch |
 | **Source System Locking** | Cutover: SCCR_LOCK_CLIENT + BAPI_USER_LOCK. Rollback unlock: SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK |
-| **New DynamoDB Table** | `migrate4hana-idempotency` — pk (string), sk (string), TTL on `ttl` attribute, 7-day retention |
+| **New Cosmos DB Table** | `migrate4hana-idempotency` — pk (string), sk (string), TTL on `ttl` attribute, 7-day retention |
 | **Test Suite** | 114 passing tests verified (unit + integration), all 55 Python files compile cleanly |
 
 ### v4.0 Production Hardening (March 24, 2026) — What Changed
 
 | Component | Change |
 |-----------|--------|
-| **CI/CD Pipeline** | GitHub Actions CI (`ci.yml`) — pytest, Bandit scan, frontend build, Lambda packaging, Terraform validate across all 3 environments |
-| **CD Pipeline** | GitHub Actions CD (`deploy.yml`) — OIDC federation, staging/prod auto-deploy, SAP SDK S3 download + ECS image build/push, smoke tests, Terraform plan/apply |
+| **CI/CD Pipeline** | GitHub Actions CI (`ci.yml`) — pytest, Bandit scan, frontend build, Azure Functions packaging, Terraform validate across all 3 environments |
+| **CD Pipeline** | GitHub Actions CD (`deploy.yml`) — OIDC federation, staging/prod auto-deploy, SAP SDK Blob Storage download + Container Apps image build/push, smoke tests, Terraform plan/apply |
 | **Staging Environment** | `terraform/environments/staging/` — 10.20.0.0/16, 2 AZ, WAF + Audit modules, VPN required |
-| **Production Environment** | `terraform/environments/prod/` — 10.30.0.0/16, 3 AZ, WAF + Audit modules, higher Lambda memory, stricter rate limits |
-| **WAF** | `terraform/modules/waf/` — WAFv2 with rate limiting (1K/5min prod), OWASP Core Rules, SQLi protection, IP reputation |
-| **Audit & Compliance** | `terraform/modules/audit/` — CloudTrail, S3 WORM (7-year), CloudWatch metrics, unauthorized-API alarms, SOX/GxP ready |
-| **DR & Backup** | Documented RTO/RPO targets, S3 cross-region replication, DynamoDB PITR, failover procedures |
+| **Production Environment** | `terraform/environments/prod/` — 10.30.0.0/16, 3 AZ, WAF + Audit modules, higher Azure Functions memory, stricter rate limits |
+| **WAF** | `terraform/modules/frontdoor-waf/` — Azure Front Door WAF with rate limiting (1K/5min prod), OWASP Core Rules, SQLi protection, IP reputation |
+| **Audit & Compliance** | `terraform/modules/audit/` — Azure Monitor Activity Logs, Blob Storage WORM (7-year), Azure Monitor metrics, unauthorized-API alarms, SOX/GxP ready |
+| **DR & Backup** | Documented RTO/RPO targets, Blob Storage cross-region replication, Cosmos DB PITR, failover procedures |
 | **Load Testing** | `tests/load_test.py` — Locust suite with 2 user profiles, CI integration, performance targets |
 
 ### v3.0 Code Hardening (March 21, 2026) — What Changed
@@ -2410,29 +2428,29 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 |-----------|--------|
 | **API Server** | Full rewrite from stdlib `http.server` → FastAPI + uvicorn. TLS-ready, Pydantic validation, CORS, async, multi-worker, auto-generated OpenAPI docs |
 | **RFC Connection Pool** | New `lambda/utils/rfc_pool.py` — thread-safe pool preventing SAP Gateway saturation |
-| **Data Loading** | Stage 12 now uses Step Functions Distributed Map with 4 parallel streams (finance, BP, materials, custom) |
+| **Data Loading** | Stage 12 now uses Durable Functions fan-out/fan-in with 4 parallel streams (finance, BP, materials, custom) |
 | **Financial Reconciliation** | New Stage 12A — penny-perfect GL balance comparison between ECC and S/4HANA |
-| **Rollback Manager** | Hardened with S3 state persistence, resume support, post-rollback verification, client unlock |
+| **Rollback Manager** | Hardened with Blob Storage state persistence, resume support, post-rollback verification, client unlock |
 | **PyRFC Layer Build** | Enhanced `scripts/setup-pyrfc.sh` with Docker build, import validation, auto-terraform update |
 | **Integration Tests** | New `tests/test_sap_integration.py` — 52 tests, 15 classes, dual-mode mock + live SAP |
 
 ### Remaining Blockers (2)
 
-1. **PyRFC Lambda Layer deployment** — The build script is ready; you still need the SAP NW RFC SDK + `terraform apply`
-2. **AWS Infrastructure deployment** — All Terraform is written; needs `terraform apply` on a real AWS account
+1. **PyRFC Functions Extension deployment** — The build script is ready; you still need the SAP NW RFC SDK + `terraform apply`
+2. **Azure Infrastructure deployment** — All Terraform is written; needs `terraform apply` on a real Azure subscription
 
 ### Production Readiness Score
 
 | Category | v2.0 | v3.0 | v4.0 | v5.0 | v6.0 | v6.1 |
 |----------|------|------|------|------|------|------|
-| Critical gaps | 7 open | 3 resolved, 4 remaining | 3 resolved, 4 remaining | 3 resolved, **#6 partially resolved**, 3 remaining | 3 remaining (PyRFC + AWS deploy + #6) | 3 remaining (PyRFC + AWS deploy + #6) |
+| Critical gaps | 7 open | 3 resolved, 4 remaining | 3 resolved, 4 remaining | 3 resolved, **#6 partially resolved**, 3 remaining | 3 remaining (PyRFC + Azure deploy + #6) | 3 remaining (PyRFC + Azure deploy + #6) |
 | High-priority gaps | 8 open | 2 resolved, 6 remaining | **6 resolved**, 2 remaining | **6 resolved**, 2 remaining | **7 resolved** (#15 partially), 1 remaining | **7 resolved** (#15 partially), 1 remaining |
 | GenAI gaps | 9 open | 9 resolved | 9 resolved | 9 resolved | 9 resolved | 9 resolved |
-| Code hardening | 0 items | 5 improvements (H1-H5) | 5 improvements | **13 improvements** (H1-H5 + P1-P8) | **19 improvements** (+ E1-E6 ECS) | **23 improvements** (+ A1-A4 Architectural) |
-| Medium-priority gaps | 10 open | 1 resolved, 9 remaining | **3 resolved**, 7 remaining | **3 resolved**, 7 remaining | **3 resolved**, 7 remaining | **4 resolved** (#23 DMS credentials), 6 remaining |
-| Infrastructure files | 0 CI/CD, 1 env | 0 CI/CD, 1 env | **2 CI/CD pipelines**, **3 environments**, **2 security modules** | + `validation.py`, enhanced `rfc_pool.py` | + **ECS module**, **Dockerfile**, **entrypoint.py**, **.dockerignore** | + **deploy.yml** SAP SDK S3 download, ECS placeholder bootstrap |
-| Test coverage | ~30 unit tests | 82 total (30 + 52) | **82+ tests** + Locust load test suite | **114 tests** verified passing + Locust load test suite | **114 tests** + Locust (unchanged — ECS uses same handler code) | **114 tests** + Locust (unchanged) |
+| Code hardening | 0 items | 5 improvements (H1-H5) | 5 improvements | **13 improvements** (H1-H5 + P1-P8) | **19 improvements** (+ E1-E6 Container Apps) | **23 improvements** (+ A1-A4 Architectural) |
+| Medium-priority gaps | 10 open | 1 resolved, 9 remaining | **3 resolved**, 7 remaining | **3 resolved**, 7 remaining | **3 resolved**, 7 remaining | **4 resolved** (#23 Data Factory credentials), 6 remaining |
+| Infrastructure files | 0 CI/CD, 1 env | 0 CI/CD, 1 env | **2 CI/CD pipelines**, **3 environments**, **2 security modules** | + `validation.py`, enhanced `rfc_pool.py` | + **Container Apps module**, **Dockerfile**, **entrypoint.py**, **.dockerignore** | + **deploy.yml** SAP SDK Blob Storage download, Container Apps placeholder bootstrap |
+| Test coverage | ~30 unit tests | 82 total (30 + 52) | **82+ tests** + Locust load test suite | **114 tests** verified passing + Locust load test suite | **114 tests** + Locust (unchanged — Container Apps uses same handler code) | **114 tests** + Locust (unchanged) |
 
-**Minimum viable production path**: Phase 1 (PyRFC Layer — build script ready) + Phase 2 (Terraform apply + ECR push) + Phase 3 (SAP connectivity) remains the critical path. All code-level work for these phases is now complete. With v6.0, the 4 heaviest compute stages (discovery, code analysis, data loading, reconciliation) now run on ECS Fargate (4 vCPU / 16 GB) with no 15-minute timeout — tasks run up to 4 hours with Step Functions `waitForTaskToken` callbacks. The production hardening gaps (RFC timeouts, input validation, idempotency, credential refresh, batch rollback, source system locking, paginated reads) are fully addressed — only AWS account access, ECR image push, and SAP SDK procurement remain as external dependencies.
+**Minimum viable production path**: Phase 1 (PyRFC Layer — build script ready) + Phase 2 (Terraform apply + ACR push) + Phase 3 (SAP connectivity) remains the critical path. All code-level work for these phases is now complete. With v6.0, the 4 heaviest compute stages (discovery, code analysis, data loading, reconciliation) now run on Azure Container Apps (4 vCPU / 16 GB) with no 15-minute timeout — tasks run up to 4 hours with Azure Durable Functions `waitForTaskToken` callbacks. The production hardening gaps (RFC timeouts, input validation, idempotency, credential refresh, batch rollback, source system locking, paginated reads) are fully addressed — only Azure subscription access, ACR image push, and SAP SDK procurement remain as external dependencies.
 
 The SAP domain knowledge embedded in the codebase — 160 AST rules, 710+ country rules, 250+ table transformations, 500+ Fiori mappings, 94 SUM known errors, 400+ OData service maps — is the most valuable and difficult-to-replicate asset. The infrastructure and deployment gaps are standard engineering work that can be executed methodically using this guide.

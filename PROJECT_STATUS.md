@@ -10,7 +10,7 @@
 
 ### ✅ YES — SAP Activate Compliant Smart Orchestrator (100% Overall)
 
-The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post Automation Engine** aligned with the SAP Activate Methodology. The platform orchestrates **17 stages across 5 SAP Activate phases**, wrapping around SAP's mandatory proprietary tools (SUM/DMO, Maintenance Planner, Readiness Check, FINS_MASS_DATA_MONITOR) while automating all pre-conversion, post-conversion, and validation workstreams. All 21 Lambda functions deliver production-grade implementations across 85 validation checks and 7 scorecard dimensions. All previously identified gaps have been resolved.
+The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post Automation Engine** aligned with the SAP Activate Methodology. The platform orchestrates **17 stages across 5 SAP Activate phases**, wrapping around SAP's mandatory proprietary tools (SUM/DMO, Maintenance Planner, Readiness Check, FINS_MASS_DATA_MONITOR) while automating all pre-conversion, post-conversion, and validation workstreams. All 21 Azure Functions deliver production-grade implementations across 85 validation checks and 7 scorecard dimensions. All previously identified gaps have been resolved.
 
 ---
 
@@ -26,9 +26,9 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 | 6 | Material Ledger Activation: CKMSTART execution + validation | 100% | ✅ Complete |
 | 7 | SPAU/SPDD Tracking: Adjustment worklist parsing + reporting | 100% | ✅ Complete |
 | 8 | ATC Integration: SAP official code validation alongside AST | 100% | ✅ Complete |
-| 9 | DMS & Delta Syncs | 100% | ✅ Complete |
+| 9 | Azure Data Factory & Delta Syncs | 100% | ✅ Complete |
 | 10 | Logging & UI Telemetry | 100% | ✅ Complete |
-| 11 | DynamoDB Simplification Rules | 100% | ✅ Complete |
+| 11 | Cosmos DB Simplification Rules | 100% | ✅ Complete |
 | 12 | Data Hygiene & MDM | 100% | ✅ Complete |
 | 13 | Global Localization | 100% | ✅ Complete |
 | 14 | Safety & Testing Automation | 100% | ✅ Complete |
@@ -72,12 +72,12 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 
 | Component | Verdict | Evidence |
 |-----------|---------|----------|
-| Bedrock integration | ✅ | `genai_router.py` — `_invoke_bedrock()` via bedrock-runtime |
-| Air-Gapped Local LLM | ✅ | `_invoke_local_llm()` HTTP POST to VPC endpoint |
+| Anthropic Claude Opus 4.6 integration | ✅ | `genai_router.py` — `_invoke_claude()` via Anthropic API |
+| Air-Gapped Local LLM | ✅ | `_invoke_local_llm()` HTTP POST to VNet private endpoint |
 | AST→GenAI escalation flow | ✅ | `route_analysis()` tries AST first, escalates if changes < threshold |
 | PII Data Scrubber | ✅ | `data_scrubber.py` — strips comments, masks strings, removes emails/SSNs/API keys |
-| Bedrock PrivateLink | ✅ | `vpc-endpoints/main.tf` — bedrock-runtime + bedrock-agent-runtime Interface endpoints |
-| Air-Gapped GPU EC2 | ✅ | `airgapped-llm/main.tf` — g5.2xlarge, zero internet egress, 500GB encrypted |
+| Anthropic Claude Opus 4.6 Private Endpoint | ✅ | `private-endpoints/main.tf` — Claude Opus API private endpoints |
+| Air-Gapped GPU VM | ✅ | `airgapped-llm/main.tf` — GPU VM, zero internet egress, 500GB encrypted |
 | Wired in dev env | ✅ | `dev/main.tf` L347-369 — both modules |
 
 ---
@@ -91,7 +91,7 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 | SUM CLI orchestration | ✅ | `sum-dmo-monitor/handler.py` — automated SUM invocation with stack.xml |
 | Real-time log monitoring | ✅ | SUM log parsing with WebSocket broadcast |
 | Progress tracking | ✅ | SUM phase tracking and status reporting |
-| Recovery checkpoint creation | ✅ | S3 checkpoint for rollback support |
+| Recovery checkpoint creation | ✅ | Blob Storage checkpoint for rollback support |
 
 > Phase 3 orchestrates SAP's SUM/DMO — the tool does NOT perform database conversions directly.
 
@@ -146,17 +146,17 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 
 ---
 
-### Req 9 — DMS & Delta Syncs (100%)
+### Req 9 — Azure Data Factory & Delta Syncs (100%)
 
 | Component | Verdict | Evidence |
 |-----------|---------|----------|
-| DMS full-load-and-cdc task | ✅ | `main.tf` — replication task with LOB support |
+| Azure Database Migration Service full-load-and-cdc task | ✅ | `main.tf` — replication task with LOB support |
 | BSEG→ACDOCA table mappings | ✅ | `table_mappings.json` — JSON transformation rules |
 | CDC latency monitoring | ✅ | `cutover-orchestrator/handler.py` — `monitor_dms_cdc_latency()` with threshold comparison |
 | CDC finalization (stop) | ✅ | `cutover-orchestrator/handler.py` — `finalize_dms_cdc()` stops task and verifies |
 | Wired in dev env | ✅ | `dev/main.tf` — module "dms" with endpoints |
-| DMS CDC error-retry & checkpoint | ✅ | `dms/main.tf` — `ErrorBehavior` with 5 retry count, `SUSPEND_TABLE` policy, batch apply |
-| DMS task ARN output | ✅ | `dms/main.tf` — `output "dms_task_arn"` + endpoint ARNs for Lambda env wiring |
+| Azure Data Factory CDC error-retry & checkpoint | ✅ | `dms/main.tf` — `ErrorBehavior` with 5 retry count, `SUSPEND_TABLE` policy, batch apply |
+| Azure Data Factory task resource ID output | ✅ | `dms/main.tf` — `output "dms_task_arn"` + endpoint resource IDs for Azure Functions env wiring |
 
 ---
 
@@ -165,20 +165,20 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 | Component | Verdict | Evidence |
 |-----------|---------|----------|
 | Structured `log_stage_event()` | ✅ | `logger.py` — UUID, timestamp, stage, action, status, duration_ms, details |
-| WebSocket broadcast | ✅ | `_broadcast_to_websocket()` via API Gateway Management API + DynamoDB connection tracking |
+| WebSocket broadcast | ✅ | `_broadcast_to_websocket()` via Azure Web PubSub + Cosmos DB connection tracking |
 | All 21 handlers wired | ✅ | Every handler imports `log_stage_event`, calls at Start/Success/Error |
 | Real WebSocket in LogViewer | ✅ | `LogViewer.jsx` — real WS with auto-reconnect, mock fallback for local dev |
-| WebSocket infrastructure | ✅ | `websocket-telemetry/main.tf` — API Gateway WS + DynamoDB + Lambda handler |
-| CloudWatch dashboards/alarms | ✅ | `cloudwatch/main.tf` — 4-widget dashboard + SNS alerts |
+| WebSocket infrastructure | ✅ | `websocket-telemetry/main.tf` — Azure Web PubSub + Cosmos DB + Azure Functions handler |
+| Application Insights + Log Analytics dashboards/alarms | ✅ | `cloudwatch/main.tf` — 4-widget dashboard + Azure Event Grid alerts |
 
 ---
 
-### Req 11 — DynamoDB Simplification Rules (100%)
+### Req 11 — Cosmos DB Simplification Rules (100%)
 
 | Component | Verdict | Evidence |
 |-----------|---------|----------|
-| DynamoDB table with GSI | ✅ | `dynamodb/main.tf` — PAY_PER_REQUEST, CategoryIndex GSI, PITR enabled |
-| Dynamic rule fetching | ✅ | `rule_router.py` — category-based GSI query + full scan |
+| Cosmos DB container with index | ✅ | `dynamodb/main.tf` — serverless, CategoryIndex, continuous backup enabled |
+| Dynamic rule fetching | ✅ | `rule_router.py` — category-based index query + full scan |
 | Static fallback (30 rules) | ✅ | `_get_fallback_rules()` — 30 rules across 8 categories (SYNTAX, DATA_MODEL, BAPI, ALV, FIORI, SECURITY, PERFORMANCE) |
 | Code analyzer integration | ✅ | `handler.py` L36 imports `get_simplification_rules`, L107 calls it |
 | Encryption-at-rest | ✅ | `dynamodb/main.tf` — `server_side_encryption { enabled = true }` |
@@ -192,10 +192,10 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 | Data cleansing engine | ✅ | `mdm_data_cleanser.py` — 00000000 dates→NULL, MATNR leading zeros stripped |
 | CVI pre-checks | ✅ | CVI_UPGRADE_CHECK_RESOLVE validation before conversion |
 | Fuzzy matching (Levenshtein + Soundex) | ✅ | `bp_deduplication_engine.py` — weighted multi-field scoring, blocking strategy, Union-Find clustering |
-| AWS Entity Resolution code | ✅ | `_run_entity_resolution()` with workflow ARN, polling, graceful fallback |
+| Azure Data Factory matching code | ✅ | `_run_entity_resolution()` with workflow resource ID, polling, graceful fallback |
 | Cross-entity matching | ✅ | `_cross_match_customer_vendor()` detects customer-vendor intercompany |
-| Entity Resolution Terraform infra | ✅ | `entity-resolution/main.tf` — S3 bucket, Glue catalog, IAM, schema mappings |
-| ER Matching Workflow provisioned | ✅ | `entity-resolution/main.tf` — `aws_entityresolution_matching_workflow` with ML_MATCHING, customer+vendor inputs, S3 output |
+| Azure Data Factory matching Terraform infra | ✅ | `entity-resolution/main.tf` — Blob Storage container, Data Factory catalog, Azure RBAC / Managed Identity, schema mappings |
+| Data Factory Matching Workflow provisioned | ✅ | `entity-resolution/main.tf` — `azurerm_data_factory_matching_workflow` with ML_MATCHING, customer+vendor inputs, Blob Storage output |
 
 ---
 
@@ -224,8 +224,8 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 | BUT000/Business Partner rollback | ✅ | `rollback_business_partners()` — BAPI_BUPA_DELETE |
 | SPRO customizing rollback | ✅ | `rollback_spro_configurations()` — CTBP_DELETE_TABLE_ENTRY |
 | Full post-conversion rollback | ✅ | Covers: FI docs, transports, BPs, material docs, ACDOCA, number ranges, BP groupings, SPRO, roles, user assignments, RFC dests, IDoc partners |
-| Checkpoint-based rollback | ✅ | S3 checkpoint load + auto-discovery of stage artifacts for rollback |
-| Step Functions error chain | ✅ | `step-functions/main.tf` — all execution stages Catch→ExecutionFailed→rollback-manager |
+| Checkpoint-based rollback | ✅ | Blob Storage checkpoint load + auto-discovery of stage artifacts for rollback |
+| Durable Functions error chain | ✅ | `durable-functions/main.tf` — all execution stages Catch→ExecutionFailed→rollback-manager |
 | ST03N process mining | ✅ | `st03n_analyzer.py` — 45+ T-code→Fiori mappings covering FI, SD, MM, PP, PM, CO, HR, AA |
 | DITL test generation | ✅ | `ditl_generator.py` — Runnable Cypress scripts with real Fiori selectors, OData service intercepts, support commands |
 | Automated BPT execution | ✅ | `bpt-test-executor/handler.py` — Automated Cypress test execution in Phase 5 |
@@ -240,8 +240,8 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 
 | # | Gap | Resolution | Status |
 |---|-----|------------|--------|
-| 1 | DynamoDB encryption-at-rest missing | `dynamodb/main.tf` already has `server_side_encryption { enabled = true }` | ✅ Resolved |
-| 2 | Entity Resolution workflow not provisioned | `entity-resolution/main.tf` — `aws_entityresolution_matching_workflow` fully provisioned with ML_MATCHING, dual schema inputs, S3 output | ✅ Resolved |
+| 1 | Cosmos DB encryption-at-rest missing | `dynamodb/main.tf` already has `server_side_encryption { enabled = true }` | ✅ Resolved |
+| 2 | Azure Data Factory matching workflow not provisioned | `entity-resolution/main.tf` — `azurerm_data_factory_matching_workflow` fully provisioned with ML_MATCHING, dual schema inputs, Blob Storage output | ✅ Resolved |
 | 3 | Rollback manager only handles FI docs + transports | Added full post-conversion rollback covering ACDOCA, BPs, materials, SPRO, number ranges, BP groupings, roles, user assignments, RFC destinations, IDoc partners | ✅ Resolved |
 
 ### Medium Priority — RESOLVED
@@ -251,7 +251,7 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 | 4 | Fallback rules only 2 of ~30 | `rule_router.py` `_get_fallback_rules()` expanded to 30 rules across 8 categories | ✅ Resolved |
 | 5 | Fiori catalog hardcoded to 5 entries | `st03n_analyzer.py` expanded to 45+ T-code→Fiori mappings | ✅ Resolved |
 | 6 | Config applier silent exception swallowing | All RFC call areas properly log errors and collect to `errors` list. Dry_run mode validates config structure. | ✅ Resolved |
-| 7 | DMS task ARN not output from Terraform | `dms/main.tf` now exports `dms_task_arn`, `dms_instance_arn`, `dms_endpoint_ecc_arn`, `dms_endpoint_s4_arn` | ✅ Resolved |
+| 7 | Azure Data Factory task resource ID not output from Terraform | `dms/main.tf` now exports `dms_task_arn`, `dms_instance_arn`, `dms_endpoint_ecc_arn`, `dms_endpoint_s4_arn` | ✅ Resolved |
 
 ### Low Priority — RESOLVED
 
@@ -259,15 +259,15 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 |---|-----|------------|--------|
 | 8 | DITL test scripts not runnable | `ditl_generator.py` rewritten with real Fiori selectors, semantic object navigation, Cypress custom commands, and OData service intercepts | ✅ Resolved |
 | 9 | Duplicate ASL JSON state machine | Only one `migration_pipeline.asl.json` exists — no duplication found | ✅ Non-issue |
-| 10 | DMS CDC checkpoint/retry | `dms/main.tf` updated with `ErrorBehavior`, `ChangeProcessingTuning`, `FullLoadSettings`, and `StreamBufferSettings` | ✅ Resolved |
+| 10 | Data Factory CDC checkpoint/retry | `dms/main.tf` updated with `ErrorBehavior`, `ChangeProcessingTuning`, `FullLoadSettings`, and `StreamBufferSettings` | ✅ Resolved |
 
 ---
 
 ## Component Inventory
 
-### Lambda Functions (21 total)
+### Azure Functions (21 total)
 
-| # | Lambda | Directory | Role | SAP Activate Phase |
+| # | Function | Directory | Role | SAP Activate Phase |
 |---|--------|-----------|------|--------------------|
 | 1 | discovery-engine | `lambda/discovery-engine/` | Stage 1 — ECC system scanning | Phase 1: Prepare |
 | 2 | maint-planner-integrator | `lambda/maint-planner-integrator/` | Stage 2 — Maintenance Planner integration | Phase 1: Prepare |
@@ -275,7 +275,7 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 | 4 | si-check-executor | `lambda/si-check-executor/` | Stage 4 — Simplification Item Check | Phase 1: Prepare |
 | 5 | code-analyzer | `lambda/code-analyzer/` | Stage 5 — AST parser + ATC + GenAI remediation | Phase 2: Explore |
 | 6 | cvi-bp-preparer | `lambda/cvi-bp-preparer/` | Stage 6 — CVI/BP preparation + dedup | Phase 2: Explore |
-| 7 | data-assessor | `lambda/data-assessor/` | Stage 7 — DMS CDC data assessment | Phase 2: Explore |
+| 7 | data-assessor | `lambda/data-assessor/` | Stage 7 — Azure Data Factory CDC data assessment | Phase 2: Explore |
 | 8 | config-integration-assessor | `lambda/config-integration-assessor/` | Stage 8 — Config + integration analysis | Phase 2: Explore |
 | 9 | pre-conversion-gate | `lambda/pre-conversion-gate/` | Stage 9 — GO/NO-GO gate | Phase 3: Realize |
 | 10 | sum-dmo-monitor | `lambda/sum-dmo-monitor/` | Stage 10 — SUM/DMO orchestration & monitoring | Phase 3: Realize |
@@ -295,17 +295,17 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 
 | # | Module | Directory | Purpose |
 |---|--------|-----------|---------|
-| 1 | vpc | `terraform/modules/vpc/` | VPC with private subnets |
-| 2 | lambda | `terraform/modules/lambda/` | Lambda deployment with telemetry env vars |
-| 3 | step-functions | `terraform/modules/step-functions/` | 17-stage state machine with rollback error chain |
-| 4 | s3-staging | `terraform/modules/s3-staging/` | Intermediate data staging |
-| 5 | cloudwatch | `terraform/modules/cloudwatch/` | Monitoring & alerts |
-| 6 | dms | `terraform/modules/dms/` | AWS DMS for full-load + CDC |
-| 7 | dynamodb | `terraform/modules/dynamodb/` | Country rules & simplification tables |
-| 8 | vpc-endpoints | `terraform/modules/vpc-endpoints/` | PrivateLink for Bedrock |
-| 9 | airgapped-llm | `terraform/modules/airgapped-llm/` | Isolated GPU EC2 for local LLM |
+| 1 | vpc | `terraform/modules/vpc/` | VNet with private subnets |
+| 2 | lambda | `terraform/modules/lambda/` | Azure Functions deployment with telemetry env vars |
+| 3 | durable-functions | `terraform/modules/durable-functions/` | 17-stage Durable Functions orchestration with rollback error chain |
+| 4 | s3-staging | `terraform/modules/s3-staging/` | Blob Storage intermediate data staging |
+| 5 | cloudwatch | `terraform/modules/cloudwatch/` | Application Insights + Log Analytics monitoring & alerts |
+| 6 | dms | `terraform/modules/dms/` | Azure Database Migration Service for full-load + CDC |
+| 7 | dynamodb | `terraform/modules/dynamodb/` | Cosmos DB country rules & simplification containers |
+| 8 | private-endpoints | `terraform/modules/private-endpoints/` | Private Endpoint for Anthropic Claude Opus 4.6 |
+| 9 | airgapped-llm | `terraform/modules/airgapped-llm/` | Isolated GPU VM for local LLM |
 | 10 | entity-resolution | `terraform/modules/entity-resolution/` | ML-powered BP deduplication |
-| 11 | websocket-telemetry | `terraform/modules/websocket-telemetry/` | API Gateway WebSocket for real-time logs |
+| 11 | websocket-telemetry | `terraform/modules/websocket-telemetry/` | Azure Web PubSub for real-time logs |
 
 ### Frontend Components
 
@@ -329,19 +329,19 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.11 (AWS Lambda) |
+| Backend | Python 3.11 (Azure Functions) |
 | Frontend | React 18.3.1, Vite 5.4.11, Tailwind CSS, Framer Motion, Recharts, Lucide React |
-| Infrastructure | Terraform >= 1.5.0, AWS Provider ~> 5.0 |
-| Orchestration | AWS Step Functions |
-| Data Sync | AWS DMS (full-load + CDC) |
+| Infrastructure | Terraform >= 1.5.0, AzureRM Provider ~> 3.0 |
+| Orchestration | Durable Functions |
+| Data Sync | Azure Database Migration Service (full-load + CDC) |
 | SAP Tools | SUM/DMO, Maintenance Planner, Readiness Check, ATC, CVI, FINS_MASS_DATA_MONITOR |
-| GenAI | Amazon Bedrock (Claude/Titan) + Air-Gapped Local LLM (Llama 3) |
-| Data Matching | AWS Entity Resolution + Custom Fuzzy Engine |
-| Telemetry | API Gateway WebSocket + CloudWatch |
-| State Store | DynamoDB (PAY_PER_REQUEST) |
-| Object Store | S3 (staging) |
-| Network | VPC, PrivateLink, VPN/Direct Connect |
+| GenAI | Anthropic Claude Opus 4.6 + Air-Gapped Local LLM (Llama 3) |
+| Data Matching | Azure Data Factory matching + Custom Fuzzy Engine |
+| Telemetry | Azure Web PubSub + Application Insights + Log Analytics |
+| State Store | Cosmos DB (serverless) |
+| Object Store | Blob Storage (staging) |
+| Network | VNet, Private Endpoint, Azure VPN Gateway / ExpressRoute |
 
 ---
 
-*This document is auto-generated from the latest architecture audit. SAP Activate compliance verified across all 17 stages, 5 phases, 21 Lambda functions, 85 validation checks, and 7 scorecard dimensions. For usage instructions, see [USAGE_GUIDE.md](USAGE_GUIDE.md).*
+*This document is auto-generated from the latest architecture audit. SAP Activate compliance verified across all 17 stages, 5 phases, 21 Azure Functions, 85 validation checks, and 7 scorecard dimensions. For usage instructions, see [USAGE_GUIDE.md](USAGE_GUIDE.md).*

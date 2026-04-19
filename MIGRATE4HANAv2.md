@@ -6,7 +6,7 @@
 
 <p align="center">
   <em>One tool to reduce time, effort, and money — across every phase of your S/4HANA conversion.</em><br/>
-  <em>Built on SAP Activate Methodology. Deployed on AWS Serverless. Backed by full automated rollback.</em>
+  <em>Built on SAP Activate Methodology. Deployed on Azure Serverless. Backed by full automated rollback.</em>
 </p>
 
 ---
@@ -15,9 +15,9 @@
 
 **Migrate4HANA** is a production-grade Smart Orchestrator that automates the pre-conversion, post-conversion, and validation phases of an SAP ECC to S/4HANA System Conversion — while wrapping around SAP's mandatory proprietary tools (SUM/DMO, Maintenance Planner, Readiness Check, FINS_MASS_DATA_MONITOR) for the core technical conversion.
 
-Built on AWS serverless architecture (21 Lambda functions, Step Functions, DynamoDB, S3, DMS, Entity Resolution, Bedrock, WebSocket Telemetry), the platform orchestrates **17 distinct migration stages** across **5 SAP Activate phases** — covering system discovery, readiness assessment, code remediation via a 4,200-line ABAP AST compiler, ML-powered Business Partner deduplication, SUM/DMO orchestration, post-conversion FINS migration, Material Ledger activation, role provisioning, integration activation, automated business process testing, cutover orchestration, and comprehensive 85-check GO-LIVE validation — all governed by a production-grade GO/NO-GO gate and backed by full automated rollback.
+Built on Azure serverless architecture (21 Azure Functions, Durable Functions, Cosmos DB, Blob Storage, Azure Database Migration Service, Azure Data Factory matching, Anthropic Claude Opus 4.6, WebSocket Telemetry), the platform orchestrates **17 distinct migration stages** across **5 SAP Activate phases** — covering system discovery, readiness assessment, code remediation via a 4,200-line ABAP AST compiler, ML-powered Business Partner deduplication, SUM/DMO orchestration, post-conversion FINS migration, Material Ledger activation, role provisioning, integration activation, automated business process testing, cutover orchestration, and comprehensive 85-check GO-LIVE validation — all governed by a production-grade GO/NO-GO gate and backed by full automated rollback.
 
-**Current State (March 9, 2026):** The platform is operational with 21 Lambda handlers containing real SAP RFC/BAPI call implementations via PyRFC. All handlers follow a dual-mode pattern: production mode (real RFC calls to live SAP systems when PyRFC + SAP NW RFC SDK are available) and local testing mode (mock data fallback for development). The latest full pipeline run against realistic enterprise simulation achieved **Grade A (100%) GO-LIVE scorecard** across all 85 validation checks — 861 custom ABAP programs scanned (98.6% auto-fix rate), 5,000 business partners migrated end-to-end, 19,762 finance line items reconciled with zero variance, in 72.9 seconds total execution time. All 35 automated tests pass. 11 Terraform modules are ready for AWS deployment.
+**Current State (March 9, 2026):** The platform is operational with 21 Function handlers containing real SAP RFC/BAPI call implementations via PyRFC. All handlers follow a dual-mode pattern: production mode (real RFC calls to live SAP systems when PyRFC + SAP NW RFC SDK are available) and local testing mode (mock data fallback for development). The latest full pipeline run against realistic enterprise simulation achieved **Grade A (100%) GO-LIVE scorecard** across all 85 validation checks — 861 custom ABAP programs scanned (98.6% auto-fix rate), 5,000 business partners migrated end-to-end, 19,762 finance line items reconciled with zero variance, in 72.9 seconds total execution time. All 35 automated tests pass. 11 Terraform modules are ready for Azure deployment.
 
 ---
 
@@ -77,16 +77,16 @@ Migrate4HANA's 17-stage pipeline maps directly to the 5 phases of the SAP Activa
 | Phase | Name | Stages | What Each Stage Does |
 |-------|------|--------|----------------------|
 | **1** | **Prepare** | 1–4 | System Discovery → Maintenance Planner Integration → Readiness Check Automation → Simplification Item Check |
-| **2** | **Explore** | 5–8 | Code Analysis + ATC + GenAI → CVI/BP Preparation + Dedup → Data Assessment (DMS/CDC) → Config/Integration Assessment |
+| **2** | **Explore** | 5–8 | Code Analysis + ATC + GenAI → CVI/BP Preparation + Dedup → Data Assessment (Data Factory/CDC) → Config/Integration Assessment |
 | **3** | **Realize (Conversion)** | 9–10 | Pre-Conversion GO/NO-GO Gate → SUM/DMO Orchestration + Monitoring |
 | **4** | **Realize (Post-Conv)** | 11–14 | SPAU/SPDD + Code Deploy → FINS Migration + Reconciliation → MatLedger + Config Apply → Roles + Integration Provisioning |
 | **5** | **Deploy & Run** | 15–17 | Business Process Testing (DITL) → Cutover Orchestration → 85-Check Migration Validator + GO-LIVE Scorecard |
 
-Each stage is a discrete Lambda function. AWS Step Functions chains them in sequence with automatic rollback error chaining — if any stage fails, the Rollback Manager Lambda reverses all prior changes.
+Each stage is a discrete Azure Function. Durable Functions chains them in sequence with automatic rollback error chaining — if any stage fails, the Rollback Manager Function reverses all prior changes.
 
 **How It Works in Production:**
 
-Each Lambda handler makes real SAP RFC calls via PyRFC. Every handler follows this dual-mode pattern:
+Each Function handler makes real SAP RFC calls via PyRFC. Every handler follows this dual-mode pattern:
 
 ```python
 try:
@@ -101,7 +101,7 @@ except ImportError:
 
 This means: **with PyRFC + SAP NW RFC SDK installed, every stage talks to a live SAP system. Without PyRFC, it runs against mock data for local development.**
 
-**Current State:** All 21 Lambda handlers are implemented with real RFC/BAPI call code. Step Functions state machine definition is complete with error handling chains. Tested end-to-end against mock data (72.9 seconds, Grade A).
+**Current State:** All 21 Function handlers are implemented with real RFC/BAPI call code. Durable Functions state machine definition is complete with error handling chains. Tested end-to-end against mock data (72.9 seconds, Grade A).
 
 ---
 
@@ -216,9 +216,9 @@ The `master_fix_engine.py` chains four fix levels sequentially:
 ### Dual-Path GenAI Escalation
 When AST transformations alone are insufficient (change count < threshold of 3), the system escalates:
 
-**Path 1 — Amazon Bedrock (Default):**
-- Model: `anthropic.claude-3-sonnet-20240229-v1:0`
-- Connectivity: VPC PrivateLink (zero internet egress)
+**Path 1 — Anthropic Claude Opus 4.6 via API (Default):**
+- Model: `claude-opus-4-6-20250619`
+- Connectivity: Private Endpoint (zero internet egress)
 - PII Scrubbing: All source code passes through `data_scrubber.py` before dispatch
   - Strips inline comments
   - Masks string literals → `"SCRUBBED_STRING"`
@@ -226,9 +226,9 @@ When AST transformations alone are insufficient (change count < threshold of 3),
   - Preserves code structure for accurate analysis
 
 **Path 2 — Air-Gapped Local LLM (Fallback):**
-- Instance: `g5.2xlarge` GPU in isolated private VPC subnet
+- Instance: GPU VM in isolated private VNet subnet
 - Model: Llama 3 (self-hosted, zero data egress)
-- Connectivity: In-VPC HTTP POST, no internet access
+- Connectivity: In-VNet HTTP POST, no internet access
 - Use case: Classified/regulated workloads where no data can leave the network
 
 ### Pattern-Based Analyzer (Complementary)
@@ -243,9 +243,9 @@ When AST transformations alone are insufficient (change count < threshold of 3),
 | FIORI | 2 | CALL TRANSACTION→Fiori Nav, SET PF-STATUS→Fiori Actions |
 | SECURITY | 2 | F_BKPF_BUK→F_ACDOC_BUK, V_VBAK_VKO→BP extension |
 | PERFORMANCE | 2 | SELECT *→explicit columns, FOR ALL ENTRIES→CDS JOIN |
-| OTHER | variable | Additional patterns from DynamoDB (dynamic rule loading) |
+| OTHER | variable | Additional patterns from Cosmos DB (dynamic rule loading) |
 
-30 rules are statically embedded as fallback if DynamoDB is unreachable (via `rule_router.py` with `CategoryIndex` GSI).
+30 rules are statically embedded as fallback if Cosmos DB is unreachable (via `rule_router.py` with `CategoryIndex` GSI).
 
 Effort estimation: base 0.5 hours/issue × severity multiplier (critical ×2, high ×1.5, medium ×1.25). Auto-generates team sizing and timeline.
 
@@ -329,10 +329,10 @@ Only records within the same block are compared — reducing 5,000 × 5,000 = 25
 
 **Cross-Entity Detection:** Identifies the same real-world entity appearing as both Customer (KNA1) and Vendor (LFA1). Uses multi-key blocking across entity types with greedy best-score 1:1 assignment. Merged records flagged as `merged_bp_type: "BOTH_CUS_VEN"`.
 
-### Layer 4: AWS Entity Resolution (Optional)
-- AWS Entity Resolution matching workflow (ML-powered)
-- Schema mapping with S3 I/O
-- Falls back gracefully to local fuzzy matching if Entity Resolution ARN is not configured
+### Layer 4: Azure Data Factory Matching (Optional)
+- Azure Data Factory matching workflow (ML-powered)
+- Schema mapping with Blob Storage I/O
+- Falls back gracefully to local fuzzy matching if Data Factory matching is not configured
 
 ### Layer 5: BP Crosswalk Engine (`bp_crosswalk_engine.py`)
 
@@ -367,7 +367,7 @@ Only records within the same block are compared — reducing 5,000 × 5,000 = 25
 **Stage 9 — Pre-Conversion Gate:**
 - Validates all Phase 1–2 results are successful before allowing conversion
 - Confirms S/4HANA target system connectivity via RFC test
-- Creates S3 checkpoint for rollback recovery
+- Creates Blob Storage checkpoint for rollback recovery
 - Returns explicit GO / NO-GO decision
 
 **Stage 10 — SUM/DMO Monitor:**
@@ -537,17 +537,17 @@ Real BAPIs for transport management:
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         MIGRATE4HANA PLATFORM                              │
-│           Smart Orchestrator — SAP Activate Aligned — AWS Serverless        │
+│           Smart Orchestrator — SAP Activate Aligned — Azure Serverless       │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   ┌──────────────────┐   ┌───────────────┐   ┌──────────────────────────┐  │
 │   │  React + Vite    │   │  API Server   │   │  WebSocket Telemetry     │  │
-│   │  Dashboard (3000)│◄─►│  REST (8000)  │   │  (API GW + DynamoDB)     │  │
+│   │  Dashboard (3000)│◄─►│  REST (8000)  │   │  (Web PubSub + Cosmos DB)│  │
 │   │  Tailwind + Motion│   │  JWT + API Key │   │  Real-Time Log Streaming │  │
 │   └──────────────────┘   └──────┬────────┘   └──────────────────────────┘  │
 │                                 │                                           │
 │                       ┌─────────▼──────────┐                               │
-│                       │   AWS Step Functions│                               │
+│                       │   Durable Functions│                               │
 │                       │  ┌───────────────┐  │                               │
 │                       │  │ 17-Stage State │  │                               │
 │                       │  │ Machine with   │  │                               │
@@ -566,16 +566,16 @@ Real BAPIs for transport management:
 │   │  │     TFDIR,AGR_DEFINE)│  │   │    (29 transform rules)        │ │   │
 │   │  │ 2. Maint Planner    │  │   │ 6. CVI/BP Preparer             │ │   │
 │   │  │    T001,CVERS,SFW5   │  │   │    Levenshtein + Soundex      │ │   │
-│   │  │ 3. Readiness Check   │  │   │    + Entity Resolution         │ │   │
+│   │  │ 3. Readiness Check   │  │   │    + Data Factory Match        │ │   │
 │   │  │    RC_COLLECT_*       │  │   │ 7. Data Assessor               │ │   │
-│   │  │ 4. SI-Check          │  │   │    DMS CDC Assessment           │ │   │
+│   │  │ 4. SI-Check          │  │   │    Data Factory CDC Assessment           │ │   │
 │   │  │    /SDF/RC_START_*    │  │   │ 8. Config/Integration          │ │   │
 │   │  └──────────────────────┘  │   │    SPRO + RFC/IDoc Mapping     │ │   │
 │   │                             │   └────────────────────────────────┘ │   │
 │   │  PHASE 3: REALIZE-CONV     │   PHASE 4: REALIZE-POST (11-14)     │   │
 │   │  ┌──────────────────────┐  │   ┌────────────────────────────────┐ │   │
 │   │  │ 9. Pre-Conv Gate     │  │   │ 11. Code Deploy                │ │   │
-│   │  │    GO/NO-GO + S3     │  │   │     BAPI_CTREQUEST_CREATE      │ │   │
+│   │  │    GO/NO-GO + Blob│  │   │     BAPI_CTREQUEST_CREATE      │ │   │
 │   │  │    Checkpoint         │  │   │     RPY_PROGRAM_INSERT         │ │   │
 │   │  │ 10. SUM/DMO Monitor  │  │   │ 12. FINS Migration             │ │   │
 │   │  │     CLI Orchestration │  │   │     BAPI_ACC_DOCUMENT_POST     │ │   │
@@ -588,7 +588,7 @@ Real BAPIs for transport management:
 │   │  │ 15. DITL Testing     │  │   └────────────────────────────────┘ │   │
 │   │  │     Cypress + OData  │  │                                      │   │
 │   │  │ 16. Cutover          │  │                                      │   │
-│   │  │     DMS CDC Final    │  │                                      │   │
+│   │  │     Data Factory CDC Final    │  │                                      │   │
 │   │  │ 17. Validator        │  │                                      │   │
 │   │  │     85 Checks → A/B/ │  │                                      │   │
 │   │  │     C/D Scorecard    │  │                                      │   │
@@ -596,25 +596,25 @@ Real BAPIs for transport management:
 │   └─────────────────────────────┴──────────────────────────────────────┘   │
 │                                                                             │
 │   ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌───────────┐ ┌──────────────┐  │
-│   │ Bedrock  │ │Air-Gapped│ │ DynamoDB  │ │ S3        │ │ AWS DMS      │  │
-│   │ Claude 3 │ │ Llama 3  │ │ Rules +   │ │ Staging + │ │ Full-Load +  │  │
-│   │ Sonnet   │ │ g5.2xl   │ │ Config +  │ │ Artifacts │ │ CDC          │  │
+│   │ Claude   │ │Air-Gapped│ │ Cosmos DB │ │ Blob      │ │ Azure Data Factory    │  │
+│   │ Opus 4.6 │ │ Llama 3  │ │ Rules +   │ │ Storage + │ │ Full-Load +  │  │
+│   │ via API  │ │ GPU VM   │ │ Config +  │ │ Artifacts │ │ CDC          │  │
 │   │ Private  │ │ Zero     │ │ Connections│ │ + Ckpts   │ │ Replication  │  │
-│   │ Link     │ │ Egress   │ │ Category  │ │           │ │              │  │
+│   │ Endpoint │ │ Egress   │ │ Category  │ │           │ │              │  │
 │   └──────────┘ └──────────┘ │ Index GSI │ └───────────┘ └──────────────┘  │
 │                              └───────────┘                                  │
 │   ┌──────────────────────┐   ┌──────────────────────┐   ┌──────────────┐  │
-│   │  Rollback Manager    │   │  Entity Resolution   │   │  CloudWatch  │  │
-│   │  BAPI_ACC_DOC_REVERSE│   │  ML-Powered BP Match │   │  4-Widget    │  │
-│   │  BAPI_CTREQ_DELETE   │   │  S3 I/O Integration  │   │  Dashboard + │  │
-│   │  BAPI_BUPA_DELETE    │   │                      │   │  SNS Alerts  │  │
+│   │  Rollback Manager    │   │  Data Factory Match  │   │  App Insights│  │
+│   │  BAPI_ACC_DOC_REVERSE│   │  ML-Powered BP Match │   │  + Log       │  │
+│   │  BAPI_CTREQ_DELETE   │   │  Blob Storage I/O    │   │  Analytics + │  │
+│   │  BAPI_BUPA_DELETE    │   │                      │   │  Event Grid  │  │
 │   │  BAPI_GOODSMVT_CANCEL│   └──────────────────────┘   └──────────────┘  │
 │   └──────────────────────┘                                                  │
 │                                                                             │
 │   ┌─────────────────────────────────────────────────────────────────────┐  │
 │   │                     SAP CONNECTIVITY LAYER                          │  │
 │   │   PyRFC + SAP NW RFC SDK → RFC_READ_TABLE, RFC_SYSTEM_INFO, BAPIs  │  │
-│   │   VPN / Direct Connect → On-Prem ECC + S/4HANA Target              │  │
+│   │   VPN / ExpressRoute → On-Prem ECC + S/4HANA Target                    │  │
 │   └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -622,23 +622,23 @@ Real BAPIs for transport management:
 
 ---
 
-# AWS Infrastructure — 11 Terraform Modules
+# Azure Infrastructure — 11 Terraform Modules
 
-All infrastructure is codified in Terraform (≥ 1.5.0, AWS Provider ~> 5.0):
+All infrastructure is codified in Terraform (≥ 1.5.0, AzureRM Provider ~> 3.0):
 
 | Module | Resources Provisioned | Key Configuration |
 |--------|----------------------|-------------------|
-| **vpc** | VPC, private subnets (2 AZs), route tables, NAT gateway | VPN/Direct Connect ready for SAP on-prem connectivity |
-| **lambda** | 21 Lambda functions with IAM roles | Environment variables for telemetry, secrets, DynamoDB, S3 |
-| **step-functions** | State machine (17-stage pipeline) | Sequential stage execution with `Catch → Rollback Manager` error chains |
-| **s3-staging** | S3 bucket | Versioned, encrypted — stores extraction artifacts, checkpoints, reports |
-| **cloudwatch** | CloudWatch dashboard (4 widgets), SNS topic | Pipeline execution metrics, error alerting, log retention policy |
-| **dms** | DMS replication instance, endpoints, task | Full-load + CDC from SAP database, table transformation rules, checkpoint/retry |
-| **dynamodb** | Tables (rules, connections, WebSocket) | PAY_PER_REQUEST billing, `CategoryIndex` GSI, encryption-at-rest, PITR |
-| **vpc-endpoints** | PrivateLink endpoints | `bedrock-runtime`, `bedrock-agent-runtime` — zero internet egress for GenAI |
-| **airgapped-llm** | EC2 `g5.2xlarge` GPU instance | Private subnet, no internet, Llama 3 self-hosted — for classified workloads |
-| **entity-resolution** | Entity Resolution matching workflow | ML-powered BP matching with S3 input/output schema mapping |
-| **websocket-telemetry** | API Gateway (WebSocket), Lambda, DynamoDB | Real-time log broadcasting to React UI, connection tracking |
+| **vnet** | VNet, private subnets (2 AZs), route tables, NAT gateway | VPN/ExpressRoute ready for SAP on-prem connectivity |
+| **functions** | 21 Azure Functions with Managed Identity | Environment variables for telemetry, secrets, Cosmos DB, Blob Storage |
+| **durable-functions** | Orchestration (17-stage pipeline) | Sequential stage execution with `Catch → Rollback Manager` error chains |
+| **blob-staging** | Blob Storage container | Versioned, encrypted — stores extraction artifacts, checkpoints, reports |
+| **monitoring** | Application Insights + Log Analytics dashboard (4 widgets), Event Grid topic | Pipeline execution metrics, error alerting, log retention policy |
+| **dms** | Azure Data Factory replication instance, endpoints, task | Full-load + CDC from SAP database, table transformation rules, checkpoint/retry |
+| **cosmosdb** | Cosmos DB containers (rules, connections, WebSocket) | Serverless billing, indexing policy, encryption-at-rest, continuous backup |
+| **private-endpoints** | Private Endpoints | Claude API endpoint — zero internet egress for GenAI |
+| **airgapped-llm** | GPU VM instance | Private subnet, no internet, Llama 3 self-hosted — for classified workloads |
+| **data-factory** | Data Factory matching workflow | ML-powered BP matching with Blob Storage input/output schema mapping |
+| **websocket-telemetry** | Azure Web PubSub, Azure Function, Cosmos DB | Real-time log broadcasting to React UI, connection tracking |
 
 **Deployment:**
 ```bash
@@ -706,9 +706,9 @@ terraform init && terraform plan && terraform apply
 
 # Structured Telemetry & Real-Time Monitoring
 
-### Event Schema (All 21 Lambdas)
+### Event Schema (All 21 Functions)
 
-Every Lambda emits structured JSON events via `log_stage_event()`:
+Every Function emits structured JSON events via `log_stage_event()`:
 
 ```json
 {
@@ -723,11 +723,11 @@ Every Lambda emits structured JSON events via `log_stage_event()`:
 ```
 
 ### Dual Delivery
-1. **CloudWatch Logs** — Always persisted (durable retention, alerting, compliance)
-2. **WebSocket Broadcast** — API Gateway Management API posts to all connected React clients (real-time dashboard)
+1. **Application Insights + Log Analytics** — Always persisted (durable retention, alerting, compliance)
+2. **WebSocket Broadcast** — Azure Web PubSub posts to all connected React clients (real-time dashboard)
 
 ### Connection Management
-- DynamoDB table tracks active WebSocket connection IDs
+- Cosmos DB container tracks active WebSocket connection IDs
 - Stale connections (GoneException) are automatically cleaned up
 - Telemetry failures never break the pipeline (best-effort delivery)
 
@@ -735,7 +735,7 @@ Every Lambda emits structured JSON events via `log_stage_event()`:
 
 # Automated Rollback — Full Post-Conversion Reversal
 
-The **Rollback Manager** Lambda provides complete automated reversal capability. It is chained to every stage via Step Functions `Catch` blocks — if any stage fails, rollback is triggered automatically.
+The **Rollback Manager** Function provides complete automated reversal capability. It is chained to every stage via Durable Functions `Catch` blocks — if any stage fails, rollback is triggered automatically.
 
 **BAPIs Called for Reversal:**
 
@@ -750,7 +750,7 @@ The **Rollback Manager** Lambda provides complete automated reversal capability.
 | RFC destinations | Destination removal |
 | IDoc partners | Partner profile deletion |
 
-S3 checkpoints created at the Pre-Conversion Gate (Stage 9) enable full state recovery.
+Blob Storage checkpoints created at the Pre-Conversion Gate (Stage 9) enable full state recovery.
 
 ---
 
@@ -814,7 +814,7 @@ Color scheme: Navy (#0f172a), Blue (#3b82f6), Cyan (#06b6d4), Green (#10b981), A
 
 **35 automated tests** in `tests/test_execution_stages.py`:
 
-- Tests mock PyRFC and boto3 using `MockRFCConnection`
+- Tests mock PyRFC and Azure SDK using `MockRFCConnection`
 - Validates every stage handler's output structure and data integrity
 - Confirms pipeline sequencing and error handling
 - Validates GO-LIVE scorecard calculation logic
@@ -872,7 +872,7 @@ All 35 tests passing as of the latest run.
 | Metric | Value |
 |--------|-------|
 | **Pipeline Stages** | **17 across 5 SAP Activate phases** |
-| **Lambda Functions** | **21** (17 stages + 4 support) |
+| **Azure Functions** | **21** (17 stages + 4 support) |
 | **Terraform Modules** | **11** |
 | **Pipeline Execution Time** | **72.9 seconds** (all 17 stages) |
 | **GO-LIVE Grade** | **A (100%)** |
@@ -908,7 +908,7 @@ All 35 tests passing as of the latest run.
 
 # Execution Modes — How to Run
 
-### Mode 1: Local Testing (No AWS, No SAP)
+### Mode 1: Local Testing (No Azure, No SAP)
 
 ```bash
 pip install reportlab
@@ -918,7 +918,7 @@ python run_local_pipeline.py
 # Duration: ~70 seconds
 ```
 
-Uses `MockRFCConnection` and `mock_data_generator.py` — no SAP system or AWS account required.
+Uses `MockRFCConnection` and `mock_data_generator.py` — no SAP system or Azure account required.
 
 ### Mode 2: Web UI + API Server
 
@@ -934,28 +934,28 @@ cd frontend && npm install && npm run dev    # Port 3000
 
 3-button pipeline control: Assess → Convert → Complete. Real-time log streaming via WebSocket.
 
-### Mode 3: AWS Production Deployment
+### Mode 3: Azure Production Deployment
 
 ```bash
-# Step 1: Build PyRFC Lambda layer (requires SAP NW RFC SDK)
+# Step 1: Build PyRFC container layer (requires SAP NW RFC SDK)
 scripts/setup-pyrfc.sh
 
 # Step 2: Deploy infrastructure
 cd terraform/environments/dev
 terraform init && terraform plan && terraform apply
 
-# Step 3: Deploy Lambda functions
+# Step 3: Deploy Azure Functions
 scripts/deploy.sh
 ```
 
 **Prerequisites for production:**
 1. SAP NW RFC SDK license (from SAP — proprietary, not open source)
-2. PyRFC Lambda layer built with the SDK
+2. PyRFC container layer built with the SDK
 3. Live SAP ECC system with RFC user credentials
 4. Target S/4HANA system with RFC connectivity
-5. AWS account with credentials
-6. SAP system credentials stored in AWS Secrets Manager
-7. VPN or Direct Connect to SAP on-premise systems
+5. Azure subscription with credentials
+6. SAP system credentials stored in Azure Key Vault
+7. VPN or ExpressRoute to SAP on-premise systems
 
 ### Mode 4: 10x Scale Testing
 
@@ -989,9 +989,9 @@ python pdf_report_generator.py <path-to-report.json>
 | 130+ Country Localization Rules | ✅ Real | 15+ countries with regulatory compliance mapping |
 | 85-Check GO-LIVE Scorecard | ✅ Real | 7-dimension validation with grading system |
 | 45+ T-code → Fiori Mappings | ✅ Real | Process mining across 9 SAP modules |
-| All 21 Lambda handler RFC/BAPI code | ✅ Real | Actual SAP function module calls via PyRFC |
-| Step Functions state machine definition | ✅ Real | 17-stage pipeline with rollback error chaining |
-| 11 Terraform modules | ✅ Real | Production-ready IaC for AWS deployment |
+| All 21 Function handler RFC/BAPI code | ✅ Real | Actual SAP function module calls via PyRFC |
+| Durable Functions state machine definition | ✅ Real | 17-stage pipeline with rollback error chaining |
+| 11 Terraform modules | ✅ Real | Production-ready IaC for Azure deployment |
 | React dashboard (6 pages) | ✅ Real | Fully functional with WebSocket telemetry |
 | API server (JWT + API key auth) | ✅ Real | REST API with pipeline threading |
 | PDF report generator | ✅ Real | Branded 6-section reports |
@@ -1002,14 +1002,14 @@ python pdf_report_generator.py <path-to-report.json>
 
 | Requirement | Why It's Needed | Provided |
 |-------------|----------------|----------|
-| SAP NW RFC SDK | Commercial license from SAP for PyRFC connectivity | `scripts/setup-pyrfc.sh` builds the Lambda layer |
+| SAP NW RFC SDK | Commercial license from SAP for PyRFC connectivity | `scripts/setup-pyrfc.sh` builds the container layer |
 | Live SAP ECC System | Source system for migration | RFC connection parameters configurable |
 | Target S/4HANA System | Destination for converted system | RFC/OData connection configurable |
-| AWS Account | Infrastructure hosting | Terraform modules deploy everything |
-| AWS Secrets Manager Setup | SAP credentials storage | Environment variable references in Lambda handlers |
-| VPN/Direct Connect | Network path to on-premise SAP | VPC module includes VPN/DX configuration |
-| Amazon Bedrock Access | GenAI code analysis (optional — falls back to air-gapped LLM or pure AST) | PrivateLink endpoint module included |
-| DMS Replication Task | Database replication for cutover | DMS module provisions the infrastructure |
+| Azure Subscription | Infrastructure hosting | Terraform modules deploy everything |
+| Azure Key Vault Setup | SAP credentials storage | Environment variable references in Function handlers |
+| VPN/ExpressRoute | Network path to on-premise SAP | VNet module includes VPN/ExpressRoute configuration |
+| Anthropic Claude Opus 4.6 Access | GenAI code analysis (optional — falls back to air-gapped LLM or pure AST) | Private Endpoint module included |
+| Azure Data Factory Replication Task | Database replication for cutover | Azure Data Factory module provisions the infrastructure |
 
 ---
 
@@ -1024,7 +1024,7 @@ python pdf_report_generator.py <path-to-report.json>
 | Weeks of manual readiness checks | Automated Maintenance Planner, Readiness Check, SI-Check | **Pre-check effort reduced by 95%** |
 | Manual SUM/DMO monitoring | Automated orchestration with real-time monitoring | **Conversion window risk reduced** |
 | Manual post-conversion validation | FINS reconciliation + 85-check scorecard | **Post-conversion quality assured** |
-| No viable rollback path | Automated BAPI-based rollback with S3 checkpoints | **Zero-risk execution** |
+| No viable rollback path | Automated BAPI-based rollback with Blob Storage checkpoints | **Zero-risk execution** |
 | Manual test creation (weeks) | Automated DITL Cypress generation with Fiori selectors | **Testing effort reduced by 90%** |
 | Black-box migration windows | Real-time WebSocket telemetry dashboard | **Full stakeholder visibility** |
 | Country rules require specialists | 15+ countries with 130+ rules built-in | **Localization out-of-the-box** |
@@ -1040,16 +1040,16 @@ Wraps SAP's mandatory tools (SUM/DMO, Maintenance Planner, Readiness Check, FINS
 A 4,200-line compiler (lexer → parser → AST → transformer → code generator) with 29 semantic rewrite rules and 60+ AST node types. This is compiler engineering applied to migration.
 
 **3. Deterministic First, GenAI When Needed**
-AST transformations run first (fast, predictable, auditable). GenAI (Bedrock Claude 3 Sonnet or air-gapped Llama 3) is invoked only for genuinely complex constructs — with PII scrubbing before any LLM dispatch.
+AST transformations run first (fast, predictable, auditable). GenAI (Anthropic Claude Opus 4.6 or air-gapped Llama 3) is invoked only for genuinely complex constructs — with PII scrubbing before any LLM dispatch.
 
 **4. Production Code with Live SAP RFC/BAPI Calls**
 Every handler contains real `pyrfc.Connection` calls to real SAP function modules. Not stubs. Not simulations. Working code that talks to live SAP when PyRFC is available, with graceful mock fallback for development.
 
 **5. Full Automated Rollback**
-BAPI-based reversal of financial documents, transport requests, Business Partners, material documents, configurations, roles, RFC destinations, and IDoc partners — chained to every Step Functions stage via error handlers.
+BAPI-based reversal of financial documents, transport requests, Business Partners, material documents, configurations, roles, RFC destinations, and IDoc partners — chained to every Durable Functions stage via error handlers.
 
 **6. Enterprise Security by Design**
-VPC-isolated execution, PrivateLink to Bedrock (zero internet egress), air-gapped LLM option, PII data scrubbing, JWT + API key authentication, SOX-compliant audit logging, CloudWatch telemetry.
+VNet-isolated execution, Private Endpoint to Claude API (zero internet egress), air-gapped LLM option, PII data scrubbing, JWT + API key authentication, SOX-compliant audit logging, Application Insights telemetry.
 
 **7. One Tool — Complete Coverage**
 Not a code scanner or a data migration tool — a complete orchestration engine covering assessment through go-live in one 17-stage, 5-phase pipeline with 85-check validation.
@@ -1058,6 +1058,6 @@ Not a code scanner or a data migration tool — a complete orchestration engine 
 
 <p align="center">
   <strong>Migrate4HANA — One tool. Every phase. SAP-supported results.</strong><br/>
-  <em>17 Stages. 5 SAP Activate Phases. 21 Lambda Functions. 85 Validation Checks. 130+ Country Rules.</em><br/>
+  <em>17 Stages. 5 SAP Activate Phases. 21 Azure Functions. 85 Validation Checks. 130+ Country Rules.</em><br/>
   <em>98.6% Auto-Fix Rate. Zero-Variance Reconciliation. Grade A GO-LIVE.</em>
 </p>

@@ -23,24 +23,24 @@ migrate4hana/
 ├── pdf_report_generator.py          # Existing PDF report (11 sections, ReportLab)
 ├── api_server.py                    # FastAPI server (15 endpoints, JWT auth)
 ├── lambda/
-│   ├── discovery-engine/            # Stage 1 — ECC system scanning [ECS Fargate]
+│   ├── discovery-engine/            # Stage 1 — ECC system scanning [Azure Container Apps]
 │   ├── maint-planner-integrator/    # Stage 2 — Maintenance Planner integration
 │   ├── readiness-check-runner/      # Stage 3 — SAP Readiness Check automation
 │   ├── si-check-executor/           # Stage 4 — Simplification Item Check
-│   ├── code-analyzer/               # Stage 5 — AST parser + ATC + GenAI [ECS Fargate]
+│   ├── code-analyzer/               # Stage 5 — AST parser + ATC + GenAI [Azure Container Apps]
 │   │   ├── abap_ast_engine.py       #   6,400-line AST compiler (160 rules)
 │   │   ├── abap_analyzer.py         #   ABAP analysis orchestrator
-│   │   ├── genai_router.py          #   Dual-path GenAI (Bedrock / Air-Gapped)
+│   │   ├── genai_router.py          #   Dual-path GenAI (Claude / Air-Gapped)
 │   │   ├── data_scrubber.py         #   PII masking before LLM dispatch
 │   │   ├── country_rules.py         #   Country-specific rule engine (535 rules, 57 countries)
 │   │   └── fixers/                  #   Deep Knowledge Engine + Level 1-3 fixers
 │   ├── cvi-bp-preparer/             # Stage 6 — CVI/BP preparation + dedup
-│   ├── data-assessor/               # Stage 7 — AWS DMS CDC data assessment
+│   ├── data-assessor/               # Stage 7 — Azure Data Factory CDC data assessment
 │   ├── config-integration-assessor/ # Stage 8 — Config + integration analysis
 │   ├── pre-conversion-gate/         # Stage 9 — GO/NO-GO gate
 │   ├── sum-dmo-monitor/             # Stage 10 — SUM/DMO orchestration
 │   ├── spau-spdd-code-deployer/     # Stage 11 — SPAU/SPDD + code deployment
-│   ├── fins-migration-executor/     # Stage 12 — FINS migration [ECS Fargate]
+│   ├── fins-migration-executor/     # Stage 12 — FINS migration [Azure Container Apps]
 │   ├── matledger-config-applier/    # Stage 13 — Material Ledger + config
 │   ├── roles-integrations-prov/     # Stage 14 — Roles + integrations
 │   ├── bpt-test-executor/           # Stage 15 — Business process testing
@@ -54,13 +54,13 @@ migrate4hana/
 │   ├── test-generator/              # QA — DITL test case generation
 │   └── utils/
 │       ├── logger.py                # Structured logger + WebSocket broadcast
-│       ├── rule_router.py           # DynamoDB rule routing
+│       ├── rule_router.py           # Cosmos DB rule routing
 │       ├── rfc_pool.py              # Thread-safe RFC pool + timeouts + pagination
-│       └── validation.py            # Shared Lambda event validation
+│       └── validation.py            # Shared Function event validation
 ├── mock-ecc/                        # Mock SAP ECC data generator
 ├── tests/                           # 114 tests (unit + integration)
 └── terraform/modules/
-    ├── airgapped-llm/               # Air-gapped GPU EC2 (g5.2xlarge)
+    ├── airgapped-llm/               # Air-gapped GPU Azure VM (Standard_NC8as_T4_v3)
     └── ... (13 other modules)
 ```
 
@@ -73,9 +73,9 @@ The tool ALREADY does all of this. The report must show the RESULTS of each:
 | **Custom code remediation** | `abap_ast_engine.py` — 6,400-line AST compiler with 160 transform rules (AST-001→AST-160) | For each ABAP program: the original code, every issue detected, the transformed S/4HANA-compatible code, rule ID applied |
 | **Deep Knowledge Engine** | `fixers/` — 249 ECC→S/4HANA table transformation rules | Semantic rewrites: BSEG→ACDOCA with `RLDNR='0L'` and `KOART` filters, KNA1→BUT000, LFA1→BUT000, KONV→PRCD_ELEMENTS, MKPF/MSEG→MATDOC |
 | **ATC integration** | `/SDF/ATC_RUN_API` with S/4HANA check variant | Compatibility findings per program |
-| **GenAI escalation** | `genai_router.py` — Bedrock/Air-Gapped dual path | Complex cases the AST couldn't handle deterministically, with AI-generated remediation |
+| **GenAI escalation** | `genai_router.py` — Claude/Air-Gapped dual path | Complex cases the AST couldn't handle deterministically, with AI-generated remediation |
 | **BP deduplication** | `bp_deduplication_engine.py` — Levenshtein + Soundex + weighted scoring | Duplicate clusters found, merge recommendations, crosswalk tables (KNA1→BUT000, LFA1→BUT000), number range resolutions |
-| **Data transformation mapping** | `data-assessor` — DMS CDC planning | BSEG/BKPF→ACDOCA field mapping, finance document transformation plan, custom table mapping |
+| **Data transformation mapping** | `data-assessor` — Data Factory CDC planning | BSEG/BKPF→ACDOCA field mapping, finance document transformation plan, custom table mapping |
 | **Config extraction & mapping** | `config-integration-assessor` — 50+ SPRO tables | Full configuration extracted from ECC with transformation rules for S/4HANA target |
 | **Country compliance** | `country_rules.py` — 535 rules across 57 countries | Tax codes, regulatory mappings, depreciation keys, withholding tax, e-invoicing rules applied per company code |
 | **Role migration** | `roles-integrations-prov` — PFCG→Fiori mapping | Each ECC role mapped to S/4HANA role structure with Fiori catalog assignments (611 T-code→Fiori mappings) |
@@ -247,10 +247,10 @@ This is the most important section. It shows WHAT THE TOOL ACTUALLY FIXED.
   - Estimated manual effort per program (hours)
 
 - **GenAI Escalation Results** (1-2 pages):
-  Programs that were escalated from AST engine to Bedrock/Local LLM:
+  Programs that were escalated from AST engine to Claude/Local LLM:
   - Program name
   - Why AST escalated (fewer than AST_CHANGE_THRESHOLD changes found)
-  - GenAI backend used (Bedrock/Air-Gapped/None)
+  - GenAI backend used (Claude/Air-Gapped/None)
   - Additional findings from GenAI
   - Remediation applied
 
@@ -369,7 +369,7 @@ This section explains what Stages 10-17 would do when the client provisions S/4H
 - **Stage 13: Config Application** — The extracted configuration (Section 5) will be applied to S/4HANA
 - **Stage 14: Role Provisioning** — The mapped roles (Section 6) will be created in S/4HANA
 - **Stage 15: Automated Testing** — The generated test scripts (Section 8) will execute against S/4HANA
-- **Stage 16: Go-Live Cutover** — Automated cutover sequence with DMS finalization
+- **Stage 16: Go-Live Cutover** — Automated cutover sequence with Data Factory finalization
 - **Stage 17: Validation** — 85-check scorecard across 7 dimensions
 
 - **Remaining Manual Work Estimate**:
@@ -476,7 +476,7 @@ Create this new handler that:
 
 3. **`lambda/utils/validation.py`**: Add `ecc_full` to accepted modes list
 
-4. **Step Functions comment**: Add a code comment in `run_local_pipeline.py` documenting how to wire `ecc_full` into Step Functions (Stages 1-8 → 9 → 9.5 → 9.6 → End)
+4. **Durable Functions comment**: Add a code comment in `run_local_pipeline.py` documenting how to wire `ecc_full` into Azure Durable Functions (Stages 1-8 → 9 → 9.5 → 9.6 → End)
 
 ### CHANGE 5: Update README.md
 

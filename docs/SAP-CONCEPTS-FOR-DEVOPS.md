@@ -52,8 +52,8 @@ a major version upgrade with breaking changes to the data model.
 | SAP Concept | DevOps Equivalent | Details |
 |---|---|---|
 | RFC (Remote Function Call) | gRPC / REST call | SAP's native protocol for system-to-system calls |
-| IDoc (Intermediate Document) | Message queue message (SQS/SNS) | Asynchronous document exchange format |
-| PI/PO | API Gateway + Message broker | SAP's middleware for routing integrations |
+| IDoc (Intermediate Document) | Message queue message (Service Bus / Web PubSub) | Asynchronous document exchange format |
+| PI/PO | Azure API Management (APIM) + Message broker | SAP's middleware for routing integrations |
 | Cloud Integration (CPI) | Modern API gateway | Cloud-native replacement for PI/PO |
 | OData Service | REST API | Standard HTTP API, auto-generated from CDS views |
 
@@ -61,11 +61,11 @@ a major version upgrade with breaking changes to the data model.
 
 | SAP Concept | DevOps Equivalent | Details |
 |---|---|---|
-| PFCG Role | IAM Role | Bundle of permissions assigned to users |
-| Authorization Object | IAM Action | e.g., "S_TCODE" controls which transactions you can run |
-| Authorization Field | IAM Resource/Condition | Limits within an auth object (e.g., which company codes) |
-| Composite Role | IAM Role with attached policies | A role containing other roles |
-| User Master Record (SU01) | IAM User | The user account with all its role assignments |
+| PFCG Role | Azure RBAC Role | Bundle of permissions assigned to users |
+| Authorization Object | RBAC Action | e.g., "S_TCODE" controls which transactions you can run |
+| Authorization Field | RBAC Resource/Condition | Limits within an auth object (e.g., which company codes) |
+| Composite Role | Managed Identity with role assignments | A role containing other roles |
+| User Master Record (SU01) | Azure AD User | The user account with all its role assignments |
 | Single Sign-On (SAML) | SSO (same thing) | SAP supports SAML 2.0, OAuth 2.0 |
 
 ### UI
@@ -113,31 +113,31 @@ move to Fiori apps. This means:
 - Users get a web browser instead of SAP GUI
 - Custom reports need Fiori equivalents
 
-## AWS Infrastructure for SAP
+## Azure Infrastructure for SAP
 
-SAP on AWS is a well-established pattern. Here's what you need:
+SAP on Azure is a well-established pattern. Here's what you need:
 
 ### Compute
-- **EC2 x2idn instances** — SAP HANA certified, high memory
-- **x2idn.16xlarge** — 256 GB RAM, good for mid-size systems
-- **x2idn.32xlarge** — 512 GB RAM, for larger systems
-- **u-6tb1.metal** — 6 TB RAM, for the biggest enterprise systems
+- **Azure VM Mv2-series instances** — SAP HANA certified, high memory
+- **Standard_M128s (128 vCPU, 256 GB)** — 256 GB RAM, good for mid-size systems
+- **Standard_M208ms_v2 (208 vCPU, 512 GB)** — 512 GB RAM, for larger systems
+- **Standard_M416ms_v2 (6 TB RAM)** — 6 TB RAM, for the biggest enterprise systems
 
 ### Storage
-- **EBS io2 Block Express** — For HANA data volume (high IOPS)
-- **EBS gp3** — For HANA log volume and OS
-- **S3** — For backups and data staging
+- **Azure Ultra Disk** — For HANA data volume (high IOPS)
+- **Azure Premium SSD v2** — For HANA log volume and OS
+- **Blob Storage** — For backups and data staging
 
 ### Network
-- **VPC** with private subnets (SAP should never be public)
-- **VPN Gateway** or **Direct Connect** — To reach on-prem ECC
-- **Transit Gateway** — If connecting multiple VPCs
+- **VNet** with private subnets (SAP should never be public)
+- **Azure VPN Gateway** or **ExpressRoute** — To reach on-prem ECC
+- **Azure Virtual WAN** — If connecting multiple VNets
 
 ### Management
-- **AWS Launch Wizard for SAP** — Automates initial deployment
-- **AWS Systems Manager** — For patching and maintenance
-- **CloudWatch** — Monitoring (plus SAP Solution Manager)
-- **AWS Backint Agent** — Native HANA backup to S3
+- **Azure Center for SAP Solutions** — Automates initial deployment
+- **Azure Update Manager** — For patching and maintenance
+- **Azure Monitor** — Monitoring (plus SAP Solution Manager)
+- **Azure Backup for SAP HANA** — Native HANA backup to Blob Storage
 
 ## Key SAP Transactions You'll See Referenced
 
@@ -147,8 +147,8 @@ SAP on AWS is a well-established pattern. Here's what you need:
 | SE11 | Data dictionary editor | Schema editor |
 | SM59 | RFC destination config | Service endpoint config |
 | SM37 | Background job monitor | Cron job monitor |
-| SU01 | User management | IAM user management |
-| PFCG | Role management | IAM role editor |
+| SU01 | User management | Azure AD user management |
+| PFCG | Role management | Azure RBAC role editor |
 | STMS | Transport Management | Deployment pipeline |
 | ST22 | Runtime error dumps | Error log / crash dumps |
 | SM21 | System log | Application log |
