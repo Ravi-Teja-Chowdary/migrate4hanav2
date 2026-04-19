@@ -23,7 +23,6 @@ import json
 import os
 import sys
 import logging
-import boto3
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
@@ -31,13 +30,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'd
 from logger import log_stage_event
 from validation import validate_event
 from bp_crosswalk_engine import execute_repointing
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
+from db_client import get_table
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+STAGING_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 IDEMPOTENCY_TABLE = os.environ.get("IDEMPOTENCY_TABLE", "migrate4hana-idempotency")
 
 # Commit checkpoint every N records
@@ -51,23 +51,23 @@ FINS_BASE_POLL_INTERVAL = int(os.environ.get("FINS_POLL_INTERVAL", "30"))  # sec
 # =============================================================================
 # IDEMPOTENCY HELPER
 # =============================================================================
-_dynamodb_table = None
+_cosmos_table = None
 
 
 def _get_idempotency_table():
-    """Lazy-init DynamoDB table to avoid import-time AWS calls."""
-    global _dynamodb_table
-    if _dynamodb_table is None:
-        _dynamodb_table = boto3.resource("dynamodb").Table(IDEMPOTENCY_TABLE)
-    return _dynamodb_table
+    """Lazy-init Cosmos DB table to avoid import-time calls."""
+    global _cosmos_table
+    if _cosmos_table is None:
+        _cosmos_table = get_table(IDEMPOTENCY_TABLE)
+    return _cosmos_table
 
 
 def _check_idempotency(run_id: str, item_key: str) -> bool:
     """Return True if this item was already processed (skip it)."""
     try:
         table = _get_idempotency_table()
-        resp = table.get_item(Key={"pk": f"{run_id}#dataload", "sk": item_key})
-        return "Item" in resp
+        resp = table.get_item({"pk": f"{run_id}#dataload", "sk": item_key})
+        return resp.get("Item") is not None
     except Exception:
         return False
 
@@ -76,7 +76,7 @@ def _mark_processed(run_id: str, item_key: str, result_status: str):
     """Record that this item was successfully processed."""
     try:
         table = _get_idempotency_table()
-        table.put_item(Item={
+        table.put_item({
             "pk": f"{run_id}#dataload",
             "sk": item_key,
             "status": result_status,
@@ -277,7 +277,7 @@ def generate_reconciliation_report(connection, source_data):
 
       1. Read ACDOCA in chunks by Fiscal Year/Period via read_table_chunked().
       2. Aggregate financial sums per chunk in constant memory.
-      3. Store period-level aggregated totals to a temp DynamoDB table.
+      3. Store period-level aggregated totals to a temp Cosmos DB container.
       4. Perform penny-perfect comparison exclusively on the aggregated totals.
 
     Returns:
@@ -438,14 +438,14 @@ def _persist_aggregated_totals(acdoca_balances, source_data):
         "timestamp": datetime.utcnow().isoformat(),
     }
     try:
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/reconciliation-aggregated-totals.json",
-            Body=json.dumps(totals_payload, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/execution/reconciliation-aggregated-totals.json",
+            json.dumps(totals_payload, indent=2, default=str),
+            content_type="application/json",
         )
     except Exception as e:
-        logger.warning(f"Failed to persist aggregated totals to S3: {e}")
+        logger.warning(f"Failed to persist aggregated totals: {e}")
 
 
 # =============================================================================
@@ -810,11 +810,11 @@ def load_staged_data(run_id, data_type):
     if not key:
         return []
     try:
-        response = s3.get_object(Bucket=STAGING_BUCKET, Key=key)
+        response = get_object(STAGING_CONTAINER, key)
         body = response["Body"] if isinstance(response["Body"], str) else response["Body"].read().decode("utf-8")
         return json.loads(body)
     except Exception as e:
-        logger.warning(f"Could not load {data_type} from S3: {e}")
+        logger.warning(f"Could not load {data_type} from storage: {e}")
         return []
 
 
@@ -825,8 +825,7 @@ def _get_s4_connection(dry_run):
     try:
         from pyrfc import Connection
         s4_params = json.loads(
-            boto3.client("secretsmanager")
-            .get_secret_value(SecretId=os.environ.get("S4_SECRETS_ARN", os.environ.get("SECRETS_ARN", "")))
+            get_secret_value(os.environ.get("S4_SECRET_NAME", os.environ.get("ECC_SECRET_NAME", "s4hana-credentials")))
             ["SecretString"]
         )
         return Connection(**s4_params), True
@@ -980,12 +979,12 @@ def _handle_reconciliation(event, run_id, dry_run, start_time):
         }
         report["material_ledger"] = {"status": "simulated"}
 
-    # Save reconciliation report to S3
-    s3.put_object(
-        Bucket=STAGING_BUCKET,
-        Key=f"migrations/{run_id}/execution/reconciliation-report.json",
-        Body=json.dumps(report, indent=2, default=str),
-        ContentType="application/json",
+    # Save reconciliation report to storage
+    put_object(
+        STAGING_CONTAINER,
+        f"migrations/{run_id}/execution/reconciliation-report.json",
+        json.dumps(report, indent=2, default=str),
+        content_type="application/json",
     )
 
     duration_ms = (__import__('time').time() - start_time) * 1000
@@ -1011,7 +1010,7 @@ def lambda_handler(event, context):
     Supports two invocation modes:
     1. Full load (stage=data-loader): loads all data types sequentially
     2. Stream load (stream_type=finance|business_partner|...): loads one type
-       Used by Step Functions Distributed Map for parallel fanout.
+       Used by Durable Functions Distributed Map for parallel fanout.
     3. Reconciliation (stage=reconciliation): penny-perfect GL balance check
     """
     logger.info("Data Loader started")
@@ -1069,8 +1068,7 @@ def lambda_handler(event, context):
             try:
                 from pyrfc import Connection
                 s4_params = json.loads(
-                    boto3.client("secretsmanager")
-                    .get_secret_value(SecretId=os.environ.get("S4_SECRETS_ARN", os.environ.get("SECRETS_ARN", "")))
+                    get_secret_value(os.environ.get("S4_SECRET_NAME", os.environ.get("ECC_SECRET_NAME", "s4hana-credentials")))
                     ["SecretString"]
                 )
                 conn = Connection(**s4_params)
@@ -1227,12 +1225,12 @@ def lambda_handler(event, context):
             "success_rate": f"{total_loaded / max(total_loaded + total_failed, 1) * 100:.1f}%",
         }
 
-        # Save to S3
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/data-loader.json",
-            Body=json.dumps(results, indent=2, default=str),
-            ContentType="application/json",
+        # Save to storage
+        put_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/execution/data-loader.json",
+            json.dumps(results, indent=2, default=str),
+            content_type="application/json",
         )
 
         log_stage_event("data-loader", "Data Loading Complete", "SUCCESS", results.get("summary", {}), (__import__('time').time() - _stage_start) * 1000)

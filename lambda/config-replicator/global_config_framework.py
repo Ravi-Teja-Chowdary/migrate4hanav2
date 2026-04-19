@@ -1,6 +1,6 @@
 """
 global_config_framework.py - Dynamic Localization Rules Engine (Stage 4)
-Replaces hard-coded India-only focus. Queries DynamoDB to apply country-specific
+Replaces hard-coded India-only focus. Queries Cosmos DB to apply country-specific
 SPRO configurations dynamically based on the target Company Code (BUKRS).
 
 Covers 55+ company codes across 50+ countries with comprehensive compliance

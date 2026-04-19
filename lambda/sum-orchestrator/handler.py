@@ -41,23 +41,19 @@ import json
 import os
 import sys
 import logging
-import boto3
 from datetime import datetime
 
 # Structured telemetry logger for real-time UI streaming
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-secrets = boto3.client("secretsmanager")
-sns = boto3.client("sns")
-
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
-SECRETS_ARN = os.environ.get("SECRETS_ARN", "")
-SNS_TOPIC_ARN = os.environ.get("SNS_ALERT_TOPIC_ARN", "")
+STAGING_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
+ECC_SECRET_NAME = os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials")
 
 
 # =============================================================================
@@ -1901,7 +1897,7 @@ def get_sap_connection(override_params=None):
     Establish RFC connection to SAP ECC.
 
     Requires the PyRFC Lambda layer with SAP NW RFC SDK.
-    Connection params come from AWS Secrets Manager.
+    Connection params come from Azure Key Vault.
 
     SAP CONCEPT FOR DEVOPS ENGINEERS:
     - RFC = Remote Function Call — think of it like gRPC to SAP
@@ -1917,11 +1913,11 @@ def get_sap_connection(override_params=None):
         )
         raise
 
-    # Get credentials from Secrets Manager
+    # Get credentials from Key Vault
     if override_params:
         conn_params = override_params
     else:
-        secret_response = secrets.get_secret_value(SecretId=SECRETS_ARN)
+        secret_response = get_secret_value(ECC_SECRET_NAME)
         conn_params = json.loads(secret_response["SecretString"])
 
     connection = Connection(
@@ -3201,7 +3197,6 @@ def prepare_sum_configuration(planning_data):
             "progress_poll_interval_seconds": 30,
             "alert_on_error": True,
             "alert_on_phase_change": True,
-            "sns_topic_arn": SNS_TOPIC_ARN,
         },
         "rollback": {
             "backup_verified": True,
@@ -3381,7 +3376,7 @@ def handle_sum_phase_error(error_info):
     - Blocking: SUM must be reset or the issue requires manual intervention
 
     For known errors, provides specific resolution guidance.
-    Alerts administrators via SNS for all errors.
+    Alerts administrators via Web PubSub for all errors.
 
     Parameters:
         error_info (dict): Error details from SUM log parsing.
@@ -3423,34 +3418,23 @@ def handle_sum_phase_error(error_info):
             "known_error": False,
         }
 
-    # Alert administrators via SNS
-    if SNS_TOPIC_ARN:
-        try:
-            alert_subject = f"SUM Error in phase {phase}: {error_code}"
-            alert_message = (
-                f"SUM/DMO Error Detected\n"
-                f"========================\n"
-                f"Phase: {phase}\n"
-                f"Error Code: {error_code}\n"
-                f"Severity: {classification['severity']}\n"
-                f"Description: {classification['description']}\n"
-                f"Resolution: {classification['resolution']}\n"
-                f"Auto-recoverable: {classification['auto_recoverable']}\n"
-                f"\nTimestamp: {datetime.utcnow().isoformat()}"
-            )
-            sns.publish(
-                TopicArn=SNS_TOPIC_ARN,
-                Subject=alert_subject[:100],  # SNS subject limit
-                Message=alert_message,
-            )
-            classification["alert_sent"] = True
-            logger.info(f"SNS alert sent for SUM error: {error_code}")
-        except Exception as e:
-            logger.warning(f"Failed to send SNS alert: {e}")
-            classification["alert_sent"] = False
-    else:
+    # Alert administrators via logger
+    try:
+        alert_details = {
+            "phase": phase,
+            "error_code": error_code,
+            "severity": classification['severity'],
+            "description": classification['description'],
+            "resolution": classification['resolution'],
+            "auto_recoverable": classification['auto_recoverable'],
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        log_stage_event("sum-orchestrator", "alert", "warning", alert_details)
+        classification["alert_sent"] = True
+        logger.info(f"Alert logged for SUM error: {error_code}")
+    except Exception as e:
+        logger.warning(f"Failed to send alert: {e}")
         classification["alert_sent"] = False
-        logger.warning("SNS_ALERT_TOPIC_ARN not configured — skipping alert")
 
     logger.info(
         f"Error classified: {classification['severity']}, "
@@ -3816,7 +3800,7 @@ def lambda_handler(event, context):
     # for all structural table conversions.                            #
     ####################################################################
 
-    Input (from Step Functions):
+    Input (from Durable Functions):
     {
         "stage": "sum-orchestrator",
         "input": {
@@ -3931,11 +3915,10 @@ def lambda_handler(event, context):
         }
 
         for s3_key, data in artifacts.items():
-            s3.put_object(
-                Bucket=STAGING_BUCKET,
-                Key=s3_key,
-                Body=json.dumps(data, indent=2, default=str),
-                ContentType="application/json",
+            put_object(
+                STAGING_CONTAINER,
+                s3_key,
+                json.dumps(data, indent=2, default=str),
             )
 
         # Build summary

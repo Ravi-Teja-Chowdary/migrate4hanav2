@@ -1,5 +1,5 @@
 """
-Input validation for Lambda handler events.
+Input validation for Function handler events.
 Validates event parameters at system boundaries before processing.
 """
 import re
@@ -15,10 +15,10 @@ _RUN_ID_RE = re.compile(r"^[a-zA-Z0-9\-_]{1,64}$")
 
 def validate_event(event: dict, required_fields: list = None) -> list:
     """
-    Validate a Lambda handler event dict.
+    Validate a Function handler event dict.
 
     Args:
-        event: The incoming Step Functions event.
+        event: The incoming Durable Functions event.
         required_fields: List of dot-path field names that must be present,
                          e.g. ["metadata.run_id", "input.ecc_client"].
 

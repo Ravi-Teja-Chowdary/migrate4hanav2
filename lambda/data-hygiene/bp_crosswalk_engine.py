@@ -577,7 +577,7 @@ def persist_crosswalk_to_dynamodb(
     crosswalk: List[Dict],
 ) -> int:
     """
-    Persist cross-walk entries to DynamoDB for real-time lookup during
+    Persist cross-walk entries to Cosmos DB for real-time lookup during
     data loading (Stage 9) and post-migration validation (Stage 13).
 
     Table schema:
@@ -613,9 +613,9 @@ def persist_crosswalk_to_dynamodb(
                 batch.put_item(Item=item)
                 written += 1
     except Exception as e:
-        logger.warning(f"DynamoDB crosswalk write failed (non-fatal): {e}")
+        logger.warning(f"Cosmos DB crosswalk write failed (non-fatal): {e}")
 
-    logger.info(f"Cross-walk: {written} entries written to DynamoDB table {table_name}")
+    logger.info(f"Cross-walk: {written} entries written to Cosmos DB container {table_name}")
     return written
 
 

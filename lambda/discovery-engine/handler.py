@@ -17,7 +17,6 @@ import json
 import os
 import sys
 import logging
-import boto3
 from datetime import datetime
 
 # Structured telemetry logger for real-time UI streaming
@@ -25,15 +24,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'u
 from logger import log_stage_event
 from validation import validate_event
 from rfc_pool import read_table_chunked
+from storage_client import put_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-secrets = boto3.client("secretsmanager")
-
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
-SECRETS_ARN = os.environ.get("SECRETS_ARN", "")
+STAGING_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
+ECC_SECRET_NAME = os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials")
 
 
 # =============================================================================
@@ -44,7 +42,7 @@ def get_sap_connection(override_params=None):
     Establish RFC connection to SAP ECC.
 
     Requires the PyRFC Lambda layer with SAP NW RFC SDK.
-    Connection params come from AWS Secrets Manager.
+    Connection params come from Azure Key Vault.
 
     SAP CONCEPT FOR DEVOPS ENGINEERS:
     - RFC = Remote Function Call — think of it like gRPC to SAP
@@ -60,11 +58,11 @@ def get_sap_connection(override_params=None):
         )
         raise
 
-    # Get credentials from Secrets Manager
+    # Get credentials from Key Vault
     if override_params:
         conn_params = override_params
     else:
-        secret_response = secrets.get_secret_value(SecretId=SECRETS_ARN)
+        secret_response = get_secret_value(ECC_SECRET_NAME)
         conn_params = json.loads(secret_response["SecretString"])
 
     connection = Connection(
@@ -587,7 +585,7 @@ def lambda_handler(event, context):
     """
     Main entry point for the Discovery Engine.
 
-    Input (from Step Functions):
+    Input (from Durable Functions):
     {
         "stage": "discovery",
         "input": {
@@ -665,21 +663,21 @@ def lambda_handler(event, context):
             "warnings": len(results["readiness"]["warnings"]),
         }
 
-        # Save full results to S3
+        # Save full results to storage
         s3_key = f"migrations/{run_id}/discovery/full-scan.json"
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=s3_key,
-            Body=json.dumps(results, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_CONTAINER,
+            s3_key,
+            json.dumps(results, indent=2, default=str),
+            content_type="application/json",
         )
 
         # Save summary separately
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/discovery/summary.json",
-            Body=json.dumps(summary, indent=2),
-            ContentType="application/json",
+        put_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/discovery/summary.json",
+            json.dumps(summary, indent=2),
+            content_type="application/json",
         )
 
         logger.info(f"Discovery complete: {json.dumps(summary)}")

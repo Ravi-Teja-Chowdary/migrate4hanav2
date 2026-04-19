@@ -29,21 +29,19 @@ import json
 import os
 import sys
 import logging
-import boto3
 from datetime import datetime
 
 # Structured telemetry logger for real-time UI streaming
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from storage_client import put_object, get_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-secrets = boto3.client("secretsmanager")
-
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
-SECRETS_ARN = os.environ.get("SECRETS_ARN", "")
+STAGING_BUCKET = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
+ECC_SECRET_NAME = os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials")
 
 
 # =============================================================================
@@ -107,7 +105,7 @@ def get_sap_connection(override_params=None):
     Establish RFC connection to SAP ECC.
 
     Requires the PyRFC Lambda layer with SAP NW RFC SDK.
-    Connection params come from AWS Secrets Manager.
+    Connection params come from Azure Key Vault.
 
     SAP CONCEPT FOR DEVOPS ENGINEERS:
     - RFC = Remote Function Call — think of it like gRPC to SAP
@@ -123,11 +121,11 @@ def get_sap_connection(override_params=None):
         )
         raise
 
-    # Get credentials from Secrets Manager
+    # Get credentials from Key Vault
     if override_params:
         conn_params = override_params
     else:
-        secret_response = secrets.get_secret_value(SecretId=SECRETS_ARN)
+        secret_response = get_secret_value(ECC_SECRET_NAME)
         conn_params = json.loads(secret_response["SecretString"])
 
     connection = Connection(
@@ -1127,7 +1125,7 @@ def lambda_handler(event, context):
     """
     Main entry point for the Readiness Check Engine.
 
-    Input (from Step Functions):
+    Input (from Durable Functions):
     {
         "stage": "readiness-check",
         "input": {
@@ -1165,7 +1163,7 @@ def lambda_handler(event, context):
         discovery_data = {}
         if discovery_s3_key:
             try:
-                obj = s3.get_object(Bucket=STAGING_BUCKET, Key=discovery_s3_key)
+                obj = get_object(STAGING_BUCKET, discovery_s3_key)
                 discovery_data = json.loads(obj["Body"].read().decode("utf-8"))
                 logger.info(f"Loaded discovery data from {discovery_s3_key}")
             except Exception as e:
@@ -1208,11 +1206,10 @@ def lambda_handler(event, context):
         }
 
         for s3_key, data in artifacts.items():
-            s3.put_object(
-                Bucket=STAGING_BUCKET,
-                Key=s3_key,
-                Body=json.dumps(data, indent=2, default=str),
-                ContentType="application/json",
+            put_object(
+                STAGING_BUCKET,
+                s3_key,
+                json.dumps(data, indent=2, default=str),
             )
 
         # Build summary

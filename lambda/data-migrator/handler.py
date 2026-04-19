@@ -28,7 +28,6 @@ the actual migration. SUM/DMO is the 'terraform apply' for core data.
 import json
 import os
 import logging
-import boto3
 import sys
 from datetime import datetime
 
@@ -47,13 +46,20 @@ from bp_crosswalk_engine import (
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from storage_client import put_object
+from secrets_client import get_secret_value
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
+STAGING_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "staging")
 
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+
+class _StorageCompat:
+    """Shim so modules expecting a Blob Storage client interface work with Azure storage."""
+    @staticmethod
+    def put_object(*, Bucket, Key, Body, ContentType="application/json"):
+        return put_object(Bucket, Key, Body, content_type=ContentType)
 
 
 # =============================================================================
@@ -337,7 +343,7 @@ def transform_bp_data(customers, vendors):
     # ── Step 6: Persist Cross-Walk to S3 ──
     try:
         crosswalk_keys = persist_crosswalk_to_s3(
-            s3, STAGING_BUCKET,
+            _StorageCompat(), STAGING_CONTAINER,
             os.environ.get("CURRENT_RUN_ID", "manual-run"),
             assignment["crosswalk"],
             repointing,
@@ -640,8 +646,7 @@ def lambda_handler(event, context):
         try:
             from pyrfc import Connection
             conn_params = json.loads(
-                boto3.client("secretsmanager")
-                .get_secret_value(SecretId=os.environ.get("SECRETS_ARN", ""))
+                get_secret_value(os.environ.get("ECC_SECRET_NAME", "sap-ecc-credentials"))
                 ["SecretString"]
             )
             from pyrfc import Connection
@@ -658,10 +663,10 @@ def lambda_handler(event, context):
             bseg = extract_table_data(conn, "BSEG", ["BUKRS","BELNR","GJAHR","BUZEI","KOART","HKONT","DMBTR","WRBTR","SHKZG","KOSTL","PRCTR"])
             acdoca_data = transform_finance_data(bkpf, bseg)
 
-            s3.put_object(
-                Bucket=STAGING_BUCKET,
-                Key=f"migrations/{run_id}/data/finance/acdoca.json",
-                Body=json.dumps(acdoca_data[:10000], default=str),  # Sample
+            put_object(
+                STAGING_CONTAINER,
+                f"migrations/{run_id}/data/finance/acdoca.json",
+                json.dumps(acdoca_data[:10000], default=str),  # Sample
             )
             results["finance"] = {"status": "extracted", "records": len(acdoca_data)}
 
@@ -674,23 +679,23 @@ def lambda_handler(event, context):
             os.environ["CURRENT_RUN_ID"] = run_id
             bp_data = transform_bp_data(customers, vendors)
 
-            s3.put_object(
-                Bucket=STAGING_BUCKET,
-                Key=f"migrations/{run_id}/data/bp-conversion/business_partners.json",
-                Body=json.dumps(bp_data["clean_bp_list"], default=str),
+            put_object(
+                STAGING_CONTAINER,
+                f"migrations/{run_id}/data/bp-conversion/business_partners.json",
+                json.dumps(bp_data["clean_bp_list"], default=str),
             )
             # Persist pre-validation report
-            s3.put_object(
-                Bucket=STAGING_BUCKET,
-                Key=f"migrations/{run_id}/data/bp-conversion/pre-validation-report.json",
-                Body=json.dumps(bp_data["pre_validation"], indent=2, default=str),
-                ContentType="application/json",
+            put_object(
+                STAGING_CONTAINER,
+                f"migrations/{run_id}/data/bp-conversion/pre-validation-report.json",
+                json.dumps(bp_data["pre_validation"], indent=2, default=str),
+                content_type="application/json",
             )
-            s3.put_object(
-                Bucket=STAGING_BUCKET,
-                Key=f"migrations/{run_id}/data/bp-conversion/remediation-report.json",
-                Body=json.dumps(bp_data["remediation_report"], indent=2, default=str),
-                ContentType="application/json",
+            put_object(
+                STAGING_CONTAINER,
+                f"migrations/{run_id}/data/bp-conversion/remediation-report.json",
+                json.dumps(bp_data["remediation_report"], indent=2, default=str),
+                content_type="application/json",
             )
             results["business_partner"] = {
                 "status": "converted",
@@ -775,43 +780,43 @@ def lambda_handler(event, context):
         }
 
         # Save mapping documentation regardless
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/data/table-mappings.json",
-            Body=json.dumps(TABLE_MAPPINGS, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/data/table-mappings.json",
+            json.dumps(TABLE_MAPPINGS, indent=2, default=str),
+            content_type="application/json",
         )
 
         # Save CVI preparation report
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/data/cvi-preparation-report.json",
-            Body=json.dumps(cvi_preparation, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/data/cvi-preparation-report.json",
+            json.dumps(cvi_preparation, indent=2, default=str),
+            content_type="application/json",
         )
 
         # Save finance readiness report
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/data/finance-readiness-report.json",
-            Body=json.dumps(finance_readiness, indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/data/finance-readiness-report.json",
+            json.dumps(finance_readiness, indent=2, default=str),
+            content_type="application/json",
         )
 
         # Save data quality report
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/data/data-quality-report.json",
-            Body=json.dumps(results["data_quality_report"], indent=2, default=str),
-            ContentType="application/json",
+        put_object(
+            STAGING_CONTAINER,
+            f"migrations/{run_id}/data/data-quality-report.json",
+            json.dumps(results["data_quality_report"], indent=2, default=str),
+            content_type="application/json",
         )
 
         # Summary
         s3_key = f"migrations/{run_id}/data/assessment-summary.json"
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=s3_key,
-            Body=json.dumps(results, indent=2, default=str),
+        put_object(
+            STAGING_CONTAINER,
+            s3_key,
+            json.dumps(results, indent=2, default=str),
         )
 
         total_records = sum(
