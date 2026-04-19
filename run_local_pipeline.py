@@ -9,11 +9,17 @@ Runs migration stages locally. Supports two modes:
 Other flags:
   --assess-only            Phases 1-2 only (stages 1-8)
   --mode ecc_full          ECC-Only full execution (stages 1-9.6, no S/4HANA)
+  --mode convert           Phase 3 only (stages 9-10, requires S/4HANA)
+  --mode complete          Phases 4-5 only (stages 11-17, requires S/4HANA)
+  --mode full              All 5 phases, 17 stages end-to-end
   --limit N                Fast test: extract only first N programs/customers/vendors
 
 Usage:
     python run_local_pipeline.py --live --mode ecc_full   # Real ECC, full assessment
     python run_local_pipeline.py --live --assess-only     # Real ECC, phases 1-2 only
+    python run_local_pipeline.py --live --mode convert    # Run Phase 3 conversion (S/4HANA)
+    python run_local_pipeline.py --live --mode complete   # Run Phases 4-5 (S/4HANA)
+    python run_local_pipeline.py --live --mode full       # Full end-to-end migration
     python run_local_pipeline.py --live --limit 50        # Real ECC, fast test (50 items)
     python run_local_pipeline.py                          # Mock data, full 17-stage run
 """
@@ -2378,8 +2384,19 @@ def run_stage_9_6_multi_volume_report(pipeline_results, output_dir, company_name
 
 def main():
     assess_only = "--assess-only" in sys.argv
-    ecc_full = "--mode" in sys.argv and "ecc_full" in sys.argv
     live_mode = "--live" in sys.argv
+
+    # Parse --mode argument
+    pipeline_mode = "full"  # default
+    if assess_only:
+        pipeline_mode = "assess"
+    elif "--mode" in sys.argv:
+        mode_idx = sys.argv.index("--mode")
+        if mode_idx + 1 < len(sys.argv):
+            pipeline_mode = sys.argv[mode_idx + 1]
+    ecc_full = pipeline_mode == "ecc_full"
+    convert_only = pipeline_mode == "convert"
+    complete_only = pipeline_mode == "complete"
 
     # Parse --limit N for fast local testing
     fast_limit = 0
@@ -2395,6 +2412,10 @@ def main():
         mode_label = "ECC-ONLY FULL EXECUTION (Phases 1-2 + Completeness + Report)"
     elif assess_only:
         mode_label = "ASSESS ONLY (Phases 1-2, Stages 1-8)"
+    elif convert_only:
+        mode_label = "CONVERT (Phase 3, Stages 9-10)"
+    elif complete_only:
+        mode_label = "COMPLETE (Phases 4-5, Stages 11-17)"
     else:
         mode_label = "FULL (All 5 Phases, 17 Stages)"
 
@@ -2418,6 +2439,12 @@ def main():
         print(f"\n  {C.BOLD}{C.CYAN}Running in ECC-Only Full Execution Mode")
         print(f"  All remediation and transformation executed.")
         print(f"  Stages 10-17 skipped (require S/4HANA target for deployment).{C.END}")
+    elif convert_only:
+        print(f"\n  {C.BOLD}{C.CYAN}Running Phase 3 CONVERSION only (SUM/DMO)")
+        print(f"  Pre-conversion gate (Stage 9) + SUM/DMO conversion (Stage 10).{C.END}")
+    elif complete_only:
+        print(f"\n  {C.BOLD}{C.CYAN}Running Phases 4-5 COMPLETION (Post-conversion + Go-Live)")
+        print(f"  Stages 11-17: Deploy, Data Load, Config, Roles, Integration, Validation, Tests.{C.END}")
 
     start_time = time.time()
 
@@ -2772,56 +2799,61 @@ def main():
 
             phase_times["Phase 3 (REALIZE)"] = time.time() - p3_start
 
-            # =================================================================
-            # PHASE 4: POST-CONVERSION -- Deploy & Validate (Stages 11-14)
-            # =================================================================
-            phase_banner(4, "POST-CONVERSION", "Deploy, Configure & Validate")
-            p4_start = time.time()
+            if convert_only:
+                print(f"\n{'=' * 70}")
+                print(f"  {C.BOLD}{C.YELLOW}  --- CONVERT MODE -- Phase 3 complete. Skipping Phases 4-5. ---{C.END}")
+                print(f"{'=' * 70}")
+            else:
+                # =================================================================
+                # PHASE 4: POST-CONVERSION -- Deploy & Validate (Stages 11-14)
+                # =================================================================
+                phase_banner(4, "POST-CONVERSION", "Deploy, Configure & Validate")
+                p4_start = time.time()
 
-            # Stage 11
-            t11 = time.time()
-            results["code_deploy"] = run_stage_11_code_deploy(conn, results, output_dir)
-            status("T", f"Stage 11 completed in {time.time() - t11:.1f}s", C.DIM)
+                # Stage 11
+                t11 = time.time()
+                results["code_deploy"] = run_stage_11_code_deploy(conn, results, output_dir)
+                status("T", f"Stage 11 completed in {time.time() - t11:.1f}s", C.DIM)
 
-            # Stage 12
-            t12 = time.time()
-            results["data_load"] = run_stage_12_data_load(conn, results, output_dir)
-            status("T", f"Stage 12 completed in {time.time() - t12:.1f}s", C.DIM)
+                # Stage 12
+                t12 = time.time()
+                results["data_load"] = run_stage_12_data_load(conn, results, output_dir)
+                status("T", f"Stage 12 completed in {time.time() - t12:.1f}s", C.DIM)
 
-            # Stage 13
-            t13 = time.time()
-            results["config_apply"] = run_stage_13_config_apply(conn, results, output_dir)
-            status("T", f"Stage 13 completed in {time.time() - t13:.1f}s", C.DIM)
+                # Stage 13
+                t13 = time.time()
+                results["config_apply"] = run_stage_13_config_apply(conn, results, output_dir)
+                status("T", f"Stage 13 completed in {time.time() - t13:.1f}s", C.DIM)
 
-            # Stage 14
-            t14 = time.time()
-            results["role_provision"] = run_stage_14_role_provision(conn, results, output_dir)
-            status("T", f"Stage 14 completed in {time.time() - t14:.1f}s", C.DIM)
+                # Stage 14
+                t14 = time.time()
+                results["role_provision"] = run_stage_14_role_provision(conn, results, output_dir)
+                status("T", f"Stage 14 completed in {time.time() - t14:.1f}s", C.DIM)
 
-            phase_times["Phase 4 (POST-CONVERSION)"] = time.time() - p4_start
+                phase_times["Phase 4 (POST-CONVERSION)"] = time.time() - p4_start
 
-            # =================================================================
-            # PHASE 5: DEPLOY & RUN -- Go-Live (Stages 15-17)
-            # =================================================================
-            phase_banner(5, "DEPLOY & RUN", "Integration, Validation & Go-Live")
-            p5_start = time.time()
+                # =================================================================
+                # PHASE 5: DEPLOY & RUN -- Go-Live (Stages 15-17)
+                # =================================================================
+                phase_banner(5, "DEPLOY & RUN", "Integration, Validation & Go-Live")
+                p5_start = time.time()
 
-            # Stage 15
-            t15 = time.time()
-            results["integration_activate"] = run_stage_15_integration_activate(conn, results, output_dir)
-            status("T", f"Stage 15 completed in {time.time() - t15:.1f}s", C.DIM)
+                # Stage 15
+                t15 = time.time()
+                results["integration_activate"] = run_stage_15_integration_activate(conn, results, output_dir)
+                status("T", f"Stage 15 completed in {time.time() - t15:.1f}s", C.DIM)
 
-            # Stage 16
-            t16 = time.time()
-            results["validation"] = run_stage_16_validate(conn, results, output_dir)
-            status("T", f"Stage 16 completed in {time.time() - t16:.1f}s", C.DIM)
+                # Stage 16
+                t16 = time.time()
+                results["validation"] = run_stage_16_validate(conn, results, output_dir)
+                status("T", f"Stage 16 completed in {time.time() - t16:.1f}s", C.DIM)
 
-            # Stage 17
-            t17 = time.time()
-            results["test_generation"] = run_stage_17_test_generation(conn, results, output_dir)
-            status("T", f"Stage 17 completed in {time.time() - t17:.1f}s", C.DIM)
+                # Stage 17
+                t17 = time.time()
+                results["test_generation"] = run_stage_17_test_generation(conn, results, output_dir)
+                status("T", f"Stage 17 completed in {time.time() - t17:.1f}s", C.DIM)
 
-            phase_times["Phase 5 (DEPLOY & RUN)"] = time.time() - p5_start
+                phase_times["Phase 5 (DEPLOY & RUN)"] = time.time() - p5_start
 
     except Exception as e:
         print(f"\n  {C.RED}X PIPELINE FAILED: {str(e)}{C.END}")
@@ -2836,6 +2868,10 @@ def main():
         banner("ECC ASSESSMENT COMPLETE (Phases 1-2 Only)", C.GREEN)
     elif ecc_full:
         banner("MIGRATE4HANA -- ECC-Only Full Execution Complete", C.GREEN)
+    elif convert_only:
+        banner("CONVERSION COMPLETE (Phases 1-3, Stages 1-10)", C.GREEN)
+    elif complete_only:
+        banner("FULL MIGRATION COMPLETE (All Phases)", C.GREEN)
     else:
         banner("FULL 17-STAGE MIGRATION PIPELINE COMPLETE", C.GREEN)
 
@@ -2883,7 +2919,7 @@ def main():
     print(f"  | Custom Table Rows:  {dm['custom_table_rows']:>8,}                      |")
     print(f"  +-----------------------------------------------------+")
 
-    if not assess_only and not ecc_full:
+    if not assess_only and not ecc_full and not convert_only:
         print(f"\n  {C.BOLD}Execution Summary (Phases 3-5):{C.END}")
         print(f"  +-----------------------------------------------------+")
         cd = results.get("code_deploy", {}).get("results", {}).get("summary", {})
@@ -2921,7 +2957,7 @@ def main():
         json.dump(save_results, f, indent=2, default=str)
 
     # Generate Post-Migration Report (client deliverable)
-    if not assess_only and not ecc_full:
+    if not assess_only and not ecc_full and not convert_only:
         post_report = generate_post_migration_report(results, conn, output_dir, total_time)
         results["post_migration_report"] = post_report
 

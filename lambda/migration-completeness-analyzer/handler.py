@@ -400,7 +400,7 @@ def _count_completed_stages(pipeline_results: dict) -> int:
     )
 
 
-def handler(event, context=None):
+def lambda_handler(event, context=None):
     """Lambda handler entry point for Step Functions integration."""
     pipeline_results = event.get("pipeline_results", event)
     completion_report = analyze_completion(pipeline_results)
@@ -409,3 +409,7 @@ def handler(event, context=None):
         "statusCode": 200,
         "body": completion_report,
     }
+
+
+# Alias for backward compatibility
+handler = lambda_handler

@@ -29,6 +29,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'u
 from abap_ast_engine import process_abap_file
 from data_scrubber import mask_payload_for_infosec
 from rule_router import get_simplification_rules
+from genai_router import route_analysis
 
 from logger import log_stage_event
 
@@ -535,6 +536,7 @@ def lambda_handler(event, context):
         remediated_count = 0
         manual_review_count = 0
         cds_suggestions = []
+        genai_enhanced_count = 0
 
         if has_rfc and discovery.get("programs"):
             # Full analysis — read and analyze each program
@@ -558,6 +560,18 @@ def lambda_handler(event, context):
                     else:
                         if issues:
                             manual_review_count += 1
+
+                    # Escalate to GenAI for deeper semantic analysis
+                    try:
+                        genai_result = route_analysis(source, context={"program": prog["name"]})
+                        if genai_result.get("genai_result"):
+                            genai_enhanced_count += 1
+                            genai_issues = genai_result["genai_result"].get("issues", [])
+                            for gi in genai_issues:
+                                gi["source"] = genai_result["backend_used"]
+                            all_issues.extend(genai_issues)
+                    except Exception as e:
+                        logger.warning(f"GenAI routing skipped for {prog['name']}: {e}")
         else:
             # No RFC — generate estimated analysis from discovery stats
             logger.info("Generating estimated code analysis from discovery stats...")
@@ -645,6 +659,7 @@ def lambda_handler(event, context):
             "auto_remediated": remediated_count,
             "manual_review": manual_review_count,
             "cds_suggestions": len(cds_suggestions),
+            "genai_enhanced": genai_enhanced_count,
             "atc_integration": atc_integration,
             "sap_official_validation": sap_official_validation,
             "atc_findings": len(atc_results),

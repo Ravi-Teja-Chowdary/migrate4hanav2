@@ -28,6 +28,9 @@ RUN dnf install -y python3.11 python3.11-pip python3.11-devel \
     dnf clean all
 
 # Copy and extract SAP NW RFC SDK (from ecs/ directory in build context)
+# NOTE: You must provide the SAP NW RFC SDK zip (nwrfc750P_*.zip) in the ecs/
+# directory before building. Download from SAP Support Portal (SAP Note 2573790).
+# The SDK is required for live RFC connections to SAP ECC/S4HANA.
 COPY ecs/nwrfc750P_*.zip /tmp/
 RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \
     # The SDK extracts into nwrfcsdk/ — flatten if needed

@@ -356,8 +356,8 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False):
 
             if mode == "assess":
                 cmd.append("--assess-only")
-            elif mode == "ecc_full":
-                cmd.extend(["--mode", "ecc_full"])
+            elif mode in ("ecc_full", "convert", "complete", "full"):
+                cmd.extend(["--mode", mode])
 
             _add_progress_step("extraction", "Starting ECC data extraction", "IN_PROGRESS")
 
@@ -492,15 +492,22 @@ def _parse_pipeline_output(line):
 
 def generate_pdf_for_run(run_id):
     run_dir = os.path.join(OUTPUT_DIR, run_id)
+
+    # Check if the final pipeline data is newer than any existing PDF
+    final_path = os.path.join(run_dir, "final-report.json")
+    final_mtime = os.path.getmtime(final_path) if os.path.isfile(final_path) else 0
+
     pdf_path = os.path.join(run_dir, "post-migration-report.pdf")
-    if os.path.isfile(pdf_path):
+    if os.path.isfile(pdf_path) and os.path.getmtime(pdf_path) >= final_mtime:
         return pdf_path
     # Check reports/ subdirectory for multi-volume PDFs
     reports_dir = os.path.join(run_dir, "reports")
     if os.path.isdir(reports_dir):
         pdf_files = sorted(f for f in os.listdir(reports_dir) if f.endswith(".pdf"))
         if pdf_files:
-            return os.path.join(reports_dir, pdf_files[0])
+            first_pdf = os.path.join(reports_dir, pdf_files[0])
+            if os.path.getmtime(first_pdf) >= final_mtime:
+                return first_pdf
     json_path = os.path.join(run_dir, "post-migration-report.json")
     if not os.path.isfile(json_path):
         final_path = os.path.join(run_dir, "final-report.json")
