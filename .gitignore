@@ -36,7 +36,7 @@ lambda/**/package/
 # lambda-layers/
 # pyrfc-layer.zip
 
-# # SAP NW RFC SDK (must not be committed — proprietary)
+# # SAP NW RFC SDK — zip files (bundled SDKs are in sapnwrfc/ and nwrfcsdk-linux/)
 # nwrfc750P_*.zip
 
 # TLS certificates

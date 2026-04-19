@@ -89,7 +89,7 @@
 
 | Improvement | What Changed |
 |-------------|-------------|
-| ~~CI/CD SAP License Paradox~~ | **RESOLVED** — `deploy.yml` now downloads the proprietary SAP NW RFC SDK from a private Blob Storage container (`https://migrate4hanasapbinaries.blob.core.windows.net/binaries/nwrfc750P_linux_x86_64.zip`) at build time via `az storage blob download`, injects it into `containers/` before `docker build`, and cleans up post-build. SDK never committed to Git |
+| ~~CI/CD SAP License Paradox~~ | **RESOLVED** — SAP NW RFC SDK Linux shared libraries are bundled in the repository under `nwrfcsdk-linux/lib/`. The Dockerfile copies them directly — no separate download or private blob storage fetch needed at build time. SDK committed to the repo for build reproducibility |
 | ~~Terraform Container Apps Chicken-and-Egg~~ | **RESOLVED** — Azure Container Apps job definition in `terraform/modules/container-apps/main.tf` now uses `alpine:latest` as a placeholder image with `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infrastructure only; CI/CD deploys the real image to ACR and updates the task definition |
 | ~~Data Gravity OOM Risk~~ | **RESOLVED** — Stage 12A reconciliation in `functions/data-loader/handler.py` rewritten with streamed aggregation. New `_read_table_chunked()` generator (50K rows/chunk via ROWSKIPS/ROWCOUNT pagination) aggregates running totals in-flight — only one chunk in memory at a time. Prevents OOM on large data volumes (500M+ BSEG rows on 16 GB Container Apps). Aggregated totals persisted to Blob Storage for audit trail via `_persist_aggregated_totals()` |
 | ~~Data Factory Credentials Hardcoded~~ | **RESOLVED** — All 3 environments (dev/staging/prod) now fetch database connection strings from Azure Key Vault via `data.azurerm_key_vault_secret`. Hardcoded `"mock_password"` in dev and `var.ecc_db_password` / `var.s4_db_password` in staging/prod replaced. Password variables removed from staging/prod `variables.tf` |
@@ -159,7 +159,7 @@ Azure Subscription with the following services enabled:
 
 | Requirement | Purpose |
 |-------------|---------|
-| **SAP S-User** (SAP Marketplace login) | Download SAP NW RFC SDK 7.50 (`nwrfc750P_*.zip`) |
+| **SAP S-User** (SAP Marketplace login) | Not needed — SDK libraries are bundled in the repository |
 | **SAP ECC system** (IDES or sandbox) | Integration testing — RFC connectivity, BAPI testing |
 | **RFC user in ECC** | Authorizations: `S_RFC` (all RFC), `S_TABU_DIS` (table display), `S_DEVELOP` (developer), `S_BTCH_ADM` (batch), `S_USER_GRP` (user admin) |
 | **SAP S/4HANA system** (sandbox or CAL) | Target system testing — deployment, config, validation |
@@ -194,12 +194,17 @@ Azure VNet ──→ SAP S/4HANA (RFC/3300, OData/443)
 
 **This is the single most critical step.** Without PyRFC, every Function handler falls back to mock data.
 
-### Step 1.1 — Download SAP NW RFC SDK
+### Step 1.1 — Verify Bundled SAP NW RFC SDK
 
-1. Log into [SAP Software Center](https://launchpad.support.sap.com/#/softwarecenter)
-2. Search for **"SAP NW RFC SDK 7.50"**
-3. Download `nwrfc750P_*-linux-x86_64.zip` (Linux x64 version)
-4. Place it in the project root: `migrate4hana-main/nwrfc750P_*.zip`
+The Linux x86_64 shared libraries are bundled in `nwrfcsdk-linux/lib/`:
+
+```bash
+ls -la nwrfcsdk-linux/lib/
+# Should show: libsapnwrfc.so, libicudata.so.50, libicui18n.so.50,
+#              libicuuc.so.50, libicudecnumber.so, libsapucum.so
+```
+
+No download is needed — the SDK is part of the repository.
 
 ### Step 1.2 — Build the PyRFC Container Layer
 

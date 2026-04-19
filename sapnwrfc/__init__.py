@@ -4,15 +4,17 @@ SAP NW RFC SDK — DLL/shared-library loader
 Import this module **before** ``import pyrfc`` to register the SDK library
 path with the Python runtime.
 
-On **Windows** (Python ≥ 3.8) it calls ``os.add_dll_directory()`` so that
-``sapnwrfc.dll`` and its ICU dependencies are found.
+On **Windows** (Python ≥ 3.8) it uses ``sapnwrfc/lib/`` (bundled DLLs) and
+calls ``os.add_dll_directory()`` so that ``sapnwrfc.dll`` and its ICU
+dependencies are found.
 
-On **Linux** the Dockerfile already sets ``LD_LIBRARY_PATH``; this module
-is a no-op but will set ``SAPNWRFC_HOME`` as a convenience.
+On **Linux** it uses ``nwrfcsdk-linux/lib/`` (bundled .so files) and sets
+``LD_LIBRARY_PATH`` and ``SAPNWRFC_HOME``.  Inside Docker the Dockerfile
+already copies these to ``/opt/sap/lib`` so this acts as a fallback.
 
 Usage (one line, anywhere before pyrfc is imported)::
 
-    import sapnwrfc          # registers DLL path
+    import sapnwrfc          # registers library path
     from pyrfc import Connection
 """
 
@@ -20,14 +22,25 @@ import os
 import sys
 import pathlib
 
-_LIB_DIR = pathlib.Path(__file__).resolve().parent / "lib"
+_PKG_DIR = pathlib.Path(__file__).resolve().parent          # sapnwrfc/
+_PROJECT_ROOT = _PKG_DIR.parent                             # repo root
+_WIN_LIB = _PKG_DIR / "lib"                                # sapnwrfc/lib/
+_LINUX_LIB = _PROJECT_ROOT / "nwrfcsdk-linux" / "lib"      # nwrfcsdk-linux/lib/
 
 
 def _register():
-    """Add sapnwrfc/lib to the runtime library search path."""
-    lib_str = str(_LIB_DIR)
+    """Add the correct SDK lib directory to the runtime library search path."""
 
-    if not _LIB_DIR.is_dir():
+    if sys.platform == "win32":
+        lib_dir = _WIN_LIB
+    else:
+        # Prefer /opt/sap/lib (Docker) if present, otherwise bundled repo copy
+        docker_lib = pathlib.Path("/opt/sap/lib")
+        lib_dir = docker_lib if docker_lib.is_dir() else _LINUX_LIB
+
+    lib_str = str(lib_dir)
+
+    if not lib_dir.is_dir():
         return  # SDK not present — pyrfc will fall back to ImportError
 
     if sys.platform == "win32":
@@ -46,7 +59,7 @@ def _register():
 
     # Set SAPNWRFC_HOME (some pyrfc builds check this)
     if not os.environ.get("SAPNWRFC_HOME"):
-        os.environ["SAPNWRFC_HOME"] = str(_LIB_DIR.parent)
+        os.environ["SAPNWRFC_HOME"] = str(lib_dir.parent)
 
 
 _register()

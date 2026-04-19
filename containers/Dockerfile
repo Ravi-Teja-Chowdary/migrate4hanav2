@@ -4,9 +4,8 @@
 # Packages the Python handlers with the SAP NW RFC SDK so that
 # Stages 1, 5, 12 and 12A can run without time limits.
 #
-# BUILD PREREQUISITES:
-#   Place the SAP NW RFC SDK zip in the containers/ directory before building:
-#     containers/nwrfc750P_*.zip        (Linux x86_64, from SAP Support Portal)
+# The Linux x86_64 SAP NW RFC SDK shared libraries are bundled in the
+# repository under nwrfcsdk-linux/lib/.  No separate download is needed.
 #
 # BUILD (from project root — build context must be the repo root):
 #   docker build -f containers/Dockerfile -t migrate4hana-worker:latest .
@@ -22,21 +21,11 @@
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0 AS builder
 
 RUN tdnf install -y python3 python3-pip python3-devel \
-    gcc gcc-c++ make unzip ca-certificates && \
+    gcc gcc-c++ make ca-certificates && \
     tdnf clean all
 
-# Copy and extract SAP NW RFC SDK (Linux x86_64 version for container builds)
-# NOTE: You must provide the SAP NW RFC SDK zip (nwrfc750P_*.zip) in the containers/
-# directory before building. Download from SAP Support Portal (SAP Note 2573790).
-# The SDK is required for live RFC connections to SAP ECC/S4HANA.
-#
-# For LOCAL Windows development, the Windows DLLs are bundled in sapnwrfc/lib/
-# and auto-registered by the sapnwrfc/__init__.py bootstrap module.
-COPY containers/nwrfc750P_*.zip /tmp/
-RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \
-    if [ -d /opt/sap/nwrfcsdk ]; then \
-        cp -r /opt/sap/nwrfcsdk/* /opt/sap/ ; \
-    fi
+# Copy the bundled Linux x86_64 SAP NW RFC SDK shared libraries
+COPY nwrfcsdk-linux/lib/ /opt/sap/lib/
 
 ENV SAPNWRFC_HOME=/opt/sap
 ENV LD_LIBRARY_PATH=/opt/sap/lib:$LD_LIBRARY_PATH
