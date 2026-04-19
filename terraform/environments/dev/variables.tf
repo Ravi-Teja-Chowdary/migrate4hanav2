@@ -74,8 +74,33 @@ variable "bedrock_model_id" {
   default     = "anthropic.claude-3-sonnet-20240229-v1:0"
 }
 
+variable "local_llm_endpoint" {
+  type        = string
+  description = "HTTP endpoint for air-gapped local LLM (leave empty to disable)"
+  default     = ""
+}
+
 variable "ast_change_threshold" {
   type        = number
   description = "If AST engine finds fewer changes than this, escalate to GenAI"
   default     = 3
+}
+
+# ── Air-Gapped LLM EC2 Configuration ────────
+variable "gpu_ami_id" {
+  type        = string
+  description = "AMI ID for the GPU instance (Deep Learning AMI)"
+  default     = "ami-0123456789abcdef0" # Replace with real AMI from: aws ec2 describe-images --owners amazon --filters 'Name=name,Values=Deep Learning AMI GPU*Amazon Linux 2*'
+}
+
+variable "llm_model_s3_path" {
+  type        = string
+  description = "S3 URI to the LLM model weights"
+  default     = "s3://migrate4hana-llm-models-dev/llama-3-8b/"
+}
+
+variable "llm_model_s3_bucket" {
+  type        = string
+  description = "S3 bucket name containing LLM model weights"
+  default     = "migrate4hana-llm-models-dev"
 }

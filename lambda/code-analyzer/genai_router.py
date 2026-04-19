@@ -4,13 +4,15 @@ genai_router.py — GenAI Dispatch Router for Migrate4HANA
 Routes ABAP code analysis requests to the optimal GenAI backend:
 
   1. AST Engine  (local, zero-latency, deterministic)
-  2. AWS Bedrock (cloud, Claude via PrivateLink — zero internet egress)
+  2. AWS Bedrock (cloud, Claude/Titan via PrivateLink — zero internet egress)
+  3. Air-gapped Local LLM (on-prem g5.2xlarge GPU, for classified workloads)
 
 Routing Logic:
   - Always run the AST engine first (structural, deterministic transforms)
-  - If AST produces fewer changes than the threshold, escalate to Bedrock
+  - If AST produces fewer changes than the threshold, escalate to GenAI
     for deeper semantic analysis (custom logic patterns, BP implications)
-  - If Bedrock fails, gracefully return the AST-only results
+  - Bedrock is the default GenAI backend; falls back to the air-gapped
+    Local LLM when Bedrock is unavailable or the system is disconnected
   - All payloads are PII-scrubbed via data_scrubber before GenAI dispatch
 """
 
@@ -31,6 +33,7 @@ from abap_ast_engine import process_abap_file
 BEDROCK_MODEL_ID = os.environ.get(
     "BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0"
 )
+LOCAL_LLM_ENDPOINT = os.environ.get("LOCAL_LLM_ENDPOINT", "")
 AST_CHANGE_THRESHOLD = int(os.environ.get("AST_CHANGE_THRESHOLD", "3"))
 
 
@@ -75,15 +78,20 @@ def route_analysis(
 
     prompt = _build_analysis_prompt(scrubbed_code, ast_result, context)
 
-    # ── Step 3: Invoke Bedrock; on failure return AST-only results ───────────
+    # ── Step 3: Try Bedrock, fall back to Local LLM ───────────────────────────
     genai_result = _invoke_bedrock(prompt)
     if genai_result is not None:
         result["backend_used"] = "bedrock"
         result["genai_result"] = genai_result
     else:
-        logger.warning(
-            "Bedrock unavailable — returning AST-only results"
-        )
+        genai_result = _invoke_local_llm(prompt)
+        if genai_result is not None:
+            result["backend_used"] = "local_llm"
+            result["genai_result"] = genai_result
+        else:
+            logger.warning(
+                "Both Bedrock and Local LLM unavailable — returning AST-only results"
+            )
 
     return result
 
@@ -142,6 +150,32 @@ def _invoke_bedrock(prompt: str) -> Optional[Dict]:
         return _parse_genai_response(content, BEDROCK_MODEL_ID)
     except Exception as e:
         logger.warning(f"Bedrock invocation failed: {e}")
+        return None
+
+
+def _invoke_local_llm(prompt: str) -> Optional[Dict]:
+    """
+    Invoke the air-gapped local LLM running on the g5.2xlarge GPU instance.
+    Communicates exclusively within the VPC (zero-egress security group).
+    """
+    if not LOCAL_LLM_ENDPOINT:
+        logger.info("Local LLM endpoint not configured — skipping")
+        return None
+    try:
+        import requests  # available in Lambda layer
+
+        response = requests.post(
+            LOCAL_LLM_ENDPOINT,
+            json={"prompt": prompt, "max_tokens": 4096, "temperature": 0.1},
+            timeout=120,
+        )
+        response.raise_for_status()
+        data = response.json()
+        content = data.get("choices", [{}])[0].get("text", "")
+
+        return _parse_genai_response(content, "local-llm")
+    except Exception as e:
+        logger.warning(f"Local LLM invocation failed: {e}")
         return None
 
 

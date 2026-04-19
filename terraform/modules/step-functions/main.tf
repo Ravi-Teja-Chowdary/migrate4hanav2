@@ -378,10 +378,46 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
           Next        = "MigrationFailed"
           ResultPath  = "$.error"
         }]
-        Next = "InvokeBedrockLLM"
+        Next = "Decision_LLMRoute"
       }
 
-      # ── LLM Remediation: Bedrock (Anthropic Claude) ──
+      # ── Decision: InfoSec LLM Routing (Air-Gapped vs Bedrock) ──
+      Decision_LLMRoute = {
+        Type    = "Choice"
+        Comment = "Determine based on InfoSec compliance which GenAI path to traverse"
+        Choices = [{
+          Variable     = "$.metadata.input.llm_mode"
+          StringEquals = "AIRGAPPED_LOCAL"
+          Next         = "InvokeAirGappedLLM"
+        }]
+        Default = "InvokeBedrockLLM"
+      }
+
+      # ── LLM Remediation: Air-Gapped Local Models (e.g. Llama 3) ──
+      InvokeAirGappedLLM = {
+        Type     = "Task"
+        Comment  = "Highly secure GPU/EC2 Local LLM for Banks & Defense"
+        Resource = "arn:aws:states:::lambda:invoke"
+        Parameters = {
+          FunctionName = lookup(var.lambda_arns, "airgapped-llm-router", "")
+          Payload = {
+            "stage"           = "llm-remediation"
+            "model"           = "local-g5-llama3"
+            "metadata.$"      = "$.metadata"
+            "code_analysis.$" = "$.code_analysis.Payload"
+          }
+        }
+        ResultPath     = "$.remediated_code"
+        TimeoutSeconds = 900
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          Next        = "MigrationFailed"
+          ResultPath  = "$.error"
+        }]
+        Next = "Stage6_DataHygiene"
+      }
+
+      # ── LLM Remediation: Standard Bedrock (Anthropic/Titan) ──
       InvokeBedrockLLM = {
         Type     = "Task"
         Comment  = "Enterprise Scale Amazon Bedrock via PrivateLink"
