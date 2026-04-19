@@ -152,7 +152,7 @@ Azure Subscription with the following services enabled:
 └── Azure Data Factory matching (for BP deduplication)
 ```
 
-**Estimated monthly cost (dev):** ~$500–800/mo (primarily Data Factory instance + GPU instance when running)  
+**Estimated monthly cost (dev):** ~$500–800/mo (primarily ADMS instance + GPU instance when running)  
 **Estimated monthly cost (prod):** ~$2,000–5,000/mo depending on migration volume
 
 ### SAP Access
@@ -169,7 +169,7 @@ Azure Subscription with the following services enabled:
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Docker | 20.10+ | Building PyRFC Functions extension |
+| Docker | 20.10+ | Building PyRFC container image |
 | Terraform | >= 1.5.0 | Infrastructure deployment |
 | Azure CLI | Latest | Azure resource management |
 | Python | 3.11 | Azure Functions runtime matching |
@@ -1416,8 +1416,8 @@ The audit module (`terraform/modules/audit/`) is included in both staging and pr
 |--------|---------|-----------------|
 | Unauthorized API Calls | `AccessDenied*`, `UnauthorizedAccess*` | > 5 in 5 min |
 | Azure RBAC Policy Changes | `CreateRole`, `DeleteRole`, `AttachRolePolicy`, `PutRolePolicy` | > 0 (any change) |
-| Key Vault Access | `GetSecretValue` from `keyvault.azure.com` | Metric only (audit trail) |
-| Pipeline Executions | `StartExecution` from `states.azure.com` | Metric only (audit trail) |
+| Key Vault Access | `GetSecretValue` from Key Vault audit events | Metric only (audit trail) |
+| Pipeline Executions | `StartExecution` from Durable Functions | Metric only (audit trail) |
 
 **Compliance coverage:**
 
@@ -1709,7 +1709,7 @@ Both staging and production environments include the WAF and Audit modules (not 
 | WAF module | Not included | ✅ Included (2K req/5min) | ✅ Included (1K req/5min) |
 | Audit module | Not included | ✅ Included | ✅ Included |
 | Terraform backend key | `dev/terraform.tfstate` | `staging/terraform.tfstate` | `prod/terraform.tfstate` |
-| Data Factory credentials | Key Vault | Key Vault | Key Vault |
+| ADMS credentials | Key Vault | Key Vault | Key Vault |
 
 ---
 
@@ -2373,7 +2373,7 @@ migrate4hana-main/
 │       └── private-endpoints/         ← Anthropic API access
 ├── scripts/
 │   ├── deploy.sh                  ← Package + build + terraform apply
-│   └── setup-pyrfc.sh             ← Build PyRFC Functions extension
+│   └── setup-pyrfc.sh             ← Build PyRFC container image
 ├── tests/
 │   ├── test_execution_stages.py   ← ~30 mock tests (unit tests)
 │   ├── test_sap_integration.py    ← 52 integration tests, 15 classes, dual-mode mock + live (NEW)
@@ -2396,7 +2396,7 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 | **CI/CD SAP SDK Download** | `deploy.yml` updated — downloads SAP NW RFC SDK from private Blob Storage container (`az storage blob download`) at build time, injects into `ecs/` before `docker build`, cleans up post-build. SDK never committed to Git |
 | **Container Apps Placeholder Bootstrap** | `terraform/modules/container-apps/main.tf` — task definition uses `alpine:latest` placeholder image + `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infra; CI/CD deploys real image |
 | **Streamed Reconciliation** | `lambda/data-loader/handler.py` — Stage 12A `generate_reconciliation_report()` rewritten with `_read_table_chunked()` generator (50K rows/chunk) and running aggregation. Prevents OOM on 500M+ row tables. Totals persisted to Blob Storage via `_persist_aggregated_totals()` |
-| **Data Factory Key Vault** | All 3 environments (dev/staging/prod) `main.tf` — database connection strings fetched from `azurerm_key_vault_secret` data sources. Hardcoded passwords and password variables removed |
+| **ADMS Key Vault** | All 3 environments (dev/staging/prod) `main.tf` — database connection strings fetched from `azurerm_key_vault_secret` data sources. Hardcoded passwords and password variables removed |
 
 ### v6.0 Azure Container Apps Compute Upgrade (April 1, 2026) — What Changed
 
@@ -2448,12 +2448,12 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 | **Data Loading** | Stage 12 now uses Durable Functions fan-out/fan-in with 4 parallel streams (finance, BP, materials, custom) |
 | **Financial Reconciliation** | New Stage 12A — penny-perfect GL balance comparison between ECC and S/4HANA |
 | **Rollback Manager** | Hardened with Blob Storage state persistence, resume support, post-rollback verification, client unlock |
-| **PyRFC Layer Build** | Enhanced `scripts/setup-pyrfc.sh` with Docker build, import validation, auto-terraform update |
+| **PyRFC Container Build** | Enhanced `scripts/setup-pyrfc.sh` with Docker build, import validation, auto-terraform update |
 | **Integration Tests** | New `tests/test_sap_integration.py` — 52 tests, 15 classes, dual-mode mock + live SAP |
 
 ### Remaining Blockers (2)
 
-1. **PyRFC Functions Extension deployment** — The build script is ready; you still need the SAP NW RFC SDK + `terraform apply`
+1. **PyRFC container deployment** — The build script is ready; you still need the SAP NW RFC SDK + `terraform apply`
 2. **Azure Infrastructure deployment** — All Terraform is written; needs `terraform apply` on a real Azure subscription
 
 ### Production Readiness Score
@@ -2468,6 +2468,6 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 | Infrastructure files | 0 CI/CD, 1 env | 0 CI/CD, 1 env | **2 CI/CD pipelines**, **3 environments**, **2 security modules** | + `validation.py`, enhanced `rfc_pool.py` | + **Container Apps module**, **Dockerfile**, **entrypoint.py**, **.dockerignore** | + **deploy.yml** SAP SDK Blob Storage download, Container Apps placeholder bootstrap |
 | Test coverage | ~30 unit tests | 82 total (30 + 52) | **82+ tests** + Locust load test suite | **114 tests** verified passing + Locust load test suite | **114 tests** + Locust (unchanged — Container Apps uses same handler code) | **114 tests** + Locust (unchanged) |
 
-**Minimum viable production path**: Phase 1 (PyRFC Layer — build script ready) + Phase 2 (Terraform apply + ACR push) + Phase 3 (SAP connectivity) remains the critical path. All code-level work for these phases is now complete. With v6.0, the 4 heaviest compute stages (discovery, code analysis, data loading, reconciliation) now run on Azure Container Apps (4 vCPU / 16 GB) with no 15-minute timeout — tasks run up to 4 hours with Azure Durable Functions `waitForTaskToken` callbacks. The production hardening gaps (RFC timeouts, input validation, idempotency, credential refresh, batch rollback, source system locking, paginated reads) are fully addressed — only Azure subscription access, ACR image push, and SAP SDK procurement remain as external dependencies.
+**Minimum viable production path**: Phase 1 (PyRFC container — build script ready) + Phase 2 (Terraform apply + ACR push) + Phase 3 (SAP connectivity) remains the critical path. All code-level work for these phases is now complete. With v6.0, the 4 heaviest compute stages (discovery, code analysis, data loading, reconciliation) now run on Azure Container Apps (4 vCPU / 16 GB) with no 15-minute timeout — tasks run up to 4 hours with Azure Durable Functions `waitForTaskToken` callbacks. The production hardening gaps (RFC timeouts, input validation, idempotency, credential refresh, batch rollback, source system locking, paginated reads) are fully addressed — only Azure subscription access, ACR image push, and SAP SDK procurement remain as external dependencies.
 
 The SAP domain knowledge embedded in the codebase — 160 AST rules, 710+ country rules, 250+ table transformations, 500+ Fiori mappings, 94 SUM known errors, 400+ OData service maps — is the most valuable and difficult-to-replicate asset. The infrastructure and deployment gaps are standard engineering work that can be executed methodically using this guide.

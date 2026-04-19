@@ -5,11 +5,11 @@
 # Stages 1, 5, 12 and 12A can run without time limits.
 #
 # BUILD PREREQUISITES:
-#   Place the SAP NW RFC SDK zip in the ecs/ directory before building:
-#     ecs/nwrfc750P_*.zip        (Linux x86_64, from SAP Support Portal)
+#   Place the SAP NW RFC SDK zip in the containers/ directory before building:
+#     containers/nwrfc750P_*.zip        (Linux x86_64, from SAP Support Portal)
 #
 # BUILD (from project root — build context must be the repo root):
-#   docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .
+#   docker build -f containers/Dockerfile -t migrate4hana-worker:latest .
 #
 # PUSH (after ACR login):
 #   ACR_NAME=<your-acr>.azurecr.io
@@ -25,11 +25,11 @@ RUN tdnf install -y python3 python3-pip python3-devel \
     gcc gcc-c++ make unzip ca-certificates && \
     tdnf clean all
 
-# Copy and extract SAP NW RFC SDK (from ecs/ directory in build context)
-# NOTE: You must provide the SAP NW RFC SDK zip (nwrfc750P_*.zip) in the ecs/
+# Copy and extract SAP NW RFC SDK (from containers/ directory in build context)
+# NOTE: You must provide the SAP NW RFC SDK zip (nwrfc750P_*.zip) in the containers/
 # directory before building. Download from SAP Support Portal (SAP Note 2573790).
 # The SDK is required for live RFC connections to SAP ECC/S4HANA.
-COPY ecs/nwrfc750P_*.zip /tmp/
+COPY containers/nwrfc750P_*.zip /tmp/
 RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \
     if [ -d /opt/sap/nwrfcsdk ]; then \
         cp -r /opt/sap/nwrfcsdk/* /opt/sap/ ; \
@@ -59,11 +59,11 @@ ENV PYTHONPATH=/opt/python:$PYTHONPATH
 # ── Application code ─────────────────────────
 WORKDIR /app
 
-# Copy ALL lambda directories (handlers + utils + shared modules)
-COPY --chown=1000:1000 lambda/ /app/lambda/
+# Copy ALL functions directories (handlers + utils + shared modules)
+COPY --chown=1000:1000 functions/ /app/functions/
 
 # Copy the unified entrypoint
-COPY --chown=1000:1000 ecs/entrypoint.py /app/entrypoint.py
+COPY --chown=1000:1000 containers/entrypoint.py /app/entrypoint.py
 
 # Non-root user for security
 RUN useradd -r -u 1000 -s /bin/false appuser

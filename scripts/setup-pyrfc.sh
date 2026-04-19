@@ -172,7 +172,7 @@ echo ""
 echo "NEXT STEPS:"
 echo "  1. The base image 'migrate4hana-pyrfc-base' is available locally"
 echo "  2. Container Apps stages (discovery-engine, code-analyzer, data-loader)"
-echo "     will use this as their base image via the ecs/Dockerfile"
+echo "     will use this as their base image via the containers/Dockerfile"
 echo "  3. Deploy infrastructure: cd terraform/environments/dev && terraform apply"
 echo ""
 

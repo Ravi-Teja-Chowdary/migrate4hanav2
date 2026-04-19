@@ -36,7 +36,7 @@ az acr login --name "$ACR_NAME"
 
 for STAGE in discovery-engine code-analyzer data-loader data-loader-reconcile; do
     echo "  → Building $STAGE..."
-    docker build -t "$ACR_NAME/$STAGE:latest" -f ecs/Dockerfile --build-arg STAGE_TARGET="$STAGE" .
+    docker build -t "$ACR_NAME/$STAGE:latest" -f containers/Dockerfile --build-arg STAGE_TARGET="$STAGE" .
     docker push "$ACR_NAME/$STAGE:latest"
 done
 
