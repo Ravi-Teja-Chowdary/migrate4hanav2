@@ -1,0 +1,39 @@
+# ──────────────────────────────────────────────────────────────
+# Migrate4HANA — Azure Terraform example variables
+# Copy to terraform.tfvars and fill in values
+# ──────────────────────────────────────────────────────────────
+
+# General
+environment = "dev"
+location    = "eastus2"
+alert_email = "your-team@example.com"
+
+# GPU VM (set to true to provision air-gapped LLM VM)
+enable_gpu_vm  = false
+gpu_vm_size    = "Standard_NC6s_v3"
+ssh_public_key = ""
+
+# WAF (disable for dev to save cost)
+enable_waf = false
+
+# OpenAI
+openai_model_name    = "gpt-4"
+openai_model_version = "turbo-2024-04-09"
+
+# SAP RFC
+pyrfc_enabled = false
+sap_rfc_cidr  = "172.16.0.0/12"
+s4hana_vm_ip  = ""
+
+# Database Migration (leave blank if not using DMS)
+ecc_db_host = ""
+ecc_db_port = "30015"
+ecc_db_name = ""
+s4_db_host  = ""
+s4_db_port  = "30015"
+s4_db_name  = ""
+
+# Compute sizing
+function_app_sku     = "EP1"
+container_app_cpu    = 4.0
+container_app_memory = "16Gi"
