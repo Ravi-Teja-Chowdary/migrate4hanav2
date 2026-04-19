@@ -438,13 +438,13 @@ az acr login --name migrate4hanadev
 cd /path/to/migrate4hanav2
 
 # Build the container image (from project root)
-docker build -f ecs/Dockerfile -t migrate4hanadev.azurecr.io/migrate4hana/worker:latest .
+docker build -f containers/Dockerfile -t migrate4hanadev.azurecr.io/migrate4hana/worker:latest .
 
 # Push to ACR
 docker push migrate4hanadev.azurecr.io/migrate4hana/worker:latest
 ```
 
-> **Note about SAP NW RFC SDK:** If you have the SAP NW RFC SDK, place the zip file (`nwrfc750P_*.zip`) in the `ecs/` directory **before** building. If you don't have it, the build will still succeed but live RFC connections won't work (you can still use mock/offline mode).
+> **Note about SAP NW RFC SDK:** If you have the SAP NW RFC SDK, place the zip file (`nwrfc750P_*.zip`) in the `containers/` directory **before** building. If you don't have it, the build will still succeed but live RFC connections won't work (you can still use mock/offline mode).
 
 ### 8.4 Verify the Image
 
@@ -792,7 +792,7 @@ az monitor log-analytics query \
 | Claude 429 Rate Limit | Too many API calls | Built-in exponential backoff handles this; wait and retry |
 | Container App CrashLoopBackOff | Missing env vars or image | Check Container App logs; verify ACR image exists |
 | RFC connection timeout | Network/firewall issue | Verify VPN/ExpressRoute and NSG rules (port 3300) |
-| `pyrfc` import error | Missing SAP NW RFC SDK | Place `nwrfc750P_*.zip` in `ecs/` and rebuild image |
+| `pyrfc` import error | Missing SAP NW RFC SDK | Place `nwrfc750P_*.zip` in `containers/` and rebuild image |
 | Functions cold start | Premium Plan scaling | First invocation takes 5-10s; subsequent calls are fast |
 | APIM 502 Bad Gateway | Functions not deployed | Re-deploy with `func azure functionapp publish` |
 

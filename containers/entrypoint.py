@@ -112,12 +112,12 @@ def main():
     event = json.loads(input_json)
 
     # ── Set up Python path so the handler's relative imports work ──
-    handler_dir = f"/app/lambda/{stage}"
-    utils_dir = "/app/lambda/utils"
+    handler_dir = f"/app/functions/{stage}"
+    utils_dir = "/app/functions/utils"
     sys.path.insert(0, handler_dir)
     sys.path.insert(0, utils_dir)
-    sys.path.insert(0, "/app/lambda/data-hygiene")
-    sys.path.insert(0, "/app/lambda/code-analyzer")
+    sys.path.insert(0, "/app/functions/data-hygiene")
+    sys.path.insert(0, "/app/functions/code-analyzer")
 
     os.chdir(handler_dir)
 

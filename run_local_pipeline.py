@@ -40,25 +40,25 @@ if sys.stderr and hasattr(sys.stderr, 'buffer'):
 # Add project paths
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "mock-ecc"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "discovery-engine"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "code-analyzer"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "data-migrator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "config-replicator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "role-migrator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "integration-mapper"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "cutover-orchestrator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "code-deployer"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "data-loader"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "config-applier"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "role-provisioner"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "integration-activator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "migration-validator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "discovery-engine"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "code-analyzer"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "data-migrator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "config-replicator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "role-migrator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "integration-mapper"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "cutover-orchestrator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "code-deployer"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "data-loader"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "config-applier"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "role-provisioner"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "integration-activator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "migration-validator"))
 # New SAP Activate stage paths
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "maintenance-planner"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "readiness-check"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "simplification-check"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "sum-orchestrator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "migration-completeness-analyzer"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "maintenance-planner"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "readiness-check"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "simplification-check"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "sum-orchestrator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "migration-completeness-analyzer"))
 
 from mock_data_generator import MockRFCConnection, generate_complete_ecc_dataset
 
@@ -970,7 +970,7 @@ def run_stage_6_data_hygiene(conn, output_dir):
     banner("[Stage 6/17] Data Hygiene & Deduplication", C.GREEN)
 
     # Import new CVI engines
-    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "data-hygiene"))
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "data-hygiene"))
     from bp_pre_validation_engine import run_bp_pre_validation, generate_remediation_report
     from bp_deduplication_engine import process_cvi_deduplication
     from bp_crosswalk_engine import (

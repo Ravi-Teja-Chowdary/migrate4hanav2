@@ -206,7 +206,7 @@ mdg.generate_finance_documents = generate_finance_documents_10x
 # Cap block sizes to keep pairwise comparisons tractable.
 MAX_BLOCK_SIZE = 50  # Max entities per block before subsampling
 
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "data-hygiene"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "data-hygiene"))
 import bp_deduplication_engine as bpde
 
 _orig_run_fuzzy_match = bpde.run_fuzzy_match
@@ -364,19 +364,19 @@ bpde.run_fuzzy_match = _scaled_run_fuzzy_match
 bpde._cross_match_customer_vendor = _scaled_cross_match
 
 # Now import the pipeline (it will use patched generators)
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "discovery-engine"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "code-analyzer"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "data-migrator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "config-replicator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "role-migrator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "integration-mapper"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "cutover-orchestrator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "code-deployer"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "data-loader"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "config-applier"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "role-provisioner"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "integration-activator"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "migration-validator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "discovery-engine"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "code-analyzer"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "data-migrator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "config-replicator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "role-migrator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "integration-mapper"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "cutover-orchestrator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "code-deployer"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "data-loader"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "config-applier"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "role-provisioner"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "integration-activator"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "migration-validator"))
 
 from run_local_pipeline import (
     C, banner, status, section, LocalBlobStorage, patch_cloud_services,

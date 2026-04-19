@@ -22,7 +22,7 @@ migrate4hana/
 ├── run_local_pipeline.py            # Local 17-stage test runner (entry point)
 ├── pdf_report_generator.py          # Existing PDF report (11 sections, ReportLab)
 ├── api_server.py                    # FastAPI server (15 endpoints, JWT auth)
-├── lambda/
+├── functions/
 │   ├── discovery-engine/            # Stage 1 — ECC system scanning [Azure Container Apps]
 │   ├── maint-planner-integrator/    # Stage 2 — Maintenance Planner integration
 │   ├── readiness-check-runner/      # Stage 3 — SAP Readiness Check automation
@@ -445,7 +445,7 @@ def generate_multi_volume_report(
     """
 ```
 
-### CHANGE 3: Migration Completeness Analyzer — `lambda/migration-completeness-analyzer/handler.py`
+### CHANGE 3: Migration Completeness Analyzer — `functions/migration-completeness-analyzer/handler.py`
 
 Create this new handler that:
 
@@ -474,7 +474,7 @@ Create this new handler that:
    - Add `GET /api/v1/reports/{run_id}/volumes` endpoint returning list of PDF volumes with file sizes
    - Add `GET /api/v1/reports/{run_id}/download/{volume_number}` endpoint for downloading individual volumes
 
-3. **`lambda/utils/validation.py`**: Add `ecc_full` to accepted modes list
+3. **`functions/utils/validation.py`**: Add `ecc_full` to accepted modes list
 
 4. **Durable Functions comment**: Add a code comment in `run_local_pipeline.py` documenting how to wire `ecc_full` into Azure Durable Functions (Stages 1-8 → 9 → 9.5 → 9.6 → End)
 
@@ -515,7 +515,7 @@ Update the pipeline modes table to include `ecc_full`.
 2. **Do NOT modify `abap_ast_engine.py`, `genai_router.py`, `country_rules.py`**, or any fixer files.
 3. **Use ReportLab only** for PDF generation — no new PDF libraries. Already installed: `pip install reportlab`.
 4. **Keep mock-data compatibility**: `ecc_full` must work against both real SAP (PyRFC) and mock data (for testing).
-5. **Follow existing code patterns**: use `log_stage_event()` from `lambda/utils/logger.py`, same error handling, same JSON structures.
+5. **Follow existing code patterns**: use `log_stage_event()` from `functions/utils/logger.py`, same error handling, same JSON structures.
 6. **Python 3.10+** compatible.
 7. **Professional report quality** — this report IS the product. Clients evaluate Migrate4HANA based on this output. Think Big 4 consulting firm quality: clean typography, consistent colors, proper spacing, no visual clutter. Every page should look like it belongs in a boardroom presentation.
 8. **Every table**: alternating row colors (white / #F0F4F8), header row #1B3A5C with white text.
@@ -527,11 +527,11 @@ Update the pipeline modes table to include `ecc_full`.
 
 Implement in this exact order, giving me COMPLETE file content for each:
 
-1. `lambda/migration-completeness-analyzer/handler.py`
+1. `functions/migration-completeness-analyzer/handler.py`
 2. `multi_volume_report_generator.py` (the big one — take your time, make it excellent)
 3. Updates to `run_local_pipeline.py`
 4. Updates to `api_server.py`
-5. Updates to `lambda/utils/validation.py`
+5. Updates to `functions/utils/validation.py`
 6. `tests/test_completeness_analyzer.py`
 7. `tests/test_multi_volume_report.py`
 8. README.md additions

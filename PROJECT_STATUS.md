@@ -269,34 +269,34 @@ The project has been successfully upgraded to a **Smart Orchestrator & Pre/Post 
 
 | # | Function | Directory | Role | SAP Activate Phase |
 |---|--------|-----------|------|--------------------|
-| 1 | discovery-engine | `lambda/discovery-engine/` | Stage 1 — ECC system scanning | Phase 1: Prepare |
-| 2 | maint-planner-integrator | `lambda/maint-planner-integrator/` | Stage 2 — Maintenance Planner integration | Phase 1: Prepare |
-| 3 | readiness-check-runner | `lambda/readiness-check-runner/` | Stage 3 — SAP Readiness Check automation | Phase 1: Prepare |
-| 4 | si-check-executor | `lambda/si-check-executor/` | Stage 4 — Simplification Item Check | Phase 1: Prepare |
-| 5 | code-analyzer | `lambda/code-analyzer/` | Stage 5 — AST parser + ATC + GenAI remediation | Phase 2: Explore |
-| 6 | cvi-bp-preparer | `lambda/cvi-bp-preparer/` | Stage 6 — CVI/BP preparation + dedup | Phase 2: Explore |
-| 7 | data-assessor | `lambda/data-assessor/` | Stage 7 — Azure Data Factory CDC data assessment | Phase 2: Explore |
-| 8 | config-integration-assessor | `lambda/config-integration-assessor/` | Stage 8 — Config + integration analysis | Phase 2: Explore |
-| 9 | pre-conversion-gate | `lambda/pre-conversion-gate/` | Stage 9 — GO/NO-GO gate | Phase 3: Realize |
-| 10 | sum-dmo-monitor | `lambda/sum-dmo-monitor/` | Stage 10 — SUM/DMO orchestration & monitoring | Phase 3: Realize |
-| 11 | spau-spdd-code-deployer | `lambda/spau-spdd-code-deployer/` | Stage 11 — SPAU/SPDD + code deployment | Phase 4: Realize |
-| 12 | fins-migration-executor | `lambda/fins-migration-executor/` | Stage 12 — FINS_MASS_DATA_MONITOR execution | Phase 4: Realize |
-| 13 | matledger-config-applier | `lambda/matledger-config-applier/` | Stage 13 — Material Ledger + config application | Phase 4: Realize |
-| 14 | roles-integrations-prov | `lambda/roles-integrations-prov/` | Stage 14 — Roles + integrations provisioning | Phase 4: Realize |
-| 15 | bpt-test-executor | `lambda/bpt-test-executor/` | Stage 15 — Business process testing | Phase 5: Deploy |
-| 16 | cutover-orchestrator | `lambda/cutover-orchestrator/` | Stage 16 — Go-live cutover orchestration | Phase 5: Deploy |
-| 17 | migration-validator | `lambda/migration-validator/` | Stage 17 — 85-check validation & scorecard | Phase 5: Deploy |
-| 18 | rollback-manager | `lambda/rollback-manager/` | Safety — Automated reversal on failure | Cross-phase |
-| 19 | data-hygiene | `lambda/data-hygiene/` | MDM — BP deduplication (fuzzy + ML) | Cross-phase |
-| 20 | process-miner | `lambda/process-miner/` | Analytics — ST03N workload analysis | Cross-phase |
-| 21 | test-generator | `lambda/test-generator/` | QA — DITL test case generation | Cross-phase |
+| 1 | discovery-engine | `functions/discovery-engine/` | Stage 1 — ECC system scanning | Phase 1: Prepare |
+| 2 | maint-planner-integrator | `functions/maint-planner-integrator/` | Stage 2 — Maintenance Planner integration | Phase 1: Prepare |
+| 3 | readiness-check-runner | `functions/readiness-check-runner/` | Stage 3 — SAP Readiness Check automation | Phase 1: Prepare |
+| 4 | si-check-executor | `functions/si-check-executor/` | Stage 4 — Simplification Item Check | Phase 1: Prepare |
+| 5 | code-analyzer | `functions/code-analyzer/` | Stage 5 — AST parser + ATC + GenAI remediation | Phase 2: Explore |
+| 6 | cvi-bp-preparer | `functions/cvi-bp-preparer/` | Stage 6 — CVI/BP preparation + dedup | Phase 2: Explore |
+| 7 | data-assessor | `functions/data-assessor/` | Stage 7 — Azure Data Factory CDC data assessment | Phase 2: Explore |
+| 8 | config-integration-assessor | `functions/config-integration-assessor/` | Stage 8 — Config + integration analysis | Phase 2: Explore |
+| 9 | pre-conversion-gate | `functions/pre-conversion-gate/` | Stage 9 — GO/NO-GO gate | Phase 3: Realize |
+| 10 | sum-dmo-monitor | `functions/sum-dmo-monitor/` | Stage 10 — SUM/DMO orchestration & monitoring | Phase 3: Realize |
+| 11 | spau-spdd-code-deployer | `functions/spau-spdd-code-deployer/` | Stage 11 — SPAU/SPDD + code deployment | Phase 4: Realize |
+| 12 | fins-migration-executor | `functions/fins-migration-executor/` | Stage 12 — FINS_MASS_DATA_MONITOR execution | Phase 4: Realize |
+| 13 | matledger-config-applier | `functions/matledger-config-applier/` | Stage 13 — Material Ledger + config application | Phase 4: Realize |
+| 14 | roles-integrations-prov | `functions/roles-integrations-prov/` | Stage 14 — Roles + integrations provisioning | Phase 4: Realize |
+| 15 | bpt-test-executor | `functions/bpt-test-executor/` | Stage 15 — Business process testing | Phase 5: Deploy |
+| 16 | cutover-orchestrator | `functions/cutover-orchestrator/` | Stage 16 — Go-live cutover orchestration | Phase 5: Deploy |
+| 17 | migration-validator | `functions/migration-validator/` | Stage 17 — 85-check validation & scorecard | Phase 5: Deploy |
+| 18 | rollback-manager | `functions/rollback-manager/` | Safety — Automated reversal on failure | Cross-phase |
+| 19 | data-hygiene | `functions/data-hygiene/` | MDM — BP deduplication (fuzzy + ML) | Cross-phase |
+| 20 | process-miner | `functions/process-miner/` | Analytics — ST03N workload analysis | Cross-phase |
+| 21 | test-generator | `functions/test-generator/` | QA — DITL test case generation | Cross-phase |
 
 ### Terraform Modules (11 total)
 
 | # | Module | Directory | Purpose |
 |---|--------|-----------|---------|
 | 1 | vpc | `terraform/modules/vpc/` | VNet with private subnets |
-| 2 | lambda | `terraform/modules/lambda/` | Azure Functions deployment with telemetry env vars |
+| 2 | lambda | `terraform/modules/functions/` | Azure Functions deployment with telemetry env vars |
 | 3 | durable-functions | `terraform/modules/durable-functions/` | 17-stage Durable Functions orchestration with rollback error chain |
 | 4 | s3-staging | `terraform/modules/s3-staging/` | Blob Storage intermediate data staging |
 | 5 | cloudwatch | `terraform/modules/cloudwatch/` | Application Insights + Log Analytics monitoring & alerts |

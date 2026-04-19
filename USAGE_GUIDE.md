@@ -897,7 +897,7 @@ Before deploying Migrate4HANA against a real SAP ECC → S/4HANA conversion:
 - [x] **Test suite** — 114 tests covering pipeline stages, rule router, ST03N analyzer, DITL generator, rollback manager, config applier, error handling, and 52 SAP integration tests.
 - [x] **RFC call timeouts** — `call_rfc_with_timeout()` prevents indefinite hangs (default 120s, configurable via `RFC_CALL_TIMEOUT_SECONDS`).
 - [x] **Paginated table reads** — `read_table_chunked()` generator with ROWSKIPS/ROWCOUNT pagination (default 5000 rows/page via `RFC_PAGE_SIZE`).
-- [x] **Input validation** — Shared `lambda/utils/validation.py` validates Function events (run_id, ecc_client, mode, dry_run, stage) across 4 handlers.
+- [x] **Input validation** — Shared `functions/utils/validation.py` validates Function events (run_id, ecc_client, mode, dry_run, stage) across 4 handlers.
 - [x] **Idempotency** — Cosmos DB-backed duplicate detection for data-loader prevents reprocessing on Function retries (7-day TTL).
 - [x] **Credential refresh** — Key Vault credential caching with 300s TTL + auth-failure auto-retry in RFC pool.
 - [x] **Source system locking** — SCCR_LOCK_CLIENT + BAPI_USER_LOCK (cutover) / SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK (rollback).

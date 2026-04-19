@@ -22,7 +22,7 @@ from decimal import Decimal
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "mock-ecc"))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "utils"))
 
 from mock_data_generator import generate_complete_ecc_dataset, MockRFCConnection
 

@@ -27,7 +27,7 @@ def mock_env():
 
 def _load_handler(stage_dir):
     """Load a Function handler module with Azure SDK/pyrfc mocked."""
-    handler_path = os.path.join(PROJECT_DIR, "lambda", stage_dir)
+    handler_path = os.path.join(PROJECT_DIR, "functions", stage_dir)
     sys.path.insert(0, handler_path)
     module_name = f"handler_{stage_dir.replace('-', '_')}"
 
@@ -525,7 +525,7 @@ class TestPipelineStructure:
 class TestRuleRouter:
     def test_fallback_rules_count(self):
         """Verify fallback rules have at least 25 rules."""
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "utils"))
         with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             import importlib
             import rule_router
@@ -534,7 +534,7 @@ class TestRuleRouter:
         assert len(rules) >= 25, f"Expected >= 25 fallback rules, got {len(rules)}"
 
     def test_fallback_rules_category_filter(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "utils"))
         with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             import importlib
             import rule_router
@@ -544,7 +544,7 @@ class TestRuleRouter:
         assert len(syntax_rules) >= 5
 
     def test_fallback_rules_data_model(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "utils"))
         with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             import importlib
             import rule_router
@@ -555,7 +555,7 @@ class TestRuleRouter:
         assert len(bseg_rule) >= 1
 
     def test_fallback_rules_structure(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "utils"))
         with patch.dict(os.environ, {"AZURE_REGION": "eastus"}):
             import importlib
             import rule_router
@@ -573,13 +573,13 @@ class TestRuleRouter:
 # =============================================================================
 class TestST03NAnalyzer:
     def test_fiori_catalog_size(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "process-miner"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "process-miner"))
         from st03n_analyzer import ST03NAnalyzer
         analyzer = ST03NAnalyzer()
         assert len(analyzer.fiori_catalog) >= 25, f"Expected >= 25 Fiori mappings, got {len(analyzer.fiori_catalog)}"
 
     def test_fiori_mapping_for_common_tcodes(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "process-miner"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "process-miner"))
         from st03n_analyzer import ST03NAnalyzer
         analyzer = ST03NAnalyzer()
         required_tcodes = ["FB50", "FB60", "VA01", "ME21N", "BP", "MIGO", "VL01N", "VF01"]
@@ -587,7 +587,7 @@ class TestST03NAnalyzer:
             assert tcode in analyzer.fiori_catalog, f"Missing Fiori mapping for {tcode}"
 
     def test_analyze_usage_with_known_tcodes(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "process-miner"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "process-miner"))
         from st03n_analyzer import ST03NAnalyzer
         analyzer = ST03NAnalyzer()
         usage_data = [
@@ -602,7 +602,7 @@ class TestST03NAnalyzer:
         assert result["metrics"]["fiori_mapped_count"] == 3
 
     def test_analyze_usage_with_unknown_tcode(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "process-miner"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "process-miner"))
         from st03n_analyzer import ST03NAnalyzer
         analyzer = ST03NAnalyzer()
         usage_data = [{"tcode": "XXXX_UNKNOWN", "executions": 100}]
@@ -616,7 +616,7 @@ class TestST03NAnalyzer:
 # =============================================================================
 class TestDITLGenerator:
     def test_generates_runnable_scripts(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "test-generator"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "test-generator"))
         from ditl_generator import DITLTestGenerator
         gen = DITLTestGenerator()
         mappings = [
@@ -631,7 +631,7 @@ class TestDITLGenerator:
         assert "GeneralJournalEntry" in script
 
     def test_generates_support_commands(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "test-generator"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "test-generator"))
         from ditl_generator import DITLTestGenerator
         gen = DITLTestGenerator()
         support = gen.generate_support_file()
@@ -640,7 +640,7 @@ class TestDITLGenerator:
         assert "navToApp" in support
 
     def test_scripts_have_odata_intercepts(self):
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "test-generator"))
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "test-generator"))
         from ditl_generator import DITLTestGenerator
         gen = DITLTestGenerator()
         script = gen.generate_cypress_script(

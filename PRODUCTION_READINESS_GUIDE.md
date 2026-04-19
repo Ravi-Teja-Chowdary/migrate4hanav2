@@ -41,7 +41,7 @@
 |-----------|-------|--------|
 | Function handlers | 18 functions (200–3800 lines each) — 15 on Azure Functions, 3 on Azure Container Apps | Structurally complete, mock-tested |
 | Azure Container Apps tasks | Stages 1, 5, 12, 12A (4 vCPU / 16 GB RAM) | **NEW v6.0** — Heavy-compute stages moved off Azure Functions |
-| Docker image | `migrate4hana/worker` — unified multi-stage build | **NEW v6.0** — `ecs/Dockerfile` + `ecs/entrypoint.py` |
+| Docker image | `migrate4hana/worker` — unified multi-stage build | **NEW v6.0** — `containers/Dockerfile` + `containers/entrypoint.py` |
 | AST transform rules | 160 rules (AST-001 → AST-160) | Complete |
 | Country compliance rules | 710+ rules across 45+ countries | Complete |
 | Table transformations | 250+ ECC → S/4HANA mappings | Complete |
@@ -55,8 +55,8 @@
 | Frontend | React SPA, 7 pages, WebSocket telemetry | Functional against mock API |
 | API server (FastAPI) | 15 REST endpoints, JWT + API-key auth, Pydantic validation, CORS, TLS-ready, auto-generated OpenAPI docs | **Production-grade** (rewritten from stdlib) |
 | Durable Functions pipeline | 22+ states across 5 phases (incl. Container Apps waitForTaskToken, Distributed Map + Reconciliation) | Defined in Terraform |
-| RFC Connection Pool | Thread-safe pool with health check, auto-reconnect, connection aging, call timeouts, credential refresh, paginated table reads | **Enhanced** — `lambda/utils/rfc_pool.py` |
-| Input Validation | Shared Function event validation (run_id, ecc_client, mode, dry_run, stage) | **New** — `lambda/utils/validation.py` |
+| RFC Connection Pool | Thread-safe pool with health check, auto-reconnect, connection aging, call timeouts, credential refresh, paginated table reads | **Enhanced** — `functions/utils/rfc_pool.py` |
+| Input Validation | Shared Function event validation (run_id, ecc_client, mode, dry_run, stage) | **New** — `functions/utils/validation.py` |
 | Integration test suite | 15 test classes, 52 test methods covering all 33 BAPI/RFC functions | **New** — `tests/test_sap_integration.py` |
 | Total test suite | 114 passing tests (unit + integration, excluding load tests) | **Verified** — `pytest tests/ --ignore=tests/load_test.py` |
 | PDF report generator | 10-section A4 reports | Working |
@@ -67,7 +67,7 @@
 | Improvement | What Changed |
 |-------------|-------------|
 | ~~Production API framework~~ | **RESOLVED** — Rewrote `api_server.py` from stdlib `http.server` → FastAPI + uvicorn. Async routes, Pydantic validation, CORS middleware, JWT + API-key auth, TLS-ready, multi-worker, auto-generated OpenAPI docs at `/docs` |
-| ~~Connection pooling~~ | **RESOLVED** — Created `lambda/utils/rfc_pool.py`: thread-safe pool with RFC_PING health checks, auto-reconnect, connection aging (300s TTL), borrow/return pattern, Functions warm-start reuse |
+| ~~Connection pooling~~ | **RESOLVED** — Created `functions/utils/rfc_pool.py`: thread-safe pool with RFC_PING health checks, auto-reconnect, connection aging (300s TTL), borrow/return pattern, Functions warm-start reuse |
 | ~~No integration tests~~ | **RESOLVED** — Created `tests/test_sap_integration.py`: 15 test classes, 52 test methods covering all 33 RFC/BAPI functions. Dual-mode: runs against MockRFCConnection by default, live SAP when `SAP_TEST_HOST` is set |
 | ~~Function timeout for large data~~ | **RESOLVED** — Stage 12 now uses Durable Functions fan-out/fan-in with 4 parallel streams (finance, business_partner, material_documents, custom_tables), each with its own 15-min Azure Functions window |
 | ~~No financial reconciliation~~ | **RESOLVED** — Added Stage 12A: penny-perfect GL balance comparison between ECC (BSEG/BKPF) and S/4HANA (ACDOCA) with variance reporting to Blob Storage |
@@ -80,18 +80,18 @@
 |-------------|-------------|
 | ~~Azure Functions 15-min limit for heavy stages~~ | **RESOLVED** — Stages 1 (Discovery), 5 (Code Analyzer), 12 (Data Loader), and 12A (Reconciliation) migrated from Azure Functions to **Azure Container Apps** with 4 vCPU / 16 GB RAM. No 15-minute timeout — tasks run up to 4 hours with Azure Durable Functions `waitForTaskToken` callback pattern |
 | ~~No container infrastructure~~ | **RESOLVED** — New `terraform/modules/container-apps/main.tf`: Azure Container Registry (ACR) repository with lifecycle policy, Azure Container Apps environment with Azure Monitor container insights, Container Apps job definition (4096 CPU / 16384 MiB), execution role, task role with Blob Storage/Cosmos DB/Claude/KeyVault/DurableFunctions permissions, Network NSG (NSG) with full egress |
-| ~~No Docker image for migration workers~~ | **RESOLVED** — `ecs/Dockerfile`: multi-stage build on Azure Linux (CBL-Mariner), SAP NW RFC SDK + PyRFC compilation, non-root `appuser`, copies all `lambda/` handler source code. Build: `docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .` |
-| ~~No Container Apps entrypoint wrapper~~ | **RESOLVED** — `ecs/entrypoint.py`: unified Docker wrapper with dynamic handler selection via `STAGE_TARGET` env var, heartbeat thread (120s interval), `_Container AppsContext` shim for Function context compatibility, Azure Durable Functions `SendTaskSuccess`/`SendTaskFailure` callbacks |
-| ~~Dead Function definitions for Container Apps stages~~ | **RESOLVED** — Removed Azure Function definitions for `discovery-engine`, `code-analyzer`, and `data-loader` from all 3 environments (dev/staging/prod). Python source code preserved in `lambda/` for Azure Container Apps Docker image and `run_local_pipeline.py` |
+| ~~No Docker image for migration workers~~ | **RESOLVED** — `containers/Dockerfile`: multi-stage build on Azure Linux (CBL-Mariner), SAP NW RFC SDK + PyRFC compilation, non-root `appuser`, copies all `functions/` handler source code. Build: `docker build -f containers/Dockerfile -t migrate4hana-worker:latest .` |
+| ~~No Container Apps entrypoint wrapper~~ | **RESOLVED** — `containers/entrypoint.py`: unified Docker wrapper with dynamic handler selection via `STAGE_TARGET` env var, heartbeat thread (120s interval), `_Container AppsContext` shim for Function context compatibility, Azure Durable Functions `SendTaskSuccess`/`SendTaskFailure` callbacks |
+| ~~Dead Function definitions for Container Apps stages~~ | **RESOLVED** — Removed Azure Function definitions for `discovery-engine`, `code-analyzer`, and `data-loader` from all 3 environments (dev/staging/prod). Python source code preserved in `functions/` for Azure Container Apps Docker image and `run_local_pipeline.py` |
 | ~~Azure Durable Functions not wired to Container Apps~~ | **RESOLVED** — `terraform/modules/durable-functions/main.tf` updated: 4 stages replaced with `containerapp job start` using `waitForTaskToken` pattern, ContainerOverrides pass `STAGE_TARGET`, `SFN_TASK_TOKEN`, and `SFN_INPUT` env vars. RBAC expanded with `containerapp job start/StopTask/DescribeTasks` + `Managed Identity assignment` for both Container Apps roles. HeartbeatSeconds=300, configurable TimeoutSeconds per stage (1h–4h) |
 
 ### What Was Built in v6.1 (Architectural Fixes)
 
 | Improvement | What Changed |
 |-------------|-------------|
-| ~~CI/CD SAP License Paradox~~ | **RESOLVED** — `deploy.yml` now downloads the proprietary SAP NW RFC SDK from a private Blob Storage container (`https://migrate4hanasapbinaries.blob.core.windows.net/binaries/nwrfc750P_linux_x86_64.zip`) at build time via `az storage blob download`, injects it into `ecs/` before `docker build`, and cleans up post-build. SDK never committed to Git |
+| ~~CI/CD SAP License Paradox~~ | **RESOLVED** — `deploy.yml` now downloads the proprietary SAP NW RFC SDK from a private Blob Storage container (`https://migrate4hanasapbinaries.blob.core.windows.net/binaries/nwrfc750P_linux_x86_64.zip`) at build time via `az storage blob download`, injects it into `containers/` before `docker build`, and cleans up post-build. SDK never committed to Git |
 | ~~Terraform Container Apps Chicken-and-Egg~~ | **RESOLVED** — Azure Container Apps job definition in `terraform/modules/container-apps/main.tf` now uses `alpine:latest` as a placeholder image with `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infrastructure only; CI/CD deploys the real image to ACR and updates the task definition |
-| ~~Data Gravity OOM Risk~~ | **RESOLVED** — Stage 12A reconciliation in `lambda/data-loader/handler.py` rewritten with streamed aggregation. New `_read_table_chunked()` generator (50K rows/chunk via ROWSKIPS/ROWCOUNT pagination) aggregates running totals in-flight — only one chunk in memory at a time. Prevents OOM on large data volumes (500M+ BSEG rows on 16 GB Container Apps). Aggregated totals persisted to Blob Storage for audit trail via `_persist_aggregated_totals()` |
+| ~~Data Gravity OOM Risk~~ | **RESOLVED** — Stage 12A reconciliation in `functions/data-loader/handler.py` rewritten with streamed aggregation. New `_read_table_chunked()` generator (50K rows/chunk via ROWSKIPS/ROWCOUNT pagination) aggregates running totals in-flight — only one chunk in memory at a time. Prevents OOM on large data volumes (500M+ BSEG rows on 16 GB Container Apps). Aggregated totals persisted to Blob Storage for audit trail via `_persist_aggregated_totals()` |
 | ~~Data Factory Credentials Hardcoded~~ | **RESOLVED** — All 3 environments (dev/staging/prod) now fetch database connection strings from Azure Key Vault via `data.azurerm_key_vault_secret`. Hardcoded `"mock_password"` in dev and `var.ecc_db_password` / `var.s4_db_password` in staging/prod replaced. Password variables removed from staging/prod `variables.tf` |
 
 ### What Was Built in v5.0 (Production Hardening Pass)
@@ -101,7 +101,7 @@
 | ~~RFC call timeouts~~ | **RESOLVED** — `call_rfc_with_timeout()` in `rfc_pool.py`: ThreadPoolExecutor-based timeout wrapper (default 120s via `RFC_CALL_TIMEOUT_SECONDS`), prevents indefinite hangs on unresponsive SAP systems |
 | ~~Data volume chunking~~ | **RESOLVED** — `read_table_chunked()` generator in `rfc_pool.py`: ROWSKIPS/ROWCOUNT pagination (default 5000 rows via `RFC_PAGE_SIZE`), max_rows safety cap. Discovery engine converted from unbounded reads to paginated scans |
 | ~~Credential refresh~~ | **RESOLVED** — RFC pool `_resolve_params()` now caches Key Vault credentials with configurable TTL (default 300s). Auto-retry on auth failures with credential cache invalidation in `get_connection()` |
-| ~~Input validation~~ | **RESOLVED** — New `lambda/utils/validation.py`: shared event validation for `run_id` (alphanumeric+hyphens, 1-64 chars), `ecc_client` (3-digit), `mode` (full/quick/delta), `dry_run` (boolean), `stage` (1-50 chars). Wired into discovery-engine, data-loader, cutover-orchestrator, rollback-manager |
+| ~~Input validation~~ | **RESOLVED** — New `functions/utils/validation.py`: shared event validation for `run_id` (alphanumeric+hyphens, 1-64 chars), `ecc_client` (3-digit), `mode` (full/quick/delta), `dry_run` (boolean), `stage` (1-50 chars). Wired into discovery-engine, data-loader, cutover-orchestrator, rollback-manager |
 | ~~Idempotency~~ | **RESOLVED** — Cosmos DB-backed idempotency in data-loader: `_check_idempotency()` / `_mark_processed()` with composite key (`run_id#stage`, entity ID), 7-day TTL. Prevents duplicate processing on Azure Functions retries. Requires `IDEMPOTENCY_TABLE` env var |
 | ~~FINS polling timeout~~ | **RESOLVED** — FINS_MASS_DATA_MONITOR polling now configurable via `FINS_MAX_POLLS` (default 480) and `FINS_POLL_INTERVAL` (default 30s) with adaptive backoff (interval increases 10% every 60 polls) |
 | ~~Rollback partial-failure risk~~ | **RESOLVED** — Rollback manager now commits in batches (`ROLLBACK_BATCH_SIZE`, default 25) with BAPI_TRANSACTION_COMMIT after each batch. Applied to all 5 rollback functions (finance, BP, materials, universal journal, user assignments) |
@@ -122,7 +122,7 @@
 | ~~Audit trail / compliance logging (SOX, GxP)~~ | ~~**High**~~ → **RESOLVED** — `terraform/modules/audit/` with Azure Monitor Activity Logs, Blob Storage WORM (7-year retention), Azure Monitor metric filters for unauthorized access, RBAC changes, pipeline executions |
 | ~~Disaster recovery / backup strategy~~ | ~~**Medium**~~ → **RESOLVED** — Documented DR plan with RTO/RPO targets, Blob Storage cross-region replication, Cosmos DB PITR, automated backup strategy (see Phase 12) |
 | ~~Load testing results~~ | ~~**Medium**~~ → **RESOLVED** — Locust load test suite (`tests/load_test.py`) with API user simulation, performance targets documented (see Phase 13) |
-| ~~Connection pooling / RFC session management~~ | ~~**Medium**~~ → **RESOLVED** — `lambda/utils/rfc_pool.py` with thread-safe pool |
+| ~~Connection pooling / RFC session management~~ | ~~**Medium**~~ → **RESOLVED** — `functions/utils/rfc_pool.py` with thread-safe pool |
 | ~~Data Factory credentials hardcoded~~ | ~~**Medium**~~ → **RESOLVED** — All 3 environments use `azurerm_key_vault_secret` data sources for database connection strings |
 | Multi-tenant isolation | **Low** — single-tenant design (acceptable for most SAP migrations) |
 
@@ -363,12 +363,12 @@ ACR_NAME=$(terraform output -raw acr_name)
 # Authenticate Docker with ACR
 az acr login --name $ACR_NAME
 
-# Build the image (run from project root — requires SAP NW RFC SDK zip in ecs/)
+# Build the image (run from project root — requires SAP NW RFC SDK zip in containers/)
 # NOTE: The CI/CD pipeline (deploy.yml) automates this — it downloads the SAP NW RFC
 # SDK from a private Blob Storage container before building. For local builds, manually
-# place the SDK zip in ecs/ first.
+# place the SDK zip in containers/ first.
 cd ../../..  # back to project root
-docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .
+docker build -f containers/Dockerfile -t migrate4hana-worker:latest .
 
 # Tag and push
 docker tag migrate4hana-worker:latest $ACR_NAME.azurecr.io/migrate4hana-worker:latest
@@ -498,7 +498,7 @@ az containerapp logs show \
 
 The code-analyzer function uses a dual-path GenAI strategy: the deterministic AST engine runs first (160 rules), and when it finds fewer than `AST_CHANGE_THRESHOLD` changes, it escalates to a GenAI backend for deeper semantic analysis. **Anthropic Claude Opus 4.6 is the primary GenAI path** — it calls the Anthropic API directly with API key authentication.
 
-**Code reference:** `lambda/code-analyzer/genai_router.py` — `_invoke_claude()` calls the Anthropic API via `anthropic` Python SDK.
+**Code reference:** `functions/code-analyzer/genai_router.py` — `_invoke_claude()` calls the Anthropic API via `anthropic` Python SDK.
 
 ### Step 2A.1 — Obtain Anthropic API Key
 
@@ -680,7 +680,7 @@ ABAP Source Code
 
 The air-gapped LLM is an **optional, high-security alternative** to the Claude Opus 4.6 API for organizations that cannot send any data (even PII-scrubbed) to external AI services. It runs a local LLM (e.g., Meta Llama 3 8B) on a GPU Azure VM with **zero internet egress** — traffic is restricted to VNet-internal only.
 
-**Code reference:** `lambda/code-analyzer/genai_router.py` — `_invoke_local_llm()` sends HTTP POST to port 8000 on the GPU instance.
+**Code reference:** `functions/code-analyzer/genai_router.py` — `_invoke_local_llm()` sends HTTP POST to port 8000 on the GPU instance.
 
 **Terraform reference:** `terraform/modules/airgapped-llm/main.tf` — provisions Standard_NC8as_T4_v3 with encrypted 500GB managed disk, zero-egress NSG.
 
@@ -1467,7 +1467,7 @@ Fields masked by data_scrubber.py:
 | Test methods | 52 total |
 | Mock mode | Runs against `MockRFCConnection` — no SAP needed |
 | Live mode | Activates when `SAP_TEST_HOST` env var is set — tests same functions against real SAP |
-| RFC Pool tests | Validates `lambda/utils/rfc_pool.py` borrow/return, health check, connection aging |
+| RFC Pool tests | Validates `functions/utils/rfc_pool.py` borrow/return, health check, connection aging |
 
 ### Running the Tests
 
@@ -1621,7 +1621,7 @@ Runs on every push and PR to `main` and `develop`:
 | Job | What It Does |
 |-----|-------------|
 | `python-test` | Runs `pytest tests/ -v` with JUnit XML output |
-| `security-scan` | Bandit static analysis on `lambda/` and `api_server.py` |
+| `security-scan` | Bandit static analysis on `functions/` and `api_server.py` |
 | `frontend-build` | `npm ci && npm run build` — validates frontend compiles |
 | `package-functions` | Zips all 21 Azure Functions with dependencies |
 | `terraform-validate` | `terraform fmt -check` + `terraform validate` across dev/staging/prod |
@@ -1654,7 +1654,7 @@ Runs on merge to `develop` (→ staging) and `main` (→ production):
 |------|-------------|
 | `set-env` | Routes to `staging` (develop branch) or `prod` (main branch) |
 | `test` | Pre-deploy test gate — must pass before any deployment |
-| `download-sap-sdk` | Downloads SAP NW RFC SDK from private Blob Storage container (`https://migrate4hana-sap-binaries-prod/`) into `ecs/` — SDK is never committed to Git |
+| `download-sap-sdk` | Downloads SAP NW RFC SDK from private Blob Storage container (`https://migrate4hana-sap-binaries-prod/`) into `containers/` — SDK is never committed to Git |
 | `build-ecs-image` | Builds Docker image with SDK present, pushes to ACR, updates Azure Container Apps job definition with new image |
 | `plan` | `terraform plan` against target environment |
 | `deploy` | `terraform apply` + Blob Storage frontend sync + Azure Function code updates |
@@ -2093,7 +2093,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | 4 | Zero integration tests | `tests/` | High | ✅ **RESOLVED** — `tests/test_sap_integration.py` with 52 tests, 15 classes, dual-mode mock + live |
 | 5 | Client lock uses wrong BAPI | `cutover-orchestrator/handler.py` | Low | ✅ **RESOLVED** — Rollback manager now calls `SCCR_UNLOCK_CLIENT` for client lock reversal |
 | 6 | No retry logic in handlers | All handlers | Medium | ✅ **PARTIALLY RESOLVED** — `call_rfc_with_timeout()` adds ThreadPoolExecutor-based timeout (120s default), credential auto-retry on auth failures. Full exponential backoff decorator pending |
-| 7 | No RFC connection pooling | All handlers | Medium | ✅ **RESOLVED** — `lambda/utils/rfc_pool.py` with thread-safe pool, health checks, connection aging, call timeouts, paginated reads, credential refresh |
+| 7 | No RFC connection pooling | All handlers | Medium | ✅ **RESOLVED** — `functions/utils/rfc_pool.py` with thread-safe pool, health checks, connection aging, call timeouts, paginated reads, credential refresh |
 
 ### High Priority (Should fix before production)
 
@@ -2106,7 +2106,7 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | 12 | No Application Insights distributed tracing | All handlers | Low | **Pending** — Add `azure_monitor_opentelemetry` and `tracing_config` |
 | 13 | API server stdlib HTTP | `api_server.py` | Medium | ✅ **RESOLVED** — Rewritten with FastAPI + uvicorn |
 | 14 | Frontend hardcoded samples | `frontend/src/data/` | Low | **Pending** — Remove sample data fallbacks when API connected |
-| 15 | No Dockerfile | Project root | Low | ✅ **PARTIALLY RESOLVED** — `ecs/Dockerfile` for migration worker stages. API server Dockerfile still pending |
+| 15 | No Dockerfile | Project root | Low | ✅ **PARTIALLY RESOLVED** — `containers/Dockerfile` for migration worker stages. API server Dockerfile still pending |
 
 ### GenAI Infrastructure (Resolved in this update)
 
@@ -2140,24 +2140,24 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 
 | # | Gap | File(s) Affected | Status | Fix Applied |
 |---|-----|------------------|--------|-------------|
-| H1 | No Distributed Map for large data volumes | `terraform/modules/durable-functions/main.tf`, `lambda/data-loader/handler.py` | ✅ **Fixed** | Stage 12 now uses 4 parallel streams (finance, BP, materials, custom) via Durable Functions fan-out/fan-in with MaxConcurrency=4, per-stream 15-min timeout |
-| H2 | No financial reconciliation post-load | `terraform/modules/durable-functions/main.tf`, `lambda/data-loader/handler.py` | ✅ **Fixed** | Added Stage 12A: penny-perfect GL balance comparison between ECC (BSEG/BKPF) and S/4HANA (ACDOCA), variance reporting to Blob Storage |
-| H3 | Rollback is fire-and-forget | `lambda/rollback-manager/handler.py` | ✅ **Fixed** | Added Blob Storage state persistence, resume across retries, post-rollback verification via RFC_READ_TABLE, client unlock via SCCR_UNLOCK_CLIENT |
+| H1 | No Distributed Map for large data volumes | `terraform/modules/durable-functions/main.tf`, `functions/data-loader/handler.py` | ✅ **Fixed** | Stage 12 now uses 4 parallel streams (finance, BP, materials, custom) via Durable Functions fan-out/fan-in with MaxConcurrency=4, per-stream 15-min timeout |
+| H2 | No financial reconciliation post-load | `terraform/modules/durable-functions/main.tf`, `functions/data-loader/handler.py` | ✅ **Fixed** | Added Stage 12A: penny-perfect GL balance comparison between ECC (BSEG/BKPF) and S/4HANA (ACDOCA), variance reporting to Blob Storage |
+| H3 | Rollback is fire-and-forget | `functions/rollback-manager/handler.py` | ✅ **Fixed** | Added Blob Storage state persistence, resume across retries, post-rollback verification via RFC_READ_TABLE, client unlock via SCCR_UNLOCK_CLIENT |
 | H4 | PyRFC build script too basic | `scripts/setup-pyrfc.sh` | ✅ **Fixed** | Docker build, import validation in Functions container, layer size check, auto-updates terraform.tfvars, clear error messages for missing SDK |
-| H5 | RFC connections not pooled | `lambda/utils/rfc_pool.py` | ✅ **Fixed** | Thread-safe pool with RFC_PING health checks, auto-reconnect, 300s connection aging, borrow/return pattern, Functions warm-start reuse |
+| H5 | RFC connections not pooled | `functions/utils/rfc_pool.py` | ✅ **Fixed** | Thread-safe pool with RFC_PING health checks, auto-reconnect, 300s connection aging, borrow/return pattern, Functions warm-start reuse |
 
 ### Production Hardening v5.0 (Resolved in this update)
 
 | # | Gap | File(s) Affected | Status | Fix Applied |
 |---|-----|------------------|--------|-------------|
-| P1 | RFC calls can hang indefinitely | `lambda/utils/rfc_pool.py` | ✅ **Fixed** | `call_rfc_with_timeout()` — ThreadPoolExecutor wrapper with configurable timeout (default 120s via `RFC_CALL_TIMEOUT_SECONDS`) |
-| P2 | Unbounded table reads (ROWCOUNT=99999) | `lambda/utils/rfc_pool.py`, `lambda/discovery-engine/handler.py` | ✅ **Fixed** | `read_table_chunked()` generator with ROWSKIPS/ROWCOUNT pagination (default 5000 rows/page via `RFC_PAGE_SIZE`), max_rows safety cap. All 6 discovery scanners converted |
-| P3 | Credentials never refresh during long runs | `lambda/utils/rfc_pool.py` | ✅ **Fixed** | `_resolve_params()` caches Key Vault credentials with TTL (300s default). Auth-failure auto-retry with cache invalidation in `get_connection()` |
-| P4 | No Azure Functions event input validation | `lambda/utils/validation.py` + 4 handlers | ✅ **Fixed** | New `validate_event()` validates run_id, ecc_client, mode, dry_run, stage. Wired into discovery-engine, data-loader, cutover-orchestrator, rollback-manager |
-| P5 | No idempotency on Azure Functions retries | `lambda/data-loader/handler.py` | ✅ **Fixed** | Cosmos DB-backed `_check_idempotency()` / `_mark_processed()` with composite key, 7-day TTL. Applied to finance, BP, and material document loading |
-| P6 | FINS polling has no configurable timeout | `lambda/data-loader/handler.py` | ✅ **Fixed** | Configurable `FINS_MAX_POLLS` (480) and `FINS_POLL_INTERVAL` (30s) with adaptive backoff (+10% interval every 60 polls) |
-| P7 | Rollback commits all-or-nothing | `lambda/rollback-manager/handler.py` | ✅ **Fixed** | Batch commits via `ROLLBACK_BATCH_SIZE` (default 25) with BAPI_TRANSACTION_COMMIT after each batch. Applied to all 5 rollback functions |
-| P8 | Source system locking is stub only | `lambda/cutover-orchestrator/handler.py`, `lambda/rollback-manager/handler.py` | ✅ **Fixed** | Lock: SCCR_LOCK_CLIENT + BAPI_USER_LOCK. Unlock: SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK |
+| P1 | RFC calls can hang indefinitely | `functions/utils/rfc_pool.py` | ✅ **Fixed** | `call_rfc_with_timeout()` — ThreadPoolExecutor wrapper with configurable timeout (default 120s via `RFC_CALL_TIMEOUT_SECONDS`) |
+| P2 | Unbounded table reads (ROWCOUNT=99999) | `functions/utils/rfc_pool.py`, `functions/discovery-engine/handler.py` | ✅ **Fixed** | `read_table_chunked()` generator with ROWSKIPS/ROWCOUNT pagination (default 5000 rows/page via `RFC_PAGE_SIZE`), max_rows safety cap. All 6 discovery scanners converted |
+| P3 | Credentials never refresh during long runs | `functions/utils/rfc_pool.py` | ✅ **Fixed** | `_resolve_params()` caches Key Vault credentials with TTL (300s default). Auth-failure auto-retry with cache invalidation in `get_connection()` |
+| P4 | No Azure Functions event input validation | `functions/utils/validation.py` + 4 handlers | ✅ **Fixed** | New `validate_event()` validates run_id, ecc_client, mode, dry_run, stage. Wired into discovery-engine, data-loader, cutover-orchestrator, rollback-manager |
+| P5 | No idempotency on Azure Functions retries | `functions/data-loader/handler.py` | ✅ **Fixed** | Cosmos DB-backed `_check_idempotency()` / `_mark_processed()` with composite key, 7-day TTL. Applied to finance, BP, and material document loading |
+| P6 | FINS polling has no configurable timeout | `functions/data-loader/handler.py` | ✅ **Fixed** | Configurable `FINS_MAX_POLLS` (480) and `FINS_POLL_INTERVAL` (30s) with adaptive backoff (+10% interval every 60 polls) |
+| P7 | Rollback commits all-or-nothing | `functions/rollback-manager/handler.py` | ✅ **Fixed** | Batch commits via `ROLLBACK_BATCH_SIZE` (default 25) with BAPI_TRANSACTION_COMMIT after each batch. Applied to all 5 rollback functions |
+| P8 | Source system locking is stub only | `functions/cutover-orchestrator/handler.py`, `functions/rollback-manager/handler.py` | ✅ **Fixed** | Lock: SCCR_LOCK_CLIENT + BAPI_USER_LOCK. Unlock: SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK |
 
 ### Low Priority (Nice to have)
 
@@ -2305,10 +2305,10 @@ migrate4hana-main/
 ├── run_10x_evaluation.py          ← 10x scale evaluation
 ├── pdf_report_generator.py        ← ReportLab PDF generation
 ├── .dockerignore                  ← Docker build context exclusions (NEW v6.0)
-├── ecs/                           ← Azure Container Apps container (NEW v6.0)
+├── containers/                           ← Azure Container Apps container (NEW v6.0)
 │   ├── Dockerfile                 ← Multi-stage build (Azure Linux (CBL-Mariner) + SAP NW RFC SDK + PyRFC)
 │   └── entrypoint.py              ← Unified Docker wrapper (STAGE_TARGET dispatch + SFN callbacks)
-├── lambda/
+├── functions/
 │   ├── code-analyzer/             ← AST engine (160 rules), country rules (710+),
 │   │   │                            data scrubber, deep knowledge engine [Azure Container Apps]
 │   │   ├── handler.py
@@ -2393,9 +2393,9 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 
 | Component | Change |
 |-----------|--------|
-| **CI/CD SAP SDK Download** | `deploy.yml` updated — downloads SAP NW RFC SDK from private Blob Storage container (`az storage blob download`) at build time, injects into `ecs/` before `docker build`, cleans up post-build. SDK never committed to Git |
+| **CI/CD SAP SDK Download** | `deploy.yml` updated — downloads SAP NW RFC SDK from private Blob Storage container (`az storage blob download`) at build time, injects into `containers/` before `docker build`, cleans up post-build. SDK never committed to Git |
 | **Container Apps Placeholder Bootstrap** | `terraform/modules/container-apps/main.tf` — task definition uses `alpine:latest` placeholder image + `lifecycle { ignore_changes = [container_definitions] }`. Terraform manages infra; CI/CD deploys real image |
-| **Streamed Reconciliation** | `lambda/data-loader/handler.py` — Stage 12A `generate_reconciliation_report()` rewritten with `_read_table_chunked()` generator (50K rows/chunk) and running aggregation. Prevents OOM on 500M+ row tables. Totals persisted to Blob Storage via `_persist_aggregated_totals()` |
+| **Streamed Reconciliation** | `functions/data-loader/handler.py` — Stage 12A `generate_reconciliation_report()` rewritten with `_read_table_chunked()` generator (50K rows/chunk) and running aggregation. Prevents OOM on 500M+ row tables. Totals persisted to Blob Storage via `_persist_aggregated_totals()` |
 | **ADMS Key Vault** | All 3 environments (dev/staging/prod) `main.tf` — database connection strings fetched from `azurerm_key_vault_secret` data sources. Hardcoded passwords and password variables removed |
 
 ### v6.0 Azure Container Apps Compute Upgrade (April 1, 2026) — What Changed
@@ -2403,13 +2403,13 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 | Component | Change |
 |-----------|--------|
 | **Azure Container Apps Module** | New `terraform/modules/container-apps/main.tf` — Azure Container Registry (ACR) repository, Azure Container Apps environment with Azure Monitor container insights, Container Apps job definition (4 vCPU / 16 GB), execution role, task role with Blob Storage/Cosmos DB/Claude/KeyVault/DurableFunctions permissions, Network NSG (NSG) |
-| **Docker Image** | `ecs/Dockerfile` — Multi-stage build on Azure Linux (CBL-Mariner), SAP NW RFC SDK + PyRFC compilation, non-root user, copies all handler source code from `lambda/` |
-| **Container Apps Entrypoint** | `ecs/entrypoint.py` — Unified Docker wrapper: `STAGE_TARGET` env var selects handler, heartbeat thread (120s), `_Container AppsContext` Azure Functions shim, `SendTaskSuccess`/`SendTaskFailure` callbacks |
+| **Docker Image** | `containers/Dockerfile` — Multi-stage build on Azure Linux (CBL-Mariner), SAP NW RFC SDK + PyRFC compilation, non-root user, copies all handler source code from `functions/` |
+| **Container Apps Entrypoint** | `containers/entrypoint.py` — Unified Docker wrapper: `STAGE_TARGET` env var selects handler, heartbeat thread (120s), `_Container AppsContext` Azure Functions shim, `SendTaskSuccess`/`SendTaskFailure` callbacks |
 | **Azure Durable Functions → Container Apps** | Stages 1, 5, 12, 12A now use `containerapp job start` with `waitForTaskToken` callback pattern instead of Azure Functions invoke. HeartbeatSeconds=300, TimeoutSeconds=3600–14400 per stage |
 | **Dead Azure Functions Cleanup** | Removed `discovery-engine`, `code-analyzer`, `data-loader` Function definitions from dev, staging, and prod environments |
 | **Container Apps Wiring** | All 3 environments (dev/staging/prod) now pass Azure Container Apps environment ID, job definition ID, Network NSG (NSG), subnets, and role assignments into the Azure Durable Functions module |
 | **Docker Context** | `.dockerignore` at project root excludes `__pycache__`, `.git`, `node_modules`, `test-output`, `frontend`, `terraform`, `docs`, `mock-ecc`, `tests`, `scripts` |
-| **Terraform Modules** | 13 → 14 modules (added `ecs/`) |
+| **Terraform Modules** | 13 → 14 modules (added `containers/`) |
 
 ### v5.0 Production Hardening (March 24, 2026) — What Changed
 
@@ -2418,7 +2418,7 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 | **RFC Call Timeouts** | `call_rfc_with_timeout()` in `rfc_pool.py` — ThreadPoolExecutor wrapper preventing indefinite hangs (default 120s, configurable via `RFC_CALL_TIMEOUT_SECONDS`) |
 | **Paginated Table Reads** | `read_table_chunked()` generator — ROWSKIPS/ROWCOUNT pagination (default 5000 rows/page via `RFC_PAGE_SIZE`), max_rows safety cap. Discovery engine converted from unbounded reads |
 | **Credential Refresh** | RFC pool caches Key Vault credentials with 300s TTL. Auth-failure auto-retry with cache invalidation |
-| **Input Validation** | New `lambda/utils/validation.py` — shared event validation wired into 4 handlers (discovery-engine, data-loader, cutover-orchestrator, rollback-manager) |
+| **Input Validation** | New `functions/utils/validation.py` — shared event validation wired into 4 handlers (discovery-engine, data-loader, cutover-orchestrator, rollback-manager) |
 | **Idempotency** | Cosmos DB-backed idempotency in data-loader — prevents duplicate processing on Azure Functions retries (7-day TTL, requires `IDEMPOTENCY_TABLE` env var) |
 | **FINS Polling** | Configurable timeout: `FINS_MAX_POLLS` (480) × `FINS_POLL_INTERVAL` (30s) with adaptive backoff (+10% every 60 polls) |
 | **Batch Rollback** | Rollback manager commits in batches of 25 (`ROLLBACK_BATCH_SIZE`) with BAPI_TRANSACTION_COMMIT after each batch |
@@ -2444,7 +2444,7 @@ This guide covers 13 phases to take Migrate4HANA from its current state to a pro
 | Component | Change |
 |-----------|--------|
 | **API Server** | Full rewrite from stdlib `http.server` → FastAPI + uvicorn. TLS-ready, Pydantic validation, CORS, async, multi-worker, auto-generated OpenAPI docs |
-| **RFC Connection Pool** | New `lambda/utils/rfc_pool.py` — thread-safe pool preventing SAP Gateway saturation |
+| **RFC Connection Pool** | New `functions/utils/rfc_pool.py` — thread-safe pool preventing SAP Gateway saturation |
 | **Data Loading** | Stage 12 now uses Durable Functions fan-out/fan-in with 4 parallel streams (finance, BP, materials, custom) |
 | **Financial Reconciliation** | New Stage 12A — penny-perfect GL balance comparison between ECC and S/4HANA |
 | **Rollback Manager** | Hardened with Blob Storage state persistence, resume support, post-rollback verification, client unlock |

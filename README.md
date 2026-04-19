@@ -146,7 +146,7 @@ The **Code Analyzer** (Stage 5) uses a dual-path strategy for ABAP code remediat
 
 ```
 migrate4hanav2/
-├── lambda/                              # Azure Function handlers (18 stages)
+├── functions/                              # Azure Function handlers (18 stages)
 │   ├── discovery-engine/                # Stage 1: ECC system scan
 │   ├── sum-orchestrator/                # Stage 1A: SUM coordination
 │   ├── simplification-check/            # Stage 2: S/4HANA simplification analysis
@@ -181,7 +181,7 @@ migrate4hanav2/
 │       ├── rfc_pool.py                  #   Thread-safe SAP RFC connection pool
 │       ├── rule_router.py               #   Simplification rules engine
 │       └── validation.py               #   Input validation
-├── ecs/                                 # Container Apps worker image
+├── containers/                                 # Container Apps worker image
 │   ├── Dockerfile                       #   CBL-Mariner based, PyRFC + SAP NW RFC SDK
 │   └── entrypoint.py                    #   Durable Functions callback integration
 ├── frontend/                            # React + Vite + Tailwind UI
@@ -286,7 +286,7 @@ terraform init && terraform apply
 
 # 4. Build and push container images
 az acr login --name <your-acr>
-docker build -f ecs/Dockerfile -t <your-acr>.azurecr.io/migrate4hana/worker:latest .
+docker build -f containers/Dockerfile -t <your-acr>.azurecr.io/migrate4hana/worker:latest .
 docker push <your-acr>.azurecr.io/migrate4hana/worker:latest
 
 # 5. Deploy Azure Functions

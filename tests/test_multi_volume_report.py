@@ -11,7 +11,7 @@ from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_DIR)
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "migration-completeness-analyzer"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "migration-completeness-analyzer"))
 
 from multi_volume_report_generator import (
     generate_multi_volume_report,

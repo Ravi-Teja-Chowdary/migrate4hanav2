@@ -8,7 +8,7 @@ import unittest
 
 # Add paths
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "migration-completeness-analyzer"))
+sys.path.insert(0, os.path.join(PROJECT_DIR, "functions", "migration-completeness-analyzer"))
 
 from handler import analyze_completion, WEIGHTS
 
