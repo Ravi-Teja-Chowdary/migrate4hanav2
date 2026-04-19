@@ -19,28 +19,28 @@ resource "azurerm_network_security_group" "gpu_nsg" {
   location            = var.location
   resource_group_name = var.resource_group_name
 
-  # Allow inbound LLM API calls from functions subnet
+  # Allow inbound Ollama API calls from functions subnet
   security_rule {
-    name                       = "AllowFunctionsLLMAPI"
+    name                       = "AllowFunctionsOllamaAPI"
     priority                   = 100
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_ranges    = ["8000"]
+    destination_port_ranges    = ["11434"]
     source_address_prefix      = var.functions_subnet_prefix
     destination_address_prefix = "*"
   }
 
-  # Allow inbound LLM API calls from containers subnet
+  # Allow inbound Ollama API calls from containers subnet
   security_rule {
-    name                       = "AllowContainersLLMAPI"
+    name                       = "AllowContainersOllamaAPI"
     priority                   = 110
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_ranges    = ["8000"]
+    destination_port_ranges    = ["11434"]
     source_address_prefix      = var.containers_subnet_prefix
     destination_address_prefix = "*"
   }
@@ -71,9 +71,12 @@ resource "azurerm_network_security_group" "gpu_nsg" {
     destination_address_prefix = "VirtualNetwork"
   }
 
-  # Allow outbound to Azure Storage (for initial model download)
+  # Allow outbound HTTPS for initial Ollama install and model download
+  # NOTE: After provisioning, manually tighten this rule or revoke it
+  # to achieve full air-gap. The DenyInternetOutbound rule (pri 4096)
+  # blocks all other outbound traffic.
   security_rule {
-    name                       = "AllowStorageOutbound"
+    name                       = "AllowInitialSetupHTTPS"
     priority                   = 110
     direction                  = "Outbound"
     access                     = "Allow"
@@ -81,7 +84,7 @@ resource "azurerm_network_security_group" "gpu_nsg" {
     source_port_range          = "*"
     destination_port_range     = "443"
     source_address_prefix      = "*"
-    destination_address_prefix = "Storage"
+    destination_address_prefix = "Internet"
   }
 
   # CRITICAL: Deny all outbound Internet traffic for air-gap
@@ -163,9 +166,7 @@ resource "azurerm_linux_virtual_machine" "gpu" {
     identity_ids = [var.managed_identity_id]
   }
 
-  custom_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-    storage_account_name = var.storage_account_name
-  }))
+  custom_data = base64encode(file("${path.module}/cloud-init.yaml"))
 
   tags = var.tags
 }

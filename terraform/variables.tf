@@ -107,10 +107,10 @@ variable "anthropic_model" {
   default     = "claude-opus-4-6-20250219"
 }
 
-variable "local_llm_endpoint" {
-  description = "HTTP endpoint of a self-hosted LLM (blank = use Anthropic Claude)"
+variable "local_llm_model" {
+  description = "Ollama model name for air-gapped LLM inference"
   type        = string
-  default     = ""
+  default     = "gemma4:26b"
 }
 
 # ── AST / Analysis ───────────────────────────────────────────

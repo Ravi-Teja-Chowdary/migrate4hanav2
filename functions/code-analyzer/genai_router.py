@@ -5,7 +5,7 @@ Routes ABAP code analysis requests to the optimal GenAI backend:
 
   1. AST Engine        (local, zero-latency, deterministic)
   2. Claude Opus 4.6   (cloud, via Anthropic API)
-  3. Air-gapped LLM    (on-prem GPU running vLLM, for classified workloads)
+  3. Air-gapped LLM    (Gemma 4 26B via Ollama on Azure GPU VM, for classified workloads)
 
 Routing Logic:
   - Always run the AST engine first (structural, deterministic transforms)
@@ -16,7 +16,8 @@ Routing Logic:
   - Fallback chain (auto mode): Claude → Local LLM → AST-only
 
 Environment:
-    LOCAL_LLM_ENDPOINT      — URL for air-gapped local LLM (OpenAI-compatible)
+    LOCAL_LLM_HOST          — Ollama host for air-gapped Gemma 4 (e.g. http://10.0.5.4:11434)
+    LOCAL_LLM_MODEL         — Ollama model tag (default "gemma4:26b")
     AST_CHANGE_THRESHOLD    — minimum AST changes to skip GenAI (default 3)
     LLM_MODE                — "auto" | "cloud" | "airgapped"
 """
@@ -26,7 +27,7 @@ import os
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import ollama as ollama_sdk
 
 import claude_engine
 from data_scrubber import mask_payload_for_infosec
@@ -36,7 +37,8 @@ logger = logging.getLogger("genai_router")
 logger.setLevel(logging.INFO)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-LOCAL_LLM_ENDPOINT = os.environ.get("LOCAL_LLM_ENDPOINT", "")
+LOCAL_LLM_HOST = os.environ.get("LOCAL_LLM_HOST", "")
+LOCAL_LLM_MODEL = os.environ.get("LOCAL_LLM_MODEL", "gemma4:26b")
 AST_CHANGE_THRESHOLD = int(os.environ.get("AST_CHANGE_THRESHOLD", "3"))
 LLM_MODE = os.environ.get("LLM_MODE", "auto").lower()  # auto | cloud | airgapped
 
@@ -165,64 +167,53 @@ def _invoke_claude(
 
 def _invoke_local_llm(prompt: str) -> Optional[Dict[str, Any]]:
     """
-    Invoke the air-gapped local LLM running on a GPU VM (vLLM).
+    Invoke the air-gapped Gemma 4 (26B) model via Ollama on an Azure GPU VM.
 
-    Uses the OpenAI-compatible chat completions format served by vLLM.
+    Connects to the Ollama API at LOCAL_LLM_HOST using the ``ollama`` Python SDK.
     Timeout: 120 seconds. Handles connection errors gracefully.
 
     Returns parsed findings dict or None on failure.
     """
-    endpoint = LOCAL_LLM_ENDPOINT
-    if not endpoint:
-        logger.info("Local LLM endpoint not configured — skipping")
+    host = LOCAL_LLM_HOST
+    if not host:
+        logger.info("LOCAL_LLM_HOST not configured — skipping air-gapped LLM")
         return None
 
-    url = endpoint.rstrip("/") + "/v1/chat/completions"
-
     try:
-        payload = {
-            "model": "local-model",
-            "messages": [
+        client = ollama_sdk.Client(host=host, timeout=120)
+
+        logger.info(
+            "Invoking Ollama (%s) at %s", LOCAL_LLM_MODEL, host
+        )
+
+        response = client.chat(
+            model=LOCAL_LLM_MODEL,
+            messages=[
                 {
                     "role": "system",
                     "content": (
-                        "You are an SAP ABAP migration expert. "
+                        "You are an SAP S/4HANA migration expert. "
+                        "Fix the following ABAP code. "
                         "Respond with ONLY valid JSON."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": 4096,
-            "temperature": 0.1,
-        }
-
-        response = requests.post(
-            url,
-            json=payload,
-            timeout=120,
-            headers={"Content-Type": "application/json"},
+            options={"temperature": 0.1, "num_predict": 4096},
         )
-        response.raise_for_status()
-        data = response.json()
 
-        content = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
+        content = response["message"]["content"]
+        logger.info(
+            "Ollama response: %d chars (model=%s)",
+            len(content), LOCAL_LLM_MODEL,
         )
-        if not content:
-            content = data.get("choices", [{}])[0].get("text", "")
+        return _parse_genai_response(content, f"ollama/{LOCAL_LLM_MODEL}")
 
-        return _parse_genai_response(content, "local_llm")
-
-    except requests.ConnectionError as exc:
-        logger.warning("Cannot connect to local LLM at %s: %s", url, exc)
-        return None
-    except requests.Timeout:
-        logger.warning("Local LLM request timed out after 120s")
+    except ConnectionError as exc:
+        logger.warning("Cannot connect to Ollama at %s: %s", host, exc)
         return None
     except Exception as exc:
-        logger.warning("Local LLM invocation failed: %s", exc)
+        logger.warning("Ollama invocation failed: %s", exc)
         return None
 
 

@@ -5,10 +5,10 @@ packages:
   - python3.11
   - python3.11-venv
   - python3-pip
-  - build-essential
+  - curl
 
 runcmd:
-  # Install NVIDIA drivers if not pre-installed
+  # Install NVIDIA drivers if not pre-installed (HPC images typically include them)
   - |
     if ! command -v nvidia-smi &> /dev/null; then
       apt-get install -y linux-headers-$(uname -r)
@@ -18,38 +18,25 @@ runcmd:
       apt-get install -y nvidia-driver-535 nvidia-utils-535
     fi
 
-  # Install Python 3.11 and pip
-  - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
-  - python3 -m pip install --upgrade pip
+  # Install Ollama
+  - curl -fsSL https://ollama.com/install.sh | sh
 
-  # Install vLLM
-  - python3 -m pip install vllm
-
-  # Download model from Azure Blob Storage
-  - mkdir -p /opt/models
-  - az storage blob download-batch -d /opt/models -s llm-models --account-name ${storage_account_name} --auth-mode login
-
-  # Create systemd service for vLLM
+  # Configure Ollama to listen on all interfaces (reachable from code-analyzer)
   - |
-    cat > /etc/systemd/system/vllm.service << 'EOF'
-    [Unit]
-    Description=vLLM OpenAI-compatible API Server
-    After=network.target
-
+    mkdir -p /etc/systemd/system/ollama.service.d
+    cat > /etc/systemd/system/ollama.service.d/override.conf << 'EOF'
     [Service]
-    Type=simple
-    User=root
-    WorkingDirectory=/opt/models
-    ExecStart=/usr/local/bin/python3 -m vllm.entrypoints.openai.api_server --model /opt/models/llama-3-8b --host 0.0.0.0 --port 8000
-    Restart=always
-    RestartSec=10
-    Environment=CUDA_VISIBLE_DEVICES=0
-
-    [Install]
-    WantedBy=multi-user.target
+    Environment="OLLAMA_HOST=0.0.0.0"
     EOF
 
-  # Enable and start vLLM service
   - systemctl daemon-reload
-  - systemctl enable vllm.service
-  - systemctl start vllm.service
+  - systemctl enable ollama.service
+  - systemctl start ollama.service
+
+  # Wait for Ollama to be ready, then pull Gemma 4 26B
+  - |
+    for i in $(seq 1 30); do
+      curl -sf http://localhost:11434/api/tags > /dev/null && break
+      sleep 5
+    done
+    ollama pull gemma4:26b

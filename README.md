@@ -50,7 +50,7 @@ Key capabilities:
 | Orchestration | Azure Durable Functions (17-stage pipeline) |
 | API Gateway | Azure API Management (APIM) |
 | GenAI Path A (Cloud) | Anthropic Claude Opus 4.6 (direct API via `anthropic` SDK) |
-| GenAI Path B (Air-Gapped) | Azure NC-series GPU VM (vLLM, NSG blocks internet) |
+| GenAI Path B (Air-Gapped) | Azure NC-series GPU VM (Ollama serving Gemma 4 26B, NSG blocks internet) |
 | Database | Azure Cosmos DB (NoSQL API) |
 | Object Storage | Azure Blob Storage (4 containers, 7-year WORM for audit) |
 | Secrets | Azure Key Vault + User-Assigned Managed Identity |
@@ -128,15 +128,15 @@ The **Code Analyzer** (Stage 5) uses a dual-path strategy for ABAP code remediat
                     │   Path A      │ │   Path B            │
                     │   Cloud       │ │   Air-Gapped        │
                     │               │ │                     │
-                    │ Claude Opus   │ │ Self-hosted LLM     │
-                    │ 4.6 via       │ │ (e.g. Llama 3) on  │
+                    │ Claude Opus   │ │ Gemma 4 26B via     │
+                    │ 4.6 via       │ │ Ollama on Azure     │
                     │ anthropic SDK │ │ NC-series GPU VM    │
                     │               │ │ NSG: no internet    │
                     └───────────────┘ └─────────────────────┘
 ```
 
 - **Path A (Cloud):** Anthropic Claude Opus 4.6 via the `anthropic` Python SDK. API key stored in Azure Key Vault. Exponential backoff for rate limits.
-- **Path B (Air-Gapped):** Self-hosted LLM running on an Azure NC-series GPU VM inside an isolated subnet. NSG denies all internet outbound traffic — zero data exfiltration.
+- **Path B (Air-Gapped):** Gemma 4 26B served by Ollama on an Azure NC-series GPU VM inside an isolated subnet. NSG denies all internet outbound traffic — zero data exfiltration. Uses the `ollama` Python SDK for inference.
 - **Routing:** Controlled by the `LLM_MODE` environment variable (`auto`, `cloud`, `airgapped`). In `auto` mode, sensitive AST nodes are automatically routed to the air-gapped path.
 - **PII Masking:** `data_scrubber.py` strips personally identifiable information before any GenAI dispatch.
 
@@ -307,6 +307,8 @@ Key environment variables (see [`.env.example`](.env.example) for the full list)
 | `AZURE_WEB_PUBSUB_CONNECTION_STRING` | Web PubSub connection string |
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude |
 | `ANTHROPIC_MODEL` | Claude model ID (default: `claude-opus-4-6-20250219`) |
+| `LOCAL_LLM_HOST` | Ollama endpoint on GPU VM (e.g., `http://10.0.5.4:11434`) |
+| `LOCAL_LLM_MODEL` | Ollama model name (default: `gemma4:26b`) |
 | `LLM_MODE` | GenAI routing: `auto`, `cloud`, or `airgapped` |
 | `AST_CHANGE_THRESHOLD` | Threshold for GenAI escalation (default: `3`) |
 

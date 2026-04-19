@@ -129,7 +129,6 @@ module "gpu_vm" {
   gpu_subnet_id            = module.vnet.gpu_subnet_id
   functions_subnet_prefix  = var.subnet_prefixes.functions
   containers_subnet_prefix = var.subnet_prefixes.containers
-  storage_account_name     = module.storage.storage_account_name
   managed_identity_id      = module.keyvault.managed_identity_id
   ssh_public_key           = var.ssh_public_key
 }
@@ -164,6 +163,8 @@ module "functions" {
   keyvault_uri                 = module.keyvault.vault_uri
   web_pubsub_connection_string = module.web_pubsub.connection_string
   anthropic_api_key_secret_uri = module.genai.secret_id
+  local_llm_host               = var.enable_gpu_vm ? "http://${module.gpu_vm[0].private_ip_address}:11434" : ""
+  local_llm_model              = var.local_llm_model
 }
 
 # ── Container Apps (4 heavy compute) ──────────────────────────

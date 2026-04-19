@@ -100,8 +100,9 @@ resource "azurerm_linux_function_app" "migrate4hana" {
     # Anthropic Claude — key pulled from Key Vault reference
     ANTHROPIC_API_KEY = "@Microsoft.KeyVault(SecretUri=${var.anthropic_api_key_secret_uri})"
 
-    # Air-gapped LLM fallback
-    LOCAL_LLM_ENDPOINT = var.local_llm_endpoint
+    # Air-gapped LLM — Ollama endpoint
+    LOCAL_LLM_HOST  = var.local_llm_host
+    LOCAL_LLM_MODEL = var.local_llm_model
 
     # AST → GenAI escalation threshold
     AST_CHANGE_THRESHOLD = tostring(var.ast_change_threshold)

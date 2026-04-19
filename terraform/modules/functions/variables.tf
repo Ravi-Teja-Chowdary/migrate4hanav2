@@ -76,10 +76,16 @@ variable "anthropic_api_key_secret_uri" {
   description = "Key Vault Secret URI for the Anthropic API key (used in KV reference)"
 }
 
-variable "local_llm_endpoint" {
+variable "local_llm_host" {
   type        = string
   default     = ""
-  description = "HTTP endpoint for air-gapped local LLM"
+  description = "Ollama API endpoint for air-gapped GPU VM (e.g., http://10.0.5.4:11434)"
+}
+
+variable "local_llm_model" {
+  type        = string
+  default     = "gemma4:26b"
+  description = "Ollama model name for air-gapped LLM inference"
 }
 
 variable "ast_change_threshold" {

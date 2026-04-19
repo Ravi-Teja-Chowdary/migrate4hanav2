@@ -582,7 +582,7 @@ The `genai_router.py` reads these environment variables:
 | `CLAUDE_MODEL_ID` | `claude-opus-4-6-20250515` | Which Anthropic model to invoke |
 | `AST_CHANGE_THRESHOLD` | `3` | If AST finds fewer than this many changes, escalate to GenAI |
 | `ANTHROPIC_API_KEY_VAULT_URL` | `""` | Key Vault secret URL for the Anthropic API key |
-| `LOCAL_LLM_ENDPOINT` | `""` (empty = disabled) | Air-gapped LLM URL (see Phase 2B) |
+| `LOCAL_LLM_HOST` | `""` (empty = disabled) | Ollama endpoint URL (see Phase 2B) |
 
 These are now set in `terraform/modules/functions/main.tf` via the Function App configuration.
 
@@ -678,11 +678,11 @@ ABAP Source Code
 
 ## 6. Phase 2B — Air-Gapped LLM Setup (GenAI — High-Security Path)
 
-The air-gapped LLM is an **optional, high-security alternative** to the Claude Opus 4.6 API for organizations that cannot send any data (even PII-scrubbed) to external AI services. It runs a local LLM (e.g., Meta Llama 3 8B) on a GPU Azure VM with **zero internet egress** — traffic is restricted to VNet-internal only.
+The air-gapped LLM is an **optional, high-security alternative** to the Claude Opus 4.6 API for organizations that cannot send any data (even PII-scrubbed) to external AI services. It runs **Gemma 4 26B via Ollama** on a GPU Azure VM with **zero internet egress** — traffic is restricted to VNet-internal only.
 
-**Code reference:** `functions/code-analyzer/genai_router.py` — `_invoke_local_llm()` sends HTTP POST to port 8000 on the GPU instance.
+**Code reference:** `functions/code-analyzer/genai_router.py` — `_invoke_local_llm()` uses the `ollama` Python SDK to call port 11434 on the GPU instance.
 
-**Terraform reference:** `terraform/modules/airgapped-llm/main.tf` — provisions Standard_NC8as_T4_v3 with encrypted 500GB managed disk, zero-egress NSG.
+**Terraform reference:** `terraform/modules/gpu-vm/main.tf` — provisions NC-series VM with cloud-init that auto-installs Ollama and pulls Gemma 4 26B.
 
 ### When to Use Air-Gapped vs Claude
 
@@ -691,207 +691,123 @@ The air-gapped LLM is an **optional, high-security alternative** to the Claude O
 | Data sensitivity | PII-scrubbed code is acceptable to send to Anthropic API | No data can leave your VNet, even scrubbed |
 | Compliance | Standard enterprise SOX/SOC2 | Government/defense (FedRAMP High, IL4+), classified |
 | Cost | Pay-per-token (~$15-75 per migration) | Fixed VM cost (~$0.90/hr while running) |
-| Quality | Claude Opus 4.6 (excellent) | Llama 3 8B (good, less nuanced) |
-| Setup effort | Low (API key + Key Vault) | Medium (install model, configure server) |
+| Quality | Claude Opus 4.6 (excellent) | Gemma 4 26B (good, open-source) |
+| Setup effort | Low (API key + Key Vault) | Medium (Terraform provisions Ollama + Gemma 4 automatically) |
 | Availability | Always on (API) | Must start/stop VM manually or via automation |
 
 > **Recommendation:** Use Claude Opus 4.6 for most deployments. Only deploy the air-gapped LLM if your security policy explicitly prohibits external AI services.
 
-### Step 2B.1 — Choose Your GPU VM Image
+### Step 2B.1 — GPU VM Provisioning
 
-The Terraform module uses a placeholder VM image. Replace it with a real Azure GPU VM image:
-
-```bash
-# Find available NVIDIA GPU VM images
-az vm image list \
-  --publisher microsoft-dsvm \
-  --offer ubuntu-hpc \
-  --all \
-  --query "[?contains(sku, 'gpu')].{URN:urn,SKU:sku}" \
-  --output table
-
-# Or use the Data Science VM with GPU support
-az vm image list \
-  --publisher microsoft-dsvm \
-  --offer ubuntu-2204 \
-  --all \
-  --output table
-```
-
-Update `terraform/environments/dev/main.tf`:
-
-```hcl
-module "airgapped_llm" {
-  source                       = "../../modules/airgapped-llm"
-  resource_group_name          = azurerm_resource_group.main.name
-  location                     = var.azure_location
-  vnet_id                      = module.vnet.vnet_id
-  vnet_cidr                    = var.vnet_cidr
-  functions_private_subnets    = var.subnet_cidrs
-  isolated_subnet_id           = module.vnet.private_subnet_ids[0]
-  gpu_vm_image_publisher       = "microsoft-dsvm"
-  gpu_vm_image_offer           = "ubuntu-hpc"
-  gpu_vm_image_sku             = "2204-gen2"
-  gpu_vm_size                  = "Standard_NC8as_T4_v3"
-}
-```
-
-### Step 2B.2 — Pre-Load the LLM Model onto the Instance
-
-Since the instance has **no internet access** (zero-egress Network NSG (NSG)), you must get model weights onto it via Blob Storage or a pre-baked VM Image.
-
-**Option A: Model via Blob Storage (recommended)**
+The GPU VM is provisioned automatically by Terraform when `enable_gpu_vm = true`. The cloud-init script installs Ollama and pulls the Gemma 4 26B model.
 
 ```bash
-# 1. Download Llama 3 8B model weights to your workstation
-#    (Requires Meta license acceptance at https://llama.meta.com/)
-#    Or use HuggingFace: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct
-
-# 2. Upload to Blob Storage (private container, encrypted)
-az storage container create \
-  --name llm-models \
-  --account-name migrate4hanastagingdev
-
-az storage blob upload-batch \
-  --destination llm-models/llama-3-8b \
-  --source ./Meta-Llama-3-8B-Instruct/ \
-  --account-name migrate4hanastagingdev
-
-# 3. Add Private Endpoint for Blob Storage so the VM can reach storage without internet
-#    (The private-endpoints module should include this — verify)
-az network private-endpoint list \
-  --resource-group migrate4hana-dev-rg \
-  --query "[?contains(name, 'storage')].{Name:name,Status:privateLinkServiceConnections[0].privateLinkServiceConnectionState.status}" \
-  --output table
-
-# 4. The instance custom_data script (added to airgapped-llm/main.tf) handles:
-#    - Installing vLLM inference server
-#    - Downloading model from Blob Storage
-#    - Starting the server on port 8000
-```
-
-**Option B: Pre-baked VM Image**
-
-```bash
-# 1. Launch a temporary Azure VM with internet access
-# 2. Install vLLM + download model
-# 3. Generalize and capture the VM image
-# 4. Use that image in Terraform (no Blob Storage download needed at boot)
-
-az vm deallocate --resource-group temp-rg --name llm-builder
-az vm generalize --resource-group temp-rg --name llm-builder
-az image create \
-  --resource-group migrate4hana-dev-rg \
-  --name migrate4hana-llm-llama3-8b-vllm \
-  --source llm-builder
-```
-
-### Step 2B.3 — Instance Bootstrap (User Data)
-
-The `terraform/modules/airgapped-llm/main.tf` now includes a `user_data` script that bootstraps the inference server on boot:
-
-```bash
-#!/bin/bash
-set -e
-
-# ── Configuration ──
-STORAGE_ACCOUNT="migrate4hanastagingdev"
-CONTAINER="llm-models"
-MODEL_BLOB_PATH="llama-3-8b"
-MODEL_LOCAL_PATH="/opt/llm/models/llama-3-8b"
-SERVE_PORT=8000
-
-# ── Install vLLM inference server ──
-pip install vllm>=0.4.0
-
-# ── Download model from Blob Storage (via Private Endpoint, no internet) ──
-mkdir -p $MODEL_LOCAL_PATH
-az storage blob download-batch \
-  --destination $MODEL_LOCAL_PATH \
-  --source $CONTAINER/$MODEL_BLOB_PATH \
-  --account-name $STORAGE_ACCOUNT
-
-# ── Start vLLM OpenAI-compatible server ──
-nohup python -m vllm.entrypoints.openai.api_server \
-  --model $MODEL_LOCAL_PATH \
-  --host 0.0.0.0 \
-  --port $SERVE_PORT \
-  --max-model-len 4096 \
-  --gpu-memory-utilization 0.90 \
-  --dtype float16 \
-  > /var/log/vllm-server.log 2>&1 &
-
-# ── Health check loop ──
-for i in $(seq 1 60); do
-  if curl -s http://localhost:$SERVE_PORT/health | grep -q ok; then
-    echo "vLLM server healthy on port $SERVE_PORT"
-    break
-  fi
-  echo "Waiting for vLLM server... ($i/60)"
-  sleep 10
-done
-```
-
-> This script has been added to the Terraform module as part of this guide update.
-
-### Step 2B.4 — Configure Azure Functions to Use the Air-Gapped LLM
-
-Set the `LOCAL_LLM_ENDPOINT` environment variable on Azure Functions:
-
-```hcl
-# In terraform/environments/dev/terraform.tfvars:
-local_llm_endpoint = "http://10.10.1.X:8000/v1/completions"
-# Replace 10.10.1.X with the private IP of the GPU VM
-```
-
-After `terraform apply`, get the VM's private IP:
-
-```bash
-# Get the air-gapped LLM private IP
+# Verify the GPU VM was created
 az vm show \
-  --name Migrate4HANA-AirGapped-LLM \
+  --name vm-migrate4hana-dev-gpu \
   --resource-group migrate4hana-dev-rg \
-  --show-details \
-  --query "{PrivateIP:privateIps,State:powerState}" \
+  --query "{Size:hardwareProfile.vmSize,State:provisioningState}" \
   --output table
+```
 
-# Get the private IP programmatically
-LLM_IP=$(az vm show \
-  --name Migrate4HANA-AirGapped-LLM \
+### Step 2B.2 — Verify Ollama and Gemma 4 Setup
+
+SSH into the GPU VM and verify the model is ready:
+
+```bash
+# Get the GPU VM private IP
+GPU_IP=$(cd terraform/environments/dev && terraform output -raw gpu_vm_private_ip)
+
+# SSH into the VM (from a bastion or jumpbox in the same VNet)
+ssh azureuser@$GPU_IP
+
+# On the GPU VM — verify Ollama is running
+sudo systemctl status ollama
+
+# Verify Gemma 4 model is available
+ollama list
+# Expected output: gemma4:26b
+
+# Test inference locally
+ollama run gemma4:26b "Hello, are you ready?"
+```
+
+If the model wasn't downloaded (cloud-init may have been blocked by NSG):
+
+```bash
+# Temporarily allow internet outbound in the NSG
+az network nsg rule update \
+  --resource-group migrate4hana-dev-rg \
+  --nsg-name nsg-migrate4hana-dev-gpu \
+  --name AllowInitialSetupHTTPS \
+  --access Allow
+
+# SSH into VM and pull the model
+ssh azureuser@$GPU_IP
+ollama pull gemma4:26b
+
+# Re-lock the air-gap
+az network nsg rule delete \
+  --resource-group migrate4hana-dev-rg \
+  --nsg-name nsg-migrate4hana-dev-gpu \
+  --name AllowInitialSetupHTTPS
+```
+
+### Step 2B.3 — Configure Azure Functions to Use the Air-Gapped LLM
+
+Set the `LOCAL_LLM_HOST` and `LOCAL_LLM_MODEL` environment variables on Azure Functions:
+
+```bash
+# Get the GPU VM private IP
+GPU_IP=$(az vm show \
+  --name vm-migrate4hana-dev-gpu \
   --resource-group migrate4hana-dev-rg \
   --show-details \
   --query privateIps -o tsv)
 
-echo "LOCAL_LLM_ENDPOINT=http://${LLM_IP}:8000/v1/completions"
+echo "LOCAL_LLM_HOST=http://${GPU_IP}:11434"
+
+# Set on Azure Functions
+az functionapp config appsettings set \
+  --name migrate4hana-func-dev \
+  --resource-group migrate4hana-dev-rg \
+  --settings LOCAL_LLM_HOST="http://${GPU_IP}:11434" \
+             LOCAL_LLM_MODEL="gemma4:26b"
 ```
 
-The `genai_router.py` sends OpenAI-compatible POST requests:
+The `genai_router.py` uses the `ollama` Python SDK to call the Gemma 4 model:
 
-```json
-POST http://{LLM_IP}:8000/v1/completions
-{
-  "prompt": "<analysis prompt with PII-scrubbed ABAP>",
-  "max_tokens": 4096,
-  "temperature": 0.1
-}
+```python
+import ollama
+
+client = ollama.Client(host=os.environ.get("LOCAL_LLM_HOST", "http://10.0.5.4:11434"))
+response = client.chat(
+    model=os.environ.get("LOCAL_LLM_MODEL", "gemma4:26b"),
+    messages=[
+        {"role": "system", "content": "You are an SAP S/4HANA migration expert..."},
+        {"role": "user", "content": abap_code},
+    ]
+)
 ```
 
-### Step 2B.5 — Test Air-Gapped LLM Connectivity
+### Step 2B.4 — Test Air-Gapped LLM Connectivity
 
 ```bash
 # 1. Verify the VM is running
 az vm get-instance-view \
-  --name Migrate4HANA-AirGapped-LLM \
+  --name vm-migrate4hana-dev-gpu \
   --resource-group migrate4hana-dev-rg \
   --query "instanceView.statuses[1].displayStatus" -o tsv
 # Expected: "VM running"
 
-# 2. Check vLLM server health (from a Function or bastion in the same VNet)
-# The NSG only allows traffic from Functions subnets on port 8000
+# 2. Check Ollama health (from a Function or bastion in the same VNet)
+# The NSG only allows traffic from Functions/Containers subnets on port 11434
+curl http://${GPU_IP}:11434/api/tags
+# Expected: JSON listing gemma4:26b
 
 # 3. Invoke code-analyzer with force_genai to bypass AST threshold
 az functionapp function invoke \
-  --name migrate4hana-code-analyzer-dev \
+  --name migrate4hana-func-dev \
   --resource-group migrate4hana-dev-rg \
   --function-name analyze \
   --body '{
@@ -904,28 +820,28 @@ az functionapp function invoke \
 # Expected: backend_used = "local_llm"
 ```
 
-### Step 2B.6 — Cost Optimization (Start/Stop Automation)
+### Step 2B.5 — Cost Optimization (Start/Stop Automation)
 
-The Standard_NC8as_T4_v3 costs **~$0.90/hour**. Since it's only needed during code analysis (Phase 2 of the pipeline), automate start/stop:
+The GPU VM costs **~$0.90-2.00/hour** depending on size. Since it's only needed during code analysis (Stage 5 of the pipeline), automate start/stop:
 
 ```bash
 # Start before pipeline execution
 az vm start \
-  --name Migrate4HANA-AirGapped-LLM \
+  --name vm-migrate4hana-dev-gpu \
   --resource-group migrate4hana-dev-rg
 
-# Wait for it to be healthy (vLLM needs ~3-5 min to load model)
+# Wait for VM + Ollama (Ollama starts automatically via systemd)
 az vm wait \
-  --name Migrate4HANA-AirGapped-LLM \
+  --name vm-migrate4hana-dev-gpu \
   --resource-group migrate4hana-dev-rg \
   --created
-sleep 300  # Wait for vLLM to warm up
+sleep 60  # Wait for Ollama to load the model
 
 # Run pipeline...
 
 # Deallocate after code analysis phase completes (stops billing)
 az vm deallocate \
-  --name Migrate4HANA-AirGapped-LLM \
+  --name vm-migrate4hana-dev-gpu \
   --resource-group migrate4hana-dev-rg
 ```
 
@@ -938,45 +854,45 @@ The Durable Functions orchestrator can automate VM start/stop around the code an
 ```python
 # In the Durable Functions orchestrator:
 # Before code analysis
-yield context.call_activity("StartLLMVM", {"vm_name": "Migrate4HANA-AirGapped-LLM"})
-yield context.create_timer(context.current_utc_datetime + timedelta(seconds=300))
+yield context.call_activity("StartLLMVM", {"vm_name": "vm-migrate4hana-dev-gpu"})
+yield context.create_timer(context.current_utc_datetime + timedelta(seconds=60))
 
 # Run code analysis
 yield context.call_activity("Stage5_CodeAnalysis", input_data)
 
 # After code analysis
-yield context.call_activity("DeallocateLLMVM", {"vm_name": "Migrate4HANA-AirGapped-LLM"})
+yield context.call_activity("DeallocateLLMVM", {"vm_name": "vm-migrate4hana-dev-gpu"})
 ```
 
 > Monthly cost with start/stop: ~$5-15/migration (vs ~$650/month if left running 24/7).
 
-### Step 2B.7 — Security Verification
+### Step 2B.6 — Security Verification
 
 The air-gapped LLM's security posture must be verified:
 
 ```bash
-# 1. Verify NSG has no internet egress
+# 1. Verify NSG has DenyInternetOutbound rule
 az network nsg rule list \
-  --nsg-name airgapped-llm-nsg \
+  --nsg-name nsg-migrate4hana-dev-gpu \
   --resource-group migrate4hana-dev-rg \
   --query "[?direction=='Outbound']" \
   --output table
 
-# Expected egress: ONLY to VNet CIDR (e.g., 10.10.0.0/16)
-# Must NOT contain 0.0.0.0/0
+# Expected: DenyInternetOutbound at priority 4096
+# AllowInitialSetupHTTPS should be DELETED after model download
 
-# 2. Verify ingress restricted to Functions subnets
+# 2. Verify ingress restricted to Functions/Containers subnets
 az network nsg rule list \
-  --nsg-name airgapped-llm-nsg \
+  --nsg-name nsg-migrate4hana-dev-gpu \
   --resource-group migrate4hana-dev-rg \
   --query "[?direction=='Inbound']" \
   --output table
 
-# Expected ingress: port 8000 from Functions private subnet CIDRs only
+# Expected ingress: port 11434 from Functions and Containers subnet CIDRs only
 
 # 3. Verify VM has no public IP
 az vm show \
-  --name Migrate4HANA-AirGapped-LLM \
+  --name vm-migrate4hana-dev-gpu \
   --resource-group migrate4hana-dev-rg \
   --show-details \
   --query publicIps -o tsv
@@ -985,9 +901,10 @@ az vm show \
 # 4. Verify disk encryption
 az disk list \
   --resource-group migrate4hana-dev-rg \
-  --query "[?contains(name, 'AirGapped')].{Name:name,Encryption:encryption.type}" \
+  --query "[?contains(name, 'gpu')].{Name:name,Encryption:encryption.type}" \
   --output table
 # Expected: Encryption = EncryptionAtRestWithPlatformKey (or CustomerKey)
+```
 ```
 
 ---
@@ -1337,7 +1254,7 @@ Set this in the frontend environment so the LogViewer component connects to real
 **NSGs (Network Security Groups) to validate:**
 - Functions NSG: Outbound to SAP (port 3300) + Blob Storage/Key Vault Private Endpoints
 - ADMS NSG: Outbound to SAP ECC (3200) + SAP HANA (30015)
-- LLM NSG: Inbound from Functions subnet (8000) only, **no internet egress**
+- LLM NSG: Inbound from Functions/Containers subnets (11434) only, **no internet egress**
 - App Gateway NSG: Inbound 443 from allowed CIDRs only
 
 ### Step 6.2 — WAF Configuration
@@ -2113,14 +2030,14 @@ The load test runs automatically in the CD pipeline (`deploy.yml`) as a smoke te
 | # | Gap | File(s) Affected | Status | Fix Applied |
 |---|-----|------------------|--------|-------------|
 | G1 | Azure Functions missing `Anthropic API invoke` Azure RBAC permission | `terraform/modules/functions/main.tf` | ✅ **Fixed** | Added `Anthropic API invoke` + `Anthropic API invokeWithResponseStream` to Azure Functions RBAC policy |
-| G2 | Azure Functions missing GenAI env vars (`CLAUDE_MODEL_ID`, `LOCAL_LLM_ENDPOINT`, `AST_CHANGE_THRESHOLD`) | `terraform/modules/functions/main.tf` | ✅ **Fixed** | Added all three env vars to Azure Functions environment block with configurable Terraform variables |
-| G3 | Air-gapped LLM placeholder VM Image (`ami-0123456789abcdef0`) | `terraform/environments/dev/main.tf` | ✅ **Fixed** | Parameterized as `var.gpu_vm_image_id` with instructions to find real Deep Learning VM Image |
-| G4 | Air-gapped LLM has no `user_data` (boots to bare OS) | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added full bootstrap script: installs vLLM, downloads model from Blob Storage, starts inference server on port 8000 |
-| G5 | Air-gapped LLM VM has no Blob Storage access for model download | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added `azurerm_role_assignment.llm_s3_access` with scoped Blob Storage GetObject/ListBucket |
-| G6 | Air-gapped LLM has no outputs (instance ID, private IP, endpoint) | `terraform/modules/airgapped-llm/main.tf` | ✅ **Fixed** | Added `instance_id`, `private_ip`, and `llm_endpoint` outputs |
+| G2 | Azure Functions missing GenAI env vars (`CLAUDE_MODEL_ID`, `LOCAL_LLM_HOST`, `AST_CHANGE_THRESHOLD`) | `terraform/modules/functions/main.tf` | ✅ **Fixed** | Added all three env vars to Azure Functions environment block with configurable Terraform variables |
+| G3 | Air-gapped LLM placeholder VM Image | `terraform/modules/gpu-vm/main.tf` | ✅ **Fixed** | Uses Ubuntu 22.04 with cloud-init for Ollama/Gemma 4 provisioning |
+| G4 | Air-gapped LLM has no `user_data` (boots to bare OS) | `terraform/modules/gpu-vm/main.tf` | ✅ **Fixed** | Added cloud-init that installs Ollama, pulls Gemma 4 26B, and starts serving on port 11434 |
+| G5 | Air-gapped LLM VM model access | `terraform/modules/gpu-vm/main.tf` | ✅ **Fixed** | Cloud-init downloads via Ollama registry during initial setup; AllowInitialSetupHTTPS NSG rule allows temporary HTTPS outbound |
+| G6 | Air-gapped LLM has no outputs (instance ID, private IP, endpoint) | `terraform/modules/gpu-vm/main.tf` | ✅ **Fixed** | Added `vm_id`, `private_ip`, and `ollama_endpoint` outputs |
 | G7 | No Claude setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2A with 7 steps: model access, Private Endpoints, Azure RBAC, env vars, testing, cost, routing |
-| G8 | No Air-Gapped LLM setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2B with 7 steps: VM Image, model loading, bootstrap, Azure Functions config, testing, cost optimization, security |
-| G9 | Dev/main.tf GenAI variables not wired through to Functions module | `terraform/environments/dev/main.tf`, `variables.tf` | ✅ **Fixed** | Added `anthropic_model`, `local_llm_endpoint`, `ast_change_threshold`, `gpu_vm_size` variables |
+| G8 | No Air-Gapped LLM setup instructions | `PRODUCTION_READINESS_GUIDE.md` | ✅ **Fixed** | Added Phase 2B with 6 steps: provisioning, Ollama/Gemma 4 verification, Functions config, testing, cost optimization, security |
+| G9 | Dev/main.tf GenAI variables not wired through to Functions module | `terraform/environments/dev/main.tf`, `variables.tf` | ✅ **Fixed** | Added `anthropic_model`, `local_llm_host`, `local_llm_model`, `ast_change_threshold`, `gpu_vm_size` variables |
 
 ### Medium Priority (Should fix before enterprise clients)
 

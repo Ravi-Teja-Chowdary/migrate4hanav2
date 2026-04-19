@@ -21,17 +21,12 @@ variable "gpu_subnet_id" {
 }
 
 variable "functions_subnet_prefix" {
-  description = "CIDR prefix of the functions subnet (allowed to call LLM API)"
+  description = "CIDR prefix of the functions subnet (allowed to call Ollama API)"
   type        = string
 }
 
 variable "containers_subnet_prefix" {
-  description = "CIDR prefix of the containers subnet (allowed to call LLM API)"
-  type        = string
-}
-
-variable "storage_account_name" {
-  description = "Azure Storage account name for model download"
+  description = "CIDR prefix of the containers subnet (allowed to call Ollama API)"
   type        = string
 }
 

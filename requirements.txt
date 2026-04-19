@@ -5,8 +5,11 @@ azure-cosmos>=4.5.0
 azure-keyvault-secrets>=4.7.0
 azure-messaging-webpubsubservice>=1.0.0
 
-# GenAI
+# GenAI — Cloud path (Claude Opus 4.6)
 anthropic>=0.40.0
+
+# GenAI — Air-gapped path (Gemma 4 via Ollama)
+ollama>=0.4.0
 
 # SAP
 pyrfc>=3.0; sys_platform == "linux"

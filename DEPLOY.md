@@ -336,7 +336,7 @@ container_app_memory = "16Gi"     # 16 GiB for Container Apps
 
 | Setting | `false` (Default) | `true` |
 |---------|-------------------|--------|
-| `enable_gpu_vm` | GenAI uses only Claude API (cloud) | Provisions NC-series GPU VM (~$2/hr) for air-gapped LLM |
+| `enable_gpu_vm` | GenAI uses only Claude API (cloud) | Provisions NC-series GPU VM (~$2/hr) with Ollama + Gemma 4 26B for air-gapped LLM |
 | `enable_waf` | API exposed directly via APIM | Azure Front Door WAF in front of APIM (OWASP protection) |
 | `pyrfc_enabled` | Uses mock/offline SAP data | Enables live RFC connections to SAP ECC/S/4HANA |
 
@@ -614,24 +614,41 @@ GPU_IP=$(cd terraform/environments/dev && terraform output -raw gpu_vm_private_i
 ssh azureuser@$GPU_IP
 ```
 
-2. Install and start vLLM with your preferred model:
+2. Verify Ollama is running and Gemma 4 is available (cloud-init auto-installs both):
 ```bash
-# On the GPU VM
-pip install vllm
-python -m vllm.entrypoints.openai.api_server \
-  --model meta-llama/Llama-3-8B-Instruct \
-  --host 0.0.0.0 --port 8000
+# On the GPU VM — check Ollama service status
+sudo systemctl status ollama
+
+# Verify Gemma 4 model is loaded
+ollama list
+# Should show: gemma4:26b
 ```
 
-3. Set the local LLM endpoint in your function app:
+If the model isn't present (e.g., internet was blocked before cloud-init finished):
+```bash
+# Temporarily allow internet to pull the model
+# Then re-apply air-gap by revoking the AllowInitialSetupHTTPS NSG rule
+ollama pull gemma4:26b
+```
+
+3. Set the local LLM host in your function app:
 ```bash
 az functionapp config appsettings set \
   --name "$FUNC_APP_NAME" \
   --resource-group "$RG_NAME" \
-  --settings LOCAL_LLM_ENDPOINT="http://$GPU_IP:8000/v1"
+  --settings LOCAL_LLM_HOST="http://$GPU_IP:11434" \
+             LOCAL_LLM_MODEL="gemma4:26b"
 ```
 
-> **Security Note:** The GPU VM's NSG blocks all internet outbound traffic by design. This ensures zero data exfiltration for sensitive ABAP code analysis.
+4. **Lock down the air-gap** — after the model is downloaded, remove the temporary internet rule:
+```bash
+az network nsg rule delete \
+  --resource-group "$RG_NAME" \
+  --nsg-name "nsg-migrate4hana-dev-gpu" \
+  --name "AllowInitialSetupHTTPS"
+```
+
+> **Security Note:** The GPU VM's NSG blocks all internet outbound traffic after lockdown. This ensures zero data exfiltration for sensitive ABAP code analysis. The Ollama API (port 11434) is only accessible from the functions and containers subnets.
 
 ---
 
@@ -881,7 +898,8 @@ Full list of environment variables used by Migrate4HANA:
 | `ANTHROPIC_API_KEY` | For GenAI | — | Anthropic Claude API key |
 | `ANTHROPIC_MODEL` | No | `claude-opus-4-6-20250219` | Claude model identifier |
 | `LLM_MODE` | No | `auto` | `auto`, `cloud`, or `airgapped` |
-| `LOCAL_LLM_ENDPOINT` | For air-gap | — | GPU VM endpoint URL |
+| `LOCAL_LLM_HOST` | For air-gap | — | Ollama endpoint on GPU VM (e.g., `http://10.0.5.4:11434`) |
+| `LOCAL_LLM_MODEL` | For air-gap | `gemma4:26b` | Ollama model name |
 | `ECC_SECRET_NAME` | No | `sap-ecc-credentials` | Key Vault secret for ECC |
 | `S4_SECRET_NAME` | No | `s4hana-credentials` | Key Vault secret for S/4HANA |
 | `AST_CHANGE_THRESHOLD` | No | `3` | GenAI escalation threshold |
