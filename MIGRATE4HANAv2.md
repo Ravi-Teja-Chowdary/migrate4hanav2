@@ -812,14 +812,17 @@ Color scheme: Navy (#0f172a), Blue (#3b82f6), Cyan (#06b6d4), Green (#10b981), A
 
 # Test Suite
 
-**35 automated tests** in `tests/test_execution_stages.py`:
+Unit coverage in `tests/`:
 
-- Tests mock PyRFC and boto3 using `MockRFCConnection`
-- Validates every stage handler's output structure and data integrity
-- Confirms pipeline sequencing and error handling
-- Validates GO-LIVE scorecard calculation logic
+- `test_smoke.py` — verifies the root pipeline runner, `genai_router`, and the
+  new `ollama_genai_engine` all import cleanly without mock-ecc.
+- `test_completeness_analyzer.py` / `test_multi_volume_report.py` — focused
+  unit tests on the Stage 9.5/9.6 components.
+- `test_smoke.py::test_live_rfc_smoke` — opt-in integration test activated
+  when `SAP_TEST_HOST/SYSNR/CLIENT/USER/PASSWD` are set.
 
-All 35 tests passing as of the latest run.
+Mock mode has been removed; any integration coverage requires a reachable
+ECC system.
 
 ---
 
@@ -918,7 +921,7 @@ python run_local_pipeline.py
 # Duration: ~70 seconds
 ```
 
-Uses `MockRFCConnection` and `mock_data_generator.py` — no SAP system or AWS account required.
+Requires a working pyrfc install plus `connections.json` + `M4H_ECC_PASSWD`. Mock mode has been removed.
 
 ### Mode 2: Web UI + API Server
 

@@ -3,15 +3,21 @@ genai_router.py — GenAI Dispatch Router for Migrate4HANA
 =========================================================
 Routes ABAP code analysis requests to the optimal GenAI backend:
 
-  1. AST Engine  (local, zero-latency, deterministic)
-  2. AWS Bedrock (cloud, Claude via PrivateLink — zero internet egress)
+  1. AST Engine       (local, zero-latency, deterministic)
+  2. Ollama (local)   (on-prem air-gapped LLM — for sensitive/PII workloads)
+  3. AWS Bedrock      (cloud, Claude via PrivateLink — zero internet egress)
 
 Routing Logic:
-  - Always run the AST engine first (structural, deterministic transforms)
-  - If AST produces fewer changes than the threshold, escalate to Bedrock
-    for deeper semantic analysis (custom logic patterns, BP implications)
-  - If Bedrock fails, gracefully return the AST-only results
-  - All payloads are PII-scrubbed via data_scrubber before GenAI dispatch
+  - Always run the AST engine first (structural, deterministic transforms).
+  - If AST produces fewer changes than the threshold, escalate to an LLM backend
+    for deeper semantic analysis.
+  - Backend selection is controlled by LLM_MODE + optional `sensitivity` flag:
+      LLM_MODE=cloud  (default)  -> Bedrock only
+      LLM_MODE=local             -> Ollama only
+      LLM_MODE=dual              -> Ollama when sensitivity=="high", else Bedrock
+  - If the chosen backend fails, the other backend is tried as a fallback
+    (where available); if both fail, the AST-only result is returned.
+  - All payloads are PII-scrubbed via data_scrubber before GenAI dispatch.
 """
 
 import json
@@ -26,12 +32,16 @@ logger.setLevel(logging.INFO)
 # Lazy imports — these modules live in the same Lambda package
 from data_scrubber import mask_payload_for_infosec
 from abap_ast_engine import process_abap_file
+from ollama_genai_engine import invoke_ollama
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 BEDROCK_MODEL_ID = os.environ.get(
     "BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0"
 )
 AST_CHANGE_THRESHOLD = int(os.environ.get("AST_CHANGE_THRESHOLD", "3"))
+
+# Backend selection. Supported values: "cloud" (default), "local", "dual".
+LLM_MODE = os.environ.get("LLM_MODE", "cloud").lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -44,10 +54,17 @@ def route_analysis(
     """
     Main routing entry point.
 
-    1. Runs the deterministic AST engine on the raw source.
-    2. If the AST engine finds fewer than AST_CHANGE_THRESHOLD changes,
-       escalates to a GenAI backend for deeper semantic analysis.
-    3. Returns a unified result containing both AST and (optional) GenAI output.
+    Steps:
+      1. Run the deterministic AST engine on the raw source.
+      2. If the AST engine finds fewer than AST_CHANGE_THRESHOLD changes,
+         escalate to a GenAI backend chosen by LLM_MODE and context.sensitivity.
+      3. Return a unified result containing AST and (optional) GenAI output.
+
+    context keys honoured:
+      - custom_rules  : list of AST rule overrides
+      - country_code  : localisation hint passed to the GenAI prompt
+      - sensitivity   : "high" routes to local Ollama when LLM_MODE in
+                        {"local", "dual"}
     """
     context = context or {}
     result: Dict[str, Any] = {
@@ -75,15 +92,26 @@ def route_analysis(
 
     prompt = _build_analysis_prompt(scrubbed_code, ast_result, context)
 
-    # ── Step 3: Invoke Bedrock; on failure return AST-only results ───────────
-    genai_result = _invoke_bedrock(prompt)
+    # ── Step 3: Pick backend per LLM_MODE × sensitivity ──────────────────────
+    sensitivity = str(context.get("sensitivity", "")).lower()
+    primary, fallback = _select_backends(sensitivity)
+    logger.info(f"LLM routing: mode={LLM_MODE} sensitivity={sensitivity or 'none'} "
+                f"primary={primary} fallback={fallback}")
+
+    genai_result = _dispatch(primary, prompt)
+    backend_used = primary if genai_result is not None else None
+
+    if genai_result is None and fallback:
+        logger.info(f"Primary backend '{primary}' failed — trying fallback '{fallback}'")
+        genai_result = _dispatch(fallback, prompt)
+        if genai_result is not None:
+            backend_used = fallback
+
     if genai_result is not None:
-        result["backend_used"] = "bedrock"
+        result["backend_used"] = backend_used
         result["genai_result"] = genai_result
     else:
-        logger.warning(
-            "Bedrock unavailable — returning AST-only results"
-        )
+        logger.warning("All GenAI backends unavailable — returning AST-only results")
 
     return result
 
@@ -91,6 +119,40 @@ def route_analysis(
 # ═══════════════════════════════════════════════════════════════════════════════
 # INTERNAL HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def _select_backends(sensitivity: str) -> (str, Optional[str]):
+    """
+    Choose (primary, fallback) backend identifiers based on LLM_MODE and
+    caller-supplied sensitivity.
+
+    Returns:
+      primary  : "ollama" or "bedrock"
+      fallback : the other backend, or None if no fallback is allowed
+    """
+    mode = LLM_MODE
+    if mode == "local":
+        return "ollama", None
+    if mode == "dual":
+        if sensitivity == "high":
+            return "ollama", "bedrock"
+        return "bedrock", "ollama"
+    # Default: cloud-only. No local fallback for plain "cloud" mode.
+    return "bedrock", None
+
+
+def _dispatch(backend: str, prompt: str) -> Optional[Dict[str, Any]]:
+    """Dispatch to the named backend, catching all exceptions."""
+    try:
+        if backend == "ollama":
+            return invoke_ollama(prompt)
+        if backend == "bedrock":
+            return _invoke_bedrock(prompt)
+        logger.warning(f"Unknown LLM backend '{backend}'")
+        return None
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Backend '{backend}' raised unexpectedly: {e}")
+        return None
+
 
 def _build_analysis_prompt(
     scrubbed_code: str, ast_result: Dict, context: Dict

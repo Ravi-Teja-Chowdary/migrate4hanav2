@@ -35,6 +35,21 @@ variable "ast_change_threshold" {
   default     = 3
   description = "If AST engine finds fewer changes than this, escalate to GenAI"
 }
+variable "llm_mode" {
+  type        = string
+  default     = "cloud"
+  description = "GenAI routing mode: cloud, local, or dual"
+}
+variable "ollama_url" {
+  type        = string
+  default     = ""
+  description = "Base URL of the on-prem Ollama server (e.g. http://10.0.2.123:11434). Empty disables local LLM path."
+}
+variable "ollama_model" {
+  type        = string
+  default     = "gemma2:27b"
+  description = "Ollama model name to request from the air-gapped LLM server"
+}
 variable "lambda_functions" {
   type = map(object({
     description = string
@@ -198,7 +213,10 @@ resource "aws_lambda_function" "migration" {
       {
         BEDROCK_MODEL_ID      = var.bedrock_model_id
         AST_CHANGE_THRESHOLD  = tostring(var.ast_change_threshold)
-      }
+        LLM_MODE              = var.llm_mode
+        OLLAMA_MODEL          = var.ollama_model
+      },
+      var.ollama_url != "" ? { OLLAMA_URL = var.ollama_url } : {}
     )
   }
 
@@ -229,4 +247,9 @@ output "function_arns" {
 
 output "function_names" {
   value = { for k, v in aws_lambda_function.migration : k => v.function_name }
+}
+
+output "security_group_id" {
+  value       = aws_security_group.lambda.id
+  description = "Security group attached to the migration Lambdas (VPC-attached)"
 }

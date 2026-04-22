@@ -1,21 +1,22 @@
 """
 Migrate4HANA — Local Pipeline Runner
 ==========================================
-Runs migration stages locally. Supports two modes:
+Runs migration stages locally against a live SAP ECC system.
 
-  --live       Use real SAP ECC connection (reads connections.json + M4H_ECC_PASSWD env)
-  (default)    Fall back to mock ECC data if --live is not specified
+Connection is ALWAYS via pyrfc (real_rfc_connection.py). Mock mode has
+been removed. Both `connections.json` and the env var `M4H_ECC_PASSWD`
+are required; the pipeline fails fast if either is missing.
 
-Other flags:
+Flags:
+  --live                   Accepted for backward compatibility (no-op — live is always used)
   --assess-only            Phases 1-2 only (stages 1-8)
   --mode ecc_full          ECC-Only full execution (stages 1-9.6, no S/4HANA)
   --limit N                Fast test: extract only first N programs/customers/vendors
 
 Usage:
-    python run_local_pipeline.py --live --mode ecc_full   # Real ECC, full assessment
-    python run_local_pipeline.py --live --assess-only     # Real ECC, phases 1-2 only
-    python run_local_pipeline.py --live --limit 50        # Real ECC, fast test (50 items)
-    python run_local_pipeline.py                          # Mock data, full 17-stage run
+    python run_local_pipeline.py --mode ecc_full   # Real ECC, full assessment
+    python run_local_pipeline.py --assess-only     # Real ECC, phases 1-2 only
+    python run_local_pipeline.py --limit 50        # Real ECC, fast test (50 items)
 """
 
 import sys
@@ -33,7 +34,6 @@ if sys.stderr and hasattr(sys.stderr, 'buffer'):
 
 # Add project paths
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(PROJECT_DIR, "mock-ecc"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "discovery-engine"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "code-analyzer"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "data-migrator"))
@@ -53,8 +53,6 @@ sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "readiness-check"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "simplification-check"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "sum-orchestrator"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "migration-completeness-analyzer"))
-
-from mock_data_generator import MockRFCConnection, generate_complete_ecc_dataset
 
 
 # =============================================================================
@@ -135,11 +133,11 @@ def patch_aws_services(output_dir):
             m = mock.MagicMock()
             m.get_secret_value.return_value = {
                 "SecretString": json.dumps({
-                    "host": "mock-ecc.local",
+                    "host": "local.ecc",
                     "sysnr": "00",
                     "client": "100",
-                    "user": "MOCK_USER",
-                    "passwd": "mock_pass",
+                    "user": "LOCAL_USER",
+                    "passwd": "local_pass",
                 })
             }
             return m
@@ -154,8 +152,6 @@ def patch_aws_services(output_dir):
 def run_stage_1_discovery(conn, mock_event, output_dir):
     """Stage 1: Discovery & Assessment"""
     banner("[Stage 1/17] System Discovery & Landscape Analysis", C.BLUE)
-
-    from mock_data_generator import generate_complete_ecc_dataset
 
     dataset = conn.dataset
     programs = dataset["programs"]
@@ -2379,7 +2375,9 @@ def run_stage_9_6_multi_volume_report(pipeline_results, output_dir, company_name
 def main():
     assess_only = "--assess-only" in sys.argv
     ecc_full = "--mode" in sys.argv and "ecc_full" in sys.argv
-    live_mode = "--live" in sys.argv
+    # --live is accepted for backward compatibility but is a no-op:
+    # live RFC is now the only supported path.
+    _ = "--live" in sys.argv
 
     # Parse --limit N for fast local testing
     fast_limit = 0
@@ -2398,7 +2396,7 @@ def main():
     else:
         mode_label = "FULL (All 5 Phases, 17 Stages)"
 
-    data_source = "LIVE SAP ECC" if live_mode else "MOCK DATA"
+    data_source = "LIVE SAP ECC"
     if fast_limit > 0:
         data_source += f" (--limit {fast_limit})"
 
@@ -2421,50 +2419,45 @@ def main():
 
     start_time = time.time()
 
-    # ── Build connection: live RFC or mock ───────────────────────────
-    if live_mode:
-        print(f"\n  {C.CYAN}Connecting to live SAP ECC via RFC...{C.END}")
-        conn_file = os.path.join(PROJECT_DIR, "connections.json")
-        if not os.path.isfile(conn_file):
-            print(f"  {C.RED}X connections.json not found. Save ECC connection from the UI first.{C.END}")
-            sys.exit(1)
-        with open(conn_file, "r", encoding="utf-8") as f:
-            conns = json.load(f)
-        ecc_cfg = conns.get("ecc", {})
-        if not ecc_cfg.get("ashost"):
-            print(f"  {C.RED}X No ECC connection configured. Set it up from the Connections page.{C.END}")
-            sys.exit(1)
+    # ── Build live RFC connection (real SAP ECC is the only supported path) ──
+    print(f"\n  {C.CYAN}Connecting to live SAP ECC via RFC...{C.END}")
+    conn_file = os.path.join(PROJECT_DIR, "connections.json")
+    if not os.path.isfile(conn_file):
+        print(f"  {C.RED}X connections.json not found. Save ECC connection from the UI first.{C.END}")
+        sys.exit(1)
+    with open(conn_file, "r", encoding="utf-8") as f:
+        conns = json.load(f)
+    ecc_cfg = conns.get("ecc", {})
+    if not ecc_cfg.get("ashost"):
+        print(f"  {C.RED}X No ECC connection configured. Set it up from the Connections page.{C.END}")
+        sys.exit(1)
 
-        ecc_passwd = os.environ.get("M4H_ECC_PASSWD", "")
-        if not ecc_passwd:
-            print(f"  {C.RED}X ECC password not found. Test the connection from the UI before running the pipeline.{C.END}")
-            sys.exit(1)
+    ecc_passwd = os.environ.get("M4H_ECC_PASSWD", "")
+    if not ecc_passwd:
+        print(f"  {C.RED}X ECC password not found in M4H_ECC_PASSWD env var. "
+              f"Test the connection from the UI before running the pipeline.{C.END}")
+        sys.exit(1)
 
-        conn_params = {
-            "ashost": ecc_cfg.get("ashost", ""),
-            "sysnr": ecc_cfg.get("sysnr", "00"),
-            "client": ecc_cfg.get("client", "100"),
-            "user": ecc_cfg.get("user", ""),
-            "passwd": ecc_passwd,
-        }
-        if ecc_cfg.get("saprouter"):
-            conn_params["saprouter"] = ecc_cfg["saprouter"]
+    conn_params = {
+        "ashost": ecc_cfg.get("ashost", ""),
+        "sysnr": ecc_cfg.get("sysnr", "00"),
+        "client": ecc_cfg.get("client", "100"),
+        "user": ecc_cfg.get("user", ""),
+        "passwd": ecc_passwd,
+    }
+    if ecc_cfg.get("saprouter"):
+        conn_params["saprouter"] = ecc_cfg["saprouter"]
 
-        ecc_client = conn_params["client"]
+    ecc_client = conn_params["client"]
 
-        from real_rfc_connection import RealRFCConnection
-        try:
-            conn = RealRFCConnection(conn_params, limit=fast_limit)
-        except Exception as e:
-            print(f"  {C.RED}X Failed to connect to SAP ECC: {e}{C.END}")
-            sys.exit(1)
+    from real_rfc_connection import RealRFCConnection
+    try:
+        conn = RealRFCConnection(conn_params, limit=fast_limit)
+    except Exception as e:
+        print(f"  {C.RED}X Failed to connect to SAP ECC: {e}{C.END}")
+        sys.exit(1)
 
-        company_name = conn.dataset.get("system_info", {}).get("sid", "SAP ECC")
-    else:
-        print(f"\n  {C.YELLOW}Generating mock ECC dataset...{C.END}")
-        dataset = generate_complete_ecc_dataset()
-        conn = MockRFCConnection(dataset)
-        company_name = "Bharat Industrial Solutions Pvt Ltd"
+    company_name = conn.dataset.get("system_info", {}).get("sid", "SAP ECC")
 
     # ── Pre-Flight Cache Cleanup ──
     # Clean only loose cache files (json/tmp/db) from test-output root.

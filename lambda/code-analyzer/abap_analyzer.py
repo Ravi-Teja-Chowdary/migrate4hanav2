@@ -408,20 +408,33 @@ if __name__ == "__main__":
     import sys
     import os
 
-    # Add mock-ecc to path
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "mock-ecc"))
+    # CLI demo: supply an ABAP source file as the first argument.
+    # Example:
+    #   py -3.10 abap_analyzer.py path/to/program.abap
+    #
+    # Mock-ECC based demo has been removed — this runner now requires either
+    # an explicit source file or a live RFC extract.
+    if len(sys.argv) < 2:
+        print("Usage: python abap_analyzer.py <abap_source_file>")
+        print("  Mock-ECC demo mode has been removed. Provide a real ABAP source file,")
+        print("  or drive the analyzer from run_local_pipeline.py (live RFC).")
+        sys.exit(1)
 
-    from mock_data_generator import generate_complete_ecc_dataset
+    src_file = sys.argv[1]
+    if not os.path.isfile(src_file):
+        print(f"File not found: {src_file}")
+        sys.exit(1)
 
-    print("Loading mock ECC data...")
-    dataset = generate_complete_ecc_dataset()
+    with open(src_file, "r", encoding="utf-8", errors="replace") as _f:
+        source = _f.read()
+
+    prog_name = os.path.splitext(os.path.basename(src_file))[0].upper()
+    programs = {prog_name: source}
 
     print("\nInitializing ABAP Analyzer with 100 rules...")
     analyzer = ABAPAnalyzer()
 
-    # Analyze all sample programs
-    programs = dataset.get("abap_source", {})
-    print(f"Analyzing {len(programs)} programs...\n")
+    print(f"Analyzing {len(programs)} program(s)...\n")
 
     report = analyzer.analyze_multiple(programs)
     analyzer.print_report(report)

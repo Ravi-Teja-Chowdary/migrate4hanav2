@@ -8,5 +8,6 @@ terraform
 docs
 *.md
 mock-ecc
+# (directory removed in aws-branch — entry retained as a no-op guard)
 tests
 scripts

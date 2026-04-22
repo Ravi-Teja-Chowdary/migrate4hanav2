@@ -68,23 +68,21 @@ The tool supports four execution modes:
 
 ## 2. Prerequisites
 
-### For Local Demo (Mock Mode)
+### Required (no longer optional — mock mode has been removed)
 - **Python 3.10+** — [Download](https://www.python.org/downloads/)
 - **Node.js 18+** — [Download](https://nodejs.org/)
 - **pip** (comes with Python)
-
-### For Real SAP Connectivity (Production)
-Everything above, plus:
 - **PyRFC** — SAP RFC connector for Python. Requires the SAP NW RFC SDK.
   ```
-  pip install pyrfc
+  pip install -r requirements.txt
   ```
   See [scripts/setup-pyrfc.sh](scripts/setup-pyrfc.sh) for SAP NW RFC SDK installation.
 - **Network access** to your ECC system (RFC port 33XX where XX = system number)
 - **Network access** to your S/4HANA Cloud system (HTTPS for OData, or RFC)
 - **SAP credentials** with read access on ECC and admin access on S/4HANA
 
-> **Note:** If PyRFC is not installed, the tool automatically falls back to **Mock Mode** using realistic sample data from a fictional Indian company. This is perfect for demos and testing.
+> **Note:** Mock mode has been removed. A valid `connections.json` plus the
+> `M4H_ECC_PASSWD` environment variable are required for every run.
 
 ---
 
@@ -114,7 +112,9 @@ cd ..
 # Run the 114-test suite (should show "114 passed")
 python -m pytest tests/ --ignore=tests/load_test.py -v
 
-# Run the full 17-stage pipeline against mock data (no SAP required)
+# Run the full 17-stage pipeline against live ECC
+#   - connections.json must be saved via the UI (Connections page)
+#   - M4H_ECC_PASSWD must be set in your shell
 python run_local_pipeline.py
 ```
 
@@ -125,7 +125,9 @@ Total duration: ~70 seconds
 Results saved to: test-output/run_YYYYMMDD_HHMMSS/
 ```
 
-> The test suite (114 tests) covers pipeline stages, rule router, ST03N analyzer, DITL generator, rollback manager, config applier, error handling, and 52 SAP integration tests (15 classes covering all 33 RFC/BAPI functions in dual-mode mock + live). The pipeline run validates all 17 stages end-to-end against realistic mock data.
+> The test suite covers the completeness analyzer and multi-volume PDF report,
+> plus an opt-in live-RFC smoke test gated by the `SAP_TEST_*` env vars. Mock
+> mode has been removed; integration tests now require a reachable SAP system.
 >
 > **Note:** `tests/load_test.py` requires the `locust` package and is excluded from default test runs. Install with `pip install locust` to run load tests separately.
 
@@ -218,7 +220,7 @@ Same fields as ECC — host, system number, client, user, password.
 2. Click **Test Connection** — the tool will attempt to connect and report success/failure
 3. If successful, click **Save** to persist the configuration
 
-> **Mock Mode:** If PyRFC is not installed, clicking "Test Connection" will show a "Connected (Mock Mode)" status. This means the tool will use realistic sample data instead of your real ECC system.
+> **Note:** If PyRFC is missing or the SAP host is unreachable, "Test Connection" will return an error. Mock mode has been removed; install pyrfc and point at a real ECC system to proceed.
 
 ### 5.3 Pipeline Page
 
@@ -303,7 +305,7 @@ Step 4  →  Click "Test Connection" — verify it shows "Connected"
 Step 5  →  Click "Save" to persist the connection
 Step 6  →  Go to "Pipeline" in the sidebar
 Step 7  →  Click the blue "Run Assessment" button
-Step 8  →  Watch the 8 stages execute across Phases 1–2 (takes 30–90 seconds with mock data)
+Step 8  →  Watch the 8 stages execute across Phases 1–2 (takes 30–90 seconds against a modestly-sized ECC system)
            - Phase 1: System Discovery, Maintenance Planner, Readiness Check, SI-Check
            - Phase 2: Code Analysis, CVI/BP Prep, Data Assessment, Config Assessment
 Step 9  →  Once complete, go to "Dashboard" to see the overview
@@ -405,7 +407,7 @@ python run_local_pipeline.py --assess-only
 ```
 
 ### What Happens
-- Uses mock ECC data (or real PyRFC if installed)
+- Connects to live ECC via PyRFC (mock mode removed — requires connections.json + M4H_ECC_PASSWD)
 - Prints colored terminal output showing each stage's progress by SAP Activate phase
 - Saves all results to `test-output/run_YYYYMMDD_HHMMSS/`
 - Generates a `final-report.json` and `post-migration-report.json`
@@ -700,7 +702,7 @@ Migrate4HANA integrates with SAP's mandatory proprietary tools. The following mu
 - **SUM/DMO installed on app server** — Downloaded, extracted, and verified on the source application server
 - **HANA database for target system** — Installed, configured, and network-accessible from the application server
 
-> **For local demo/assessment:** None of these are required. Migrate4HANA automatically falls back to mock mode when SAP tools are not available.
+> **Note:** The assessment phases (1–2) only require RFC access to the source ECC system. SUM/DMO prerequisites and an S/4HANA target are needed only for Phase 3 conversion onwards.
 
 ---
 
@@ -796,10 +798,10 @@ ENTITY_RESOLUTION_WORKFLOW_ARN=arn:aws:entityresolution:...  # Set by Terraform 
 - Check it's on port 8000: open `http://localhost:8000/api/health` in a browser
 - If port 8000 is busy, kill the process using it and restart
 
-### "Connected (Mock Mode)" instead of real SAP
-- PyRFC is not installed. Install it with `pip install pyrfc`
+### "Test Connection" fails with PyRFC error
+- PyRFC is not installed. Install everything with `pip install -r requirements.txt`
 - You also need the SAP NW RFC SDK library. See `scripts/setup-pyrfc.sh`
-- Without PyRFC, the tool uses realistic sample data — this is fine for demos
+- Mock mode has been removed — PyRFC and a reachable ECC host are now mandatory.
 
 ### Frontend shows blank page
 - Make sure `npm install` completed successfully in the `frontend/` directory

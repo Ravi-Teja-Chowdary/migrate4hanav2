@@ -160,9 +160,6 @@ class MasterFixEngine:
 # CLI — Run the full fix engine against mock data
 # =============================================================================
 if __name__ == '__main__':
-    # Add paths
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'mock-ecc'))
-
     print("=" * 60)
     print("  MIGRATE4HANA — Master Fix Engine")
     print("=" * 60)
@@ -170,16 +167,11 @@ if __name__ == '__main__':
     # Initialize engine
     engine = MasterFixEngine(countries=["IN", "US", "DE", "AE", "BR", "GB", "JP", "AU"])
 
-    # Load mock programs
-    try:
-        from mock_data_generator import generate_complete_ecc_dataset
-        print(f"\n  Loading mock ECC data...")
-        dataset = generate_complete_ecc_dataset()
-        programs = dataset.get("abap_source", {})
-    except ImportError:
-        print("  Mock data not available — using inline test")
-        programs = {
-            "ZTEST": """REPORT ZTEST.
+    # Mock data has been removed; supply a small inline ABAP sample for
+    # smoke-testing the fix engine locally. For real runs, invoke the
+    # engine from the pipeline with live-extracted ABAP source.
+    programs = {
+        "ZTEST": """REPORT ZTEST.
 TABLES: BSEG, LFA1.
 DATA: lt_items TYPE STANDARD TABLE OF BSEG OCCURS 0 WITH HEADER LINE.
 DATA: lv_total TYPE BSEG-DMBTR.
@@ -194,7 +186,7 @@ SELECT SINGLE * FROM LFA1 INTO DATA(ls_vendor) WHERE LIFNR = '1000'.
 CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY' TABLES t_outtab = lt_items.
 CALL FUNCTION 'POPUP_TO_CONFIRM_STEP' EXPORTING textline1 = 'OK?'.
 """
-        }
+    }
 
     # Run fix engine on all programs
     print(f"\n  Fixing {len(programs)} programs...")

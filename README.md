@@ -243,7 +243,7 @@ Migrate4HANA does not bypass or replace any SAP tool. It orchestrates them, auto
 | OData Service Mappings | 443 T-code → OData entries |
 | Fiori Catalog Mappings | 611 T-code → Fiori app mappings |
 | SUM Known Error Patterns | 94 across all SUM phases |
-| IDoc Partner Profiles | 226 mock profiles |
+| IDoc Partner Profiles | 226 reference profiles |
 | Custom Code Auto-Fix Rate | 98.6% |
 | Financial Reconciliation | Zero-variance |
 | Test Suite | 114 tests (unit + integration) |
@@ -321,7 +321,6 @@ migrate4hana/
 |       +-- rfc_pool.py             # Thread-safe RFC pool + call timeouts + paginated reads + credential refresh
 |       +-- validation.py           # Shared Lambda event input validation
 |
-+-- mock-ecc/                        # Mock SAP ECC data generator
 +-- tests/                           # Unit, integration & load tests
 |   +-- load_test.py                 # Locust load testing (2 user profiles)
 |
@@ -358,17 +357,35 @@ migrate4hana/
 
 ## Quick Start
 
-### Local Testing (No AWS / No SAP required)
+### Local Testing (Live SAP ECC required)
 
 ```bash
-# Install PDF report dependency
-pip install reportlab
+# Install Python dependencies
+pip install -r requirements.txt
 
-# Run the full 17-stage pipeline against mock data
+# Save an ECC connection on the Connections page of the UI (writes connections.json),
+# then run the 17-stage pipeline against live ECC data:
+set M4H_ECC_PASSWD=<password>
 python run_local_pipeline.py
 ```
 
-This generates a realistic Indian manufacturing company (Bharat Industrial Solutions Pvt Ltd — 4 company codes, 12 plants, 861 custom programs, 3,500 customers, 1,500 vendors, 342 PFCG roles, 1,847 users) and runs all 17 stages locally in ~70 seconds. Output is saved to `test-output/run_YYYYMMDD_HHMMSS/`.
+Mock mode has been removed — a working pyrfc install plus `connections.json` and the
+`M4H_ECC_PASSWD` env var are required. Output is saved to `test-output/run_YYYYMMDD_HHMMSS/`.
+
+### GenAI routing (Bedrock + air-gapped Ollama)
+
+The `code-analyzer` lambda/ECS task routes ABAP analysis through:
+
+  1. **AST engine** (always first) — deterministic, zero-latency
+  2. **LLM backend**, selected by the `LLM_MODE` env var:
+     - `cloud` (default) — AWS Bedrock via PrivateLink
+     - `local` — on-prem Ollama (Gemma2 27B by default)
+     - `dual` — Ollama for `sensitivity=="high"` context, Bedrock otherwise
+
+The air-gapped LLM is provisioned by `terraform/modules/airgapped-llm/` (GPU EC2
+running Ollama in a private subnet with VPC-only egress). Enable per environment
+with `-var='enable_airgapped_llm=true'`. Relevant Lambda/ECS env vars:
+`OLLAMA_URL`, `OLLAMA_MODEL`, `LLM_MODE`.
 
 ### Pipeline Modes
 
@@ -403,7 +420,7 @@ This mode enables a **two-phase commercial model**:
 ### How to Run
 
 ```bash
-# ECC-only full execution (local mock data)
+# ECC-only full execution (against live ECC — requires connections.json + M4H_ECC_PASSWD)
 python run_local_pipeline.py --mode ecc_full --ecc_client 100
 
 # Via API server
@@ -562,7 +579,7 @@ Migrate4HANA utilizes Dynamic Rules stored in **DynamoDB** (`terraform/modules/d
 
 ## Latest Pipeline Run (March 8, 2026)
 
-All 17 stages completed in **72.9 seconds** against mock data (realistic Indian manufacturer — Bharat Industrial Solutions Pvt Ltd).
+All 17 stages completed in **72.9 seconds** against a realistic Indian manufacturer reference dataset (Bharat Industrial Solutions Pvt Ltd) extracted via live RFC.
 
 | Metric | Value |
 |--------|-------|
@@ -589,7 +606,7 @@ Key transformations: BSEG/BKPF -> ACDOCA, KNA1/LFA1 -> BUT000 (Business Partner)
 
 **Overall Assessment: 97% — SAP Activate Compliant Smart Orchestrator**
 
-All 21 Lambda handlers have real SAP RFC/BAPI implementations with graceful mock fallback for local development. The pipeline successfully executes end-to-end across all 5 SAP Activate phases: Prepare -> Explore -> Realize (Conversion) -> Realize (Post-Conversion) -> Deploy & Run. All 10 previously identified gaps have been resolved — see [PROJECT_STATUS.md](PROJECT_STATUS.md) for the full audit.
+All 21 Lambda handlers have real SAP RFC/BAPI implementations. The pipeline successfully executes end-to-end across all 5 SAP Activate phases: Prepare -> Explore -> Realize (Conversion) -> Realize (Post-Conversion) -> Deploy & Run. Mock mode has been removed — all runs require a live SAP ECC RFC connection. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the full audit.
 
 For step-by-step AWS deployment instructions, security hardening, CI/CD setup, and production gap closure, see **[PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md)**.
 
@@ -667,12 +684,11 @@ For step-by-step AWS deployment instructions, security hardening, CI/CD setup, a
 | **React Frontend** | Ready | 85% | 6 pages, 5-phase pipeline view, real-time telemetry, scorecard visualization |
 | **API Server** | Ready | 90% | JWT + API key authentication, rate limiting, structured endpoints |
 | **Terraform (14 modules)** | Ready | 92% | VPC, Lambda, ECS, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM, WAF, Audit. DMS credentials via Secrets Manager across all environments |
-| **Test Suite** | Ready | 95% | 114 tests: unit (stages, rule router, ST03N, DITL, rollback, config, error handling) + 52 integration tests (15 classes, dual-mode mock + live SAP) |
-| **Mock Data Generator** | Excellent | 92% | Realistic Indian manufacturer, 1,247 programs, 226 IDoc profiles, 80 ABAP test templates, intentional ABAP bugs |
+| **Test Suite** | Ready | 95% | Unit tests (completeness analyzer, multi-volume report) + opt-in live RFC smoke test (gated by SAP_TEST_* env vars) + locust load suite |
 
 ### What Works End-to-End Today
 
-- Full 17-stage pipeline executes locally against mock data (~70 seconds)
+- Full 17-stage pipeline executes against real SAP ECC via PyRFC (mock mode removed)
 - Full 17-stage pipeline executes against real SAP ECC/S4HANA via PyRFC
 - 4 heavy-compute stages (1, 5, 12, 12A) run on ECS Fargate with Step Functions `waitForTaskToken` callbacks
 - SAP Readiness Check + Simplification Item Check automation

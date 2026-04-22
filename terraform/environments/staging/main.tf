@@ -81,6 +81,11 @@ module "lambda" {
   bedrock_model_id     = var.bedrock_model_id
   ast_change_threshold = var.ast_change_threshold
 
+  # GenAI routing (cloud / local / dual) and Ollama endpoint wiring
+  llm_mode     = var.llm_mode
+  ollama_model = var.ollama_model
+  ollama_url   = var.enable_airgapped_llm ? "http://${module.airgapped_llm[0].private_ip}:11434" : ""
+
   lambda_functions = {
     # NOTE: discovery-engine removed — now runs on ECS Fargate (Stage 1)
 
@@ -276,6 +281,26 @@ module "ecs" {
   s3_staging_bucket  = module.s3_staging.bucket_name
   s3_staging_arn     = module.s3_staging.bucket_arn
   bedrock_model_id   = var.bedrock_model_id
+  llm_mode           = var.llm_mode
+  ollama_model       = var.ollama_model
+  ollama_url         = var.enable_airgapped_llm ? "http://${module.airgapped_llm[0].private_ip}:11434" : ""
+}
+
+# ─────────────────────────────────────────────
+# Air-gapped LLM (Ollama + Gemma2 on GPU EC2)
+# Disabled by default in staging; enable via -var='enable_airgapped_llm=true'
+# ─────────────────────────────────────────────
+module "airgapped_llm" {
+  source = "../../modules/airgapped-llm"
+  count  = var.enable_airgapped_llm ? 1 : 0
+
+  environment                = var.environment
+  vpc_id                     = module.vpc.vpc_id
+  vpc_cidr                   = var.vpc_cidr
+  private_subnet_id          = module.vpc.private_subnet_ids[0]
+  consumer_security_group_id = module.lambda.security_group_id
+  gpu_ami_id                 = var.gpu_ami_id
+  ollama_model               = var.ollama_model
 }
 
 # ─────────────────────────────────────────────

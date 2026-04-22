@@ -67,6 +67,28 @@ variable "ast_change_threshold" {
   default = 3
 }
 
+# ── Air-gapped LLM (Ollama + Gemma2) ─────────
+variable "enable_airgapped_llm" {
+  type        = bool
+  description = "Provision the on-prem Ollama EC2 for local LLM inference"
+  default     = false
+}
+variable "llm_mode" {
+  type        = string
+  description = "GenAI routing mode: cloud, local, or dual"
+  default     = "cloud"
+}
+variable "ollama_model" {
+  type        = string
+  description = "Ollama model name served by the air-gapped EC2"
+  default     = "gemma2:27b"
+}
+variable "gpu_ami_id" {
+  type        = string
+  description = "AMI ID for GPU instance used by the Ollama server"
+  default     = ""
+}
+
 # ── WAF ──────────────────────────────────────
 variable "waf_rate_limit" {
   type        = number

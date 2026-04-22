@@ -25,6 +25,21 @@ variable "bedrock_model_id" {
   type    = string
   default = "anthropic.claude-3-sonnet-20240229-v1:0"
 }
+variable "llm_mode" {
+  type        = string
+  default     = "cloud"
+  description = "GenAI routing mode: cloud, local, or dual"
+}
+variable "ollama_url" {
+  type        = string
+  default     = ""
+  description = "Base URL of the on-prem Ollama server (empty disables local LLM path)"
+}
+variable "ollama_model" {
+  type        = string
+  default     = "gemma2:27b"
+  description = "Ollama model name to request from the air-gapped LLM server"
+}
 variable "image_tag" {
   type        = string
   default     = "latest"
@@ -205,13 +220,15 @@ resource "aws_ecs_task_definition" "migration_heavy" {
     image     = "alpine:latest"   # Placeholder — CI/CD deploys real image
     essential = true
 
-    environment = [
+    environment = concat([
       { name = "S3_STAGING_BUCKET", value = var.s3_staging_bucket },
       { name = "SECRETS_ARN",       value = var.secrets_arn },
       { name = "ENVIRONMENT",       value = var.environment },
       { name = "BEDROCK_MODEL_ID",  value = var.bedrock_model_id },
       { name = "AWS_DEFAULT_REGION", value = var.aws_region },
-    ]
+      { name = "LLM_MODE",          value = var.llm_mode },
+      { name = "OLLAMA_MODEL",      value = var.ollama_model },
+    ], var.ollama_url != "" ? [{ name = "OLLAMA_URL", value = var.ollama_url }] : [])
 
     logConfiguration = {
       logDriver = "awslogs"

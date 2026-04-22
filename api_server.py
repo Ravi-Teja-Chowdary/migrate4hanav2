@@ -265,13 +265,13 @@ def test_s4hana_connection(params):
                     "sap_release": sys_info.get("RFCSAPRL", ""),
                     "message": f"Connected to S/4HANA {sys_info.get('RFCSYSID', host)}"}
         except ImportError:
-            return {"status": "mock", "system_id": "S4H", "host": host, "sap_release": "S/4HANA 2023 FPS02",
-                    "message": f"PyRFC not installed - mock mode. Target {host} will be simulated."}
+            return {"status": "error", "system_id": "", "host": host, "sap_release": "",
+                    "message": "PyRFC not installed on the server. Install pyrfc + SAP NW RFC SDK to test live RFC connections."}
         except Exception as e:
             return {"status": "error", "message": f"Connection failed: {str(e)}"}
     elif conn_type == "odata":
         api_url = params.get("api_url", host)
-        return {"status": "mock", "system_id": "S4HC", "host": api_url, "sap_release": "S/4HANA Cloud",
+        return {"status": "pending", "system_id": "S4HC", "host": api_url, "sap_release": "S/4HANA Cloud",
                 "message": f"OData endpoint {api_url} registered. Will use Communication Arrangements in target."}
     return {"status": "error", "message": f"Unknown connection type: {conn_type}"}
 
@@ -332,7 +332,6 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False):
                                    {"host": ecc_conf.get("ashost", "")})
             elif has_ecc and not _ecc_passwd:
                 # Connection is saved but password expired (server restarted).
-                # Don't silently fall back to mock — tell the user to re-test.
                 _add_progress_step("connection",
                                    "ECC connection saved but session expired. "
                                    "Please re-test the connection on the Connections page to re-authenticate.",
@@ -343,7 +342,16 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False):
                                    "results": None}
                 return
             else:
-                _add_progress_step("connection", "Using mock ECC data (no live connection)", "WARNING")
+                # Mock mode has been removed — a live ECC connection is required.
+                _add_progress_step("connection",
+                                   "No ECC connection configured. "
+                                   "Save and test an ECC connection on the Connections page before starting a run.",
+                                   "ERROR")
+                async with _lock:
+                    _active_run = {"status": "failed",
+                                   "error": "No live ECC connection configured. Mock mode has been removed.",
+                                   "results": None}
+                return
 
             if mode == "assess":
                 cmd.append("--assess-only")

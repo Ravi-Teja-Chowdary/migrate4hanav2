@@ -1,0 +1,33 @@
+# Migrate4HANA — Python dependencies
+#
+# SAP NW RFC SDK is required by pyrfc and must be installed separately:
+#   Windows: sapnwrfc/lib/ (already bundled in this repo)
+#   Linux:   nwrfcsdk-linux/lib/ (set SAPNWRFC_HOME env var)
+#   See: https://github.com/SAP/PyRFC for pyrfc installation guide
+#
+# Install with:
+#   py -3.10 -m pip install -r requirements.txt
+
+# ── API server (api_server.py) ──
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0
+python-multipart>=0.0.6
+
+# ── AWS + SAP RFC ──
+boto3>=1.34.0
+botocore>=1.34.0
+pyrfc>=3.0
+
+# ── GenAI backends ──
+# Bedrock is invoked via boto3 above; Ollama can use either the client
+# package or a plain HTTP POST (requests fallback).
+ollama>=0.4.0
+requests>=2.31.0
+
+# ── Reporting ──
+reportlab>=4.0
+
+# ── Testing / load ──
+pytest>=7.4.0
+locust>=2.20.0

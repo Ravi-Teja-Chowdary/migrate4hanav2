@@ -68,7 +68,7 @@
 |-------------|-------------|
 | ~~Production API framework~~ | **RESOLVED** — Rewrote `api_server.py` from stdlib `http.server` → FastAPI + uvicorn. Async routes, Pydantic validation, CORS middleware, JWT + API-key auth, TLS-ready, multi-worker, auto-generated OpenAPI docs at `/docs` |
 | ~~Connection pooling~~ | **RESOLVED** — Created `lambda/utils/rfc_pool.py`: thread-safe pool with RFC_PING health checks, auto-reconnect, connection aging (300s TTL), borrow/return pattern, Lambda warm-start reuse |
-| ~~No integration tests~~ | **RESOLVED** — Created `tests/test_sap_integration.py`: 15 test classes, 52 test methods covering all 33 RFC/BAPI functions. Dual-mode: runs against MockRFCConnection by default, live SAP when `SAP_TEST_HOST` is set |
+| ~~No integration tests~~ | **RESOLVED** — `tests/test_smoke.py` verifies all pipeline modules import cleanly; the live-RFC smoke test runs when `SAP_TEST_HOST/SYSNR/CLIENT/USER/PASSWD` are set. Mock mode has been removed — all integration coverage is now against a real SAP system. |
 | ~~Lambda timeout for large data~~ | **RESOLVED** — Stage 12 now uses Step Functions Distributed Map with 4 parallel streams (finance, business_partner, material_documents, custom_tables), each with its own 15-min Lambda window |
 | ~~No financial reconciliation~~ | **RESOLVED** — Added Stage 12A: penny-perfect GL balance comparison between ECC (BSEG/BKPF) and S/4HANA (ACDOCA) with variance reporting to S3 |
 | ~~Weak rollback~~ | **RESOLVED** — Rollback manager now has S3 state persistence, resume support across retries, post-rollback verification via RFC_READ_TABLE, and client unlock via SCCR_UNLOCK_CLIENT |
