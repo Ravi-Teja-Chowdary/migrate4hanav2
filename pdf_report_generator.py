@@ -1,4 +1,4 @@
-﻿"""
+"""
 Migrate4HANA â€” PDF Report Generator
 =====================================
 Generates a professional client-deliverable PDF from the

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Migrate4HANA - API Server (FastAPI)
 ====================================
 Production-grade HTTP API for the migration platform.
