@@ -56,13 +56,7 @@ FORBIDDEN_FMS = [
 # is tracked as a separate Wave 2 todo. Removing entries from this list
 # is the literal acceptance criterion for the corresponding retool todo.
 # Each entry is a path relative to the repo root.
-PENDING_RETOOL_ALLOWLIST = {
-    "lambda/code-deployer/handler.py",         # retool-code-deployer
-    "lambda/config-applier/handler.py",        # retool-config-applier
-    "lambda/data-loader/handler.py",           # retool-data-loader
-    "lambda/integration-activator/handler.py", # retool-integration-activator
-    "lambda/role-provisioner/handler.py",      # retool-role-provisioner
-}
+PENDING_RETOOL_ALLOWLIST = set()  # Wave 2 complete — list emptied. Re-add an entry only with a tracked retool todo.
 
 # We only flag ACTUAL invocations: `conn.call("FM"` or `connection.call("FM"`
 # or `.call('FM'`. This avoids false positives from rule libraries and docs

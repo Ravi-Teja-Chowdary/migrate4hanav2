@@ -17,6 +17,8 @@ Usage:
         result = conn.call("RFC_READ_TABLE", QUERY_TABLE="T001")
 """
 
+from __future__ import annotations
+
 import threading
 import time
 import logging

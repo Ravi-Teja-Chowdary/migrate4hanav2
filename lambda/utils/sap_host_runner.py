@@ -6,6 +6,8 @@ fetch, etc.).
 Extracted pattern from the legacy sum-orchestrator (see
 lambda/_deprecated/sum-orchestrator/handler.py for original usage).
 """
+
+from __future__ import annotations
 import logging
 import time
 import boto3

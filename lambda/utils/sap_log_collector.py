@@ -2,6 +2,8 @@
 sap_log_collector — pull SAP host log files (sapinst, tp, dev_*, work
 directory traces) into S3 with run_id prefix.
 """
+
+from __future__ import annotations
 import logging
 import os
 from .sap_host_runner import run

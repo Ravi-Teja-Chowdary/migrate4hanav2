@@ -5,6 +5,8 @@ Recommend HANA + app server sizing for the target S/4HANA based on
 ECC database footprint and workload metrics. Outputs an AWS instance
 recommendation and warnings for capacity-planning conversations.
 """
+
+from __future__ import annotations
 import json
 import logging
 import os

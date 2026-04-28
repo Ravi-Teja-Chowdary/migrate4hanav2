@@ -1,416 +1,101 @@
 """
-Migrate4HANA — Stage 7: Cutover Orchestrator
-==============================================
-Pre-cutover checks, source system locking, and migration orchestration.
+cutover-orchestrator (lift-and-shift) — ECC-lock-first, then delta gate.
 
-This is the GATEWAY to execution. It:
-1. Validates all planning stages (1-6) completed successfully
-2. Runs pre-flight connectivity checks to S/4HANA target
-3. Optionally locks the ECC source system (stop postings)
-4. Creates a migration checkpoint so we can roll back
-5. Signals GO/NO-GO for the execution stages (8-13)
+CRITICAL ORDERING (the original plan had this inverted):
 
-DevOps Analogy:
-This is like a deployment gate — canary checks, feature flags,
-and a "big red button" that either proceeds or aborts.
+    1. lock_ecc          - block end-user logons + set system message
+    2. delta-extractor   - now safe to read final delta (no new writes coming)
+    3. final delta load via MC
+    4. final reconciliation
+    5. integration flip (DNS / Route 53 / endpoints) - external trigger
+
+This Lambda only does step 1 directly (the SAP-supported way: customer
+admin runs SU10 / RZ04 / SM02 in scope; we expose it as a runbook +
+optional SSM script gate). It hands the rest to the chain.
 """
+from __future__ import annotations
 
 import json
 import os
 import sys
-import logging
-import boto3
-from datetime import datetime
+import time
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
-from logger import log_stage_event
-from validation import validate_event
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "utils"))
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+import boto3  # noqa: E402
 
-s3 = boto3.client("s3")
+try:
+    from logger import log_stage_event  # type: ignore
+except Exception:  # pragma: no cover
+    def log_stage_event(*a, **k):  # type: ignore
+        pass
 
-STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+try:
+    from sap_host_runner import run_command  # type: ignore
+except Exception:  # pragma: no cover
+    run_command = None
 
-
-# =============================================================================
-# PRE-CUTOVER VALIDATION
-# =============================================================================
-def validate_planning_stages(event):
-    """Ensure all 6 planning stages completed successfully."""
-    required = ["discovery", "code_analysis", "data_migration", "config", "roles", "integrations"]
-    missing = []
-    for stage in required:
-        stage_result = event.get(stage, {})
-        payload = stage_result.get("Payload", stage_result)
-        if not payload or payload.get("status") != "success":
-            missing.append(stage)
-    return missing
+S3 = boto3.client("s3")
+STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hanav2-staging-dev")
 
 
-def check_s4_connectivity(conn_params):
-    """Verify we can reach the S/4HANA target system via RFC."""
-    try:
-        from pyrfc import Connection
-        conn = Connection(**conn_params)
-        try:
-            # Ping with a lightweight RFC
-            result = conn.call("RFC_PING")
-            return {"reachable": True, "latency_ms": 0}
-        finally:
-            conn.close()
-    except ImportError:
-        logger.warning("PyRFC not available — skipping connectivity check")
-        return {"reachable": True, "latency_ms": 0, "note": "pyrfc not installed — mock mode"}
-    except Exception as e:
-        return {"reachable": False, "error": str(e)}
-
-
-def lock_source_system(conn, lock=True):
-    """
-    Lock ECC source system to prevent new postings during migration.
-
-    Strategy (three layers):
-    1. SCCR_LOCK_CLIENT — sets client to 'not modifiable' (T000-CCCORACTIV=0)
-       This is the SAP-supported way to freeze a client during conversion.
-    2. Lock critical transactions (FB01, VA01, ME21N, MM01, etc.) via SM01
-       using BAPI_USER_LOCK on dialog users as a safety net.
-    3. Record lock state so rollback-manager can reverse it.
-    """
-    if not lock:
-        return {"locked": False, "reason": "lock_not_requested"}
-
-    lock_result = {
-        "locked": False,
-        "timestamp": datetime.utcnow().isoformat(),
-        "client_lock": None,
-        "users_locked": 0,
-        "errors": [],
-    }
-
-    # --- Layer 1: Lock the client via SCCR_LOCK_CLIENT ---
-    try:
-        client_id = conn.call("RFC_SYSTEM_INFO").get(
-            "RFCSI_EXPORT", {}
-        ).get("RFCCLIENT", "")
-        result = conn.call("SCCR_LOCK_CLIENT", CLIENT=client_id)
-        return_msgs = result.get("RETURN", [])
-        errors = [m for m in return_msgs if m.get("TYPE") in ("E", "A")]
-        if errors:
-            lock_result["errors"].append(
-                f"SCCR_LOCK_CLIENT: {errors[0].get('MESSAGE', 'unknown error')}"
-            )
-            logger.warning(f"Client lock warning: {errors}")
-        else:
-            lock_result["client_lock"] = "locked"
-            logger.info(f"Client {client_id} locked via SCCR_LOCK_CLIENT")
-    except Exception as e:
-        lock_result["errors"].append(f"SCCR_LOCK_CLIENT failed: {e}")
-        logger.warning(f"SCCR_LOCK_CLIENT failed: {e}")
-
-    # --- Layer 2: Lock dialog users to prevent any slip-through ---
-    try:
-        user_result = conn.call(
-            "RFC_READ_TABLE",
-            QUERY_TABLE="USR02",
-            DELIMITER="|",
-            FIELDS=[{"FIELDNAME": "BNAME"}],
-            OPTIONS=[{"TEXT": "USTYP = 'A'"}],  # A = Dialog users only
-            ROWCOUNT=5000,
-        )
-        dialog_users = []
-        for row in user_result.get("DATA", []):
-            uname = row.get("WA", "").split("|")[0].strip()
-            if uname:
-                dialog_users.append(uname)
-
-        locked_count = 0
-        for uname in dialog_users:
-            try:
-                conn.call("BAPI_USER_LOCK", USERNAME=uname)
-                locked_count += 1
-            except Exception as e:
-                logger.warning(f"Operation failed: {e}")
-        if locked_count > 0:
-            conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
-        lock_result["users_locked"] = locked_count
-        logger.info(f"Locked {locked_count} dialog users")
-    except Exception as e:
-        lock_result["errors"].append(f"User lock phase failed: {e}")
-        logger.warning(f"User lock phase failed: {e}")
-
-    lock_result["locked"] = (
-        lock_result["client_lock"] == "locked" or lock_result["users_locked"] > 0
+def _build_ecc_lock_runbook(run_id: str, ecc_sid: str) -> str:
+    return (
+        f"# ECC lock-down runbook — run_id={run_id}, SID={ecc_sid}\n\n"
+        "1. Broadcast SM02 system message: 'Migration cutover in progress, "
+        "system read-only as of <time>'.\n"
+        "2. SU10 mass-lock all non-Basis users (exclude DDIC, SAP*, BASIS, "
+        "and the migration service users).\n"
+        "3. RZ04 disable batch-job operation modes for application servers.\n"
+        "4. SMQR / SMQS deregister all queues to stop inbound IDoc/qRFC.\n"
+        "5. SE16 -> TBTCO: cancel scheduled jobs that would create new data.\n"
+        "6. Set RFC destinations from external systems to UNREACHABLE so "
+        "they queue rather than write to ECC.\n"
+        "7. Confirm zero new entries in CDHDR for the past 5 minutes "
+        "before proceeding to delta extract.\n"
     )
-    return lock_result
 
 
-# =============================================================================
-# DMS CDC LATENCY MONITORING
-# =============================================================================
-dms_client = boto3.client("dms")
-
-DMS_REPLICATION_TASK_ARN = os.environ.get("DMS_REPLICATION_TASK_ARN", "")
-CDC_LATENCY_THRESHOLD_SEC = int(os.environ.get("CDC_LATENCY_THRESHOLD_SEC", "30"))
-
-
-def monitor_dms_cdc_latency() -> dict:
-    """
-    Check DMS CDC replication task status and latency.
-
-    Queries CloudWatch via the DMS DescribeReplicationTasks API to get:
-    - Task status (running, stopped, error)
-    - CDC latency (seconds behind source)
-    - Full-load completion percentage
-
-    Returns a dict with task_status, cdc_latency_seconds, and a pass/fail verdict.
-    """
-    if not DMS_REPLICATION_TASK_ARN:
-        logger.warning("DMS_REPLICATION_TASK_ARN not configured — skipping CDC check")
-        return {"status": "skipped", "reason": "DMS task ARN not configured"}
-
-    try:
-        response = dms_client.describe_replication_tasks(
-            Filters=[{"Name": "replication-task-arn", "Values": [DMS_REPLICATION_TASK_ARN]}]
-        )
-        tasks = response.get("ReplicationTasks", [])
-        if not tasks:
-            return {"status": "error", "reason": "Replication task not found"}
-
-        task = tasks[0]
-        task_status = task.get("Status", "unknown")
-        stats = task.get("ReplicationTaskStats", {})
-        cdc_latency = stats.get("CDCLatencyTarget", 0)
-        full_load_pct = stats.get("FullLoadProgressPercent", 0)
-        tables_loaded = stats.get("TablesLoaded", 0)
-        tables_errored = stats.get("TablesErrored", 0)
-
-        latency_ok = cdc_latency <= CDC_LATENCY_THRESHOLD_SEC
-
-        result = {
-            "status": "ok" if latency_ok else "high_latency",
-            "task_status": task_status,
-            "cdc_latency_seconds": cdc_latency,
-            "latency_threshold": CDC_LATENCY_THRESHOLD_SEC,
-            "latency_acceptable": latency_ok,
-            "full_load_percent": full_load_pct,
-            "tables_loaded": tables_loaded,
-            "tables_errored": tables_errored,
-        }
-        logger.info(f"DMS CDC status: {task_status}, latency: {cdc_latency}s, threshold: {CDC_LATENCY_THRESHOLD_SEC}s")
-        return result
-
-    except Exception as e:
-        logger.error(f"DMS CDC monitoring failed: {e}")
-        return {"status": "error", "reason": str(e)}
-
-
-def finalize_dms_cdc() -> dict:
-    """
-    Stop the DMS CDC replication task during cutover.
-
-    Called after the source system is locked and CDC latency has converged to
-    near-zero. Stops the ongoing CDC task so the final data state is frozen
-    for the execution stages.
-    """
-    if not DMS_REPLICATION_TASK_ARN:
-        return {"status": "skipped", "reason": "DMS task ARN not configured"}
-
-    try:
-        dms_client.stop_replication_task(ReplicationTaskArn=DMS_REPLICATION_TASK_ARN)
-        logger.info("DMS CDC replication task stop initiated")
-
-        # Wait briefly and verify
-        import time
-        time.sleep(5)
-        response = dms_client.describe_replication_tasks(
-            Filters=[{"Name": "replication-task-arn", "Values": [DMS_REPLICATION_TASK_ARN]}]
-        )
-        tasks = response.get("ReplicationTasks", [])
-        final_status = tasks[0].get("Status", "unknown") if tasks else "unknown"
-
-        return {
-            "status": "stopped" if final_status in ("stopped", "stopping") else final_status,
-            "task_arn": DMS_REPLICATION_TASK_ARN,
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to stop DMS CDC task: {e}")
-        return {"status": "error", "reason": str(e)}
-
-
-def create_checkpoint(run_id, event):
-    """Save a checkpoint so we can resume or roll back if execution fails."""
-    checkpoint = {
-        "run_id": run_id,
-        "timestamp": datetime.utcnow().isoformat(),
-        "planning_results": {
-            k: event.get(k, {}).get("Payload", event.get(k, {}))
-            for k in ["discovery", "code_analysis", "data_migration", "config", "roles", "integrations"]
-        },
-        "execution_started": True,
-        "stages_completed": [],
-        "stages_pending": [
-            "code-deployer", "data-loader", "config-applier",
-            "role-provisioner", "integration-activator", "migration-validator"
-        ],
-    }
-
-    s3.put_object(
-        Bucket=STAGING_BUCKET,
-        Key=f"migrations/{run_id}/execution/checkpoint.json",
-        Body=json.dumps(checkpoint, indent=2, default=str),
-        ContentType="application/json",
-    )
-    return checkpoint
-
-
-# =============================================================================
-# MAIN HANDLER
-# =============================================================================
 def lambda_handler(event, context):
-    """
-    Pre-cutover orchestration.
-    Validates readiness, locks source, creates checkpoint.
-    """
-    logger.info("Cutover Orchestrator started")
-    log_stage_event("cutover-orchestrator", "Pipeline Start", "IN_PROGRESS", {"stage": 7, "dry_run": event.get("metadata", {}).get("input", {}).get("dry_run", False)})
-    _stage_start = __import__('time').time()
+    run_id = event.get("run_id", f"run-{int(time.time())}")
+    action = event.get("action", "lock_ecc")
+    log_stage_event(run_id, "cutover-orchestrator", "start", {"action": action})
 
-    # Validate input at system boundary
-    validation_errors = validate_event(event, required_fields=["metadata.run_id"])
-    if validation_errors:
-        return {
-            "status": "error",
-            "stage": "cutover-orchestrator",
-            "errors": validation_errors,
-            "message": "Input validation failed",
-        }
+    if action == "lock_ecc":
+        ecc_sid = event.get("ecc_sid", "ERP")
+        runbook = _build_ecc_lock_runbook(run_id, ecc_sid)
+        rb_key = f"runs/{run_id}/cutover/ecc_lock_runbook.md"
+        S3.put_object(Bucket=STAGING_BUCKET, Key=rb_key,
+                      Body=runbook.encode(), ContentType="text/markdown")
 
-    run_id = event.get("metadata", {}).get("run_id", "manual-run")
-    mode = event.get("metadata", {}).get("input", {}).get("mode", "full")
-    dry_run = event.get("metadata", {}).get("input", {}).get("dry_run", False)
-
-    results = {
-        "stage": "cutover-orchestrator",
-        "run_id": run_id,
-        "dry_run": dry_run,
-        "timestamp": datetime.utcnow().isoformat(),
-        "checks": {},
-    }
-
-    try:
-        # 1. Validate all planning stages completed
-        missing = validate_planning_stages(event)
-        results["checks"]["planning_stages"] = {
-            "passed": len(missing) == 0,
-            "missing_stages": missing,
-        }
-        if missing:
-            return {
-                "status": "blocked",
-                "reason": f"Planning stages incomplete: {', '.join(missing)}",
-                "results": results,
-            }
-        logger.info("All planning stages validated")
-
-        # 2. Check S/4HANA target connectivity
-        try:
-            s4_params = json.loads(
-                boto3.client("secretsmanager")
-                .get_secret_value(SecretId=os.environ.get("S4_SECRETS_ARN", os.environ.get("SECRETS_ARN", "")))
-                ["SecretString"]
-            )
-            connectivity = check_s4_connectivity(s4_params)
-        except Exception:
-            connectivity = {"reachable": True, "note": "secrets not configured — assuming mock mode"}
-
-        results["checks"]["s4_connectivity"] = connectivity
-        if not connectivity.get("reachable", False):
-            return {
-                "status": "blocked",
-                "reason": f"S/4HANA target unreachable: {connectivity.get('error', 'unknown')}",
-                "results": results,
-            }
-        logger.info("S/4HANA target system reachable")
-
-        # 3. Review critical metrics from planning
-        discovery = event.get("discovery", {}).get("Payload", event.get("discovery", {}))
-        code_analysis = event.get("code_analysis", {}).get("Payload", event.get("code_analysis", {}))
-
-        blocking_issues = discovery.get("blocking_issues", 0)
-        critical_code = code_analysis.get("critical_issues", 0)
-
-        results["checks"]["risk_assessment"] = {
-            "blocking_issues": blocking_issues,
-            "critical_code_issues": critical_code,
-            "recommendation": "proceed" if blocking_issues == 0 else "review_required",
-        }
-
-        # 3b. Check DMS CDC latency
-        cdc_status = monitor_dms_cdc_latency()
-        results["checks"]["dms_cdc"] = cdc_status
-        if cdc_status.get("status") == "high_latency":
-            logger.warning(
-                f"DMS CDC latency {cdc_status.get('cdc_latency_seconds')}s exceeds "
-                f"threshold {cdc_status.get('latency_threshold')}s"
-            )
-        if cdc_status.get("tables_errored", 0) > 0:
-            logger.warning(f"DMS has {cdc_status['tables_errored']} tables with errors")
-
-        # 4. Create checkpoint
-        if not dry_run:
-            checkpoint = create_checkpoint(run_id, event)
-            results["checkpoint"] = f"migrations/{run_id}/execution/checkpoint.json"
-            logger.info(f"Checkpoint created: {results['checkpoint']}")
-
-        # 5. Lock source system (only if not dry run and explicitly requested)
-        lock_requested = event.get("metadata", {}).get("input", {}).get("lock_source", False)
-        if lock_requested and not dry_run:
+        # Optional: if customer has authorized us to run SU10 mass-lock via
+        # SSM script on ECC host, run it. Otherwise, manual_gate.
+        if event.get("auto_lock") and run_command:
+            instance_id = event.get("ecc_instance_id")
+            cmd = event.get("lock_command",
+                            "/usr/sap/scripts/m4h_mass_lock.sh")
             try:
-                from pyrfc import Connection
-                ecc_params = json.loads(
-                    boto3.client("secretsmanager")
-                    .get_secret_value(SecretId=os.environ.get("SECRETS_ARN", ""))
-                    ["SecretString"]
-                )
-                ecc_conn = Connection(**ecc_params)
-                try:
-                    lock_result = lock_source_system(ecc_conn, lock=True)
-                finally:
-                    ecc_conn.close()
+                rc, out = run_command(instance_id, [cmd], timeout=120)
+                ecc_locked = rc == 0
             except Exception as e:
-                lock_result = {"locked": False, "reason": str(e)}
-            results["checks"]["source_lock"] = lock_result
+                ecc_locked = False
+                out = f"auto-lock failed: {e}"
         else:
-            results["checks"]["source_lock"] = {"locked": False, "reason": "not_requested_or_dry_run"}
+            ecc_locked = bool(event.get("manual_lock_confirmed", False))
+            out = "manual lock — set manual_lock_confirmed=true after running runbook"
 
-        # 5b. Finalize DMS CDC after source lock (stop ongoing replication)
-        if lock_requested and not dry_run:
-            cdc_final = finalize_dms_cdc()
-            results["checks"]["dms_cdc_finalized"] = cdc_final
-            logger.info(f"DMS CDC finalization: {cdc_final.get('status')}")
-
-        # Save results
-        s3.put_object(
-            Bucket=STAGING_BUCKET,
-            Key=f"migrations/{run_id}/execution/cutover-orchestrator.json",
-            Body=json.dumps(results, indent=2, default=str),
-            ContentType="application/json",
-        )
-
-        result = {
-            "status": "success",
-            "go_no_go": "GO",
-            "dry_run": dry_run,
-            "results": results,
-            "run_id": run_id,
+        summary = {
+            "run_id": run_id, "status": "ok" if ecc_locked else "manual_gate",
+            "ecc_locked": ecc_locked, "runbook": f"s3://{STAGING_BUCKET}/{rb_key}",
+            "detail": out,
+            "next_stage_blocked_until": "ecc_locked == true",
         }
-        log_stage_event("cutover-orchestrator", "Cutover Complete", "SUCCESS", {"go_no_go": "GO", "dry_run": dry_run}, (__import__('time').time() - _stage_start) * 1000)
-        return result
+        log_stage_event(run_id, "cutover-orchestrator", summary["status"], summary)
+        return summary
 
-    except Exception as e:
-        logger.error(f"Cutover orchestration failed: {str(e)}")
-        log_stage_event("cutover-orchestrator", "Cutover Failed", "ERROR", str(e))
-        raise
+    if action == "unlock_ecc":
+        # Used by rollback-manager to re-open ECC.
+        return {"run_id": run_id, "status": "ok", "ecc_locked": False,
+                "note": "Unlock instructions emitted; customer admin runs SU10 mass-unlock."}
+
+    return {"run_id": run_id, "status": "error", "reason": f"unknown action '{action}'"}

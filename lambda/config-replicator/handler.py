@@ -374,9 +374,11 @@ def lambda_handler(event, context):
         # Apply Global Dynamic Configuration logic
         # Extract BUKRS directly from payload or mock
         discovered_company_codes = []
-        if finance := config_data.get("finance", {}).get("tables", {}):
-             if t001 := finance.get("T001", {}).get("data"):
-                 discovered_company_codes = [cc.get("BUKRS", "") for cc in t001 if cc.get("BUKRS")]
+        finance = config_data.get("finance", {}).get("tables", {})
+        if finance:
+            t001 = finance.get("T001", {}).get("data")
+            if t001:
+                discovered_company_codes = [cc.get("BUKRS", "") for cc in t001 if cc.get("BUKRS")]
                  
         if not discovered_company_codes:
             # Fallback for unconnected instances
