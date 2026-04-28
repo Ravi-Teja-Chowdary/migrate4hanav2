@@ -1,0 +1,314 @@
+{
+  "Comment": "Migrate4HANA - Lift-and-Shift Pipeline (28 stages, 9 phases). Greenfield S/4HANA stand-up; every S/4 write goes through SAP-shipped tools (Migration Cockpit / LTMOM / IDoc inbound / CTS+/tp). Two-plane architecture: orchestration plane = AWS code, execution plane = SAP tools.",
+  "StartAt": "Phase0_Assess_Marker",
+  "States": {
+
+    "Phase0_Assess_Marker": {
+      "Type": "Pass",
+      "Result": {"phase": 0, "phase_name": "ASSESS"},
+      "ResultPath": "$.phase_telemetry",
+      "Next": "Stage1_Discovery"
+    },
+    "Stage1_Discovery": {
+      "Type": "Task", "Resource": "${DiscoveryEngineArn}",
+      "Next": "Stage2_SizingAdvisor",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage2_SizingAdvisor": {
+      "Type": "Task", "Resource": "${SizingAdvisorArn}",
+      "Next": "Stage3_ObjectRouter",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage3_ObjectRouter": {
+      "Type": "Task", "Resource": "${ObjectRouterArn}",
+      "Comment": "Emits a DAG of migration objects with lane assignments (MC/LTMOM/IDoc/Transport) and dependencies. Output is topo-sorted.",
+      "Next": "Phase1_Provision_Marker",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+
+    "Phase1_Provision_Marker": {
+      "Type": "Pass",
+      "Result": {"phase": 1, "phase_name": "PROVISION"},
+      "ResultPath": "$.phase_telemetry",
+      "Next": "Stage4_TargetProvisioner"
+    },
+    "Stage4_TargetProvisioner": {
+      "Type": "Task", "Resource": "${TargetProvisionerArn}",
+      "Comment": "Launch Wizard for SAP / SWPM via SSM. Sandbox vs Launch-Wizard vs Basis-Handover modes.",
+      "Next": "ManualGate_BasisHandover",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "ManualGate_BasisHandover": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Comment": "Human gate: Basis admin confirms target S/4HANA install complete (HANA + ASCS + ERS + cluster) before automation continues.",
+      "Parameters": {
+        "FunctionName": "${ManualGateLambdaArn}",
+        "Payload": {"gate": "basis_handover", "token.$": "$$.Task.Token", "input.$": "$"}
+      },
+      "Next": "Stage5_BasisValidator"
+    },
+    "Stage5_BasisValidator": {
+      "Type": "Task", "Resource": "${BasisValidatorArn}",
+      "Comment": "Hard gate. check_target() validates RFC, clients, STMS, idoc_xml SICF, MC availability. Aborts pipeline if ready=false.",
+      "Next": "BasisReadyChoice",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "BasisReadyChoice": {
+      "Type": "Choice",
+      "Choices": [
+        {"Variable": "$.basis_ready", "BooleanEquals": true, "Next": "Phase2_Code_Marker"}
+      ],
+      "Default": "RollbackManager"
+    },
+
+    "Phase2_Code_Marker": {
+      "Type": "Pass",
+      "Result": {"phase": 2, "phase_name": "CODE"},
+      "ResultPath": "$.phase_telemetry",
+      "Next": "Stage6_CodeExtraction"
+    },
+    "Stage6_CodeExtraction": {
+      "Type": "Task", "Resource": "${CodeAnalyzerArn}",
+      "Parameters": {"mode": "extract", "input.$": "$"},
+      "Next": "Stage7_CodeRemediation",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage7_CodeRemediation": {
+      "Type": "Task", "Resource": "${CodeAnalyzerArn}",
+      "Parameters": {"mode": "remediate", "input.$": "$"},
+      "Next": "Stage8_TransportArtifactBuilder_Code",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage8_TransportArtifactBuilder_Code": {
+      "Type": "Task", "Resource": "${TransportArtifactBuilderArn}",
+      "Parameters": {"object_kind": "code", "input.$": "$"},
+      "Next": "Stage9a_TransportFilePlacer_Code",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage9a_TransportFilePlacer_Code": {
+      "Type": "Task", "Resource": "${TransportFilePlacerArn}",
+      "Next": "Stage9b_TransportImportExecutor_Code",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage9b_TransportImportExecutor_Code": {
+      "Type": "Task", "Resource": "${TransportImportExecutorArn}",
+      "Comment": "tp addtobuffer + tp import via SSM. The ONE supported S/4 write mechanism for code.",
+      "Next": "Stage9c_TransportImportVerifier_Code",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage9c_TransportImportVerifier_Code": {
+      "Type": "Task", "Resource": "${TransportImportVerifierArn}",
+      "Comment": "RC parse, inactive-objects scan, log capture.",
+      "Next": "Phase3_Config_Marker",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+
+    "Phase3_Config_Marker": {
+      "Type": "Pass",
+      "Result": {"phase": 3, "phase_name": "CONFIG"},
+      "ResultPath": "$.phase_telemetry",
+      "Next": "Stage10_ConfigExtraction"
+    },
+    "Stage10_ConfigExtraction": {
+      "Type": "Task", "Resource": "${ConfigReplicatorArn}",
+      "Parameters": {"mode": "extract", "input.$": "$"},
+      "Next": "Stage11_BCSetBuilder",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage11_BCSetBuilder": {
+      "Type": "Task", "Resource": "${BCSetBuilderArn}",
+      "Comment": "SCPR_API_BC_SET_CREATE on BUILD system; emits transport object list to artifact-builder.",
+      "Next": "Stage12_TransportArtifactBuilder_Config",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage12_TransportArtifactBuilder_Config": {
+      "Type": "Task", "Resource": "${TransportArtifactBuilderArn}",
+      "Parameters": {"object_kind": "config", "input.$": "$"},
+      "Next": "Stage12a_FilePlacer_Config",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage12a_FilePlacer_Config": {
+      "Type": "Task", "Resource": "${TransportFilePlacerArn}",
+      "Next": "Stage12b_ImportExecutor_Config",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage12b_ImportExecutor_Config": {
+      "Type": "Task", "Resource": "${TransportImportExecutorArn}",
+      "Next": "Stage12c_ImportVerifier_Config",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage12c_ImportVerifier_Config": {
+      "Type": "Task", "Resource": "${TransportImportVerifierArn}",
+      "Next": "Phase4_DataPrep_Marker",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+
+    "Phase4_DataPrep_Marker": {
+      "Type": "Pass",
+      "Result": {"phase": 4, "phase_name": "DATA_PREP"},
+      "ResultPath": "$.phase_telemetry",
+      "Next": "Stage13_DataExtraction"
+    },
+    "Stage13_DataExtraction": {
+      "Type": "Task", "Resource": "${DataMigratorArn}",
+      "Parameters": {"mode": "extract", "input.$": "$"},
+      "Next": "Stage14_DataHygiene",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage14_DataHygiene": {
+      "Type": "Task", "Resource": "${DataHygieneArn}",
+      "Next": "Stage15_TemplateGeneration",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage15_TemplateGeneration": {
+      "Type": "Task", "Resource": "${DataMigratorArn}",
+      "Parameters": {"mode": "generate_templates", "input.$": "$"},
+      "Comment": "Emits MC XML/CSV, IDoc XML, LTMOM mapping artifacts to S3.",
+      "Next": "Phase5_DataLoad_Marker",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+
+    "Phase5_DataLoad_Marker": {
+      "Type": "Pass",
+      "Result": {"phase": 5, "phase_name": "DATA_LOAD"},
+      "ResultPath": "$.phase_telemetry",
+      "Next": "Stage16to18_DataLoad_Map"
+    },
+    "Stage16to18_DataLoad_Map": {
+      "Type": "Map",
+      "Comment": "Iterate over the topo-sorted DAG from object-router. Each object dispatches to its lane (MC/LTMOM/IDoc) via Choice. Lanes themselves are the SAP execution plane.",
+      "ItemsPath": "$.routing.dag",
+      "MaxConcurrency": 5,
+      "Iterator": {
+        "StartAt": "LaneRouter",
+        "States": {
+          "LaneRouter": {
+            "Type": "Choice",
+            "Choices": [
+              {"Variable": "$.lane", "StringEquals": "MC",    "Next": "Lane_MC"},
+              {"Variable": "$.lane", "StringEquals": "LTMOM", "Next": "Lane_LTMOM"},
+              {"Variable": "$.lane", "StringEquals": "IDOC",  "Next": "Lane_IDoc"},
+              {"Variable": "$.lane", "StringEquals": "BODS",  "Next": "Lane_BODS_ManualGate"}
+            ],
+            "Default": "Lane_Skip"
+          },
+          "Lane_MC":    {"Type": "Task", "Resource": "${MigrationCockpitOrchestratorArn}", "End": true},
+          "Lane_LTMOM": {"Type": "Task", "Resource": "${LTMOMOrchestratorArn}", "End": true},
+          "Lane_IDoc":  {"Type": "Task", "Resource": "${IDocOrchestratorArn}", "End": true},
+          "Lane_BODS_ManualGate": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+            "Parameters": {
+              "FunctionName": "${ManualGateLambdaArn}",
+              "Payload": {"gate": "bods_lane", "token.$": "$$.Task.Token", "input.$": "$"}
+            },
+            "End": true
+          },
+          "Lane_Skip": {"Type": "Pass", "Result": {"skipped": true}, "End": true}
+        }
+      },
+      "ResultPath": "$.dataload_results",
+      "Next": "Phase6_Validate_Marker",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+
+    "Phase6_Validate_Marker": {
+      "Type": "Pass",
+      "Result": {"phase": 6, "phase_name": "VALIDATE"},
+      "ResultPath": "$.phase_telemetry",
+      "Next": "Stage19_Reconciliation"
+    },
+    "Stage19_Reconciliation": {
+      "Type": "Task", "Resource": "${MigrationValidatorArn}",
+      "Next": "Stage20_TestGeneration",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage20_TestGeneration": {
+      "Type": "Task", "Resource": "${TestGeneratorArn}",
+      "Next": "Stage21_GoLiveScorecard",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage21_GoLiveScorecard": {
+      "Type": "Task", "Resource": "${MigrationCompletenessAnalyzerArn}",
+      "Next": "ManualGate_PreCutover",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+
+    "ManualGate_PreCutover": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Comment": "Human gate: GO/NO-GO board reviews scorecard before cutover begins.",
+      "Parameters": {
+        "FunctionName": "${ManualGateLambdaArn}",
+        "Payload": {"gate": "pre_cutover", "token.$": "$$.Task.Token", "input.$": "$"}
+      },
+      "Next": "Phase7_Cutover_Marker"
+    },
+
+    "Phase7_Cutover_Marker": {
+      "Type": "Pass",
+      "Result": {"phase": 7, "phase_name": "CUTOVER"},
+      "ResultPath": "$.phase_telemetry",
+      "Next": "Stage22_ECCLock"
+    },
+    "Stage22_ECCLock": {
+      "Type": "Task", "Resource": "${CutoverOrchestratorArn}",
+      "Parameters": {"action": "lock_ecc", "input.$": "$"},
+      "Comment": "MUST run before final delta. Sets ECC to read-only / blocks user logons.",
+      "Next": "Stage23_FinalDeltaExtract",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage23_FinalDeltaExtract": {
+      "Type": "Task", "Resource": "${DeltaExtractorArn}",
+      "Comment": "Hard-blocks if ecc_locked != true. Three strategies: pyrfc_batch / idoc_change_ptrs / slt_dmis.",
+      "Next": "Stage24_FinalDeltaLoad",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage24_FinalDeltaLoad": {
+      "Type": "Task", "Resource": "${MigrationCockpitOrchestratorArn}",
+      "Parameters": {"mode": "delta_load", "input.$": "$"},
+      "Next": "Stage25_FinalReconciliation",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "Stage25_FinalReconciliation": {
+      "Type": "Task", "Resource": "${MigrationValidatorArn}",
+      "Parameters": {"mode": "final", "input.$": "$"},
+      "Next": "ManualGate_FinalGoLive",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "ManualGate_FinalGoLive": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Comment": "Final human GO/NO-GO before integration flip. After this, switch-back is harder.",
+      "Parameters": {
+        "FunctionName": "${ManualGateLambdaArn}",
+        "Payload": {"gate": "final_go_live", "token.$": "$$.Task.Token", "input.$": "$"}
+      },
+      "Next": "Stage26_IntegrationActivation"
+    },
+    "Stage26_IntegrationActivation": {
+      "Type": "Task", "Resource": "${IntegrationActivatorArn}",
+      "Comment": "DNS/endpoint flip is AWS-side. Any S/4-side SM59/WE20 changes were already shipped via customizing transport in Phase 3.",
+      "Next": "Phase8_Run_Marker",
+      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+
+    "Phase8_Run_Marker": {
+      "Type": "Pass",
+      "Result": {"phase": 8, "phase_name": "RUN"},
+      "ResultPath": "$.phase_telemetry",
+      "Next": "Stage27_FinalReport"
+    },
+    "Stage27_FinalReport": {
+      "Type": "Task", "Resource": "${PdfReportGeneratorArn}",
+      "End": true
+    },
+
+    "RollbackManager": {
+      "Type": "Task", "Resource": "${RollbackManagerArn}",
+      "Comment": "Greenfield rollback = switch-back to ECC (DNS flip + un-lock ECC). Target S/4 is left intact for forensics.",
+      "End": true
+    }
+  }
+}
