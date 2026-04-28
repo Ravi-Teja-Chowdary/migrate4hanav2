@@ -2,6 +2,27 @@
 
 > **Aligned with SAP Activate Methodology | SAP Post-Migration Support Retained**
 
+> ### 🆕 NEW: Lift-and-Shift mode (`aws-lift-and-shift` branch)
+>
+> A second migration mode is now available for greenfield **lift-and-shift** projects
+> (ECC → brand-new S/4HANA on AWS). It runs a 28-stage / 9-phase pipeline that
+> performs **zero direct writes** into the target — every change goes through SAP-shipped
+> tools (Migration Cockpit, LTMOM, IDoc inbound, CTS+/`tp`, BC Sets) so SAP support is
+> fully preserved with no "reproduce in a standard tool first" friction.
+>
+> - Architecture: [`MIGRATE4HANA-LIFT-AND-SHIFT.md`](MIGRATE4HANA-LIFT-AND-SHIFT.md)
+> - Local runner: `python run_local_lift_and_shift.py --list-stages`
+> - API: `POST /api/pipeline/lift-and-shift` (full / `/assess` / `/code` / `/data`)
+> - UI: **Lift & Shift** tab in the navigation
+> - CI gate: `tests/test_no_direct_writes.py` enforces the two-plane principle
+>
+> **Customer prerequisites for lift-and-shift mode:** ECC source + RFC user (read-only),
+> target S/4HANA license + S-user, Migration Cockpit credentials, LTMOM authorization,
+> IDoc inbound + partner profiles, CTS+ / abapGit, STMS routes ECC↔target, EFS or
+> shared `/usr/sap/trans`, BUILD-system role definitions (assignments are NEVER
+> auto-pushed to PROD — they are emitted to a CSV for the security team).
+
+
 > **Status (April 2026):** Production-ready. 17-stage pipeline across 5 SAP Activate phases fully operational — 4 heavy-compute stages (Discovery, Code Analysis, Data Loading, Reconciliation) upgraded to ECS Fargate (4 vCPU / 16 GB). Latest run scored **Grade A (100%)** with 861 custom programs scanned, 98.6% auto-fix rate, and 5,000 business partners migrated end-to-end. 114-test suite passing, all 10 previously identified gaps resolved. 160 AST transform rules, 535 country compliance rules across 57 countries, 443 OData mappings, 249 table transformations, 611 Fiori catalog mappings. See [Production Readiness](#production-readiness) for deployment considerations and [PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md) for the full deployment playbook.
 
 ---

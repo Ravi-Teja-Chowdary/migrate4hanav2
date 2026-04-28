@@ -8,6 +8,7 @@ const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/connections', label: 'Connections', icon: Server },
   { to: '/pipeline', label: 'Pipeline', icon: GitBranch },
+  { to: '/lift-and-shift', label: 'Lift & Shift', icon: GitBranch },
   { to: '/telemetry', label: 'Telemetry', icon: Activity },
   { to: '/scorecard', label: 'Scorecard', icon: Trophy },
   { to: '/report', label: 'Report', icon: FileText },

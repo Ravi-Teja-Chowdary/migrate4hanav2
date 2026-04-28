@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Connections from './pages/Connections';
 import Pipeline from './pages/Pipeline';
+import LiftAndShift from './pages/LiftAndShift';
 import Telemetry from './pages/Telemetry';
 import Scorecard from './pages/Scorecard';
 import StageDetail from './pages/StageDetail';
@@ -15,6 +16,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="connections" element={<Connections />} />
         <Route path="pipeline" element={<Pipeline />} />
+        <Route path="lift-and-shift" element={<LiftAndShift />} />
         <Route path="telemetry" element={<Telemetry />} />
         <Route path="scorecard" element={<Scorecard />} />
         <Route path="report" element={<Report />} />

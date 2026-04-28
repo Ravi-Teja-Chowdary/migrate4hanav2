@@ -312,7 +312,7 @@ def get_run(run_id):
         return json.load(f)
 
 
-async def start_pipeline_async(mode="full", generate_pdf_after=False):
+async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_kind="in_place"):
     global _active_run
     async with _lock:
         if _active_run["status"] == "running":
@@ -323,12 +323,14 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False):
 
     # Clear old progress steps
     _progress_steps.clear()
-    _add_progress_step("pipeline", "Pipeline started", "IN_PROGRESS", {"mode": mode})
+    _add_progress_step("pipeline", "Pipeline started", "IN_PROGRESS",
+                        {"mode": mode, "kind": pipeline_kind})
 
     async def _run():
         global _active_run
         try:
-            cmd = [sys.executable, os.path.join(PROJECT_DIR, "run_local_pipeline.py")]
+            runner = "run_local_lift_and_shift.py" if pipeline_kind == "lift_and_shift" else "run_local_pipeline.py"
+            cmd = [sys.executable, os.path.join(PROJECT_DIR, runner)]
 
             # Determine if live ECC connection is available
             conns = _load_connections()
@@ -363,10 +365,16 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False):
                                    "results": None}
                 return
 
-            if mode == "assess":
-                cmd.append("--assess-only")
-            elif mode == "ecc_full":
-                cmd.extend(["--mode", "ecc_full"])
+            if pipeline_kind == "lift_and_shift":
+                # run_local_lift_and_shift.py uses --through <stage_id> to scope.
+                _LS_THROUGH = {"assess": "stage3", "code": "stage9c", "data": "stage18"}
+                if mode in _LS_THROUGH:
+                    cmd.extend(["--through", _LS_THROUGH[mode]])
+            else:
+                if mode == "assess":
+                    cmd.append("--assess-only")
+                elif mode == "ecc_full":
+                    cmd.extend(["--mode", "ecc_full"])
 
             _add_progress_step("extraction", "Starting ECC data extraction", "IN_PROGRESS")
 
@@ -703,6 +711,49 @@ async def start_full():
 @app.post("/api/run", dependencies=[Depends(require_auth)])
 async def legacy_run():
     return await start_pipeline_async(mode="full")
+
+
+# =============================================================================
+# ROUTES - LIFT-AND-SHIFT (greenfield S/4HANA target via SAP-shipped tools)
+# =============================================================================
+@app.post("/api/pipeline/lift-and-shift", dependencies=[Depends(require_auth)])
+async def pipeline_lift_and_shift():
+    """Run the full 28-stage lift-and-shift pipeline (orchestration plane only).
+
+    Every S/4 write goes through Migration Cockpit / LTMOM / IDoc inbound /
+    CTS+/tp - we never call BAPIs against the target. See
+    MIGRATE4HANA-LIFT-AND-SHIFT.md for the architecture charter."""
+    return await start_pipeline_async(mode="full", pipeline_kind="lift_and_shift")
+
+
+@app.post("/api/pipeline/lift-and-shift/assess", dependencies=[Depends(require_auth)])
+async def pipeline_lift_and_shift_assess():
+    """Phase 0 only - discovery, sizing, object routing. No writes."""
+    return await start_pipeline_async(mode="assess", pipeline_kind="lift_and_shift")
+
+
+@app.post("/api/pipeline/lift-and-shift/code", dependencies=[Depends(require_auth)])
+async def pipeline_lift_and_shift_code():
+    """Phases 0-2 only - up through code transport import + verify."""
+    return await start_pipeline_async(mode="code", pipeline_kind="lift_and_shift")
+
+
+@app.post("/api/pipeline/lift-and-shift/data", dependencies=[Depends(require_auth)])
+async def pipeline_lift_and_shift_data():
+    """Phases 0-5 - up through data load via MC/LTMOM/IDoc lanes."""
+    return await start_pipeline_async(mode="data", pipeline_kind="lift_and_shift")
+
+
+@app.get("/api/pipeline/lift-and-shift/stages", dependencies=[Depends(require_auth)])
+async def pipeline_lift_and_shift_stages():
+    """Return the 28-stage definition for UI display (mirrors run_local_lift_and_shift.STAGES)."""
+    try:
+        sys.path.insert(0, PROJECT_DIR)
+        from run_local_lift_and_shift import STAGES as _stages  # type: ignore
+        return {"stages": [{"id": sid, "phase": phase, "handler": mod, "extra": extra}
+                            for sid, phase, mod, extra in _stages]}
+    except Exception as e:
+        return {"error": str(e), "stages": []}
 
 
 # =============================================================================

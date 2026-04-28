@@ -2,6 +2,33 @@
 
 Complete guide to using the **Migrate4HANA** Smart Orchestrator for SAP ECC to S/4HANA System Conversion, aligned with the SAP Activate Methodology.
 
+> ### 🆕 Lift-and-Shift mode (greenfield S/4HANA on AWS)
+>
+> If you're moving to a **brand-new** S/4HANA on AWS (rather than in-place conversion),
+> use the lift-and-shift pipeline:
+>
+> ```bash
+> python run_local_lift_and_shift.py --list-stages   # 28 stages across 9 phases
+> python run_local_lift_and_shift.py                 # full run
+> python run_local_lift_and_shift.py --through stage3   # assess only
+> python run_local_lift_and_shift.py --only stage16     # single stage
+> ```
+>
+> Or trigger it from the API / UI:
+>
+> ```bash
+> curl -X POST http://localhost:8000/api/pipeline/lift-and-shift          # full
+> curl -X POST http://localhost:8000/api/pipeline/lift-and-shift/assess   # phase 0
+> curl -X POST http://localhost:8000/api/pipeline/lift-and-shift/code     # through phase 2
+> curl -X POST http://localhost:8000/api/pipeline/lift-and-shift/data     # through phase 5
+> curl http://localhost:8000/api/pipeline/lift-and-shift/stages           # list stages
+> ```
+>
+> Read [`MIGRATE4HANA-LIFT-AND-SHIFT.md`](MIGRATE4HANA-LIFT-AND-SHIFT.md) for the
+> two-plane architecture, allowed/forbidden operations against the target, and the
+> full 9-phase / 28-stage breakdown.
+
+
 > **Current Status (March 2026):** All 17 stages across 5 SAP Activate phases fully operational. Latest pipeline run: **Grade A (100%)** — 861 programs scanned, 98.6% auto-fix rate, 5,000 business partners migrated, 72.9-second end-to-end execution. 85 validation checks across 7 dimensions. 114-test suite passing. All 10 previously identified gaps resolved. See [README.md](README.md#production-readiness) for production deployment considerations.
 
 ---
