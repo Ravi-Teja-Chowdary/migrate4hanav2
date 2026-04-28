@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Server, GitBranch, Trophy, FileText, Zap, ChevronRight, Activity,
+  LayoutDashboard, Server, GitBranch, Trophy, FileText, Zap, ChevronRight, Activity, ShieldCheck,
 } from 'lucide-react';
 
 const NAV = [
@@ -9,6 +9,7 @@ const NAV = [
   { to: '/connections', label: 'Connections', icon: Server },
   { to: '/pipeline', label: 'Pipeline', icon: GitBranch },
   { to: '/lift-and-shift', label: 'Lift & Shift', icon: GitBranch },
+  { to: '/gates', label: 'Approval Gates', icon: ShieldCheck },
   { to: '/telemetry', label: 'Telemetry', icon: Activity },
   { to: '/scorecard', label: 'Scorecard', icon: Trophy },
   { to: '/report', label: 'Report', icon: FileText },

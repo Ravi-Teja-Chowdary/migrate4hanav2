@@ -264,6 +264,22 @@ module "lambda" {
       source_dir  = "${path.root}/../../../lambda/test-generator"
       layers      = []
     }
+
+    # Lift-and-shift orchestrators
+    object-router                  = { description = "LS: object lane router",         handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 1024, source_dir = "${path.root}/../../../lambda/object-router",                  layers = [] }
+    sizing-advisor                 = { description = "LS: target sizing advisor",      handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512,  source_dir = "${path.root}/../../../lambda/sizing-advisor",                 layers = [] }
+    target-provisioner             = { description = "LS: greenfield S/4 stand-up",    handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/target-provisioner",             layers = [] }
+    basis-validator                = { description = "LS: target readiness gate",      handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512,  source_dir = "${path.root}/../../../lambda/basis-validator",                layers = [var.pyrfc_layer_arn] }
+    bc-set-builder                 = { description = "LS: BC Set builder",             handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512,  source_dir = "${path.root}/../../../lambda/bc-set-builder",                 layers = [] }
+    transport-artifact-builder     = { description = "LS: stage CTS+ artifacts",       handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 1024, source_dir = "${path.root}/../../../lambda/transport-artifact-builder",     layers = [] }
+    transport-file-placer          = { description = "LS: place tp files via SSM",     handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 512,  source_dir = "${path.root}/../../../lambda/transport-file-placer",          layers = [] }
+    transport-import-executor      = { description = "LS: invoke tp import via SSM",   handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/transport-import-executor",      layers = [var.pyrfc_layer_arn] }
+    transport-import-verifier      = { description = "LS: verify transport return",    handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512,  source_dir = "${path.root}/../../../lambda/transport-import-verifier",      layers = [var.pyrfc_layer_arn] }
+    migration-cockpit-orchestrator = { description = "LS: drive Migration Cockpit",    handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/migration-cockpit-orchestrator", layers = [] }
+    ltmom-orchestrator             = { description = "LS: LTMOM project + monitor",   handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/ltmom-orchestrator",             layers = [var.pyrfc_layer_arn] }
+    idoc-orchestrator              = { description = "LS: IDoc XML inbound + WE02",   handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/idoc-orchestrator",              layers = [var.pyrfc_layer_arn] }
+    delta-extractor                = { description = "LS: cutover delta capture",     handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/delta-extractor",                layers = [var.pyrfc_layer_arn] }
+    manual-gate                    = { description = "LS: persist SFN task tokens",   handler = "handler.lambda_handler", runtime = "python3.11", timeout = 60,  memory = 256,  source_dir = "${path.root}/../../../lambda/manual-gate",                    layers = [] }
   }
 }
 
@@ -329,6 +345,8 @@ module "step_functions" {
     "code-deployer", "data-loader", "config-applier", "role-provisioner",
     "integration-activator", "migration-validator", "test-generator",
   ]
+
+  deploy_lift_and_shift = true
 }
 
 # ─────────────────────────────────────────────
@@ -501,4 +519,35 @@ output "start_migration_command" {
       --state-machine-arn ${module.step_functions.state_machine_arn} \
       --input '{"mode":"discovery","ecc_client":"100"}'
   EOT
+}
+
+
+
+# Lift-and-Shift: target-system + gates table
+module "target_system" {
+  source             = "../../modules/target-system"
+  name_prefix        = "migrate4hana-${var.environment}"
+  vpc_id             = module.vpc.vpc_id
+  private_subnets    = module.vpc.private_subnet_ids
+  staging_bucket_arn = module.s3_staging.bucket_arn
+  tags               = { Component = "TargetSystem", Pipeline = "lift-and-shift" }
+}
+
+resource "aws_dynamodb_table" "gates" {
+  name         = "migrate4hana-gates-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "gate_id"
+  attribute {
+    name = "gate_id"
+    type = "S"
+  }
+  tags = { Component = "ManualGate", Pipeline = "lift-and-shift" }
+}
+
+output "lift_and_shift_state_machine_arn" {
+  value = module.step_functions.lift_and_shift_state_machine_arn
+}
+
+output "gates_table_name" {
+  value = aws_dynamodb_table.gates.name
 }

@@ -8,6 +8,11 @@ variable "s3_staging_arn" { type = string }
 variable "vpc_id" { type = string }
 variable "private_subnet_ids" { type = list(string) }
 variable "secrets_arn" { type = string }
+variable "gates_table_name" {
+  type        = string
+  default     = ""
+  description = "DynamoDB table name for manual-gate persistence (empty = use S3 fallback)"
+}
 variable "telemetry_ws_endpoint" {
   type    = string
   default = ""
@@ -136,6 +141,39 @@ resource "aws_iam_role_policy" "lambda" {
           "bedrock:InvokeModelWithResponseStream"
         ]
         Resource = "arn:aws:bedrock:*::foundation-model/*"
+      },
+      # Lambda-to-Lambda chained invocation (two-plane orchestrators).
+      {
+        Effect   = "Allow"
+        Action   = ["lambda:InvokeFunction"]
+        Resource = "arn:aws:lambda:*:*:function:migrate4hana-*"
+      },
+      # Manual-gate Lambda needs to (eventually) call SendTaskSuccess from
+      # operator approval flow. The api_server uses its own role, but we keep
+      # this here so the same Lambda can self-recover stuck gates if needed.
+      {
+        Effect   = "Allow"
+        Action   = ["states:SendTaskSuccess", "states:SendTaskFailure", "states:SendTaskHeartbeat"]
+        Resource = "*"
+      },
+      # DynamoDB access for the gates table (when configured).
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem",
+          "dynamodb:Query", "dynamodb:Scan"
+        ]
+        Resource = "*"
+      },
+      # SSM Run Command - transport-file-placer/import-executor invoke tp
+      # on SAP hosts via SSM (the only allowed write path to /usr/sap/trans).
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:SendCommand", "ssm:GetCommandInvocation",
+          "ssm:DescribeInstanceInformation"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -202,6 +240,23 @@ resource "aws_lambda_function" "migration" {
         S3_STAGING_BUCKET = var.s3_staging_bucket
         SECRETS_ARN       = var.secrets_arn
         ENVIRONMENT       = var.environment
+        # ── Two-plane orchestrator function names (lift-and-shift mode) ──
+        # Retooled handlers chain to these via boto3.client('lambda').invoke().
+        # Names follow the convention migrate4hana-<key>-<env>.
+        MC_ORCHESTRATOR_FN              = "migrate4hana-migration-cockpit-orchestrator-${var.environment}"
+        LTMOM_ORCHESTRATOR_FN           = "migrate4hana-ltmom-orchestrator-${var.environment}"
+        IDOC_ORCHESTRATOR_FN            = "migrate4hana-idoc-orchestrator-${var.environment}"
+        TRANSPORT_ARTIFACT_BUILDER_FN   = "migrate4hana-transport-artifact-builder-${var.environment}"
+        TRANSPORT_FILE_PLACER_FN        = "migrate4hana-transport-file-placer-${var.environment}"
+        TRANSPORT_IMPORT_EXECUTOR_FN    = "migrate4hana-transport-import-executor-${var.environment}"
+        TRANSPORT_IMPORT_VERIFIER_FN    = "migrate4hana-transport-import-verifier-${var.environment}"
+        BC_SET_BUILDER_FN               = "migrate4hana-bc-set-builder-${var.environment}"
+        CUTOVER_ORCHESTRATOR_FN         = "migrate4hana-cutover-orchestrator-${var.environment}"
+        OBJECT_ROUTER_FN                = "migrate4hana-object-router-${var.environment}"
+        DELTA_EXTRACTOR_FN              = "migrate4hana-delta-extractor-${var.environment}"
+        BASIS_VALIDATOR_FN              = "migrate4hana-basis-validator-${var.environment}"
+        TARGET_PROVISIONER_FN           = "migrate4hana-target-provisioner-${var.environment}"
+        GATES_TABLE                     = var.gates_table_name
       },
       var.telemetry_ws_endpoint != "" ? {
         TELEMETRY_WS_ENDPOINT          = var.telemetry_ws_endpoint

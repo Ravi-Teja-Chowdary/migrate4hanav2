@@ -74,6 +74,7 @@ module "lambda" {
   vpc_id            = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnet_ids
   secrets_arn       = aws_secretsmanager_secret.sap_credentials.arn
+  gates_table_name  = aws_dynamodb_table.gates.name
 
   # WebSocket telemetry env vars for real-time UI streaming
   telemetry_ws_endpoint          = module.websocket_telemetry.management_endpoint
@@ -281,6 +282,136 @@ module "lambda" {
       source_dir  = "${path.root}/../../../lambda/test-generator"
       layers      = []
     }
+
+    # ===========================================================================
+    # LIFT-AND-SHIFT MODE (greenfield S/4HANA on AWS) — 12 new orchestrators
+    # ===========================================================================
+    object-router = {
+      description = "Lift-and-shift: routes objects to MC/LTMOM/IDoc/Transport lanes"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 300
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/object-router"
+      layers      = []
+    }
+    sizing-advisor = {
+      description = "Lift-and-shift: target sizing recommendations"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 300
+      memory      = 512
+      source_dir  = "${path.root}/../../../lambda/sizing-advisor"
+      layers      = []
+    }
+    target-provisioner = {
+      description = "Lift-and-shift: stand-up greenfield S/4HANA via SSM"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 900
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/target-provisioner"
+      layers      = []
+    }
+    basis-validator = {
+      description = "Lift-and-shift: hard-gate readiness check on target system"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 300
+      memory      = 512
+      source_dir  = "${path.root}/../../../lambda/basis-validator"
+      layers      = [var.pyrfc_layer_arn]
+    }
+    bc-set-builder = {
+      description = "Lift-and-shift: emit BC Set XML for customizing transport"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 300
+      memory      = 512
+      source_dir  = "${path.root}/../../../lambda/bc-set-builder"
+      layers      = []
+    }
+    transport-artifact-builder = {
+      description = "Lift-and-shift: stage CTS+ transport artifacts to S3"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 600
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/transport-artifact-builder"
+      layers      = []
+    }
+    transport-file-placer = {
+      description = "Lift-and-shift: place cofiles/data on /usr/sap/trans via SSM"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 600
+      memory      = 512
+      source_dir  = "${path.root}/../../../lambda/transport-file-placer"
+      layers      = []
+    }
+    transport-import-executor = {
+      description = "Lift-and-shift: invoke tp import via SSM on target host"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 900
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/transport-import-executor"
+      layers      = [var.pyrfc_layer_arn]
+    }
+    transport-import-verifier = {
+      description = "Lift-and-shift: verify transport import return codes"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 300
+      memory      = 512
+      source_dir  = "${path.root}/../../../lambda/transport-import-verifier"
+      layers      = [var.pyrfc_layer_arn]
+    }
+    migration-cockpit-orchestrator = {
+      description = "Lift-and-shift: drive SAP Migration Cockpit via REST"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 900
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/migration-cockpit-orchestrator"
+      layers      = []
+    }
+    ltmom-orchestrator = {
+      description = "Lift-and-shift: emit LTMOM project + monitor jobs"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 900
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/ltmom-orchestrator"
+      layers      = [var.pyrfc_layer_arn]
+    }
+    idoc-orchestrator = {
+      description = "Lift-and-shift: post IDoc XML inbound and track WE02"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 900
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/idoc-orchestrator"
+      layers      = [var.pyrfc_layer_arn]
+    }
+    delta-extractor = {
+      description = "Lift-and-shift: cutover delta capture from locked ECC"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 900
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/delta-extractor"
+      layers      = [var.pyrfc_layer_arn]
+    }
+    manual-gate = {
+      description = "Lift-and-shift: persist Step Functions task tokens for human approval"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 60
+      memory      = 256
+      source_dir  = "${path.root}/../../../lambda/manual-gate"
+      layers      = []
+    }
   }
 }
 
@@ -366,6 +497,9 @@ module "step_functions" {
     "migration-validator",
     "test-generator",
   ]
+
+  # Deploy the lift-and-shift state machine alongside the legacy in-place one.
+  deploy_lift_and_shift = true
 }
 
 # 
@@ -548,4 +682,63 @@ module "websocket_telemetry" {
   source      = "../../modules/websocket-telemetry"
   environment = var.environment
   region      = var.aws_region
+}
+
+
+# =============================================================================
+# Lift-and-Shift: target-system module (greenfield S/4HANA infrastructure)
+# =============================================================================
+module "target_system" {
+  source = "../../modules/target-system"
+
+  name_prefix        = "migrate4hana-${var.environment}"
+  vpc_id             = module.vpc.vpc_id
+  private_subnets    = module.vpc.private_subnet_ids
+  build_sid          = "BLD"
+  target_sid         = "S4H"
+  staging_bucket_arn = module.s3_staging.bucket_arn
+  tags = {
+    Component = "TargetSystem"
+    Pipeline  = "lift-and-shift"
+  }
+}
+
+# =============================================================================
+# Lift-and-Shift: DynamoDB table for manual-gate task tokens
+# =============================================================================
+resource "aws_dynamodb_table" "gates" {
+  name         = "migrate4hana-gates-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "gate_id"
+
+  attribute {
+    name = "gate_id"
+    type = "S"
+  }
+
+  tags = {
+    Component = "ManualGate"
+    Pipeline  = "lift-and-shift"
+  }
+}
+
+output "lift_and_shift_state_machine_arn" {
+  value       = module.step_functions.lift_and_shift_state_machine_arn
+  description = "ARN of the lift-and-shift state machine"
+}
+
+output "target_system" {
+  value = {
+    sap_host_role_arn         = module.target_system.sap_host_iam_role_arn
+    sap_host_instance_profile = module.target_system.sap_host_instance_profile
+    hana_security_group_id    = module.target_system.hana_security_group_id
+    app_security_group_id     = module.target_system.app_security_group_id
+    trans_efs_id              = module.target_system.trans_efs_id
+  }
+  description = "Lift-and-shift target system outputs"
+}
+
+output "gates_table_name" {
+  value       = aws_dynamodb_table.gates.name
+  description = "DynamoDB table for manual-gate task tokens"
 }

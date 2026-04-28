@@ -197,6 +197,115 @@ function ProgressPanel({ steps, status, runId, pdfGenerated }) {
   );
 }
 
+function LiftAndShiftTargetCard() {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState({
+    target_ashost: '', target_sysnr: '00', target_client: '100', target_user: '', target_saprouter: '',
+    mc_base_url: '', mc_user: '',
+    ltmom_user: '',
+    idoc_endpoint: '', idoc_partner: '', idoc_partner_type: 'LS',
+    transport_host_instance_id: '', cts_token_name: '',
+  });
+  const [status, setStatus] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const set = (k) => (val) => setV((s) => ({ ...s, [k]: val }));
+
+  useEffect(() => {
+    apiFetch('/api/connections')
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.statusText)))
+      .then((data) => {
+        if (data.lift_and_shift_target) {
+          setV((s) => ({ ...s, ...data.lift_and_shift_target }));
+          setStatus('saved');
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await apiFetch('/api/connections/lift-and-shift-target', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(v),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setStatus('saved');
+    } catch {
+      setStatus('error');
+    }
+    setSaving(false);
+  };
+
+  return (
+    <ConnectionCard
+      title="Lift-and-Shift Target (Greenfield S/4HANA on AWS)"
+      subtitle="Migration Cockpit, LTMOM, IDoc inbound, CTS+ host"
+      icon={Database}
+      color="#a855f7"
+      status={status}
+      defaultOpen={false}
+    >
+      <div className="space-y-5">
+        <div>
+          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">Target S/4HANA RFC (read-only / monitoring)</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Application Server" value={v.target_ashost} onChange={set('target_ashost')} placeholder="s4.company.com" />
+            <Field label="System Number" value={v.target_sysnr} onChange={set('target_sysnr')} placeholder="00" />
+            <Field label="Client" value={v.target_client} onChange={set('target_client')} placeholder="100" />
+            <Field label="RFC User" value={v.target_user} onChange={set('target_user')} placeholder="MIGRATE_RO" helpText="Read-only RFC user — no writes" />
+            <Field label="SAP Router (optional)" value={v.target_saprouter} onChange={set('target_saprouter')} placeholder="/H/.../S/3299/H/" />
+          </div>
+        </div>
+
+        <div>
+          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">Migration Cockpit (OData)</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="MC OData Base URL" value={v.mc_base_url} onChange={set('mc_base_url')} placeholder="https://s4.company.com/sap/opu/odata/sap/" />
+            <Field label="MC User" value={v.mc_user} onChange={set('mc_user')} placeholder="MC_OPERATOR" />
+          </div>
+        </div>
+
+        <div>
+          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">LTMOM (custom-object lane)</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="LTMOM User" value={v.ltmom_user} onChange={set('ltmom_user')} placeholder="LTMOM_OPERATOR" helpText="User with /LTB/* authorisations" />
+          </div>
+        </div>
+
+        <div>
+          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">IDoc Inbound</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="IDoc XML Endpoint" value={v.idoc_endpoint} onChange={set('idoc_endpoint')} placeholder="https://s4.company.com/sap/bc/idoc_xml" />
+            <Field label="Partner Number" value={v.idoc_partner} onChange={set('idoc_partner')} placeholder="LSMIGRATE" />
+            <Field label="Partner Type" value={v.idoc_partner_type} onChange={set('idoc_partner_type')} placeholder="LS" helpText="LS=Logical System, KU=Customer, LI=Vendor" />
+          </div>
+        </div>
+
+        <div>
+          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">CTS+ Transport Host</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Transport Host EC2 Instance ID" value={v.transport_host_instance_id} onChange={set('transport_host_instance_id')} placeholder="i-0123456789abcdef0" helpText="Instance hosting /usr/sap/trans (driven via SSM)" />
+            <Field label="CTS+ Secret Name" value={v.cts_token_name} onChange={set('cts_token_name')} placeholder="migrate4hana/prod/cts-token" helpText="Name of secret in AWS Secrets Manager" />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 mt-2">
+          <button onClick={save} disabled={saving || !v.target_ashost}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent-blue/10 text-accent-blue text-xs font-semibold
+                       hover:bg-accent-blue/20 transition-all border border-accent-blue/20 disabled:opacity-30 disabled:cursor-not-allowed">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Save Target Connections
+          </button>
+          {status === 'saved' && <span className="text-xs text-accent-green">Saved</span>}
+          {status === 'error' && <span className="text-xs text-accent-red">Save failed — is API server up?</span>}
+        </div>
+      </div>
+    </ConnectionCard>
+  );
+}
+
 export default function Connections() {
   // ECC state
   const [eccHost, setEccHost] = useState('');
@@ -436,6 +545,9 @@ export default function Connections() {
           </button>
         </div>
       </ConnectionCard>
+
+      {/* Lift-and-Shift TARGET (greenfield S/4HANA on AWS) */}
+      <LiftAndShiftTargetCard />
 
       {/* Run Conversion & Generate PDF — shown when ECC is connected */}
       <AnimatePresence>

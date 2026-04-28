@@ -7,6 +7,13 @@ variable "environment" { type = string }
 variable "lambda_arns" { type = map(string) }
 variable "pipeline_stages" { type = list(string) }
 
+# Lift-and-shift state machine — set to false on legacy stacks that do not
+# yet have the new orchestrator Lambdas deployed.
+variable "deploy_lift_and_shift" {
+  type    = bool
+  default = false
+}
+
 # ── ECS / Fargate variables (heavy-compute stages) ──
 variable "ecs_cluster_arn" {
   type        = string
@@ -62,6 +69,12 @@ resource "aws_iam_role_policy" "step_functions" {
       {
         Effect   = "Allow"
         Action   = ["logs:*"]
+        Resource = "*"
+      },
+      # Manual-gate human-approval pattern (lambda:invoke.waitForTaskToken)
+      {
+        Effect   = "Allow"
+        Action   = ["states:SendTaskSuccess", "states:SendTaskFailure", "states:SendTaskHeartbeat"]
         Resource = "*"
       },
       # ── ECS Fargate permissions (Stages 1, 5, 12, 12A) ──
@@ -972,3 +985,100 @@ resource "aws_cloudwatch_log_group" "sfn" {
 # ── Outputs ──────────────────────────────────
 output "state_machine_arn" { value = aws_sfn_state_machine.migration_pipeline.arn }
 output "state_machine_name" { value = aws_sfn_state_machine.migration_pipeline.name }
+
+
+# =============================================================================
+# LIFT-AND-SHIFT STATE MACHINE (greenfield S/4HANA pipeline)
+#
+# Deployed when var.deploy_lift_and_shift = true. Renders
+# lift_and_shift_pipeline.asl.json with placeholder substitution: each
+# ${XxxArn} is replaced with the corresponding entry from var.lambda_arns.
+# =============================================================================
+locals {
+  ls_arns = {
+    DiscoveryEngineArn               = lookup(var.lambda_arns, "discovery-engine", "")
+    SizingAdvisorArn                 = lookup(var.lambda_arns, "sizing-advisor", "")
+    ObjectRouterArn                  = lookup(var.lambda_arns, "object-router", "")
+    TargetProvisionerArn             = lookup(var.lambda_arns, "target-provisioner", "")
+    BasisValidatorArn                = lookup(var.lambda_arns, "basis-validator", "")
+    CodeAnalyzerArn                  = lookup(var.lambda_arns, "code-analyzer", "")
+    TransportArtifactBuilderArn      = lookup(var.lambda_arns, "transport-artifact-builder", "")
+    TransportFilePlacerArn           = lookup(var.lambda_arns, "transport-file-placer", "")
+    TransportImportExecutorArn       = lookup(var.lambda_arns, "transport-import-executor", "")
+    TransportImportVerifierArn       = lookup(var.lambda_arns, "transport-import-verifier", "")
+    ConfigReplicatorArn              = lookup(var.lambda_arns, "config-replicator", "")
+    BCSetBuilderArn                  = lookup(var.lambda_arns, "bc-set-builder", "")
+    DataMigratorArn                  = lookup(var.lambda_arns, "data-migrator", "")
+    DataHygieneArn                   = lookup(var.lambda_arns, "data-hygiene", "")
+    MigrationCockpitOrchestratorArn  = lookup(var.lambda_arns, "migration-cockpit-orchestrator", "")
+    LTMOMOrchestratorArn             = lookup(var.lambda_arns, "ltmom-orchestrator", "")
+    IDocOrchestratorArn              = lookup(var.lambda_arns, "idoc-orchestrator", "")
+    MigrationValidatorArn            = lookup(var.lambda_arns, "migration-validator", "")
+    TestGeneratorArn                 = lookup(var.lambda_arns, "test-generator", "")
+    MigrationCompletenessAnalyzerArn = lookup(var.lambda_arns, "migration-completeness-analyzer", "")
+    CutoverOrchestratorArn           = lookup(var.lambda_arns, "cutover-orchestrator", "")
+    DeltaExtractorArn                = lookup(var.lambda_arns, "delta-extractor", "")
+    IntegrationActivatorArn          = lookup(var.lambda_arns, "integration-activator", "")
+    PdfReportGeneratorArn            = lookup(var.lambda_arns, "pdf_report_generator", "")
+    RollbackManagerArn               = lookup(var.lambda_arns, "rollback-manager", "")
+    ManualGateLambdaArn              = lookup(var.lambda_arns, "manual-gate", "")
+  }
+}
+
+resource "aws_sfn_state_machine" "lift_and_shift" {
+  count    = var.deploy_lift_and_shift ? 1 : 0
+  name     = "migrate4hana-lift-and-shift-${var.environment}"
+  role_arn = aws_iam_role.step_functions.arn
+
+  # Manual placeholder substitution — we cannot use templatefile() because the
+  # ASL JSON contains $$.Task.Token references and templatefile would mangle
+  # the $$ escape. Each replace() swaps one ${PlaceholderArn} for the actual
+  # Lambda ARN.
+  definition = replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(
+    file("${path.module}/lift_and_shift_pipeline.asl.json"),
+    "$${DiscoveryEngineArn}",               local.ls_arns.DiscoveryEngineArn),
+    "$${SizingAdvisorArn}",                 local.ls_arns.SizingAdvisorArn),
+    "$${ObjectRouterArn}",                  local.ls_arns.ObjectRouterArn),
+    "$${TargetProvisionerArn}",             local.ls_arns.TargetProvisionerArn),
+    "$${BasisValidatorArn}",                local.ls_arns.BasisValidatorArn),
+    "$${CodeAnalyzerArn}",                  local.ls_arns.CodeAnalyzerArn),
+    "$${TransportArtifactBuilderArn}",      local.ls_arns.TransportArtifactBuilderArn),
+    "$${TransportFilePlacerArn}",           local.ls_arns.TransportFilePlacerArn),
+    "$${TransportImportExecutorArn}",       local.ls_arns.TransportImportExecutorArn),
+    "$${TransportImportVerifierArn}",       local.ls_arns.TransportImportVerifierArn),
+    "$${ConfigReplicatorArn}",              local.ls_arns.ConfigReplicatorArn),
+    "$${BCSetBuilderArn}",                  local.ls_arns.BCSetBuilderArn),
+    "$${DataMigratorArn}",                  local.ls_arns.DataMigratorArn),
+    "$${DataHygieneArn}",                   local.ls_arns.DataHygieneArn),
+    "$${MigrationCockpitOrchestratorArn}",  local.ls_arns.MigrationCockpitOrchestratorArn),
+    "$${LTMOMOrchestratorArn}",             local.ls_arns.LTMOMOrchestratorArn),
+    "$${IDocOrchestratorArn}",              local.ls_arns.IDocOrchestratorArn),
+    "$${MigrationValidatorArn}",            local.ls_arns.MigrationValidatorArn),
+    "$${TestGeneratorArn}",                 local.ls_arns.TestGeneratorArn),
+    "$${MigrationCompletenessAnalyzerArn}", local.ls_arns.MigrationCompletenessAnalyzerArn),
+    "$${CutoverOrchestratorArn}",           local.ls_arns.CutoverOrchestratorArn),
+    "$${DeltaExtractorArn}",                local.ls_arns.DeltaExtractorArn),
+    "$${IntegrationActivatorArn}",          local.ls_arns.IntegrationActivatorArn),
+    "$${PdfReportGeneratorArn}",            local.ls_arns.PdfReportGeneratorArn),
+    "$${RollbackManagerArn}",               local.ls_arns.RollbackManagerArn),
+    "$${ManualGateLambdaArn}",              local.ls_arns.ManualGateLambdaArn)
+
+  logging_configuration {
+    log_destination        = "${aws_cloudwatch_log_group.sfn_ls[0].arn}:*"
+    include_execution_data = true
+    level                  = "ALL"
+  }
+
+  tags = { Name = "migrate4hana-lift-and-shift-${var.environment}", Pipeline = "lift-and-shift" }
+}
+
+resource "aws_cloudwatch_log_group" "sfn_ls" {
+  count             = var.deploy_lift_and_shift ? 1 : 0
+  name              = "/aws/stepfunctions/migrate4hana-lift-and-shift-${var.environment}"
+  retention_in_days = 30
+}
+
+output "lift_and_shift_state_machine_arn" {
+  value       = var.deploy_lift_and_shift ? aws_sfn_state_machine.lift_and_shift[0].arn : ""
+  description = "ARN of the lift-and-shift state machine (empty if not deployed)"
+}

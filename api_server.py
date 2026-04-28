@@ -558,6 +558,28 @@ class S4HANAConnection(BaseModel):
     saprouter: str = ""
 
 
+class TargetLiftAndShiftConnection(BaseModel):
+    # Greenfield S/4HANA target — RFC for reads/monitoring (never writes)
+    target_ashost: str = ""
+    target_sysnr: str = "00"
+    target_client: str = "100"
+    target_user: str = ""
+    target_saprouter: str = ""
+    # Migration Cockpit
+    mc_base_url: str = ""           # e.g. https://s4.example.com/sap/opu/odata/sap/...
+    mc_user: str = ""
+    # LTMOM
+    ltmom_user: str = ""
+    # IDoc inbound
+    idoc_endpoint: str = ""         # e.g. https://s4.example.com/sap/bc/idoc_xml
+    idoc_partner: str = ""
+    idoc_partner_type: str = "LS"
+    # CTS+ / Transport host (SSM-managed)
+    transport_host_instance_id: str = ""  # EC2 instance ID with /usr/sap/trans
+    cts_token_name: str = ""        # name of secret in Secrets Manager (no value here)
+
+
+
 # =============================================================================
 # APP STARTUP
 # =============================================================================
@@ -660,6 +682,22 @@ async def test_s4(body: S4HANAConnection):
     return test_s4hana_connection(body.model_dump())
 
 
+@app.post("/api/connections/lift-and-shift-target", dependencies=[Depends(require_auth)])
+async def save_lift_and_shift_target(body: TargetLiftAndShiftConnection):
+    """Save greenfield S/4HANA target system credentials for the lift-and-shift pipeline.
+
+    Stores everything except secrets. Passwords / CTS+ tokens go to AWS Secrets Manager
+    referenced by name (cts_token_name); we never persist secret material in connections.json.
+    """
+    conns = _load_connections()
+    payload = body.model_dump()
+    payload["saved_at"] = datetime.now().isoformat()
+    conns["lift_and_shift_target"] = payload
+    _save_connections(conns)
+    return {"status": "saved", "connection": payload}
+
+
+
 # =============================================================================
 # ROUTES - PIPELINE
 # =============================================================================
@@ -754,6 +792,189 @@ async def pipeline_lift_and_shift_stages():
                             for sid, phase, mod, extra in _stages]}
     except Exception as e:
         return {"error": str(e), "stages": []}
+
+
+# =============================================================================
+# ROUTES - MANUAL GATES (lambda:invoke.waitForTaskToken approval flow)
+# =============================================================================
+def _gates_clients():
+    import boto3 as _b
+    return _b.client("s3"), _b.client("stepfunctions"), _b.client("dynamodb")
+
+
+def _gates_bucket():
+    return os.environ.get("S3_STAGING_BUCKET", "migrate4hanav2-staging-dev")
+
+
+def _gates_table():
+    return os.environ.get("GATES_TABLE", "")
+
+
+@app.get("/api/gates", dependencies=[Depends(require_auth)])
+async def list_pending_gates():
+    """List all pending manual gates. Reads DynamoDB if GATES_TABLE is set,
+    else falls back to scanning s3://<bucket>/gates/<run_id>/<gate>.json."""
+    s3, _, ddb = _gates_clients()
+    table = _gates_table()
+    items = []
+    if table:
+        try:
+            resp = ddb.scan(
+                TableName=table,
+                FilterExpression="#s = :p",
+                ExpressionAttributeNames={"#s": "status"},
+                ExpressionAttributeValues={":p": {"S": "pending"}},
+            )
+            for it in resp.get("Items", []):
+                items.append({
+                    "gate_id":    it["gate_id"]["S"],
+                    "run_id":     it["run_id"]["S"],
+                    "gate":       it["gate"]["S"],
+                    "status":     it["status"]["S"],
+                    "created_at": it.get("created_at", {}).get("S", ""),
+                })
+            return {"source": "dynamodb", "gates": items}
+        except Exception as e:
+            # fall through to S3
+            pass
+    # S3 fallback
+    try:
+        bucket = _gates_bucket()
+        paginator = s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix="gates/"):
+            for obj in page.get("Contents", []):
+                if not obj["Key"].endswith(".json"):
+                    continue
+                body = s3.get_object(Bucket=bucket, Key=obj["Key"])["Body"].read()
+                try:
+                    rec = json.loads(body)
+                    if rec.get("status") == "pending":
+                        items.append({
+                            "gate_id":    rec.get("gate_id", ""),
+                            "run_id":     rec.get("run_id", ""),
+                            "gate":       rec.get("gate", ""),
+                            "status":     rec.get("status", ""),
+                            "created_at": rec.get("created_at", ""),
+                        })
+                except Exception:
+                    continue
+        return {"source": "s3", "gates": items}
+    except Exception as e:
+        return {"source": "error", "gates": [], "error": str(e)}
+
+
+def _resolve_gate(gate_id: str):
+    """Find a gate record. Returns (record_dict, location, key_or_pk)."""
+    s3, _, ddb = _gates_clients()
+    table = _gates_table()
+    if table:
+        try:
+            resp = ddb.get_item(TableName=table, Key={"gate_id": {"S": gate_id}})
+            it = resp.get("Item")
+            if it:
+                rec = {
+                    "gate_id": it["gate_id"]["S"],
+                    "run_id":  it["run_id"]["S"],
+                    "gate":    it["gate"]["S"],
+                    "token":   it["token"]["S"],
+                    "status":  it["status"]["S"],
+                }
+                return rec, "dynamodb", gate_id
+        except Exception:
+            pass
+    # S3 fallback - gate_id format is "<run_id>__<gate>"
+    if "__" not in gate_id:
+        return None, None, None
+    run_id, gate = gate_id.split("__", 1)
+    bucket = _gates_bucket()
+    key = "gates/{run}/{gate}.json".format(run=run_id, gate=gate)
+    try:
+        body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+        return json.loads(body), "s3", key
+    except Exception:
+        return None, None, None
+
+
+def _mark_gate(location: str, key: str, status: str, decided_by: str = ""):
+    s3, _, ddb = _gates_clients()
+    if location == "dynamodb":
+        ddb.update_item(
+            TableName=_gates_table(),
+            Key={"gate_id": {"S": key}},
+            UpdateExpression="SET #s = :v, decided_by = :u, decided_at = :t",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={
+                ":v": {"S": status},
+                ":u": {"S": decided_by or "anonymous"},
+                ":t": {"S": _utc_iso()},
+            },
+        )
+    elif location == "s3":
+        body = s3.get_object(Bucket=_gates_bucket(), Key=key)["Body"].read()
+        rec = json.loads(body)
+        rec["status"] = status
+        rec["decided_by"] = decided_by or "anonymous"
+        rec["decided_at"] = _utc_iso()
+        s3.put_object(Bucket=_gates_bucket(), Key=key,
+                      Body=json.dumps(rec).encode("utf-8"),
+                      ContentType="application/json")
+
+
+def _utc_iso():
+    from datetime import datetime as _dt, timezone as _tz
+    return _dt.now(_tz.utc).isoformat()
+
+
+@app.post("/api/gates/{gate_id}/approve", dependencies=[Depends(require_auth)])
+async def approve_gate(gate_id: str, request: Request):
+    """Approve a pending gate - sends SendTaskSuccess to Step Functions,
+    unblocking the waiting state. Body may contain {"decided_by": "<user>",
+    "output": <dict>}."""
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    rec, location, key = _resolve_gate(gate_id)
+    if not rec:
+        raise HTTPException(404, "gate not found: {}".format(gate_id))
+    if rec.get("status") != "pending":
+        raise HTTPException(409, "gate is not pending (status={})".format(rec.get("status")))
+    _, sfn, _ = _gates_clients()
+    out = body.get("output") or {"approved": True, "decided_by": body.get("decided_by", "")}
+    try:
+        sfn.send_task_success(taskToken=rec["token"], output=json.dumps(out))
+    except Exception as e:
+        raise HTTPException(500, "SendTaskSuccess failed: {}".format(e))
+    _mark_gate(location, key, "approved", decided_by=body.get("decided_by", ""))
+    return {"status": "approved", "gate_id": gate_id}
+
+
+@app.post("/api/gates/{gate_id}/reject", dependencies=[Depends(require_auth)])
+async def reject_gate(gate_id: str, request: Request):
+    """Reject a pending gate - sends SendTaskFailure to Step Functions, which
+    triggers the Catch -> RollbackManager branch."""
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    rec, location, key = _resolve_gate(gate_id)
+    if not rec:
+        raise HTTPException(404, "gate not found: {}".format(gate_id))
+    if rec.get("status") != "pending":
+        raise HTTPException(409, "gate is not pending (status={})".format(rec.get("status")))
+    _, sfn, _ = _gates_clients()
+    try:
+        sfn.send_task_failure(
+            taskToken=rec["token"],
+            error="GateRejected",
+            cause=body.get("reason", "human reviewer rejected the gate"),
+        )
+    except Exception as e:
+        raise HTTPException(500, "SendTaskFailure failed: {}".format(e))
+    _mark_gate(location, key, "rejected", decided_by=body.get("decided_by", ""))
+    return {"status": "rejected", "gate_id": gate_id}
 
 
 # =============================================================================
