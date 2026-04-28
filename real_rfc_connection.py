@@ -13,6 +13,20 @@ Usage:
     # conn.call("RFC_READ_TABLE", ...) passes through to pyrfc
 """
 
+import os
+import sys
+
+# Ensure the bundled SAP NW RFC SDK (Windows DLLs in sapnwrfc/lib or Linux
+# .so files in nwrfcsdk-linux/lib) is on the dynamic loader's search path
+# *before* pyrfc is imported. The sapnwrfc package lives next to this file.
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _THIS_DIR not in sys.path:
+    sys.path.insert(0, _THIS_DIR)
+try:
+    import sapnwrfc  # noqa: F401  (configures SAP NW RFC SDK paths)
+except Exception:
+    pass
+
 import pyrfc
 import logging
 import time as _time

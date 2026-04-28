@@ -23,6 +23,16 @@ import json
 import os
 import sys
 import asyncio
+
+# Configure the bundled SAP NW RFC SDK (Windows: sapnwrfc/lib, Linux:
+# nwrfcsdk-linux/lib) before any module imports pyrfc.
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+try:
+    import sapnwrfc  # noqa: F401  (configures SAP NW RFC SDK paths)
+except Exception:
+    pass
 import hashlib
 import hmac
 import base64

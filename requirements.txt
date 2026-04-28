@@ -1,9 +1,16 @@
 # Migrate4HANA — Python dependencies
 #
-# SAP NW RFC SDK is required by pyrfc and must be installed separately:
-#   Windows: sapnwrfc/lib/ (already bundled in this repo)
-#   Linux:   nwrfcsdk-linux/lib/ (set SAPNWRFC_HOME env var)
-#   See: https://github.com/SAP/PyRFC for pyrfc installation guide
+# SAP NW RFC SDK is bundled inside the repo:
+#   Windows: sapnwrfc/lib/             (DLLs)
+#   Linux:   nwrfcsdk-linux/lib/       (.so files)
+#
+# The `sapnwrfc` package (sapnwrfc/__init__.py) auto-configures
+# SAPNWRFC_HOME, PATH (Windows) and LD_LIBRARY_PATH (Linux) at import
+# time, and pre-loads the ICU/SAP UC shared objects on Linux. Just
+# `import sapnwrfc` before importing pyrfc and both platforms work.
+#
+# If you ever need to replace the bundled SDK, see:
+#   https://github.com/SAP/PyRFC for pyrfc installation guide
 #
 # Install with:
 #   py -3.10 -m pip install -r requirements.txt

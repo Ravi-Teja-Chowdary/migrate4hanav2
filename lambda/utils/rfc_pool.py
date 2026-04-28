@@ -28,6 +28,24 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 
 logger = logging.getLogger(__name__)
 
+# Bootstrap the bundled SAP NW RFC SDK before importing pyrfc so that local
+# Windows and Linux runs can both find the native libraries. In the AWS
+# Lambda layer, SAPNWRFC_HOME is already set by the Dockerfile and this
+# import is a harmless no-op.
+def _bootstrap_sap_sdk():
+    import sys as _sys
+    here = os.path.dirname(os.path.abspath(__file__))
+    # lambda/utils/ → project root is two levels up
+    project_root = os.path.abspath(os.path.join(here, os.pardir, os.pardir))
+    if project_root not in _sys.path:
+        _sys.path.insert(0, project_root)
+    try:
+        import sapnwrfc  # noqa: F401
+    except Exception:
+        pass
+
+_bootstrap_sap_sdk()
+
 try:
     from pyrfc import Connection as RFCConnection
     PYRFC_AVAILABLE = True

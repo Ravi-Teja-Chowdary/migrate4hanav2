@@ -34,6 +34,16 @@ if sys.stderr and hasattr(sys.stderr, 'buffer'):
 
 # Add project paths
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+if PROJECT_DIR not in sys.path:
+    sys.path.insert(0, PROJECT_DIR)
+
+# Bootstrap the bundled SAP NW RFC SDK (Windows DLLs or Linux .so files)
+# so pyrfc can load its native libraries on either platform.
+try:
+    import sapnwrfc  # noqa: F401  (configures SAP NW RFC SDK paths)
+except Exception:
+    pass
+
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "discovery-engine"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "code-analyzer"))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "data-migrator"))

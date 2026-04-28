@@ -44,23 +44,34 @@ fi
 echo "  ✓ Docker found"
 
 NWRFC_SDK_FILE=$(ls -1 "${SCRIPT_DIR}"/nwrfc750P_*.zip 2>/dev/null | head -1)
+BUNDLED_SDK_DIR="${PROJECT_DIR}/nwrfcsdk-linux"
+USE_BUNDLED_SDK=0
 if [ -z "$NWRFC_SDK_FILE" ]; then
-    echo ""
-    echo "ERROR: SAP NW RFC SDK not found!"
-    echo ""
-    echo "You need to download the SAP NW RFC SDK:"
-    echo "  1. Go to https://launchpad.support.sap.com/#/softwarecenter"
-    echo "  2. Search for 'SAP NW RFC SDK 7.50'"
-    echo "  3. Download the Linux x86_64 version"
-    echo "  4. Place the zip file in: ${SCRIPT_DIR}/"
-    echo ""
-    echo "Note: You need an SAP S-user (support user) to download this."
-    echo "If you don't have one, your SAP Basis admin can provide it."
-    echo ""
-    echo "The file will be named something like: nwrfc750P_12-70002752.zip"
-    exit 1
+    if [ -f "${BUNDLED_SDK_DIR}/lib/libsapnwrfc.so" ]; then
+        echo "  ✓ Using bundled SAP NW RFC SDK at ${BUNDLED_SDK_DIR}"
+        USE_BUNDLED_SDK=1
+    else
+        echo ""
+        echo "ERROR: SAP NW RFC SDK not found!"
+        echo ""
+        echo "You need to either:"
+        echo "  (a) Place the bundled Linux SDK under ${BUNDLED_SDK_DIR}/"
+        echo "      (must contain lib/libsapnwrfc.so), or"
+        echo "  (b) Download the SAP NW RFC SDK zip from SAP:"
+        echo "      1. Go to https://launchpad.support.sap.com/#/softwarecenter"
+        echo "      2. Search for 'SAP NW RFC SDK 7.50'"
+        echo "      3. Download the Linux x86_64 version"
+        echo "      4. Place the zip file in: ${SCRIPT_DIR}/"
+        echo ""
+        echo "Note: You need an SAP S-user (support user) to download this."
+        echo "If you don't have one, your SAP Basis admin can provide it."
+        echo ""
+        echo "The file will be named something like: nwrfc750P_12-70002752.zip"
+        exit 1
+    fi
+else
+    echo "  ✓ SAP NW RFC SDK found: ${NWRFC_SDK_FILE}"
 fi
-echo "  ✓ SAP NW RFC SDK found: ${NWRFC_SDK_FILE}"
 
 # ── Step 2: Set up build directory ──
 echo ""
@@ -68,33 +79,42 @@ echo "Step 2: Setting up build directory..."
 rm -rf "${BUILD_DIR}" "${OUTPUT_DIR}"
 mkdir -p "${BUILD_DIR}/python" "${BUILD_DIR}/lib" "${OUTPUT_DIR}"
 
-# Copy the SDK zip
-cp "${NWRFC_SDK_FILE}" "${BUILD_DIR}/"
+# Copy the SDK source — either the official zip or the bundled directory
+if [ "${USE_BUNDLED_SDK}" -eq 1 ]; then
+    cp -r "${BUNDLED_SDK_DIR}" "${BUILD_DIR}/nwrfcsdk-bundled"
+else
+    cp "${NWRFC_SDK_FILE}" "${BUILD_DIR}/"
+fi
 
 # ── Step 3: Build the layer using Docker ──
 echo ""
 echo "Step 3: Building Lambda layer in Docker (Amazon Linux 2)..."
 
-cat > "${BUILD_DIR}/Dockerfile" << 'DOCKERFILE'
+cat > "${BUILD_DIR}/Dockerfile" << DOCKERFILE
 FROM public.ecr.aws/lambda/python:3.11
 
 # Install build dependencies
 RUN yum install -y gcc gcc-c++ make unzip
 
-# Copy and extract SAP NW RFC SDK
-COPY nwrfc750P_*.zip /tmp/
-RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \
-    mv /opt/sap/nwrfcsdk/* /opt/sap/ 2>/dev/null || true
+# Copy SAP NW RFC SDK — either from the official zip or the pre-extracted
+# directory bundled with the repo.
+$(if [ "${USE_BUNDLED_SDK}" -eq 1 ]; then
+    echo "COPY nwrfcsdk-bundled/ /opt/sap/"
+else
+    echo "COPY nwrfc750P_*.zip /tmp/"
+    echo "RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \\"
+    echo "    mv /opt/sap/nwrfcsdk/* /opt/sap/ 2>/dev/null || true"
+fi)
 
 # Set library path
 ENV SAPNWRFC_HOME=/opt/sap
-ENV LD_LIBRARY_PATH=/opt/sap/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/opt/sap/lib:\$LD_LIBRARY_PATH
 
 # Install PyRFC
 RUN pip install pyrfc --target /opt/python/
 
 # Copy SDK libraries to layer
-RUN mkdir -p /opt/lib && \
+RUN mkdir -p /opt/lib && \\
     cp /opt/sap/lib/*.so* /opt/lib/ 2>/dev/null || true
 
 # Package the layer
