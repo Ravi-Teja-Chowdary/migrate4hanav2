@@ -20,83 +20,188 @@ Codebase is now feature-complete for v1 lift-and-shift; remaining work is integr
 
 ## What's needed to test Migrate4HANA comprehensively
 
-The code is done. End-to-end validation now needs **environment, SAP systems, credentials, and sample workloads**. Group them as below — anything you can't supply means that lane stays "code-tested only".
+The code is done. End-to-end validation now needs **environment, SAP systems, credentials, and sample workloads**. Each item below is tagged with the AWS resource it consumes so you can map cost and IAM scope.
 
-### 1. AWS environment
-- AWS account with admin (or scoped) IAM for terraform apply
-- S3 bucket + DynamoDB table for terraform remote state (per env: dev/staging/prod)
-- VPC with private subnets + NAT (or Transit Gateway) reachable from SAP hosts
-- Route 53 private zone (optional, for friendly hostnames)
-- ACM cert if you want HTTPS on the api_server / frontend
-- Tools on the operator workstation:
-  - `terraform >= 1.5`
-  - `aws` CLI v2 (configured via SSO or access keys)
-  - `python 3.11`, `pip`, `node 20`, `npm`
-  - `docker` (only if you containerise the api_server)
+### 1. AWS environment (operator workstation + control plane)
+| Need | AWS resource it consumes |
+|---|---|
+| Terraform remote state | **S3 bucket** + **DynamoDB table** (per env: dev/staging/prod) |
+| Identity for `terraform apply` | **IAM user/role** with admin (or scoped) policy |
+| Network plumbing | **VPC**, **private subnets** (≥2 AZs), **NAT Gateway** *or* Transit Gateway |
+| DNS (optional) | **Route 53 private hosted zone** |
+| TLS for api_server / frontend (optional) | **ACM certificate**, **ALB** |
+| Operator desktop tools | none in AWS — local: `terraform≥1.5`, `aws` CLI v2, `python 3.11`, `node 20`, `docker` |
 
 ### 2. Source SAP ECC system (the "from" side)
-- ECC 6.0 EHP7+ on any DB (HANA/Oracle/DB2/MSSQL) — reachable from the AWS VPC
-- Service user (`M4H_RFC`) with: `S_RFC`, `S_TABU_DIS`, `S_BTCH_*`, `S_TRANSPRT`, `S_DATASET`, `S_DEVELOP` (display)
-- Transport directory (`/usr/sap/trans`) accessible to the SSM-managed orchestrator host
-- SAP host with **SSM Agent** installed (Linux preferred) so Lambda → SSM → `tp` / `R3trans` works
-- SAP kernel + `tp` / `R3trans` binaries on PATH for that host
+| Need | AWS resource it consumes |
+|---|---|
+| ECC 6.0 EHP7+ host (any DB) | **EC2** (your choice, BYOL) **or** on-prem reachable via **Site-to-Site VPN** / **Direct Connect** |
+| RFC service user + transport access | none |
+| Orchestrator command channel | **SSM agent** on the ECC host → **Systems Manager (SSM)** + VPC endpoints (`ssm`, `ssmmessages`, `ec2messages`) |
+| Transport directory (`/usr/sap/trans`) | **EBS volume** attached to the ECC host |
 
 ### 3. Target greenfield S/4HANA system (the "to" side)
-- S/4HANA 2022/2023 on HANA — installed and patched (this tool does NOT install S/4)
-- Same RFC service user pattern, plus access to:
-  - **Migration Cockpit** (`LTMC` / Fiori "Migrate Your Data") with OData endpoint enabled
-  - **LTMOM** (`LTMOM` tcode) for custom mapping objects
-  - **CTS+** target client for transport import
-  - **IDoc inbound** partner profiles (for the IDoc lane)
-- BC sets + simplification list relevant to your S/4 release
-- SSM-managed S/4 host (same as ECC side) for `tp import`, BC set activation
+| Need | AWS resource it consumes |
+|---|---|
+| **S/4HANA 2022/2023 on HANA** (this tool does NOT install S/4) | **EC2** + **EBS** — see SAP CAL free-trial section below |
+| Migration Cockpit (LTMC) OData endpoint | none — runs inside the S/4 host |
+| LTMOM, CTS+, IDoc inbound | none — runs inside the S/4 host |
+| Orchestrator command channel | **SSM agent** on the S/4 host (same VPC endpoints as above) |
 
-### 4. Credentials & secrets (stored in AWS Secrets Manager)
-- `m4h/ecc/rfc` — `{ ashost, sysnr, client, user, passwd, lang }`
-- `m4h/s4/rfc` — same shape for S/4
-- `m4h/mc/odata` — `{ base_url, user, passwd }` for Migration Cockpit OData
-- `m4h/cts/host` — SSM target id + transport user
-- `m4h/idoc/partner` — partner profile + port
-- (optional) `m4h/db/*` for direct delta extracts
+### 4. Credentials & secrets
+| Secret | AWS resource |
+|---|---|
+| `m4h/ecc/rfc`, `m4h/s4/rfc`, `m4h/mc/odata`, `m4h/cts/host`, `m4h/idoc/partner` | **AWS Secrets Manager** (one secret per entry) |
+| Lambda → Secrets Manager fetch | **VPC endpoint** for `secretsmanager` |
 
 ### 5. SAP-shipped binaries / SDKs
-- **NW RFC SDK** — already vendored in repo (`nwrfcsdk-windows/`, `nwrfcsdk-linux/`); Lambda layer built from the linux variant
-- **SAPCAR**, **SAPGUI** (operator desktop only)
-- **`tp` / `R3trans`** on the SSM hosts (ship with NetWeaver kernel)
-- **PyRFC** wheel matching Lambda's `python3.11` + `manylinux` (build inside an Amazon Linux 2 container)
+| Need | AWS resource |
+|---|---|
+| NW RFC SDK (vendored linux variant) → Lambda layer | **Lambda layer** stored in **S3** |
+| PyRFC wheel built for Amazon Linux 2 + python3.11 | built in **CodeBuild** *or* a one-shot EC2 (or local Docker), uploaded to **S3** |
+| `tp` / `R3trans` | none in AWS — already on the SAP hosts |
 
-### 6. Sample workloads / test fixtures
-- 1–2 **transport requests** (workbench + customising) exported from ECC for the transport lane
-- 1 **MC migration project** (e.g., GL accounts or business partners) with ~100–1k rows
-- 1 **LTMOM custom object** with a non-trivial field mapping
-- 1 **IDoc type** (e.g., `MATMAS05`, `DEBMAS07`) with sample payloads
+### 6. Sample workloads / test fixtures (no AWS resources — content only)
+- 1–2 **transport requests** (workbench + customising) exported from ECC
+- 1 **MC migration project** with ~100–1k rows
+- 1 **LTMOM custom object** with a non-trivial mapping
+- 1 **IDoc type** (`MATMAS05`, `DEBMAS07`) + sample payloads
 - 1 **BC set** scoped to a small config area
 - 1 **delta-extract** scenario (table + date column)
 
 ### 7. Network / connectivity
-- Bidirectional reachability: Lambda (in VPC) → ECC RFC (33xx), S/4 RFC (33xx), MC OData (44300/HTTPS), CTS+ (3299/3300), SSM endpoints
-- VPC endpoints for `ssm`, `ssmmessages`, `ec2messages`, `secretsmanager`, `s3`, `dynamodb`, `logs`, `sns`
-- Security groups whitelisting SAP gateway ports
+| Need | AWS resource |
+|---|---|
+| Lambda → SAP RFC (33xx), MC OData (44300), CTS+ (3299/3300) | **Lambda in VPC** (ENIs in private subnets) |
+| Lambda → AWS APIs without internet | **VPC endpoints**: `ssm`, `ssmmessages`, `ec2messages`, `secretsmanager`, `s3`, `dynamodb`, `logs`, `sns` |
+| SAP host firewalling | **Security groups** scoped to SAP gateway ports |
+| (optional) on-prem ECC | **Site-to-Site VPN** or **Direct Connect** |
 
 ### 8. Observability + approvals
-- SNS topic + at least 2 subscribers (email/Slack) for manual-gate notifications
-- CloudWatch log groups (auto-created by the lambda module)
-- SES or Slack webhook if you want richer gate notifications
-- Operator accounts in the frontend with their name set in the Gates page (persisted to localStorage)
+| Need | AWS resource |
+|---|---|
+| Manual-gate task tokens | **DynamoDB table** (`m4h-gates-<env>`) |
+| Lambda + Step Function logs | **CloudWatch Log Groups** |
+| Gate notifications | **SNS topic** + subscribers (email / Slack via Lambda) |
+| (optional) richer email | **SES** |
 
-### 9. Pre-flight smoke checklist (before first real run)
+### 9. Migrate4HANA control plane (created by terraform)
+| Need | AWS resource |
+|---|---|
+| 14 lift-and-shift lambdas | **Lambda functions** + **Lambda layers** + **IAM execution roles** |
+| Pipeline orchestration | **Step Functions state machine** |
+| Migration artefacts (transports, logs, runbooks) | **S3 bucket** (versioned, encrypted) |
+| Pipeline triggers / schedules | **EventBridge rules** |
+| api_server + frontend hosting | **ECS Fargate** *or* **EC2** (your choice) + **ALB**; static frontend can also live on **S3 + CloudFront** |
+
+### 10. Pre-flight smoke checklist
 1. `terraform plan` on `dev` → 0 errors
-2. `terraform apply` → all 14 lambdas, gates table, step function deploy
-3. `tests/test_imports.py` + `tests/test_no_direct_writes.py` + `tests/test_manual_gate.py` + `tests/test_orchestrators.py` green in CI
-4. `npm run build` in `frontend/` clean (already verified locally)
-5. Connections page: save ECC + S/4 + MC + LTMOM + IDoc + CTS+ entries; secrets land in Secrets Manager
-6. Trigger pipeline with a single MC object → walk through all manual gates → confirm DynamoDB rows + SNS emails
+2. `terraform apply` → 14 lambdas, gates table, step function deployed
+3. All four test suites green in CI
+4. `npm run build` in `frontend/` clean
+5. Save all connection entries in Connections page → secrets land in Secrets Manager
+6. Trigger pipeline with one MC object → walk all manual gates → confirm DynamoDB rows + SNS emails
 7. Repeat for transport lane and IDoc lane
 8. Run rollback-manager against the same execution to confirm idempotency
 
-### 10. What you *don't* need
+### 11. What you *don't* need
 - ❌ SUM / DMO licences — lift-and-shift bypasses them by design
 - ❌ SAP Solution Manager (nice-to-have, not required)
-- ❌ Direct DB access on S/4 — every write goes through SAP-shipped tools (this preserves SAP support)
+- ❌ Direct DB access on S/4 — every write goes through SAP-shipped tools (preserves SAP support)
 
-> **Rule of thumb:** anything that talks to SAP must go through MC, LTMOM, IDoc, CTS+, or RFC-with-standard-BAPIs. Custom SQL writes against S/4 are blocked by `tests/test_no_direct_writes.py` and will fail CI.
+---
+
+## SAP S/4HANA from SAP CAL (free 30-day trial) — AWS resources
+
+SAP Cloud Appliance Library (CAL) deploys the **"SAP S/4HANA Fully-Activated Appliance"** as a **CloudFormation stack** in *your* AWS account. The SAP license is free for 30 days; **AWS infrastructure cost is on you** (~USD 30–60/day depending on instance choice and uptime — suspend when idle).
+
+| Resource | Typical sizing for the trial appliance |
+|---|---|
+| **EC2 instance** (S/4 + HANA + Fiori on one host) | 1 × `r5.4xlarge` or `r5.8xlarge` (128–256 GB RAM); CAL picks based on the appliance template |
+| **EBS volumes** | ~1 TB total (gp3) — separate volumes for `/hana/data`, `/hana/log`, `/usr/sap`, `/sapmnt`, OS root |
+| **Elastic IP** | 1 (for RDP/SAPGUI access) |
+| **VPC** | 1 (CAL creates a fresh VPC by default; you can pin it to an existing one) |
+| **Subnet** | 1 public subnet in 1 AZ |
+| **Internet Gateway** | 1 |
+| **Security Group** | 1 (CAL opens 22, 3389, 3200, 3300, 8000, 8443, 44300, 50000, 50013, 50014) |
+| **Key pair** | 1 (you provide; used for Linux SSH) |
+| **CloudFormation stack** | 1 (created and managed by CAL — do not edit by hand) |
+| **IAM role for CAL** | 1 cross-account role you create once so CAL can deploy into your account |
+
+> **Important constraints**
+> - CAL requires you to nominate an AWS region where the appliance template is published (commonly `us-east-1`, `eu-west-1`, `ap-southeast-1`).
+> - The trial appliance is **single-host**, **non-HA**, **no backup automation** — fine for migration testing, not for any production-like load.
+> - **Suspend the appliance from the CAL console** when not in use; otherwise EC2 + EBS bills accrue 24/7.
+> - The CAL VPC is isolated by default — to let Migrate4HANA's Lambdas reach it, either (a) deploy CAL into the same VPC as the tool via "advanced mode", or (b) **VPC peer** the CAL VPC with the Migrate4HANA VPC.
+
+---
+
+## Migrate4HANA tool — AWS resources (separate from SAP CAL)
+
+Everything terraform creates / the tool needs, *excluding* the S/4 system itself.
+
+### Compute
+- **AWS Lambda** — 14 functions (target-provisioner, basis-validator, sizing-advisor, object-router, MC/LTMOM/IDoc orchestrators, 4 transport sub-lambdas, bc-set-builder, delta-extractor, manual-gate)
+- **Lambda layers** — NW RFC SDK + PyRFC + shared utils
+- **AWS Step Functions** — 1 state machine driving the lift-and-shift pipeline
+- **ECS Fargate** *or* **EC2** (small) — host for `api_server.py` (FastAPI)
+- **S3 + CloudFront** *or* same ALB — hosting the React frontend
+
+### Storage
+- **S3 buckets**:
+  - terraform state (per env)
+  - migration artefacts (transports, logs, runbooks) — versioned + KMS-encrypted
+  - lambda deployment packages + layers
+  - frontend static assets (if served from S3)
+- **DynamoDB tables**:
+  - terraform state lock (per env)
+  - `m4h-gates-<env>` — manual-gate task tokens
+
+### Networking
+- **VPC** (1) with **private subnets** (≥2 AZs) and **public subnet** (1, for NAT)
+- **NAT Gateway** (1) — egress for Lambda
+- **Internet Gateway** (1)
+- **Application Load Balancer** (1) — fronting api_server / frontend
+- **Security groups** — Lambda SG, ALB SG, SAP-host SG
+- **VPC endpoints (interface)**: `ssm`, `ssmmessages`, `ec2messages`, `secretsmanager`, `logs`, `sns`, `kms`
+- **VPC endpoints (gateway)**: `s3`, `dynamodb`
+- **(optional)** Site-to-Site VPN or Direct Connect — only if ECC is on-prem
+- **(optional)** VPC peering — to the SAP CAL VPC
+
+### Identity & secrets
+- **IAM roles**: lambda-exec (one per function or one shared), step-functions-exec, api-server-exec, terraform-deployer
+- **IAM policies** scoped to `secretsmanager:GetSecretValue`, `ssm:SendCommand`, `s3:*` on the artefact bucket, `dynamodb:*` on the gates table, `states:*` on the state machine
+- **AWS Secrets Manager** — 5+ secrets (`m4h/ecc/rfc`, `m4h/s4/rfc`, `m4h/mc/odata`, `m4h/cts/host`, `m4h/idoc/partner`)
+- **AWS KMS** — 1 customer-managed key for S3 + Secrets Manager encryption
+
+### Eventing & notifications
+- **SNS topic** — `m4h-gates-<env>` for manual-gate emails / Slack
+- **EventBridge rules** — pipeline schedule triggers
+- **CloudWatch Log Groups** — one per lambda + Step Functions execution logs
+- **CloudWatch Alarms** (optional) — failed executions, throttles, dead-letter depth
+- **SES** (optional) — if you want richer gate emails
+
+### Build / CI (optional, not in terraform yet)
+- **CodeBuild** — to build the PyRFC wheel against Amazon Linux 2
+- **CodePipeline** *or* **GitHub Actions OIDC role** — to deploy terraform on merge
+
+---
+
+## Two-account / two-VPC topology (recommended)
+
+```
+┌──────────────────────────────────┐         peering          ┌─────────────────────────────┐
+│  Migrate4HANA AWS account        │ ◄─────────────────────► │  SAP CAL deployment         │
+│  ────────────────────────────    │                         │  ─────────────────────       │
+│  • Lambdas (in VPC)              │                         │  • EC2 (S/4HANA appliance)  │
+│  • Step Functions                │                         │  • EBS (HANA data/log)      │
+│  • S3, DynamoDB, Secrets, KMS    │                         │  • SG, EIP, IGW             │
+│  • api_server (Fargate) + ALB    │                         │  • CAL CloudFormation stack │
+│  • SNS, EventBridge, CloudWatch  │                         │                             │
+└──────────────────────────────────┘                         └─────────────────────────────┘
+            │                                                              ▲
+            │  RFC 33xx / OData 44300 / CTS+ 3299                          │
+            └──────────────────────────────────────────────────────────────┘
+```
+
+Single-account is also fine — just deploy CAL into the same VPC and skip the peering.
