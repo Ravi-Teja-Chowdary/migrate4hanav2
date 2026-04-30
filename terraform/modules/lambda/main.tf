@@ -26,8 +26,8 @@ variable "telemetry_broadcast_policy_arn" {
   default = ""
 }
 variable "entity_resolution_workflow_arn" {
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
   description = "ARN of the AWS Entity Resolution matching workflow for BP dedup"
 }
 variable "bedrock_model_id" {
@@ -57,14 +57,37 @@ variable "ollama_model" {
 }
 variable "lambda_functions" {
   type = map(object({
-    description = string
-    handler     = string
-    runtime     = string
-    timeout     = number
-    memory      = number
-    source_dir  = string
-    layers      = list(string)
+    description   = string
+    handler       = string
+    runtime       = string
+    timeout       = number
+    memory        = number
+    source_dir    = string
+    layers        = list(string)
+    architectures = optional(list(string), ["x86_64"])
   }))
+}
+
+# ── Wave 6/7/8 plumbing: audit ledger, reconciliation, evidence WORM bucket ──
+variable "events_table_name" {
+  type        = string
+  default     = ""
+  description = "DynamoDB table name for hash-chained run-events ledger (Wave 7)"
+}
+variable "recon_tolerance_table_name" {
+  type        = string
+  default     = ""
+  description = "DynamoDB table name for reconciliation tolerance policy (Wave 8)"
+}
+variable "evidence_bucket_name" {
+  type        = string
+  default     = ""
+  description = "S3 bucket (Object Lock COMPLIANCE) for immutable evidence (Wave 7)"
+}
+variable "kms_key_arn" {
+  type        = string
+  default     = ""
+  description = "Customer-managed KMS key ARN for at-rest encryption (Wave 6)"
 }
 
 # ── IAM Role ─────────────────────────────────
@@ -148,38 +171,87 @@ resource "aws_iam_role_policy" "lambda" {
         Action   = ["lambda:InvokeFunction"]
         Resource = "arn:aws:lambda:*:*:function:migrate4hana-*"
       },
-      # Manual-gate Lambda needs to (eventually) call SendTaskSuccess from
-      # operator approval flow. The api_server uses its own role, but we keep
-      # this here so the same Lambda can self-recover stuck gates if needed.
+      # Step Functions task-token completion (manual gate self-recovery).
+      # Scoped to migrate4hana state machines in this account/region.
       {
         Effect   = "Allow"
         Action   = ["states:SendTaskSuccess", "states:SendTaskFailure", "states:SendTaskHeartbeat"]
-        Resource = "*"
+        Resource = "arn:aws:states:*:*:stateMachine:migrate4hana-*"
       },
-      # DynamoDB access for the gates table (when configured).
+      # DynamoDB - migrate4hana tables only (gates, run-events, recon-tolerance,
+      # mc-compatibility-matrix). Indexes covered by the trailing /index/* arn.
       {
         Effect = "Allow"
         Action = [
           "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem",
-          "dynamodb:Query", "dynamodb:Scan"
+          "dynamodb:Query", "dynamodb:Scan", "dynamodb:BatchGetItem",
+          "dynamodb:BatchWriteItem", "dynamodb:ConditionCheckItem"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:dynamodb:*:*:table/m4h-*",
+          "arn:aws:dynamodb:*:*:table/m4h-*/index/*",
+          "arn:aws:dynamodb:*:*:table/migrate4hana-*",
+          "arn:aws:dynamodb:*:*:table/migrate4hana-*/index/*"
+        ]
       },
-      # SSM Run Command - transport-file-placer/import-executor invoke tp
-      # on SAP hosts via SSM (the only allowed write path to /usr/sap/trans).
+      # SSM Run Command - only against EC2 instances explicitly tagged as
+      # Migrate4HANA SAP hosts. Tag-condition prevents this Lambda role from
+      # running shell on every SSM-managed instance in the account.
+      {
+        Effect = "Allow"
+        Action = ["ssm:SendCommand"]
+        Resource = [
+          "arn:aws:ssm:*:*:document/AWS-RunShellScript",
+          "arn:aws:ssm:*:*:document/AWS-RunPowerShellScript",
+          "arn:aws:ec2:*:*:instance/*"
+        ]
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Migrate4HANAHost" = "true"
+          }
+        }
+      },
+      # Read-only SSM polling for command results - safe to leave broad
+      # because we only get back our own command invocations.
       {
         Effect = "Allow"
         Action = [
-          "ssm:SendCommand", "ssm:GetCommandInvocation",
-          "ssm:DescribeInstanceInformation"
+          "ssm:GetCommandInvocation",
+          "ssm:DescribeInstanceInformation",
+          "ssm:ListCommandInvocations"
         ]
         Resource = "*"
+      },
+      # Wave 6 - KMS data-key operations (only the customer-managed CMK).
+      # Empty arn list collapses to deny when kms_key_arn is unset.
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*",
+          "kms:GenerateDataKey*", "kms:DescribeKey"
+        ]
+        Resource = var.kms_key_arn != "" ? [var.kms_key_arn] : ["arn:aws:kms:*:*:key/__none__"]
+      },
+      # Wave 7 - immutable evidence bucket. Object Lock is enforced at the
+      # bucket level (COMPLIANCE) so PutObject is sufficient; we never need
+      # DeleteObject from Lambda code.
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject", "s3:GetObject", "s3:GetObjectRetention",
+          "s3:PutObjectLegalHold", "s3:GetObjectLegalHold",
+          "s3:ListBucket"
+        ]
+        Resource = var.evidence_bucket_name != "" ? [
+          "arn:aws:s3:::${var.evidence_bucket_name}",
+          "arn:aws:s3:::${var.evidence_bucket_name}/*"
+        ] : ["arn:aws:s3:::__none__"]
       }
     ]
   })
 }
 
-# ── SNS Publish permission for SUM Orchestrator alerts ──
+# ── SNS Publish - migrate4hana topics only ──
 resource "aws_iam_role_policy" "lambda_sns_publish" {
   name = "migrate4hana-lambda-sns-publish"
   role = aws_iam_role.lambda.id
@@ -188,11 +260,9 @@ resource "aws_iam_role_policy" "lambda_sns_publish" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = [
-          "sns:Publish"
-        ]
-        Resource = "*"
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = "arn:aws:sns:*:*:migrate4hana-*"
       }
     ]
   })
@@ -227,7 +297,8 @@ resource "aws_lambda_function" "migration" {
   filename         = data.archive_file.lambda[each.key].output_path
   source_code_hash = data.archive_file.lambda[each.key].output_base64sha256
 
-  layers = each.value.layers
+  architectures = each.value.architectures
+  layers        = each.value.layers
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -243,33 +314,41 @@ resource "aws_lambda_function" "migration" {
         # ── Two-plane orchestrator function names (lift-and-shift mode) ──
         # Retooled handlers chain to these via boto3.client('lambda').invoke().
         # Names follow the convention migrate4hana-<key>-<env>.
-        MC_ORCHESTRATOR_FN              = "migrate4hana-migration-cockpit-orchestrator-${var.environment}"
-        LTMOM_ORCHESTRATOR_FN           = "migrate4hana-ltmom-orchestrator-${var.environment}"
-        IDOC_ORCHESTRATOR_FN            = "migrate4hana-idoc-orchestrator-${var.environment}"
-        TRANSPORT_ARTIFACT_BUILDER_FN   = "migrate4hana-transport-artifact-builder-${var.environment}"
-        TRANSPORT_FILE_PLACER_FN        = "migrate4hana-transport-file-placer-${var.environment}"
-        TRANSPORT_IMPORT_EXECUTOR_FN    = "migrate4hana-transport-import-executor-${var.environment}"
-        TRANSPORT_IMPORT_VERIFIER_FN    = "migrate4hana-transport-import-verifier-${var.environment}"
-        BC_SET_BUILDER_FN               = "migrate4hana-bc-set-builder-${var.environment}"
-        CUTOVER_ORCHESTRATOR_FN         = "migrate4hana-cutover-orchestrator-${var.environment}"
-        OBJECT_ROUTER_FN                = "migrate4hana-object-router-${var.environment}"
-        DELTA_EXTRACTOR_FN              = "migrate4hana-delta-extractor-${var.environment}"
-        BASIS_VALIDATOR_FN              = "migrate4hana-basis-validator-${var.environment}"
-        TARGET_PROVISIONER_FN           = "migrate4hana-target-provisioner-${var.environment}"
-        GATES_TABLE                     = var.gates_table_name
+        MC_ORCHESTRATOR_FN            = "migrate4hana-migration-cockpit-orchestrator-${var.environment}"
+        LTMOM_ORCHESTRATOR_FN         = "migrate4hana-ltmom-orchestrator-${var.environment}"
+        IDOC_ORCHESTRATOR_FN          = "migrate4hana-idoc-orchestrator-${var.environment}"
+        TRANSPORT_ARTIFACT_BUILDER_FN = "migrate4hana-transport-artifact-builder-${var.environment}"
+        TRANSPORT_FILE_PLACER_FN      = "migrate4hana-transport-file-placer-${var.environment}"
+        TRANSPORT_IMPORT_EXECUTOR_FN  = "migrate4hana-transport-import-executor-${var.environment}"
+        TRANSPORT_IMPORT_VERIFIER_FN  = "migrate4hana-transport-import-verifier-${var.environment}"
+        BC_SET_BUILDER_FN             = "migrate4hana-bc-set-builder-${var.environment}"
+        CUTOVER_ORCHESTRATOR_FN       = "migrate4hana-cutover-orchestrator-${var.environment}"
+        OBJECT_ROUTER_FN              = "migrate4hana-object-router-${var.environment}"
+        DELTA_EXTRACTOR_FN            = "migrate4hana-delta-extractor-${var.environment}"
+        BASIS_VALIDATOR_FN            = "migrate4hana-basis-validator-${var.environment}"
+        TARGET_PROVISIONER_FN         = "migrate4hana-target-provisioner-${var.environment}"
+        GATES_TABLE                   = var.gates_table_name
+        # Wave 7 — hash-chained immutable ledger
+        EVENTS_TABLE_NAME     = var.events_table_name
+        S3_EVIDENCE_BUCKET    = var.evidence_bucket_name
+        EVIDENCE_COLLECTOR_FN = "migrate4hana-evidence-collector-${var.environment}"
+        # Wave 8 — reconciliation framework
+        TOLERANCE_TABLE_NAME     = var.recon_tolerance_table_name
+        RECONCILIATION_ENGINE_FN = "migrate4hana-reconciliation-engine-${var.environment}"
+        MANUAL_GATE_FN           = "migrate4hana-manual-gate-${var.environment}"
       },
       var.telemetry_ws_endpoint != "" ? {
         TELEMETRY_WS_ENDPOINT          = var.telemetry_ws_endpoint
-        TELEMETRY_WS_CONNECTIONS_TABLE  = var.telemetry_ws_connections_table
+        TELEMETRY_WS_CONNECTIONS_TABLE = var.telemetry_ws_connections_table
       } : {},
       var.entity_resolution_workflow_arn != "" ? {
         ENTITY_RESOLUTION_WORKFLOW_ARN = var.entity_resolution_workflow_arn
       } : {},
       {
-        BEDROCK_MODEL_ID      = var.bedrock_model_id
-        AST_CHANGE_THRESHOLD  = tostring(var.ast_change_threshold)
-        LLM_MODE              = var.llm_mode
-        OLLAMA_MODEL          = var.ollama_model
+        BEDROCK_MODEL_ID     = var.bedrock_model_id
+        AST_CHANGE_THRESHOLD = tostring(var.ast_change_threshold)
+        LLM_MODE             = var.llm_mode
+        OLLAMA_MODEL         = var.ollama_model
       },
       var.ollama_url != "" ? { OLLAMA_URL = var.ollama_url } : {}
     )

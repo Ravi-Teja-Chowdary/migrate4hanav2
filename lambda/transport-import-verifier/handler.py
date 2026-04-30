@@ -39,14 +39,32 @@ def lambda_handler(event, context):
         rc = _scan_rc(stdout, tr_id)
         warnings = _scan_warnings(stdout)
         inactive = _scan_inactive(stdout)
+        is_production = bool(event.get("is_production", False))
 
         log_key = f"runs/{run_id}/transports/{tr_id}/import.log"
         s3.put_object(Bucket=STAGING_BUCKET, Key=log_key, Body=stdout.encode())
 
-        verdict = "success" if rc in (0, 4) and not inactive else \
-                  "warnings" if rc == 4 else "failed"
+        if rc is None:
+            verdict = "failed"
+            reason = "no return-code line found for transport in import logs"
+        elif inactive:
+            verdict = "failed"
+            reason = f"{len(inactive)} inactive/syntax-error objects detected"
+        elif rc == 0 and not warnings:
+            verdict = "success"
+            reason = "RC=0, no warnings"
+        elif rc == 0:
+            verdict = "warning_requires_review"
+            reason = f"RC=0 but {len(warnings)} warning lines"
+        elif rc == 4:
+            verdict = "failed" if is_production else "warning_requires_review"
+            reason = ("RC=4 in production requires manual Basis review"
+                      if is_production else "RC=4 — warnings, review required")
+        else:
+            verdict = "failed"
+            reason = f"RC={rc} >= 8"
 
-        result = {"transport_id": tr_id, "verdict": verdict,
+        result = {"transport_id": tr_id, "verdict": verdict, "reason": reason,
                   "tp_return_code": rc, "warnings": warnings[:50],
                   "inactive_objects": inactive[:50],
                   "log_s3": f"s3://{STAGING_BUCKET}/{log_key}"}
@@ -64,13 +82,15 @@ def lambda_handler(event, context):
 
 
 def _scan_rc(stdout, tr_id):
-    rc = 0
+    """Highest RC for this transport, or None if no RC line found (fail-safe)."""
+    rc = None
     for line in stdout.splitlines():
         if tr_id[-5:] in line and "return code" in line.lower():
             try:
-                rc = max(rc, int(line.split()[-1]))
+                val = int(line.split()[-1])
+                rc = val if rc is None else max(rc, val)
             except Exception:
-                pass
+                continue
     return rc
 
 

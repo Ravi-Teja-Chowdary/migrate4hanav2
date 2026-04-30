@@ -94,10 +94,43 @@ _PUBLIC_PATHS = {"/api/health", "/api/auth/token"}
 
 
 def _ensure_jwt_secret():
-    """Ensure a JWT secret exists; generate and persist one if not set."""
+    """Resolve a JWT signing secret in this priority order:
+       1. M4H_JWT_SECRET env var (12-factor; production)
+       2. AWS Secrets Manager (M4H_JWT_SECRET_ARN env var) — production
+       3. .jwt_secret file (LOCAL DEV ONLY — refused if M4H_ENV=prod)
+       4. auto-generate + persist to .jwt_secret (LOCAL DEV ONLY)
+
+    Production must use option 1 or 2. Plaintext file fallback is gated
+    behind M4H_ENV != 'prod' so a misconfigured prod deploy fails closed
+    instead of silently writing a secret to disk.
+    """
     global _JWT_SECRET
     if _JWT_SECRET:
         return
+
+    arn = os.environ.get("M4H_JWT_SECRET_ARN", "")
+    if arn:
+        try:
+            import boto3  # local import: keep startup fast in dev
+            sm = boto3.client("secretsmanager")
+            resp = sm.get_secret_value(SecretId=arn)
+            _JWT_SECRET = (resp.get("SecretString") or "").strip()
+            if _JWT_SECRET:
+                return
+        except Exception as e:
+            raise RuntimeError(
+                f"M4H_JWT_SECRET_ARN={arn} set but Secrets Manager fetch failed: {e}. "
+                "Refusing to fall back to plaintext file in production path."
+            )
+
+    env = os.environ.get("M4H_ENV", "dev").lower()
+    if env in ("prod", "production"):
+        raise RuntimeError(
+            "M4H_ENV=prod but no JWT secret available. "
+            "Set M4H_JWT_SECRET or M4H_JWT_SECRET_ARN. "
+            "Plaintext .jwt_secret fallback is disabled in production."
+        )
+
     secret_file = os.path.join(PROJECT_DIR, ".jwt_secret")
     if os.path.isfile(secret_file):
         with open(secret_file, "r", encoding="utf-8") as f:
@@ -107,7 +140,11 @@ def _ensure_jwt_secret():
     _JWT_SECRET = secrets.token_hex(32)
     with open(secret_file, "w", encoding="utf-8") as f:
         f.write(_JWT_SECRET)
-    print(f"  [Auth] Generated JWT secret -> .jwt_secret (keep this file secure)")
+    try:
+        os.chmod(secret_file, 0o600)
+    except Exception:
+        pass
+    print("  [Auth] Generated dev-only JWT secret -> .jwt_secret (DO NOT use in prod)")
 
 
 def _b64url_encode(data: bytes) -> str:

@@ -60,17 +60,40 @@ def _tp_ssm(event, tr_id, sid, client) -> dict:
     bastion = event["target_bastion_instance_id"]
     sidadm = sid.lower() + "adm"
     pf = f"/usr/sap/trans/bin/TP_DOMAIN_{sid}.PFL"
+    is_production = bool(event.get("is_production", False))
     cmds = [
         f"su - {sidadm} -c 'tp addtobuffer {tr_id} {sid} pf={pf}'",
         f"su - {sidadm} -c 'tp import {tr_id} {sid} client={client} U16 pf={pf} 2>&1'",
     ]
     res = ssm_run(bastion, cmds, comment=f"tp-import-{tr_id}", timeout_seconds=3600)
-    rc = _extract_tp_rc(res.get("stdout", ""))
-    return {"status": "success" if rc in (0, 4) else "failed",
+    ssm_status = res.get("status")
+    stdout = res.get("stdout") or ""
+    stderr = res.get("stderr") or ""
+
+    rc = _extract_tp_rc(stdout)
+
+    if ssm_status not in ("Success", "Completed"):
+        verdict = "failed"
+        reason = f"SSM command status={ssm_status}; tp output may be incomplete"
+    elif rc is None:
+        verdict = "failed"
+        reason = "no tp return-code line found in stdout (cannot certify import)"
+    elif rc == 0:
+        verdict = "success"
+        reason = "RC=0"
+    elif rc == 4:
+        verdict = "failed" if is_production else "warning_requires_review"
+        reason = ("RC=4 in production requires manual Basis review (forced fail)"
+                  if is_production else "RC=4 — warnings present, requires review")
+    else:
+        verdict = "failed"
+        reason = f"RC={rc} >= 8 (import failed)"
+
+    return {"status": verdict, "reason": reason,
             "transport_id": tr_id, "method": "tp_ssm",
-            "tp_return_code": rc, "ssm_status": res.get("status"),
-            "stdout_tail": (res.get("stdout") or "")[-3000:],
-            "stderr_tail": (res.get("stderr") or "")[-1000:]}
+            "tp_return_code": rc, "ssm_status": ssm_status,
+            "stdout_tail": stdout[-3000:],
+            "stderr_tail": stderr[-1000:]}
 
 
 def _tms_rfc(event, tr_id, sid, client) -> dict:
@@ -78,12 +101,19 @@ def _tms_rfc(event, tr_id, sid, client) -> dict:
             "note": "TMS RFC path requires TMS domain config — not auto-orchestrated in v1"}
 
 
-def _extract_tp_rc(stdout: str) -> int:
-    rc = 0
+def _extract_tp_rc(stdout: str):
+    """Return the highest tp return code found in stdout, or None if absent.
+
+    Critical: returning None on absence (rather than defaulting to 0) prevents
+    the executor from declaring success for an import where tp output was
+    truncated or never produced — a previous safety bug.
+    """
+    rc = None
     for line in stdout.splitlines():
         if "return code" in line.lower():
             try:
-                rc = max(rc, int(line.split()[-1]))
+                val = int(line.split()[-1])
+                rc = val if rc is None else max(rc, val)
             except Exception:
-                pass
+                continue
     return rc

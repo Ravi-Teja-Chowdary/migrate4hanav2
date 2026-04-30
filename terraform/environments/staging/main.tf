@@ -71,6 +71,13 @@ module "lambda" {
   vpc_id             = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnet_ids
   secrets_arn        = aws_secretsmanager_secret.sap_credentials.arn
+  gates_table_name   = aws_dynamodb_table.gates.name
+
+  # Wave 6/7/8 — evidence ledger plumbing
+  events_table_name          = module.evidence_ledger.events_table_name
+  recon_tolerance_table_name = module.evidence_ledger.recon_tolerance_table_name
+  evidence_bucket_name       = module.evidence_ledger.evidence_bucket_name
+  kms_key_arn                = module.evidence_ledger.kms_key_arn
 
   telemetry_ws_endpoint          = module.websocket_telemetry.management_endpoint
   telemetry_ws_connections_table = module.websocket_telemetry.connections_table_name
@@ -266,21 +273,30 @@ module "lambda" {
     }
 
     # Lift-and-shift orchestrators
-    object-router                  = { description = "LS: object lane router",         handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 1024, source_dir = "${path.root}/../../../lambda/object-router",                  layers = [] }
-    sizing-advisor                 = { description = "LS: target sizing advisor",      handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512,  source_dir = "${path.root}/../../../lambda/sizing-advisor",                 layers = [] }
-    target-provisioner             = { description = "LS: greenfield S/4 stand-up",    handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/target-provisioner",             layers = [] }
-    basis-validator                = { description = "LS: target readiness gate",      handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512,  source_dir = "${path.root}/../../../lambda/basis-validator",                layers = [var.pyrfc_layer_arn] }
-    bc-set-builder                 = { description = "LS: BC Set builder",             handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512,  source_dir = "${path.root}/../../../lambda/bc-set-builder",                 layers = [] }
-    transport-artifact-builder     = { description = "LS: stage CTS+ artifacts",       handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 1024, source_dir = "${path.root}/../../../lambda/transport-artifact-builder",     layers = [] }
-    transport-file-placer          = { description = "LS: place tp files via SSM",     handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 512,  source_dir = "${path.root}/../../../lambda/transport-file-placer",          layers = [] }
-    transport-import-executor      = { description = "LS: invoke tp import via SSM",   handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/transport-import-executor",      layers = [var.pyrfc_layer_arn] }
-    transport-import-verifier      = { description = "LS: verify transport return",    handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512,  source_dir = "${path.root}/../../../lambda/transport-import-verifier",      layers = [var.pyrfc_layer_arn] }
-    migration-cockpit-orchestrator = { description = "LS: drive Migration Cockpit",    handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/migration-cockpit-orchestrator", layers = [] }
-    ltmom-orchestrator             = { description = "LS: LTMOM project + monitor",   handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/ltmom-orchestrator",             layers = [var.pyrfc_layer_arn] }
-    idoc-orchestrator              = { description = "LS: IDoc XML inbound + WE02",   handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/idoc-orchestrator",              layers = [var.pyrfc_layer_arn] }
-    delta-extractor                = { description = "LS: cutover delta capture",     handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/delta-extractor",                layers = [var.pyrfc_layer_arn] }
-    manual-gate                    = { description = "LS: persist SFN task tokens",   handler = "handler.lambda_handler", runtime = "python3.11", timeout = 60,  memory = 256,  source_dir = "${path.root}/../../../lambda/manual-gate",                    layers = [] }
+    object-router                  = { description = "LS: object lane router", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 1024, source_dir = "${path.root}/../../../lambda/object-router", layers = [] }
+    sizing-advisor                 = { description = "LS: target sizing advisor", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/sizing-advisor", layers = [] }
+    target-provisioner             = { description = "LS: greenfield S/4 stand-up", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/target-provisioner", layers = [] }
+    basis-validator                = { description = "LS: target readiness gate", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/basis-validator", layers = [var.pyrfc_layer_arn] }
+    bc-set-builder                 = { description = "LS: BC Set builder", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/bc-set-builder", layers = [] }
+    transport-artifact-builder     = { description = "LS: stage CTS+ artifacts", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 1024, source_dir = "${path.root}/../../../lambda/transport-artifact-builder", layers = [] }
+    transport-file-placer          = { description = "LS: place tp files via SSM", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 512, source_dir = "${path.root}/../../../lambda/transport-file-placer", layers = [] }
+    transport-import-executor      = { description = "LS: invoke tp import via SSM", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/transport-import-executor", layers = [var.pyrfc_layer_arn] }
+    transport-import-verifier      = { description = "LS: verify transport return", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/transport-import-verifier", layers = [var.pyrfc_layer_arn] }
+    migration-cockpit-orchestrator = { description = "LS: drive Migration Cockpit", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/migration-cockpit-orchestrator", layers = [] }
+    ltmom-orchestrator             = { description = "LS: LTMOM project + monitor", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/ltmom-orchestrator", layers = [var.pyrfc_layer_arn] }
+    idoc-orchestrator              = { description = "LS: IDoc XML inbound + WE02", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/idoc-orchestrator", layers = [var.pyrfc_layer_arn] }
+    delta-extractor                = { description = "LS: cutover delta capture", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/delta-extractor", layers = [var.pyrfc_layer_arn] }
+    manual-gate                    = { description = "LS: persist SFN task tokens", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 60, memory = 256, source_dir = "${path.root}/../../../lambda/manual-gate", layers = [] }
+    evidence-collector             = { description = "Wave 7: hash-chained event ledger", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 120, memory = 512, source_dir = "${path.root}/../../../lambda/evidence-collector", layers = [], architectures = ["arm64"] }
+    reconciliation-engine          = { description = "Wave 8: count/key/balance/hash recon", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 1024, source_dir = "${path.root}/../../../lambda/reconciliation-engine", layers = [], architectures = ["arm64"] }
   }
+}
+
+# Wave 6/7/8 — Evidence ledger (KMS CMK + Object Lock S3 + DDB)
+module "evidence_ledger" {
+  source          = "../../modules/evidence-ledger"
+  environment     = var.environment
+  retention_years = 7
 }
 
 # ─────────────────────────────────────────────
@@ -325,8 +341,8 @@ module "airgapped_llm" {
 module "step_functions" {
   source = "../../modules/step-functions"
 
-  environment  = var.environment
-  lambda_arns  = module.lambda.function_arns
+  environment = var.environment
+  lambda_arns = module.lambda.function_arns
 
   # ECS Fargate — heavy-compute stages (1, 5, 12, 12A)
   ecs_cluster_arn         = module.ecs.cluster_arn
