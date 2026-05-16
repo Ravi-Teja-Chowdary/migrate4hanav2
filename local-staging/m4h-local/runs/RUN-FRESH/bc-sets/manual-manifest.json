@@ -1,0 +1,29 @@
+{
+  "run_id": "RUN-FRESH",
+  "mode": "manual_creation_required",
+  "groups": [
+    {
+      "name": "Financial",
+      "tables": []
+    },
+    {
+      "name": "Controlling",
+      "tables": []
+    },
+    {
+      "name": "MaterialsMgmt",
+      "tables": []
+    },
+    {
+      "name": "SalesDistribution",
+      "tables": []
+    }
+  ],
+  "instructions": [
+    "1. Open transaction SCPR on BUILD system",
+    "2. For each config group below, create a BC Set with those tables",
+    "3. Release each BC Set to a CTS+ transport",
+    "4. Export and import that transport to target"
+  ],
+  "rfc_error": "5 (rc=5): key=FU_NOT_FOUND, message=ID:FL Type:E Number:046 SCPR_API_BC_SET_CREATE [MSG: class=FL, type=E, number=046, v1-4:=SCPR_API_BC_SET_CREATE;;;]"
+}

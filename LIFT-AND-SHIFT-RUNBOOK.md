@@ -8,6 +8,25 @@
 - Smoke test (§7 of setup) passed (steps 1–3 always; steps 4–5 once pyrfc is installed).
 - `M4H_TARGET_MODE=basis_handover_only` is set in your shell (SAP CAL provisioned the S/4).
 
+## Environment values used in every command below
+
+| Side | Host | sysnr | client | user |
+|---|---|---|---|---|
+| **Source — laptop ECC** | `192.168.0.5` | `41` | `800` | `sapuser` |
+| **Target — S/4HANA on AWS** | `32.195.65.246` | `00` | `100` | `SAP*` |
+
+Required env vars in every PowerShell session (the runner reads these — do not skip):
+```powershell
+$env:M4H_ECC_PASSWD     = "<password for sapuser on the laptop ECC>"
+$env:M4H_TARGET_PASSWD  = "<password for SAP* on the S/4HANA target>"
+$env:M4H_TARGET_MODE    = "basis_handover_only"
+$env:SAPNWRFC_HOME      = "$PWD\sapnwrfc"
+```
+
+> **PowerShell gotcha:** `SAP*` is a literal SAP superuser name and is safe inside
+> single-quoted strings (`user='SAP*'`). Do NOT pass it unquoted to PowerShell or it
+> will be interpreted as a glob. Always wrap it in single quotes.
+
 > **Local-mode architecture (verified by audit 2026-05-11):** the runner auto-activates
 > `local_aws_shim.py` which monkey-patches `boto3` to emulate Secrets Manager (creds from
 > `connections.json` + `M4H_ECC_PASSWD` / `M4H_TARGET_PASSWD`), S3 (filesystem at
@@ -55,7 +74,7 @@ Manual gates: **gate1** (basis handover) · **gate2** (pre-cutover) · **gate3**
 .\.venv\Scripts\Activate.ps1
 
 # run a single stage:
-python run_local_lift_and_shift.py --only stage6 --run-id RUN-001 --ecc-host 192.168.0.6 --target-host 10.0.x.y
+python run_local_lift_and_shift.py --only stage6 --run-id RUN-001 --ecc-host 192.168.0.5 --target-host 32.195.65.246
 
 # run a phase (stage range):
 python run_local_lift_and_shift.py --from-stage stage6 --through stage9c --run-id RUN-001
@@ -83,7 +102,7 @@ users/roles, integration endpoints.
 
 **Run:**
 ```powershell
-python run_local_lift_and_shift.py --only stage1 --run-id RUN-2025-01-15 --ecc-host 192.168.0.6
+python run_local_lift_and_shift.py --only stage1 --run-id RUN-2025-01-15 --ecc-host 192.168.0.5
 ```
 
 **Expect:**
@@ -95,7 +114,7 @@ python run_local_lift_and_shift.py --only stage1 --run-id RUN-2025-01-15 --ecc-h
 
 **If it fails:**
 - `pyrfc.RFCError: Connection failed`: laptop ECC is down, or `M4H_ECC_PASSWD` wrong.
-- `RFC_READ_TABLE: AUTHORIZATION FAILURE`: `M4H_RFC` user missing `S_TABU_DIS`.
+- `RFC_READ_TABLE: AUTHORIZATION FAILURE`: `sapuser` missing `S_TABU_DIS` (grant in SU01).
 
 ## Stage 2 — Sizing & Target Design
 **Handler:** `sizing-advisor`
@@ -162,7 +181,7 @@ python run_local_lift_and_shift.py --only stage4 --run-id RUN-2025-01-15
 
 ```powershell
 # from laptop, RFC ping via pyrfc:
-python -c "from pyrfc import Connection; c=Connection(ashost='10.0.x.y',sysnr='00',client='100',user='DDIC',passwd='$env:M4H_TARGET_PASSWD'); print(c.call('RFC_PING'))"
+python -c "from pyrfc import Connection; c=Connection(ashost='32.195.65.246',sysnr='00',client='100',user='SAP*',passwd='$env:M4H_TARGET_PASSWD'); print(c.call('RFC_PING'))"
 ```
 
 If you see `{}` it's good. The runner auto-approves the gate in local mode.
@@ -177,7 +196,7 @@ If you see `{}` it's good. The runner auto-approves the gate in local mode.
 
 **Run:**
 ```powershell
-python run_local_lift_and_shift.py --only stage5 --run-id RUN-2025-01-15 --target-host 10.0.x.y
+python run_local_lift_and_shift.py --only stage5 --run-id RUN-2025-01-15 --target-host 32.195.65.246
 ```
 
 **Expect:** 5 green checks. If any fail, go back to `LIFT-AND-SHIFT-SETUP.md §6` and fix.
@@ -249,16 +268,16 @@ records the would-be command to `local-staging/_ssm_manual/local-ssm-<id>.sh` an
 the file path; you then run that script yourself on the target host via SSH:
 ```powershell
 type local-staging\_ssm_manual\local-ssm-<id>.sh   # inspect the commands
-scp local-staging\_ssm_manual\local-ssm-<id>.sh s4hadm@10.0.x.y:/tmp/
-ssh s4hadm@10.0.x.y "sh /tmp/local-ssm-<id>.sh"
+scp local-staging\_ssm_manual\local-ssm-<id>.sh s4hadm@32.195.65.246:/tmp/
+ssh s4hadm@32.195.65.246 "sh /tmp/local-ssm-<id>.sh"
 ```
 
 If you prefer pure manual STMS: download the cofile + data file from the local-staging
 folder, then `scp` to the S/4 host:
 ```powershell
 $src = "local-staging\m4h-local\runs\RUN-2025-01-15\transports\code"
-scp $src\K9000042.NPL s4hadm@10.0.x.y:/usr/sap/trans/cofiles/
-scp $src\R9000042.NPL s4hadm@10.0.x.y:/usr/sap/trans/data/
+scp $src\K9000042.NPL s4hadm@32.195.65.246:/usr/sap/trans/cofiles/
+scp $src\R9000042.NPL s4hadm@32.195.65.246:/usr/sap/trans/data/
 ```
 
 ## Stage 9b — Transport Import Executor
@@ -567,7 +586,7 @@ Tailscale is down, or the SAP CAL appliance is suspended. Check `tailscale statu
 the CAL Web UI.
 
 ### "MC OData returns 401"
-The `mc_user` in `connections.json` lacks the `/IWFND/RT_GW_USER` role. Use `DDIC` for the
+The `mc_user` in `connections.json` lacks the `/IWFND/RT_GW_USER` role. Use `SAP*` for the
 first run.
 
 ### "Transport import RC=12"

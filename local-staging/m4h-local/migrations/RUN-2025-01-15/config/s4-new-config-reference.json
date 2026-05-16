@@ -1,0 +1,37 @@
+{
+  "fiori_launchpad": {
+    "description": "Fiori Launchpad configuration (new in S/4HANA)",
+    "settings": [
+      "Theme configuration (Quartz / Horizon)",
+      "Launchpad spaces and pages",
+      "App catalog assignments",
+      "Target mappings for custom apps"
+    ]
+  },
+  "business_partner": {
+    "description": "BP number range and synchronization settings",
+    "settings": [
+      "BP number range (SNRO object BU_PARTNER)",
+      "Customer-Vendor Integration (CVI) sync direction",
+      "BP role category mapping",
+      "BP grouping configuration"
+    ]
+  },
+  "simplified_finance": {
+    "description": "New finance settings for Universal Journal",
+    "settings": [
+      "Ledger configuration (leading vs non-leading)",
+      "Currency types per ledger",
+      "Extension ledger settings",
+      "Margin analysis (COPA) integration"
+    ]
+  },
+  "output_management": {
+    "description": "New output management framework (replaces NACE)",
+    "settings": [
+      "Output types \u2192 BRF+ rules",
+      "Adobe Forms \u2192 Fiori print forms",
+      "Email templates"
+    ]
+  }
+}

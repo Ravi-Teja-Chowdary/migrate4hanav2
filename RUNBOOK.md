@@ -25,14 +25,22 @@ Do this once. Subsequent runs only need the env vars (§A.6) re-set in a new she
 
 ```powershell
 git branch --show-current     # must be: aws-lift-and-shift
-python --version              # must be 3.11+ (you currently have 3.7.4 — upgrade required)
+python --version              # 3.7 works locally (see note); 3.10+ recommended
 node --version                # 18+
 docker --version              # optional, only needed for Part C (AWS deploy)
 aws --version                 # optional, only needed for Part C
 ```
 
-**If Python is <3.11:** install Python 3.11 or 3.12 from https://python.org and re-run
-the pip install in §A.3. The bundled SAP NW RFC SDK supports 3.11/3.12 on Windows.
+**Python version note (Windows reality on this branch):**
+- The bundled SAP NW RFC SDK ships only **pyrfc 2.8.31 wheels**, which are pinned to
+  **Python 3.7**. pyrfc ≥ 3.0 needs Visual Studio C++ build tools to compile — usually a
+  non-starter on a laptop.
+- The Lambda handlers all use `from __future__ import annotations`, so 3.7 syntax is
+  sufficient. Newer boto3 (≥ 1.34) refuses to install on 3.7 — pin to **boto3 1.33.13**
+  instead (last release that supports 3.7).
+- For the AWS-hosted side (Part C), the Lambda runtime in Terraform is Python 3.11 — that
+  runs the same source, just packaged via `scripts/deploy.sh`. Your **local** Python
+  version doesn't have to match the Lambda runtime.
 
 ## A.2. Confirm SAP source + target reachability
 
@@ -50,19 +58,34 @@ All four ports must return `TcpTestSucceeded : True`. If not, fix network (Tails
 VPN / firewall) before continuing. See `LIFT-AND-SHIFT-SETUP.md §1.4` for the
 Tailscale bridge.
 
-## A.3. Python venv + dependencies
+## A.3. Python dependencies
+
+**Use your existing system Python 3.7** (the one that has pyrfc 2.8.31 already
+installed — verify with `pip show pyrfc`). Do **not** create a 3.10+ venv; pyrfc won't
+build there without Visual Studio C++ tools.
 
 ```powershell
 cd C:\Users\ajays\Downloads\migrate4hanav2
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
 
-# pyrfc — try the official wheel first
-pip install pyrfc
-# If that fails (needs a C++ compiler matching your Python), use the community wheel:
-pip install pynwrfc
+# Pinned boto3 — last release that supports Python 3.7. requirements.txt asks for
+# >= 1.34 which won't install on 3.7, so install these explicitly:
+py -3.7 -m pip install "boto3==1.33.13" "botocore==1.33.13"
+
+# Then the rest of requirements.txt — but skip the boto3/pyrfc/fastapi pins that won't
+# install on 3.7. Install on demand only what each stage needs:
+py -3.7 -m pip install "requests>=2.31.0" "reportlab>=4.0" "ollama" --upgrade
 ```
+
+**Verify the import works:**
+```powershell
+python -c "import boto3, pyrfc; print('boto3', boto3.__version__, '| pyrfc', pyrfc.__version__)"
+# Expected: boto3 1.33.13 | pyrfc 2.8.31
+```
+
+> `fastapi` / `pydantic v2` / `locust` won't install on 3.7. **That's fine** — they're
+> only needed for the optional `api_server.py` (which you can run from Python 3.10 in a
+> separate shell if you want the UI) and for load tests. The 28-stage runner doesn't
+> need them.
 
 ## A.4. Point pyrfc at the bundled SAP NW RFC SDK
 
