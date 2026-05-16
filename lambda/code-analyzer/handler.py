@@ -36,8 +36,35 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 s3 = boto3.client("s3")
+secrets = boto3.client("secretsmanager")
 
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
+
+
+def get_sap_connection():
+    """RFC connection to the SOURCE ECC via Secrets Manager (or local shim).
+
+    Mirrors discovery-engine.get_sap_connection. Reads creds from the secret
+    pointed at by ECC_SECRETS_ARN (preferred) or falls back to SECRETS_ARN.
+    """
+    from pyrfc import Connection
+    secret_id = (os.environ.get("ECC_SECRETS_ARN")
+                 or os.environ.get("SOURCE_CREDS_ARN")
+                 or os.environ.get("SECRETS_ARN"))
+    if not secret_id:
+        raise RuntimeError("No ECC secrets ARN configured (ECC_SECRETS_ARN / SECRETS_ARN)")
+    payload = json.loads(secrets.get_secret_value(SecretId=secret_id)["SecretString"])
+    host = payload.get("ashost") or payload.get("host")
+    conn = Connection(
+        ashost=host,
+        sysnr=payload["sysnr"],
+        client=payload["client"],
+        user=payload["user"],
+        passwd=payload["passwd"],
+        lang="EN",
+    )
+    logger.info(f"code-analyzer RFC connection established to {host} client {payload['client']}")
+    return conn
 
 
 # =============================================================================
@@ -266,8 +293,19 @@ def auto_remediate_with_ast_engine(source_code):
     
     # 3. Process Code Structurally
     try:
-        fixed_ast_code = process_abap_file(scrubbed_code, {"rules": dynamic_rules})
-        changes = [{"rule_id": "AST-GEN", "description": "Structurally updated via ABAP AST Engine."}]
+        result = process_abap_file(scrubbed_code, {"rules": dynamic_rules})
+        # AST engine returns dict with 'transformed_code' + 'changes' fields
+        if isinstance(result, dict):
+            fixed_ast_code = result.get("transformed_code", scrubbed_code)
+            engine_changes = result.get("changes", [])
+            changes = engine_changes if engine_changes else (
+                [{"rule_id": "AST-GEN", "description": "Structurally updated via ABAP AST Engine."}]
+                if fixed_ast_code != scrubbed_code else []
+            )
+        else:
+            # Legacy string return
+            fixed_ast_code = result
+            changes = [{"rule_id": "AST-GEN", "description": "Structurally updated via ABAP AST Engine."}]
         return fixed_ast_code, changes
     except Exception as e:
         logger.error(f"AST Remediation failed. {e}")
@@ -445,10 +483,16 @@ def read_abap_source(conn, program_name):
             "RPY_PROGRAM_READ",
             PROGRAM_NAME=program_name,
             WITH_LOWERCASE="X",
+            WITH_INCLUDELIST="",
+            ONLY_SOURCE="X",
         )
-        # Source lines are in the PROG_SOURCE table
-        source_lines = [line.get("LINE", "") for line in result.get("PROG_SOURCE", [])]
-        return "\n".join(source_lines)
+        # ECC 7.40 returns the body in SOURCE_EXTENDED; older systems used
+        # SOURCE or PROG_SOURCE. Try them in priority order.
+        for tbl in ("SOURCE_EXTENDED", "SOURCE", "PROG_SOURCE"):
+            rows = result.get(tbl) or []
+            if rows:
+                return "\n".join(line.get("LINE", "") for line in rows)
+        return ""
     except Exception as e:
         logger.warning(f"Could not read source for {program_name}: {e}")
         return None
@@ -519,16 +563,26 @@ def lambda_handler(event, context):
     run_id = event.get("metadata", {}).get("run_id", "manual-run")
     discovery = event.get("discovery", {})
 
+    # Fallback: if upstream stage didn't pass discovery inline, load it from
+    # the staging bucket / local-staging directly. This makes code-analyzer
+    # runnable standalone.
+    if not discovery:
+        try:
+            obj = s3.get_object(Bucket=STAGING_BUCKET,
+                                Key=f"migrations/{run_id}/discovery/full-scan.json")
+            discovery = json.loads(obj["Body"].read())
+            logger.info(f"Loaded discovery for {run_id}: {len(discovery.get('programs', []))} programs")
+        except Exception as ex:
+            logger.warning(f"No discovery payload available — running degraded ({ex})")
+
     try:
         # Try to establish SAP connection for reading source code
         try:
-            from pyrfc import Connection
-            from handler import get_sap_connection  # noqa
             conn = get_sap_connection()
             has_rfc = True
-        except (ImportError, Exception):
+        except Exception as ex:
             has_rfc = False
-            logger.warning("No RFC connection — analyzing based on discovery metadata only")
+            logger.warning(f"No RFC connection — analyzing based on discovery metadata only ({ex})")
 
         programs = discovery.get("summary", {}).get("total_programs", 0)
         all_issues = []

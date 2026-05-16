@@ -21,6 +21,19 @@ s3 = boto3.client("s3")
 
 def lambda_handler(event, context):
     run_id = event.get("run_id", "local")
+
+    # If the upstream artifact-builder ran in manual mode (no transport
+    # actually created — typical for systems without RFC-enabled TR APIs),
+    # there is nothing to place. Surface the manual gate cleanly.
+    upstream = event.get("stage8") or event.get("transport_artifact") or {}
+    if (event.get("mode") == "manual_assembly_required"
+            or upstream.get("mode") == "manual_assembly_required"
+            or "transport_id" not in event):
+        log_stage_event(run_id, "transport-placer", "completed",
+                        {"mode": "manual_assembly_required"})
+        return {"status": "manual_required", "mode": "manual_assembly_required",
+                "reason": "Upstream stage emitted a manual manifest; no cofile/datafile to place."}
+
     tr_id = event["transport_id"]
     cofile_s3 = event["cofile_s3"]
     datafile_s3 = event["datafile_s3"]

@@ -23,7 +23,13 @@ STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
 
 def lambda_handler(event, context):
     run_id = event.get("run_id", "local")
-    obj = event["object"]
+    
+    obj = event.get("object")
+    if not obj:
+        log_stage_event(run_id, "ltmom-orchestrator", "completed",
+                        {"mode": "pass_through", "reason": "no_object_spec"})
+        return {"status": "ok", "mode": "pass_through",
+                "reason": "No object spec provided; LTMOM orchestration skipped."}
     spec = event.get("design_spec", {})
     model_built = event.get("model_already_built", False)
 

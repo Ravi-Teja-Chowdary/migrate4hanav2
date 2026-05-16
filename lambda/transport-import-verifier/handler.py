@@ -22,6 +22,16 @@ STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
 
 def lambda_handler(event, context):
     run_id = event.get("run_id", "local")
+
+    upstream = event.get("stage8") or event.get("transport_artifact") or {}
+    if (event.get("mode") == "manual_assembly_required"
+            or upstream.get("mode") == "manual_assembly_required"
+            or "transport_id" not in event):
+        log_stage_event(run_id, "transport-verifier", "completed",
+                        {"mode": "manual_assembly_required"})
+        return {"status": "manual_required", "mode": "manual_assembly_required",
+                "reason": "No transport to verify (upstream emitted manual manifest)."}
+
     tr_id = event["transport_id"]
     bastion = event["target_bastion_instance_id"]
 

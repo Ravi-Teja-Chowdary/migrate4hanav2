@@ -45,10 +45,45 @@ def lambda_handler(event, context):
         conn = Connection(ashost=creds["ashost"], sysnr=creds["sysnr"], client=creds["client"],
                           user=creds["user"], passwd=creds["passwd"])
 
-        tr_id = _create_transport(conn, transport_type, description)
-        for obj in object_list:
-            _add_to_transport(conn, tr_id, obj)
-        _release_transport(conn, tr_id)
+        try:
+            tr_id = _create_transport(conn, transport_type, description)
+            for obj in object_list:
+                _add_to_transport(conn, tr_id, obj)
+            _release_transport(conn, tr_id)
+        except Exception as rfc_err:
+            # ECC releases prior to 7.50 don't expose TRINT_* internal FMs over RFC.
+            # Emit a manifest the basis team can use to assemble a transport manually
+            # via SE09/SE10 + tp release, or via abapGit.
+            msg = str(rfc_err)
+            if "FU_NOT_FOUND" in msg or "TRINT_" in msg or "TR_OBJECTS_INSERT" in msg:
+                manifest = {
+                    "run_id": run_id,
+                    "mode": "manual_assembly_required",
+                    "description": description,
+                    "transport_type": transport_type,
+                    "object_count": len(object_list),
+                    "objects": object_list,
+                    "instructions": [
+                        "1. SE10 → Create Workbench Request with description above",
+                        "2. Add the objects from this manifest (or use abapGit push)",
+                        "3. Release the request (SE10 → truck icon)",
+                        "4. Copy /usr/sap/trans/cofiles/K* + data/R* to S3 staging path",
+                        "5. Re-run stage9b (transport-import-executor) pointing to that path",
+                    ],
+                    "rfc_error": msg,
+                }
+                key = f"runs/{run_id}/transports/manual/manifest.json"
+                s3.put_object(Bucket=STAGING_BUCKET, Key=key,
+                              Body=json.dumps(manifest, default=str, indent=2).encode())
+                logger.warning(
+                    f"Transport API not RFC-enabled on source. Wrote manual manifest to s3://{STAGING_BUCKET}/{key}"
+                )
+                log_stage_event(run_id, "transport-builder", "completed",
+                                {"mode": "manual_assembly_required", "object_count": len(object_list)})
+                return {"status": "manual_required", "mode": "manual_assembly_required",
+                        "object_count": len(object_list),
+                        "manifest_s3": f"s3://{STAGING_BUCKET}/{key}"}
+            raise
 
         bastion = creds.get("bastion_instance_id")
         if not bastion:

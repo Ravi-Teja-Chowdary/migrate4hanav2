@@ -259,91 +259,76 @@ def scan_org_structure(conn):
     """
     logger.info("Scanning org structure...")
 
-    org = {}
+    org = {
+        "company_codes": [],
+        "plants": [],
+        "sales_orgs": [],
+        "controlling_areas": [],
+    }
+
+    def _safe_read(table, fields, dest_key, mapper):
+        """RFC_READ_TABLE wrapper that survives missing fields on older ECC releases.
+        Drops any field the system reports as invalid and retries with what's left."""
+        from pyrfc import ABAPApplicationError
+        attempt_fields = list(fields)
+        for _ in range(len(attempt_fields) + 1):
+            try:
+                result = conn.call(
+                    "RFC_READ_TABLE",
+                    QUERY_TABLE=table,
+                    DELIMITER="|",
+                    FIELDS=[{"FIELDNAME": f} for f in attempt_fields],
+                )
+                for row in result.get("DATA", []):
+                    parts = [p.strip() for p in row["WA"].split("|")]
+                    if len(parts) >= 1:
+                        org[dest_key].append(mapper(parts, attempt_fields))
+                return
+            except ABAPApplicationError as ex:
+                msg = str(ex)
+                if "FIELD_NOT_VALID" in msg and attempt_fields:
+                    # SAP returns Number:NNN as the 0-based index of the bad field
+                    import re
+                    m = re.search(r"Number:\s*(\d+)", msg)
+                    idx = int(m.group(1)) if m else 0
+                    if 0 <= idx < len(attempt_fields):
+                        logger.warning(
+                            f"{table}: dropping unsupported field '{attempt_fields[idx]}' on this release"
+                        )
+                        attempt_fields.pop(idx)
+                        continue
+                logger.warning(f"{table}: skipping ({ex})")
+                return
+            except Exception as ex:
+                logger.warning(f"{table}: skipping ({ex})")
+                return
+
+    def _by_name(parts, fields):
+        return {f.lower(): (parts[i] if i < len(parts) else "") for i, f in enumerate(fields)}
 
     # Company Codes (T001)
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="T001",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "BUKRS"},     # Company code
-            {"FIELDNAME": "BUTXT"},     # Company name
-            {"FIELDNAME": "WAERS"},     # Currency
-            {"FIELDNAME": "LAND1"},     # Country
-        ],
-    )
-    org["company_codes"] = []
-    for row in result.get("DATA", []):
-        fields = row["WA"].split("|")
-        if len(fields) >= 4:
-            org["company_codes"].append({
-                "code": fields[0].strip(),
-                "name": fields[1].strip(),
-                "currency": fields[2].strip(),
-                "country": fields[3].strip(),
-            })
+    _safe_read("T001", ["BUKRS", "BUTXT", "WAERS", "LAND1"], "company_codes",
+               lambda parts, fl: {"code": parts[0],
+                                  "name":     parts[fl.index("BUTXT")] if "BUTXT" in fl else "",
+                                  "currency": parts[fl.index("WAERS")] if "WAERS" in fl else "",
+                                  "country":  parts[fl.index("LAND1")] if "LAND1" in fl else ""})
 
     # Plants (T001W)
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="T001W",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "WERKS"},     # Plant code
-            {"FIELDNAME": "NAME1"},     # Plant name
-            {"FIELDNAME": "BUKRS"},     # Company code
-            {"FIELDNAME": "LAND1"},     # Country
-        ],
-    )
-    org["plants"] = []
-    for row in result.get("DATA", []):
-        fields = row["WA"].split("|")
-        if len(fields) >= 4:
-            org["plants"].append({
-                "code": fields[0].strip(),
-                "name": fields[1].strip(),
-                "company_code": fields[2].strip(),
-                "country": fields[3].strip(),
-            })
+    _safe_read("T001W", ["WERKS", "NAME1", "BUKRS", "LAND1"], "plants",
+               lambda parts, fl: {"code": parts[0],
+                                  "name":         parts[fl.index("NAME1")] if "NAME1" in fl else "",
+                                  "company_code": parts[fl.index("BUKRS")] if "BUKRS" in fl else "",
+                                  "country":      parts[fl.index("LAND1")] if "LAND1" in fl else ""})
 
     # Sales Organizations (TVKO)
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="TVKO",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "VKORG"},     # Sales org
-            {"FIELDNAME": "BUKRS"},     # Company code
-        ],
-    )
-    org["sales_orgs"] = []
-    for row in result.get("DATA", []):
-        fields = row["WA"].split("|")
-        if len(fields) >= 2:
-            org["sales_orgs"].append({
-                "code": fields[0].strip(),
-                "company_code": fields[1].strip(),
-            })
+    _safe_read("TVKO", ["VKORG", "BUKRS"], "sales_orgs",
+               lambda parts, fl: {"code": parts[0],
+                                  "company_code": parts[fl.index("BUKRS")] if "BUKRS" in fl else ""})
 
     # Controlling Areas (TKA01)
-    result = conn.call(
-        "RFC_READ_TABLE",
-        QUERY_TABLE="TKA01",
-        DELIMITER="|",
-        FIELDS=[
-            {"FIELDNAME": "KOKRS"},     # Controlling area
-            {"FIELDNAME": "WAERS"},     # Currency
-        ],
-    )
-    org["controlling_areas"] = []
-    for row in result.get("DATA", []):
-        fields = row["WA"].split("|")
-        if len(fields) >= 2:
-            org["controlling_areas"].append({
-                "code": fields[0].strip(),
-                "currency": fields[1].strip(),
-            })
+    _safe_read("TKA01", ["KOKRS", "WAERS"], "controlling_areas",
+               lambda parts, fl: {"code": parts[0],
+                                  "currency": parts[fl.index("WAERS")] if "WAERS" in fl else ""})
 
     logger.info(
         f"Org structure: {len(org['company_codes'])} company codes, "

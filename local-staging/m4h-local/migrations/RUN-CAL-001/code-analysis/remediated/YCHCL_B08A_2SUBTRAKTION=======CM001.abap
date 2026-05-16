@@ -1,0 +1,8 @@
+METHOD EINGEBEN.
+  CALL METHOD super.
+  CASE sy-subrc.
+    WHEN 1.
+      RAISE EXCEPTION TYPE wert_ist_null.
+  ENDCASE.
+  yfunktion = 'SCRUBBED_STRING'.
+ENDMETHOD.

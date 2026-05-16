@@ -24,6 +24,16 @@ STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
 
 def lambda_handler(event, context):
     run_id = event.get("run_id", "local")
+
+    upstream = event.get("stage8") or event.get("transport_artifact") or {}
+    if (event.get("mode") == "manual_assembly_required"
+            or upstream.get("mode") == "manual_assembly_required"
+            or "transport_id" not in event):
+        log_stage_event(run_id, "transport-executor", "completed",
+                        {"mode": "manual_assembly_required"})
+        return {"status": "manual_required", "mode": "manual_assembly_required",
+                "reason": "Upstream manifest is manual-assembly. Run STMS Import once the transport exists on target."}
+
     tr_id = event["transport_id"]
     method = event.get("import_method", "tp_ssm")
     target_sid = event["target_sid"]

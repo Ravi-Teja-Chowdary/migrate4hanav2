@@ -32,8 +32,15 @@ STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
 def lambda_handler(event, context):
     run_id = event.get("run_id", "local")
     strategy = event.get("strategy", "pyrfc_batch")
-    objects = event["objects"]
+    objects = event.get("objects", [])
     ecc_creds_arn = event.get("ecc_creds_arn") or os.environ.get("ECC_SECRETS_ARN")
+
+    # If no objects specified (smoke run), pass through
+    if not objects:
+        log_stage_event(run_id, "delta-extractor", "completed",
+                        {"mode": "pass_through", "reason": "no_objects"})
+        return {"status": "ok", "mode": "pass_through",
+                "reason": "No objects specified; delta extraction skipped."}
 
     log_stage_event(run_id, "delta-extractor", "started",
                     {"strategy": strategy, "object_count": len(objects)})

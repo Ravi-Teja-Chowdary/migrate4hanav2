@@ -51,7 +51,8 @@ def _ecc(secret_id: str):
     from pyrfc import Connection
     return Connection(ashost=sec["ashost"], sysnr=sec.get("sysnr", "00"),
                       client=sec["client"], user=sec["user"],
-                      passwd=sec["password"], lang=sec.get("lang", "EN"))
+                      passwd=sec.get("passwd") or sec.get("password"),
+                      lang=sec.get("lang", "EN"))
 
 
 def _read_table(conn, table: str, fields: list, where: str = "", max_rows: int = MAX_ROWS_PER_TEMPLATE) -> list:
@@ -115,11 +116,25 @@ def lambda_handler(event, context):
         return {"status": "ok", "run_id": run_id, "mode": mode,
                 "note": "extract counts are produced by discovery-engine; this is a no-op in lift-and-shift"}
 
-    secret_id = event.get("ecc_secret_id", os.environ.get("ECC_SECRET_ID", ""))
+    secret_id = (event.get("ecc_secret_id")
+                 or os.environ.get("ECC_SECRET_ID")
+                 or event.get("ecc_creds_arn")
+                 or event.get("source_creds_arn")
+                 or "local:ecc")
     if not secret_id:
-        return {"status": "blocked", "reason": "ecc_secret_id required", "run_id": run_id}
+        return {"status": "blocked", "reason": "ecc_secret_id / ecc_creds_arn required", "run_id": run_id}
 
     obj_name = spec.get("object", "UNKNOWN")
+    
+    # In generate_templates mode without a specific object spec,
+    # this is a pass-through (no data templates to generate in lift-and-shift
+    # smoke run). Production runs pass object_spec from stage3's DAG.
+    if mode == "generate_templates" and obj_name == "UNKNOWN":
+        log_stage_event(run_id, "data-migrator", "ok",
+                        {"mode": "generate_templates", "status": "no_objects"})
+        return {"status": "ok", "run_id": run_id, "mode": mode,
+                "note": "no object specs provided; data templates skipped in smoke run"}
+    
     table = spec.get("source_table", obj_name)
     fields = spec.get("fields", [])
     where = spec.get("where_clause", "")

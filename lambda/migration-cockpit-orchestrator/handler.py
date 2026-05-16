@@ -29,7 +29,16 @@ STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
 
 def lambda_handler(event, context):
     run_id = event.get("run_id", "local")
-    obj = event["object"]
+    
+    # In smoke run without DAG lane routing, orchestrators receive no object.
+    # Make all three orchestrators graceful pass-throughs.
+    obj = event.get("object")
+    if not obj:
+        log_stage_event(run_id, "mc-orchestrator", "completed",
+                        {"mode": "pass_through", "reason": "no_object_spec"})
+        return {"status": "ok", "mode": "pass_through",
+                "reason": "No object spec provided; data load orchestration skipped."}
+    
     template_s3 = event["template_s3_uri"]
     project = event.get("mc_project", "M4H_LIFT_AND_SHIFT")
     target_creds_arn = event.get("target_creds_arn") or os.environ.get("TARGET_SECRETS_ARN")

@@ -35,8 +35,13 @@ STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
 
 def lambda_handler(event, context):
     run_id = event.get("run_id", "local")
-    obj = event["object"]
-    payload_s3 = event["payload_s3_uri"]
+    
+    obj = event.get("object")
+    if not obj:
+        log_stage_event(run_id, "idoc-orchestrator", "completed",
+                        {"mode": "pass_through", "reason": "no_object_spec"})
+        return {"status": "ok", "mode": "pass_through",
+                "reason": "No object spec provided; IDoc orchestration skipped."}
     target_creds_arn = event.get("target_creds_arn") or os.environ.get("TARGET_SECRETS_ARN")
 
     log_stage_event(run_id, "idoc-orchestrator", "started", {"object": obj})

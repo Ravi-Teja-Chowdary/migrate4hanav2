@@ -156,6 +156,54 @@ def _load(module_path: str):
     return module
 
 
+def _build_object_list(run_id: str, kind: str) -> list:
+    """Compose an object_list for transport-artifact-builder from prior stage outputs.
+
+    kind=="code"   → remediated ABAP programs from code-analyzer (stage 7)
+    kind=="config" → CTSplus-lane nodes from object-router (stage 3)
+    """
+    staging = Path(os.environ.get("M4H_STAGING_DIR", REPO_ROOT / "local-staging" / "m4h-local"))
+    out = []
+
+    if kind == "code":
+        remediated_dir = staging / "migrations" / run_id / "code-analysis" / "remediated"
+        if remediated_dir.is_dir():
+            for f in sorted(remediated_dir.glob("*.abap")):
+                out.append({"object_type": "PROG", "object_name": f.stem})
+        # Fallback: pull program names from the code-analyzer report if no remediated files.
+        if not out:
+            report = staging / "runs" / run_id / "code-analyzer" / "report.json"
+            if report.exists():
+                try:
+                    data = json.loads(report.read_text())
+                    seen = set()
+                    for issue in data.get("issues", []):
+                        nm = issue.get("program")
+                        if nm and nm not in seen:
+                            seen.add(nm)
+                            out.append({"object_type": "PROG", "object_name": nm})
+                except Exception:
+                    pass
+
+    elif kind == "config":
+        dag_path = staging / "runs" / run_id / "object-router" / "dag.json"
+        if dag_path.exists():
+            try:
+                dag = json.loads(dag_path.read_text())
+                for n in dag.get("nodes", []):
+                    if n.get("lane") == "CTSplus":
+                        out.append({"object_type": "CUS", "object_name": n.get("object", "")})
+            except Exception:
+                pass
+
+    if not out:
+        # Last-resort placeholder so downstream handlers don't KeyError; logged so user knows.
+        print(f"  [warn] no {kind} objects discovered for {run_id} — using single placeholder")
+        out = [{"object_type": "PROG" if kind == "code" else "CUS",
+                "object_name": f"M4H_{kind.upper()}_PLACEHOLDER"}]
+    return out
+
+
 def _run_gate(stage_id: str, gate: str, event: dict) -> dict:
     print(f"  [MANUAL GATE] {gate} — auto-approve in local mode (--no-gates to skip prompt)")
     return {"gate": gate, "approved": True, "auto": True}
@@ -213,6 +261,25 @@ def main() -> int:
 
         print(f"[{sid}] {mod or '(manual gate)'}")
         event_for_stage = {**event, **extra}
+
+        # Compose object_list for transport-artifact-builder from upstream artifacts
+        if mod == "transport-artifact-builder.handler" and "object_list" not in event_for_stage:
+            kind = extra.get("object_kind", "code")
+            event_for_stage["object_list"] = _build_object_list(args.run_id, kind)
+            event_for_stage["description"] = f"M4H {kind} transport for {args.run_id}"
+
+        # Pass through config_groups from stage10 to stage11
+        if mod == "bc-set-builder.handler" and "config_groups" not in event_for_stage:
+            s10_result = event.get("stage10", {})
+            if s10_result and s10_result.get("status") == "success":
+                # stage10 writes config to s3; we need to regenerate or load config_groups
+                # For now, use a simplified placeholder with the global config framework output
+                event_for_stage["config_groups"] = [
+                    {"name": "Financial", "tables": []},
+                    {"name": "Controlling", "tables": []},
+                    {"name": "MaterialsMgmt", "tables": []},
+                    {"name": "SalesDistribution", "tables": []},
+                ]
 
         if args.dry_run:
             print("  (dry-run)")

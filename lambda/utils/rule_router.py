@@ -17,10 +17,17 @@ logger.setLevel(logging.INFO)
 DYNAMODB_TABLE_NAME = os.environ.get("RULES_TABLE_NAME", "sap-simplification-rules")
 dynamodb = boto3.resource('dynamodb')
 
+# Module-level cache: rule sets rarely change within a single process run,
+# so we cache by category to avoid repeated DynamoDB scans (and log spam).
+_RULES_CACHE: Dict[str, List[Dict[str, Any]]] = {}
+
 def get_simplification_rules(category: str = None) -> List[Dict[str, Any]]:
     """
     Fetches rules from DynamoDB. If category is provided, filters by category using GSI.
     """
+    cache_key = category or "__all__"
+    if cache_key in _RULES_CACHE:
+        return _RULES_CACHE[cache_key]
     table = dynamodb.Table(DYNAMODB_TABLE_NAME)
     
     try:
@@ -38,6 +45,10 @@ def get_simplification_rules(category: str = None) -> List[Dict[str, Any]]:
             response = table.scan()
             rules = response.get('Items', [])
             logger.info(f"DynamoDB Rule Router: Scanned and fetched {len(rules)} total rules.")
+            if not rules:
+                # Empty table (e.g. local-shim or unprovisioned env) → use static fallback
+                rules = _get_fallback_rules(category)
+            _RULES_CACHE[cache_key] = rules
             return rules
             
     except ClientError as e:
