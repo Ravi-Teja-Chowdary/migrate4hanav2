@@ -281,29 +281,28 @@ def analyze_program(program_name, source_code):
 
 def auto_remediate_with_ast_engine(source_code):
     """
-    Apply AST-based structural fixes directly via the new Engine.
-    Also incorporates PII Scrubber prior to AST serialization.
+    Apply AST-based structural fixes via the AST Engine.
+
+    The AST engine operates on the *raw* ABAP source so that string literals,
+    function-module names, dictionary identifiers, and other syntactically
+    significant tokens survive into the on-disk remediated file.
+
+    PII scrubbing is performed ONLY for payloads dispatched to external LLMs
+    (see genai_router.route_analysis). It must never run before code is
+    persisted to disk — doing so would mask `'LH'`, `APPEND ... TO itab`,
+    function-module names, etc. and produce uncompilable output.
     """
-    
-    # 1. InfoSec Scrubber
-    scrubbed_code = mask_payload_for_infosec(source_code)
-    
-    # 2. Fetch AST mapping logic
     dynamic_rules = get_simplification_rules()
-    
-    # 3. Process Code Structurally
     try:
-        result = process_abap_file(scrubbed_code, {"rules": dynamic_rules})
-        # AST engine returns dict with 'transformed_code' + 'changes' fields
+        result = process_abap_file(source_code, {"rules": dynamic_rules})
         if isinstance(result, dict):
-            fixed_ast_code = result.get("transformed_code", scrubbed_code)
+            fixed_ast_code = result.get("transformed_code", source_code)
             engine_changes = result.get("changes", [])
             changes = engine_changes if engine_changes else (
                 [{"rule_id": "AST-GEN", "description": "Structurally updated via ABAP AST Engine."}]
-                if fixed_ast_code != scrubbed_code else []
+                if fixed_ast_code != source_code else []
             )
         else:
-            # Legacy string return
             fixed_ast_code = result
             changes = [{"rule_id": "AST-GEN", "description": "Structurally updated via ABAP AST Engine."}]
         return fixed_ast_code, changes
@@ -320,45 +319,83 @@ def auto_remediate_with_ast_engine(source_code):
 
 def run_atc_check(connection, programs):
     """
-    Execute ATC (ABAP Test Cockpit) check via RFC call to /SDF/ATC_RUN_API
-    with the S/4HANA readiness check variant.
+    Execute SAP-official static analysis (ATC or its ECC predecessors) via RFC.
 
-    ATC is SAP's built-in static analysis tool. Running it via RFC gives us
-    SAP-official findings that complement our AST engine's pattern matching.
+    Tries the following FM/variant combinations in order until one works:
+      1. /SDF/ATC_RUN_API  with variant S4HANA_READINESS_2023  (target S/4 7.55+)
+      2. /SDF/ATC_RUN_API  with variant S4HANA_READINESS       (target S/4 7.5x)
+      3. /SDF/SCAN_API     with variant DEFAULT                (source ECC 7.40+)
+      4. /SDF/SCAN_RUN_PROG (per-program loop)                 (source ECC 7.31+)
 
-    Returns list of ATC findings in the same issue format as the AST analyzer.
+    Returns a list of ATC-shaped issue dicts plus a metadata dict on the last
+    element describing which backend was used. Caller decides what to do.
     """
     atc_issues = []
-    try:
-        # Prepare the object set for ATC — list of programs to check
-        object_set = [{"OBJECT_TYPE": "PROG", "OBJECT_NAME": p} for p in programs[:200]]
+    object_set = [{"OBJECT_TYPE": "PROG", "OBJECT_NAME": p} for p in programs[:200]]
 
-        result = connection.call("/SDF/ATC_RUN_API", **{
-            "VARIANT": "S4HANA_READINESS",  # S/4HANA readiness check variant
-            "OBJECT_SET": object_set,
-            "EXECUTE_CHECKS": "X",
+    backends = [
+        ("/SDF/ATC_RUN_API", {"VARIANT": "S4HANA_READINESS_2023",
+                              "OBJECT_SET": object_set, "EXECUTE_CHECKS": "X"}),
+        ("/SDF/ATC_RUN_API", {"VARIANT": "S4HANA_READINESS",
+                              "OBJECT_SET": object_set, "EXECUTE_CHECKS": "X"}),
+        ("/SDF/SCAN_API",    {"VARIANT": "DEFAULT",
+                              "OBJECT_SET": object_set}),
+    ]
+
+    chosen_backend = None
+    last_err = None
+    findings = []
+    for fm, params in backends:
+        try:
+            result = connection.call(fm, **params)
+            findings = result.get("FINDINGS") or result.get("ET_FINDINGS") or []
+            chosen_backend = f"{fm}/{params.get('VARIANT', '')}".rstrip("/")
+            logger.info(f"ATC backend '{chosen_backend}' returned {len(findings)} findings")
+            break
+        except Exception as e:
+            last_err = f"{fm}: {type(e).__name__}: {str(e)[:120]}"
+            logger.debug(f"ATC backend {fm} unavailable — {last_err}")
+            continue
+
+    # Last resort: per-program /SDF/SCAN_RUN_PROG
+    if chosen_backend is None:
+        try:
+            for p in programs[:50]:  # cap to avoid runaway loop
+                try:
+                    res = connection.call("/SDF/SCAN_RUN_PROG", I_PROGRAM=p)
+                    for f in (res.get("ET_RESULT") or []):
+                        f["OBJECT_NAME"] = p
+                        findings.append(f)
+                except Exception:
+                    continue
+            if findings:
+                chosen_backend = "/SDF/SCAN_RUN_PROG"
+                logger.info(f"ATC fallback /SDF/SCAN_RUN_PROG returned {len(findings)} findings")
+        except Exception as e:
+            last_err = f"/SDF/SCAN_RUN_PROG: {e}"
+
+    if chosen_backend is None:
+        logger.warning(
+            f"ATC integration unavailable on this system — none of the supported "
+            f"check FMs are callable. Last error: {last_err}. AST results still valid."
+        )
+        return []
+
+    for finding in findings:
+        atc_issues.append({
+            "rule_id": f"ATC-{finding.get('CHECK_ID') or finding.get('CHECK_CATEGORY') or 'UNKNOWN'}",
+            "program": finding.get("OBJECT_NAME", ""),
+            "line": int(finding.get("LINE") or finding.get("LINE_NUMBER") or 0),
+            "line_content": (finding.get("FINDING_TEXT") or finding.get("CHECK_MESSAGE") or "")[:120],
+            "category": finding.get("CHECK_CATEGORY", "atc_finding"),
+            "description": finding.get("FINDING_TEXT") or finding.get("CHECK_MESSAGE", ""),
+            "severity": _map_atc_priority_to_severity(finding.get("PRIORITY") or finding.get("SEVERITY", "3")),
+            "auto_fixable": False,
+            "source": chosen_backend,
+            "atc_message_id": finding.get("MESSAGE_ID", ""),
         })
 
-        findings = result.get("FINDINGS", [])
-        for finding in findings:
-            atc_issues.append({
-                "rule_id": f"ATC-{finding.get('CHECK_ID', 'UNKNOWN')}",
-                "program": finding.get("OBJECT_NAME", ""),
-                "line": int(finding.get("LINE", 0)),
-                "line_content": finding.get("FINDING_TEXT", "")[:120],
-                "category": finding.get("CHECK_CATEGORY", "atc_finding"),
-                "description": finding.get("FINDING_TEXT", ""),
-                "severity": _map_atc_priority_to_severity(finding.get("PRIORITY", "3")),
-                "auto_fixable": False,
-                "source": "ATC",
-                "atc_message_id": finding.get("MESSAGE_ID", ""),
-            })
-
-        logger.info(f"ATC check completed: {len(atc_issues)} findings from {len(programs)} programs")
-
-    except Exception as e:
-        logger.warning(f"ATC integration failed (non-fatal, AST results still valid): {e}")
-
+    logger.info(f"ATC check completed via {chosen_backend}: {len(atc_issues)} findings from {len(programs)} programs")
     return atc_issues
 
 

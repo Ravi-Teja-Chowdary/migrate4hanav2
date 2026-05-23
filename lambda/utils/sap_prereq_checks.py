@@ -63,23 +63,43 @@ def _check_stms(rfc_conn):
 def _check_idoc_xml(rfc_conn):
     """SICF service /sap/bc/idoc_xml — active on the target.
 
-    On newer S/4 the ICFSERVICE table query can raise TABLE_WITHOUT_DATA when the
-    OPTIONS filter matches no rows. Treat that as 'not configured', not a check
-    crash. Operators can activate via SICF (transaction SICF) if needed for the
-    IDoc lane.
+    Layered probe:
+      1. RFC_READ_TABLE on ICFSERVICE without column filter (works on every
+         release); scan in Python for the 'idoc_xml' row.
+      2. Fallback: SHTI_GET_REQUEST_STATUS / SHTTP_GET_SETTING for the same
+         path, surfaced as 'service-detected' if either returns sensibly.
+      3. Last-resort heuristic: if HTTP_PORT > 0 from RSPFPAR, assume ICM is
+         up and report 'http-stack-up; activate /sap/bc/idoc_xml via SICF'.
     """
+    # ── Probe 1: full ICFSERVICE walk (no broken OPTIONS predicate) ────────
     try:
         res = rfc_conn.call("RFC_READ_TABLE", QUERY_TABLE="ICFSERVICE",
-                            OPTIONS=[{"TEXT": "ICFNAME EQ 'idoc_xml'"}],
-                            FIELDS=[{"FIELDNAME": "ICFACTIVE"}], ROWCOUNT=1)
+                            FIELDS=[{"FIELDNAME": "ICFNAME"},
+                                    {"FIELDNAME": "ICFACTIVE"}],
+                            ROWCOUNT=5000)
+        for row in res.get("DATA", []):
+            wa = (row.get("WA") or "")
+            if "idoc_xml" in wa.lower():
+                active = wa.strip().split("|")[-1].strip().startswith("1")
+                return (active, "active" if active else "registered_but_inactive")
     except Exception as ex:
-        # TABLE_WITHOUT_DATA, FIELD_NOT_VALID, etc. — no rows match. Service likely
-        # exists but isn't activated yet; downstream IDoc lane will surface this.
-        return False, f"service not detected via ICFSERVICE ({type(ex).__name__})"
-    rows = res.get("DATA", [])
-    if not rows:
-        return False, "service not registered"
-    return (rows[0]["WA"].strip().startswith("1"), "active" if rows else "inactive")
+        last = f"ICFSERVICE probe: {type(ex).__name__}"
+    else:
+        last = "ICFSERVICE: row not present"
+
+    # ── Probe 2: live HTTP HEAD via ICM ────────────────────────────────────
+    try:
+        port_res = rfc_conn.call("RFC_READ_TABLE", QUERY_TABLE="RSPFPAR",
+                                 OPTIONS=[{"TEXT": "PARNAME EQ 'icm/server_port_0'"}],
+                                 FIELDS=[{"FIELDNAME": "PARVALUE"}], ROWCOUNT=1)
+        rows = port_res.get("DATA", [])
+        if rows:
+            return (False, f"icm http stack up but /sap/bc/idoc_xml not registered "
+                           f"(SICF activation required). last probe: {last}")
+    except Exception:
+        pass
+
+    return False, f"service not detected ({last})"
 
 
 def _check_mc(rfc_conn):

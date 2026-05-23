@@ -29,6 +29,7 @@ from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from sap_number import parse_sap_number
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -441,10 +442,7 @@ def validate_fins_reconciliation(conn, source_data):
             values = row.get("WA", "").split("|")
             if len(values) >= 3:
                 cc = values[0].strip()
-                try:
-                    amount = float(values[1].strip().replace(",", ""))
-                except (ValueError, TypeError):
-                    amount = 0.0
+                amount = parse_sap_number(values[1])
                 drcrk = values[2].strip()
                 # Debit = positive, Credit = negative for balance calculation
                 if drcrk == "H":  # Credit
@@ -455,12 +453,13 @@ def validate_fins_reconciliation(conn, source_data):
         source_balances = source_data.get("gl_balances_by_cc", {})
         for cc, source_bal in source_balances.items():
             target_bal = acdoca_by_cc.get(cc, 0.0)
-            variance = abs(float(source_bal) - target_bal)
+            src = parse_sap_number(source_bal)
+            variance = abs(src - target_bal)
             checks.append({
                 "check": f"gl_balance_cc_{cc}",
                 "type": "gl_balance",
                 "company_code": cc,
-                "source_balance": float(source_bal),
+                "source_balance": src,
                 "target_balance": target_bal,
                 "variance": round(variance, 2),
                 "status": "ok" if variance < 0.01 else "failed",
@@ -569,7 +568,7 @@ def validate_fins_reconciliation(conn, source_data):
             "ROWCOUNT": 50000,
         })
         vendor_balance = sum(
-            float(row.get("WA", "").split("|")[1].strip().replace(",", ""))
+            parse_sap_number(row.get("WA", "").split("|")[1])
             for row in vendor_result.get("DATA", [])
             if len(row.get("WA", "").split("|")) >= 2
         ) if vendor_result.get("DATA") else 0.0
@@ -583,13 +582,13 @@ def validate_fins_reconciliation(conn, source_data):
             "ROWCOUNT": 50000,
         })
         customer_balance = sum(
-            float(row.get("WA", "").split("|")[1].strip().replace(",", ""))
+            parse_sap_number(row.get("WA", "").split("|")[1])
             for row in customer_result.get("DATA", [])
             if len(row.get("WA", "").split("|")) >= 2
         ) if customer_result.get("DATA") else 0.0
 
-        source_vendor_bal = float(source_data.get("vendor_balance_total", 0))
-        source_customer_bal = float(source_data.get("customer_balance_total", 0))
+        source_vendor_bal = parse_sap_number(source_data.get("vendor_balance_total", 0))
+        source_customer_bal = parse_sap_number(source_data.get("customer_balance_total", 0))
 
         if source_vendor_bal != 0:
             vendor_variance = abs(source_vendor_bal - vendor_balance)

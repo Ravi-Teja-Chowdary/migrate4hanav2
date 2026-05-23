@@ -1,0 +1,6 @@
+{
+  "object": "InventoryBalances",
+  "lane": "MC",
+  "status": "skipped",
+  "reason": "no source-table mapping"
+}

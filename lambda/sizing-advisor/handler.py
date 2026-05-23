@@ -88,8 +88,66 @@ def _estimate_db_size_gb(conn) -> int:
 
 
 def _estimate_workload(conn) -> dict:
-    return {"peak_dialog_users": 0, "batch_jobs_per_day": 0,
-            "note": "ST03N extraction not yet wired; fill manually for production"}
+    """Pull a workload snapshot from ST03N via SWNC_GET_WORKLOAD_SNAPSHOT.
+
+    Returns a dict with peak_dialog_users, batch_jobs_per_day, avg_response_ms,
+    total_dialog_steps. Falls back to zero-values with an explanatory note if
+    the FM is unavailable, the user lacks S_TOOLS_EX, or the system has no
+    workload history yet.
+    """
+    from datetime import datetime, timedelta
+
+    today = datetime.utcnow()
+    yesterday = today - timedelta(days=1)
+    last_month = today - timedelta(days=30)
+
+    try:
+        # Daily snapshot for "peak users" — last full day on the TOTAL aggregate
+        res = conn.call(
+            "SWNC_GET_WORKLOAD_SNAPSHOT",
+            READ_START_DATE=yesterday.strftime("%Y%m%d"),
+            READ_START_TIME="000000",
+            READ_END_DATE=today.strftime("%Y%m%d"),
+            READ_END_TIME="000000",
+        )
+        tasktypes = res.get("TASKTIMES", []) or res.get("E_TASKTIMES", [])
+        # Pick the DIALOG task type
+        dialog = next((r for r in tasktypes if str(r.get("TASKTYPE", "")).upper() == "DIALOG"), {})
+        batch = next((r for r in tasktypes if str(r.get("TASKTYPE", "")).upper() == "BACKGROUND"), {})
+
+        peak_users = int(dialog.get("MAX_ACTIVE_USERS") or dialog.get("USERS") or 0)
+        dialog_steps = int(dialog.get("COUNT") or 0)
+        batch_jobs = int(batch.get("COUNT") or 0)
+        avg_resp_ms = int((dialog.get("RESPTI") or 0) / max(dialog_steps, 1))
+
+        return {
+            "peak_dialog_users": peak_users,
+            "batch_jobs_per_day": batch_jobs,
+            "total_dialog_steps": dialog_steps,
+            "avg_response_ms": avg_resp_ms,
+            "snapshot_window": f"{yesterday.date()}..{today.date()}",
+        }
+    except Exception as e:
+        logger.warning(f"ST03N snapshot failed ({type(e).__name__}): {e}")
+        # Secondary fallback: count TBTCO entries for batch job estimate
+        batch_jobs = 0
+        try:
+            tbtco = conn.call(
+                "RFC_READ_TABLE",
+                QUERY_TABLE="TBTCO",
+                OPTIONS=[{"TEXT": f"SDLSTRTDT GE '{last_month.strftime('%Y%m%d')}'"}],
+                FIELDS=[{"FIELDNAME": "JOBNAME"}],
+                ROWCOUNT=10000,
+            )
+            batch_jobs = len(tbtco.get("DATA", [])) // 30  # crude per-day average
+        except Exception:
+            pass
+        return {
+            "peak_dialog_users": 0,
+            "batch_jobs_per_day": batch_jobs,
+            "note": f"ST03N snapshot unavailable ({type(e).__name__}); "
+                    f"batch_jobs_per_day derived from TBTCO 30-day average",
+        }
 
 
 def _recommend(db_size_gb: int, workload: dict) -> dict:

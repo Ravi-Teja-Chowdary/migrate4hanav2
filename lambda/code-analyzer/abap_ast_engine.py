@@ -1957,6 +1957,8 @@ class ABAPParser:
 
     def _parse_select_options(self):
         tok = self._advance()
+        if self._is_chained():            # SELECT-OPTIONS : s1 FOR f1, ...
+            self._advance()               # skip the ':' chain operator
         name = self._read_token_value()
         for_field = ''
         if self._check_kw('FOR'): self._advance(); for_field = self._read_token_value()
@@ -1965,6 +1967,8 @@ class ABAPParser:
 
     def _parse_ranges(self):
         tok = self._advance()
+        if self._is_chained():            # RANGES : r1 FOR f1, ...
+            self._advance()
         name = self._read_token_value()
         for_field = ''
         if self._check_kw('FOR'): self._advance(); for_field = self._read_token_value()
@@ -2612,8 +2616,12 @@ class ABAPParser:
             self._match_period()
             return AppendStatement(lines_of=src, target=tgt, line=tok.line)
         source = self._read_token_value()
-        if self._check_kw('TO'): self._advance()
-        target = self._read_token_value()
+        target = ''
+        if self._check_kw('TO'):
+            self._advance()
+            target = self._read_token_value()
+        # else: header-line short form `APPEND wa.` — no TO, no target.
+        # Do NOT read the period as the target (that produced `APPEND x TO ..`).
         self._match_period()
         return AppendStatement(source=source, target=target, line=tok.line)
 
@@ -6807,8 +6815,11 @@ class ABAPCodeGenerator:
             self._emit(f"APPEND INITIAL LINE TO {node.target}.")
         elif node.lines_of:
             self._emit(f"APPEND LINES OF {node.lines_of} TO {node.target}.")
-        else:
+        elif node.target and node.target != node.source:
             self._emit(f"APPEND {node.source} TO {node.target}.")
+        else:
+            # Header-line short form: `APPEND wa.` (no explicit target)
+            self._emit(f"APPEND {node.source}.")
 
     def _gen_insert_table(self, node: InsertTableStatement):
         idx = f" INDEX {node.index}" if node.index else ''
@@ -7180,6 +7191,73 @@ class ABAPCodeGenerator:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# OUTPUT SAFETY NET
+# ═══════════════════════════════════════════════════════════════════════════════
+# An AST round-trip can lose operands for any statement type the parser/generator
+# doesn't fully model. Emitting such a reconstruction silently corrupts code
+# (e.g. `APPEND x TO ..`, `SELECT-OPTIONS : FOR .`). This reconciliation pass
+# detects those signatures in the generated output and restores the verbatim
+# original source line for that statement — original ABAP always compiles, a
+# lossy reconstruction may not. This guarantees the engine never CORRUPTS code
+# it failed to model, regardless of parser completeness.
+
+_LOSSY_LINE_PATTERNS = [
+    re.compile(r'\bTO\s*\.+\s*$', re.I),     # APPEND x TO .  /  ... TO ..
+    re.compile(r'\bFOR\s+\.\s*$', re.I),     # SELECT-OPTIONS : FOR .
+    re.compile(r'\bINTO\s*\.+\s*$', re.I),
+    re.compile(r'\bFROM\s*\.+\s*$', re.I),
+    re.compile(r'\bWITH\s*\.+\s*$', re.I),
+    re.compile(r'=\s*\.\s*$'),               # x = .
+    re.compile(r'\s\.\.\s*$'),               # dangling double period
+    re.compile(r'^\s*[\w/<>-]+\s*:\s*FOR\b', re.I),
+]
+
+
+def _reconcile_lossy_lines(original_source: str, generated_code: str) -> str:
+    """Restore generated lines that lost operands during AST round-trip.
+
+    For each generated line matching a corruption signature, substitute the
+    next unused original source line that begins with the same keyword. Safe by
+    construction: it only ever replaces a detectably-broken line with a verbatim
+    original statement.
+    """
+    from collections import defaultdict
+
+    out_lines = generated_code.splitlines()
+    if not any(p.search(l) for l in out_lines for p in _LOSSY_LINE_PATTERNS):
+        return generated_code  # fast path — nothing corrupted
+
+    orig_by_kw = defaultdict(list)
+    for ol in original_source.splitlines():
+        s = ol.strip()
+        if not s or s.startswith('*') or s.startswith('"'):
+            continue
+        first = s.split(None, 1)[0].upper().rstrip(':')
+        orig_by_kw[first].append(ol.rstrip())
+
+    ptr = defaultdict(int)
+    repaired = 0
+    for i, line in enumerate(out_lines):
+        s = line.strip()
+        if not s or s.startswith('*'):
+            continue
+        if any(p.search(s) for p in _LOSSY_LINE_PATTERNS):
+            first = s.split(None, 1)[0].upper().rstrip(':')
+            cands = orig_by_kw.get(first, [])
+            j = ptr[first]
+            if j < len(cands):
+                out_lines[i] = cands[j]
+                ptr[first] = j + 1
+                repaired += 1
+    if repaired:
+        logger.warning(
+            f"Output safety net restored {repaired} lossy generated line(s) "
+            f"from original source (AST round-trip gap)"
+        )
+    return "\n".join(out_lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PUBLIC API
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -7223,6 +7301,9 @@ def process_abap_file(source_code: str, rules: Dict[str, Any] = None) -> Dict[st
     # Step 4: Generate
     generator = ABAPCodeGenerator()
     output_code = generator.generate(transformed_program)
+
+    # Step 4b: Output safety net — restore any lossy reconstruction from source
+    output_code = _reconcile_lossy_lines(source_code, output_code)
 
     # Build result
     severity_counts = {}

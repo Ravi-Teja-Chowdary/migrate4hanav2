@@ -1,0 +1,202 @@
+{
+  "run_id": "RUN-E2E-001",
+  "mode": "generate_templates",
+  "object_count": 20,
+  "ok_count": 16,
+  "partial_count": 1,
+  "error_count": 0,
+  "skipped_count": 3,
+  "results": [
+    {
+      "object": "GLAccount",
+      "lane": "MC",
+      "row_count": 14408,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/GLAccount.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "CostCenter",
+      "lane": "MC",
+      "row_count": 2645,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/CostCenter.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "ProfitCenter",
+      "lane": "MC",
+      "row_count": 518,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/ProfitCenter.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "BusinessPartner",
+      "lane": "MC",
+      "row_count": 28242,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/BusinessPartner.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "Customer",
+      "lane": "MC",
+      "row_count": 19575,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/Customer.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "Vendor",
+      "lane": "MC",
+      "row_count": 2415,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/Vendor.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "Material",
+      "lane": "MC",
+      "row_count": 21501,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/Material.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "BOM",
+      "lane": "MC",
+      "row_count": 4110,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/BOM.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "Routing",
+      "lane": "MC",
+      "row_count": 5141,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/Routing.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "WorkCenter",
+      "lane": "MC",
+      "row_count": 3604,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/WorkCenter.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "OpenPO",
+      "lane": "MC",
+      "row_count": 18782,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/OpenPO.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "OpenSO",
+      "lane": "MC",
+      "row_count": 15332,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/OpenSO.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "OpenAR",
+      "lane": "MC",
+      "row_count": 10079,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/OpenAR.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "OpenAP",
+      "lane": "MC",
+      "row_count": 50000,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/OpenAP.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "GLBalances",
+      "lane": "MC",
+      "status": "skipped",
+      "reason": "no canonical mapping",
+      "artifact": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/skipped/GLBalances.json"
+    },
+    {
+      "object": "InventoryBalances",
+      "lane": "MC",
+      "status": "skipped",
+      "reason": "no canonical mapping",
+      "artifact": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/skipped/InventoryBalances.json"
+    },
+    {
+      "object": "AssetMaster",
+      "lane": "MC",
+      "row_count": 1482,
+      "artifacts": {
+        "mc_csv": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/mc/AssetMaster.csv"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "BankStatements",
+      "lane": "IDOC",
+      "row_count": 0,
+      "artifacts": {
+        "idoc_xml": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/idoc/BankStatements.xml"
+      },
+      "note": "ECC read failed: ABAPApplicationError: 5 (rc=5): key=FIELD_NOT_VALID, message= Number:000 [MSG: class=, type=, number=000, v1-4:=;;;]",
+      "status": "partial"
+    },
+    {
+      "object": "ExchangeRates",
+      "lane": "IDOC",
+      "row_count": 44807,
+      "artifacts": {
+        "idoc_xml": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/idoc/ExchangeRates.xml"
+      },
+      "note": null,
+      "status": "ok"
+    },
+    {
+      "object": "CustomZTable",
+      "lane": "LTMOM",
+      "status": "skipped",
+      "reason": "no canonical mapping",
+      "artifact": "s3://m4h-local/runs/RUN-E2E-001/data-migrator/skipped/CustomZTable.json"
+    }
+  ]
+}

@@ -110,24 +110,83 @@ STAGES = [
 
 
 def _inline_pdf_report(event, _context):
-    """Adapter — stage 27 calls pdf_report_generator.generate_pdf_from_file."""
+    """Adapter — stage 27 aggregates every upstream artifact and renders PDF."""
     import pdf_report_generator
     run_id = event.get("run_id", "local")
-    out_dir = REPO_ROOT / "local-staging" / "m4h-local" / "runs" / run_id / "report"
+    staging_root = REPO_ROOT / "local-staging" / "m4h-local"
+    out_dir = staging_root / "runs" / run_id / "report"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_pdf = out_dir / "migration-report.pdf"
-    # Build a minimal report stub if no upstream JSON is available yet.
-    stub = {"run_id": run_id, "title": "Migrate4HANA — lift-and-shift run",
-            "generated_at": datetime.utcnow().isoformat(),
-            "stages": [], "summary": "Local test run."}
+
+    aggregated = _aggregate_run_artifacts(staging_root, run_id)
     stub_path = out_dir / "report_input.json"
-    stub_path.write_text(json.dumps(stub, indent=2))
+    stub_path.write_text(json.dumps(aggregated, indent=2, default=str))
+
     try:
         pdf_report_generator.generate_pdf_from_file(str(stub_path), str(out_pdf))
-        return {"status": "success", "report": str(out_pdf)}
+        return {"status": "success", "report": str(out_pdf),
+                "stage_count": len(aggregated.get("stages", []))}
     except Exception as e:
         return {"status": "success", "report": "skipped",
-                "note": f"PDF generation skipped in local mode: {e}"}
+                "stage_count": len(aggregated.get("stages", [])),
+                "note": f"PDF render skipped (input JSON still produced): {e}"}
+
+
+def _aggregate_run_artifacts(staging_root: Path, run_id: str) -> dict:
+    """Collect every JSON artifact written under runs/<run_id>/ and
+    migrations/<run_id>/ into a structured report input.
+
+    Each artifact is keyed by its directory name so the PDF generator can
+    render section headers ("discovery", "code-analysis", etc.) cleanly.
+    """
+    stages = []
+    for base in (staging_root / "runs" / run_id, staging_root / "migrations" / run_id):
+        if not base.is_dir():
+            continue
+        for f in sorted(base.rglob("*.json")):
+            try:
+                payload = json.loads(f.read_text())
+            except Exception:
+                continue
+            rel = f.relative_to(base)
+            stages.append({
+                "section": rel.parts[0] if rel.parts else f.stem,
+                "artifact": str(rel).replace("\\", "/"),
+                "path": str(f),
+                "size_bytes": f.stat().st_size,
+                "payload": payload,
+            })
+
+    summary_lines = []
+    for s in stages:
+        section = s["section"]
+        p = s["payload"]
+        if section == "discovery" and isinstance(p, dict) and "total_programs" in p:
+            summary_lines.append(
+                f"Discovery: {p.get('total_programs', 0)} programs, "
+                f"{p.get('total_tables', 0)} tables, {p.get('total_users', 0)} users"
+            )
+        elif section == "code-analysis" and isinstance(p, dict) and "total_issues" in p:
+            summary_lines.append(
+                f"Code analysis: {p.get('total_issues', 0)} issues, "
+                f"{p.get('auto_remediated', 0)} auto-fixed, "
+                f"ATC={'on' if p.get('atc_integration') else 'off'}"
+            )
+        elif section == "execution" and isinstance(p, dict) and "scorecard" in p:
+            sc = p.get("scorecard", {})
+            summary_lines.append(
+                f"Scorecard: {sc.get('grade', '?')} ({sc.get('score', '?')}) "
+                f"— {sc.get('recommendation', '')}"
+            )
+
+    return {
+        "run_id": run_id,
+        "title": f"Migrate4HANA — lift-and-shift run {run_id}",
+        "generated_at": datetime.utcnow().isoformat(),
+        "stages": stages,
+        "stage_count": len(stages),
+        "summary": " | ".join(summary_lines) if summary_lines else "No upstream artifacts found.",
+    }
 
 
 def _load(module_path: str):
