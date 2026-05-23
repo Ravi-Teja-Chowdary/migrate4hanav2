@@ -67,3 +67,5 @@ entity-resolution-output/
 .env.production
 
 .github/
+
+local-staging/*
