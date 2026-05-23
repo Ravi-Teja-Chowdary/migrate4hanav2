@@ -626,29 +626,57 @@ def lambda_handler(event, context):
         remediated_count = 0
         manual_review_count = 0
         cds_suggestions = []
+        # Program cap: env-controlled. 0 = unlimited (safe on ECS Fargate / local
+        # mode where there is no 15-min Lambda timeout). Lambda deploys that keep
+        # this stage on Lambda should set CODE_ANALYZER_MAX_PROGRAMS to a bounded
+        # value (e.g. 200) to stay under the timeout.
+        max_programs = int(os.environ.get("CODE_ANALYZER_MAX_PROGRAMS", "0"))
+        programs_scanned = 0
+        programs_read = 0
+        programs_no_source = 0
 
         if has_rfc and discovery.get("programs"):
-            # Full analysis — read and analyze each program
-            for prog in discovery["programs"][:200]:  # Limit for Lambda timeout
+            prog_list = discovery["programs"]
+            if max_programs > 0:
+                prog_list = prog_list[:max_programs]
+            programs_scanned = len(prog_list)
+            # Remediation scope:
+            #   default            -> remediate programs the issue-detector flagged
+            #                         (fix what breaks S/4; minimal change)
+            #   AST_REMEDIATE_ALL=1 -> run the AST engine on every readable program
+            #                         (full modernization; matches standalone scan)
+            remediate_all = os.environ.get("AST_REMEDIATE_ALL", "0") == "1"
+            logger.info(f"Analyzing {programs_scanned} programs "
+                        f"(cap={max_programs or 'none'}, remediate_all={remediate_all})...")
+            for idx, prog in enumerate(prog_list, 1):
                 source = read_abap_source(conn, prog["name"])
                 if source:
+                    programs_read += 1
                     issues = analyze_program(prog["name"], source)
                     all_issues.extend(issues)
 
-                    # Attempt auto-remediation via AST
-                    if any(i["auto_fixable"] for i in issues):
+                    do_ast = remediate_all or any(i["auto_fixable"] for i in issues)
+                    fixed = False
+                    if do_ast:
                         fixed_source, changes = auto_remediate_with_ast_engine(source)
                         if changes:
                             remediated_count += 1
-                            # Save remediated source to S3
+                            # Save remediated source (sanitize name for namespaced/odd programs)
+                            safe_name = re.sub(r"[^A-Za-z0-9_=.\-]", "_", prog["name"])[:120]
                             s3.put_object(
                                 Bucket=STAGING_BUCKET,
-                                Key=f"migrations/{run_id}/code-analysis/remediated/{prog['name']}.abap",
+                                Key=f"migrations/{run_id}/code-analysis/remediated/{safe_name}.abap",
                                 Body=fixed_source,
                             )
-                    else:
-                        if issues:
-                            manual_review_count += 1
+                            fixed = True
+                    if issues and not fixed:
+                        manual_review_count += 1
+                else:
+                    programs_no_source += 1
+
+                if idx % 1000 == 0:
+                    logger.info(f"  code-analyzer progress: {idx}/{programs_scanned} "
+                                f"read={programs_read} remediated={remediated_count}")
         else:
             # No RFC — generate estimated analysis from discovery stats
             logger.info("Generating estimated code analysis from discovery stats...")
@@ -672,7 +700,8 @@ def lambda_handler(event, context):
 
         if has_rfc and discovery.get("programs"):
             try:
-                program_names = [prog["name"] for prog in discovery["programs"][:200]]
+                _atc_src = discovery["programs"] if max_programs == 0 else discovery["programs"][:max_programs]
+                program_names = [prog["name"] for prog in _atc_src]
                 atc_results = run_atc_check(conn, program_names)
                 if atc_results:
                     atc_integration = True
@@ -709,6 +738,15 @@ def lambda_handler(event, context):
             "sap_official_validation": sap_official_validation,
             "atc_results": atc_results[:200],  # Cap for payload size
             "atc_quick_fixes": atc_quick_fixes[:200],
+            "coverage": {
+                "total_custom_programs": programs or programs_scanned,
+                "programs_scanned": programs_scanned,
+                "programs_with_source": programs_read,
+                "programs_no_source": programs_no_source,
+                "programs_remediated": remediated_count,
+                "cap": max_programs or "unlimited",
+                "remediate_all": os.environ.get("AST_REMEDIATE_ALL", "0") == "1",
+            },
         }
 
         # Save to S3

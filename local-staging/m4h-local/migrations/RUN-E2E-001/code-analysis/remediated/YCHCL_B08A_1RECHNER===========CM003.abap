@@ -1,4 +1,0 @@
-METHOD rechnen.
-  CALL METHOD me.
-ENDMETHOD.
-"RECHNEN

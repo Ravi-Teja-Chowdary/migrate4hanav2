@@ -31,6 +31,7 @@ from global_config_framework import generate_spro_payload
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
 from logger import log_stage_event
+from sap_fields import valid_fields
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -228,11 +229,22 @@ def extract_config_tables(conn):
 
         for table_name, table_def in area["tables"].items():
             try:
+                # Request only fields that actually exist on this release —
+                # avoids FIELD_NOT_VALID skipping the whole table.
+                fields = valid_fields(conn, table_name, table_def["fields"])
+                if not fields:
+                    logger.warning(f"  {table_name}: no requested fields exist on this release; skipping")
+                    all_config[area_key]["tables"][table_name] = {
+                        "description": table_def["description"],
+                        "error": "no requested fields present on this release",
+                    }
+                    continue
+
                 result = conn.call(
                     "RFC_READ_TABLE",
                     QUERY_TABLE=table_name,
                     DELIMITER="|",
-                    FIELDS=[{"FIELDNAME": f} for f in table_def["fields"]],
+                    FIELDS=[{"FIELDNAME": f} for f in fields],
                     ROWCOUNT=50000,
                 )
 
@@ -240,7 +252,7 @@ def extract_config_tables(conn):
                 for row in result.get("DATA", []):
                     values = row["WA"].split("|")
                     row_dict = {}
-                    for i, field in enumerate(table_def["fields"]):
+                    for i, field in enumerate(fields):
                         row_dict[field] = values[i].strip() if i < len(values) else ""
                     rows.append(row_dict)
 

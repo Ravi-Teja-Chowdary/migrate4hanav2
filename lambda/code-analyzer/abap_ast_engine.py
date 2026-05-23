@@ -3978,10 +3978,15 @@ class S4HANATransformVisitor:
             description='RANGES statement is obsolete — use TYPE RANGE OF',
             old_code=old, new_code=new, severity='medium',
         ))
-        node.node_type = 'DATA_DECLARATION'
+        # Morph RANGES into an equivalent `DATA ... TYPE RANGE OF` declaration.
+        # Build a fully-initialised DataDeclaration and copy its attributes so the
+        # code generator finds everything it expects (is_structure_begin, ref_to,
+        # length, …). Reassigning __class__ alone left those unset and crashed
+        # _gen_data_declaration with AttributeError on structure-heavy programs.
+        _morphed = DataDeclaration(name=node.name, keyword='DATA',
+                                   type_clause=f"RANGE OF {type_ref}", line=node.line)
         node.__class__ = DataDeclaration
-        node.keyword = 'DATA'
-        node.type_clause = f"RANGE OF {type_ref}"
+        node.__dict__.update(_morphed.__dict__)
 
     # ── Rule 13: TABLES statement → DATA with TYPE ───────────────────────────
 

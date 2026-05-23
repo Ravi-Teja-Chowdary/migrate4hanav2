@@ -75,6 +75,23 @@ def test_ast_preserves_select_options_and_append():
     assert "ITAB" in out.upper()
 
 
+def test_ast_ranges_declaration_does_not_crash_generation():
+    """RANGES → 'DATA ... TYPE RANGE OF' morph must not lose generator attributes.
+    Previously crashed with: 'DataDeclaration' object has no attribute 'is_structure_begin'."""
+    engine = _load("code-analyzer", "abap_ast_engine")
+    src = (
+        "REPORT zranges.\n"
+        "RANGES so_matnr FOR mara-matnr.\n"
+        "DATA: BEGIN OF gs_x,\n"
+        "        a TYPE c,\n"
+        "      END OF gs_x.\n"
+    )
+    res = engine.process_abap_file(src)          # must not raise
+    out = res["transformed_code"]
+    assert "RANGE OF" in out                       # morph applied
+    assert res["stats"]["parse_error_count"] == 0
+
+
 def test_ast_safety_net_restores_lossy_line():
     engine = _load("code-analyzer", "abap_ast_engine")
     original = "REPORT z.\nAPPEND foo TO bar_table.\n"
@@ -168,6 +185,35 @@ def test_bc_set_builder_falls_through_to_manual_when_no_bastion(monkeypatch):
     body = json.loads(written["Body"].decode())
     assert body["mode"] == "manual_creation_required"
     assert body["ssh_available"] is False
+
+
+# ── 4b. sap_fields probe (FIELD_NOT_VALID fix) ───────────────────────────────
+def test_valid_fields_intersects_with_dd03l():
+    from sap_fields import valid_fields, _FIELD_CACHE
+    _FIELD_CACHE.clear()
+
+    class Conn:
+        def call(self, fm, **kw):
+            assert kw.get("QUERY_TABLE") == "DD03L"
+            # T001 really has MANDT, BUKRS, BUTXT, WAERS — but NOT 'BOGUS'
+            return {"DATA": [{"WA": f} for f in ["MANDT", "BUKRS", "BUTXT", "WAERS", ".INCLUDE"]]}
+
+    kept = valid_fields(Conn(), "T001", ["BUKRS", "BUTXT", "WAERS", "BOGUS"])
+    assert kept == ["BUKRS", "BUTXT", "WAERS"]      # BOGUS dropped, order preserved
+    assert "BUKRS" in kept                           # key never wrongly stripped
+
+
+def test_valid_fields_falls_back_when_probe_empty():
+    from sap_fields import valid_fields, _FIELD_CACHE
+    _FIELD_CACHE.clear()
+
+    class Conn:
+        def call(self, fm, **kw):
+            raise RuntimeError("DD03L not readable")
+
+    # Probe fails -> return wanted unchanged (no worse than before)
+    kept = valid_fields(Conn(), "ZSOMETHING", ["A", "B"])
+    assert kept == ["A", "B"]
 
 
 # ── 5. basis-validator IDoc XML probe ────────────────────────────────────────

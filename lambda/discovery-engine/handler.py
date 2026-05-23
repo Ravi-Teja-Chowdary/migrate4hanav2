@@ -25,6 +25,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'u
 from logger import log_stage_event
 from validation import validate_event
 from rfc_pool import read_table_chunked
+from sap_fields import valid_fields
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -267,41 +268,31 @@ def scan_org_structure(conn):
     }
 
     def _safe_read(table, fields, dest_key, mapper):
-        """RFC_READ_TABLE wrapper that survives missing fields on older ECC releases.
-        Drops any field the system reports as invalid and retries with what's left."""
-        from pyrfc import ABAPApplicationError
-        attempt_fields = list(fields)
-        for _ in range(len(attempt_fields) + 1):
-            try:
-                result = conn.call(
-                    "RFC_READ_TABLE",
-                    QUERY_TABLE=table,
-                    DELIMITER="|",
-                    FIELDS=[{"FIELDNAME": f} for f in attempt_fields],
-                )
-                for row in result.get("DATA", []):
-                    parts = [p.strip() for p in row["WA"].split("|")]
-                    if len(parts) >= 1:
-                        org[dest_key].append(mapper(parts, attempt_fields))
-                return
-            except ABAPApplicationError as ex:
-                msg = str(ex)
-                if "FIELD_NOT_VALID" in msg and attempt_fields:
-                    # SAP returns Number:NNN as the 0-based index of the bad field
-                    import re
-                    m = re.search(r"Number:\s*(\d+)", msg)
-                    idx = int(m.group(1)) if m else 0
-                    if 0 <= idx < len(attempt_fields):
-                        logger.warning(
-                            f"{table}: dropping unsupported field '{attempt_fields[idx]}' on this release"
-                        )
-                        attempt_fields.pop(idx)
-                        continue
-                logger.warning(f"{table}: skipping ({ex})")
-                return
-            except Exception as ex:
-                logger.warning(f"{table}: skipping ({ex})")
-                return
+        """RFC_READ_TABLE wrapper that requests only fields present on this release.
+
+        Resolves the table's real columns from DD03L up front (via valid_fields)
+        so we never trigger FIELD_NOT_VALID — previously this parsed the SAP
+        message *number* as a field index and stripped the wrong (often key)
+        columns, corrupting the parsed rows.
+        """
+        attempt_fields = valid_fields(conn, table, list(fields))
+        if not attempt_fields:
+            logger.warning(f"{table}: none of the requested fields exist on this release; skipping")
+            return
+        try:
+            result = conn.call(
+                "RFC_READ_TABLE",
+                QUERY_TABLE=table,
+                DELIMITER="|",
+                FIELDS=[{"FIELDNAME": f} for f in attempt_fields],
+            )
+            for row in result.get("DATA", []):
+                parts = [p.strip() for p in row["WA"].split("|")]
+                if len(parts) >= 1:
+                    org[dest_key].append(mapper(parts, attempt_fields))
+            return
+        except Exception as ex:
+            logger.warning(f"{table}: skipping ({ex})")
 
     def _by_name(parts, fields):
         return {f.lower(): (parts[i] if i < len(parts) else "") for i, f in enumerate(fields)}

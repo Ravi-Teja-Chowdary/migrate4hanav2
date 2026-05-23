@@ -26,6 +26,7 @@ frontend/dist/
 # Runtime artifacts
 connections.json
 test-output/
+local-staging/
 .jwt_secret
 
 # Lambda deployment packages
