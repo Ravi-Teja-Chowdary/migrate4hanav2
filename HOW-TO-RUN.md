@@ -12,8 +12,14 @@ You have **two computers** that matter:
 
 | Nickname | What it is | Address | Where it lives |
 |---|---|---|---|
-| **ECC** | Your *old* SAP system (the source) | `10.68.159.204` | your local network |
-| **S/4** | Your *new* SAP system (the target) | `3.231.211.143` | AWS cloud |
+| **ECC** | Your *old* SAP system (the source) | `192.168.0.6` | your local network |
+| **S/4** | Your *new* SAP system (the target) | name `vhcals4hci.dummy.nodomain` (currently IP `3.231.211.143`) | AWS cloud |
+
+> **Why a name instead of an IP for S/4?** The cloud SAP system always refers to
+> itself by the name `vhcals4hci.dummy.nodomain`. Your laptop needs a "phonebook"
+> entry mapping that name to the current IP — that's Step 1.0 below. The cloud
+> machine's IP **changes every time it reboots**, so if logins start timing out,
+> redo Step 1.0 with the new IP.
 
 The tool (**Migrate4HANA**) runs on **this laptop**. It *reads* from ECC and
 *writes* into S/4 — but only through official SAP tools, so nothing gets
@@ -29,6 +35,26 @@ Two rules that save you pain:
 ---
 
 ## 1. One-time prep on THIS laptop (5 minutes)
+
+### 1.0 Tell your laptop where the cloud S/4 is (admin — REDO after any S/4 reboot)
+The cloud S/4 calls itself `vhcals4hci.dummy.nodomain`. Map that name to its
+**current** public IP. **Do this whenever the S/4's IP changes** (it changes on
+every cloud reboot).
+
+1. Find the current S/4 public IP (from your cloud console / the "External IP"
+   you were given). Right now it is `3.231.211.143`.
+2. Open PowerShell **as Administrator**: Start → type `PowerShell` →
+   **right-click** → **Run as administrator** → **Yes**.
+3. Paste this, replacing the IP if yours is different:
+```powershell
+$ip="3.231.211.143"; $h="$env:windir\System32\drivers\etc\hosts"
+$body = (Get-Content $h | Where-Object { $_ -notmatch 'vhcals4hc' }) -join "`r`n"
+$body += "`r`n$ip`tvhcals4hci.dummy.nodomain`r`n$ip`tvhcals4hcs.dummy.nodomain`r`n"
+Set-Content $h $body -NoNewline
+Get-Content $h | Select-String vhcals4hc
+```
+You should see the two lines printed with the **current** IP. Done — close the
+admin window; you don't need admin again.
 
 ### 1.1 Open PowerShell in the project folder
 Press Start → type `PowerShell` → Enter. Then paste:
@@ -55,7 +81,7 @@ cd C:\Users\ajays\Downloads\migrate4hanav2
 
 ### 1.3 Check both SAP systems answer
 ```powershell
-Test-NetConnection 10.68.159.204 -Port 3241    # ECC  — want TcpTestSucceeded : True
+Test-NetConnection 192.168.0.6 -Port 3241    # ECC  — want TcpTestSucceeded : True
 Test-NetConnection 3.231.211.143 -Port 3300    # S/4  — want TcpTestSucceeded : True
 ```
 - **Both say `True`** → great, continue.
@@ -64,8 +90,8 @@ Test-NetConnection 3.231.211.143 -Port 3300    # S/4  — want TcpTestSucceeded 
 
 ### 1.4 Prove the tool can actually log in to both
 ```powershell
-python -c "from pyrfc import Connection; import os; c=Connection(ashost='10.68.159.204',sysnr='41',client='800',user='sapuser',passwd=os.environ['M4H_ECC_PASSWD']); print('ECC login OK'); c.close()"
-python -c "from pyrfc import Connection; import os; c=Connection(ashost='3.231.211.143',sysnr='00',client='100',user='SAP*',passwd=os.environ['M4H_TARGET_PASSWD']); print('S4 login OK'); c.close()"
+python -c "from pyrfc import Connection; import os; c=Connection(ashost='192.168.0.6',sysnr='41',client='800',user='sapuser',passwd=os.environ['M4H_ECC_PASSWD']); print('ECC login OK'); c.close()"
+python -c "from pyrfc import Connection; import os; c=Connection(ashost='vhcals4hci.dummy.nodomain',sysnr='00',client='100',user='SAP*',passwd=os.environ['M4H_TARGET_PASSWD']); print('S4 login OK'); c.close()"
 ```
 - **Both print `... OK`** → you are fully ready. Skip to Section 3.
 - **`S4 login OK` does NOT appear** (says "name or password is incorrect" or
@@ -83,7 +109,7 @@ preference:
 **Option A — use a different login that already works.** Many S/4 systems ship
 with `DDIC` or `BPINST` enabled using the same master password. Try:
 ```powershell
-python -c "from pyrfc import Connection; import os; c=Connection(ashost='3.231.211.143',sysnr='00',client='100',user='DDIC',passwd=os.environ['M4H_TARGET_PASSWD']); print('DDIC login OK'); c.close()"
+python -c "from pyrfc import Connection; import os; c=Connection(ashost='vhcals4hci.dummy.nodomain',sysnr='00',client='100',user='DDIC',passwd=os.environ['M4H_TARGET_PASSWD']); print('DDIC login OK'); c.close()"
 ```
 If `DDIC login OK` appears, tell me and I'll switch the config from `SAP*` to
 `DDIC` (one line in `connections.json`).
@@ -111,8 +137,8 @@ $env:M4H_TARGET_MODE  = "basis_handover_only"
 python run_local_lift_and_shift.py `
     --from-stage stage1 --through stage21 `
     --run-id RUN-LIVE-001 `
-    --ecc-host 10.68.159.204 `
-    --target-host 3.231.211.143
+    --ecc-host 192.168.0.6 `
+    --target-host vhcals4hci.dummy.nodomain
 ```
 
 That's stages **1 → 21** (Phases 0 through 6). It deliberately STOPS before the
@@ -180,8 +206,8 @@ $env:M4H_TARGET_MODE  = "basis_handover_only"
 python run_local_lift_and_shift.py `
     --from-stage stage22 --through stage27 `
     --run-id RUN-LIVE-001 `
-    --ecc-host 10.68.159.204 `
-    --target-host 3.231.211.143
+    --ecc-host 192.168.0.6 `
+    --target-host vhcals4hci.dummy.nodomain
 ```
 
 ### If you change your mind after locking ECC (undo)
@@ -222,17 +248,17 @@ $env:M4H_TARGET_PASSWD= "Parupallitejaajay#92"
 $env:M4H_TARGET_MODE  = "basis_handover_only"
 
 # health check
-Test-NetConnection 10.68.159.204 -Port 3241
+Test-NetConnection 192.168.0.6 -Port 3241
 Test-NetConnection 3.231.211.143 -Port 3300
 
 # the safe run (phases 0-6)
-python run_local_lift_and_shift.py --from-stage stage1 --through stage21 --run-id RUN-LIVE-001 --ecc-host 10.68.159.204 --target-host 3.231.211.143
+python run_local_lift_and_shift.py --from-stage stage1 --through stage21 --run-id RUN-LIVE-001 --ecc-host 192.168.0.6 --target-host vhcals4hci.dummy.nodomain
 
 # results
 Get-Content local-staging\m4h-local\migrations\RUN-LIVE-001\execution\go-live-scorecard.json
 
 # the go-live cutover (only when ready)
-python run_local_lift_and_shift.py --from-stage stage22 --through stage27 --run-id RUN-LIVE-001 --ecc-host 10.68.159.204 --target-host 3.231.211.143
+python run_local_lift_and_shift.py --from-stage stage22 --through stage27 --run-id RUN-LIVE-001 --ecc-host 192.168.0.6 --target-host vhcals4hci.dummy.nodomain
 ```
 
 If anything says `failed` and stops, copy the last 20 lines of output and send
