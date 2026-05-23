@@ -5,13 +5,13 @@
 > the run itself, then an **honest statement of what the result will be**.
 >
 > Do the GUI steps on your **Windows Remote Desktop box (3.237.83.66)**, which has
-> SAP GUI. Log on: System = the S/4 (vhcals4hci), Client `100`, User `SAP*`,
+> SAP GUI. Log on: System = the S/4 (vhcals4hci), Client `100`, User `MIGRATE_ADMI`,
 > password = your master password.
 
 ---
 
 ## Where we already are (proven)
-- ✅ RFC to both ECC and S/4 works; `SAP*` has full authorization (`SAP_ALL`).
+- ✅ RFC to both ECC and S/4 works; `MIGRATE_ADMI` has full authorization (`SAP_ALL`).
 - ✅ IDoc web service `/sap/bc/idoc_xml` is **active** (you did this).
 - ✅ A test IDoc physically landed in S/4 (DOCNUM created, status 56).
 - ⏳ Status 56 = "no partner profile" → the data arrived but didn't post into a
@@ -98,7 +98,7 @@ Open PowerShell (the env vars are saved from `HOW-TO-RUN.md` step 1.2):
 cd C:\Users\ajays\Downloads\migrate4hanav2
 $env:SAPNWRFC_HOME    = "C:\Users\ajays\Downloads\migrate4hanav2\sapnwrfc"
 $env:M4H_ECC_PASSWD   = "India123"
-$env:M4H_TARGET_PASSWD= "Parupallitejaajay#92"
+$env:M4H_TARGET_PASSWD= "Parupalliajayteja@2020"
 $env:M4H_TARGET_MODE  = "basis_handover_only"
 ```
 

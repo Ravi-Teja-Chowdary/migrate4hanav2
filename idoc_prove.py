@@ -11,7 +11,7 @@ proving the write reached the target on supported rails.
 Read + one inbound IDoc (reversible: test material, never released).
 
 Run:
-    $env:M4H_TARGET_PASSWD = "Parupallitejaajay#92"
+    $env:M4H_TARGET_PASSWD = "Parupalliajayteja@2020"
     python idoc_prove.py
 """
 from __future__ import annotations

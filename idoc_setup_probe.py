@@ -9,7 +9,7 @@ Read-only. Lists:
      cleanly. If none exist, we'll create a minimal one (separate step).
 
 Run:
-    $env:M4H_TARGET_PASSWD = "Parupallitejaajay#92"
+    $env:M4H_TARGET_PASSWD = "Parupalliajayteja@2020"
     python idoc_setup_probe.py
 """
 from __future__ import annotations

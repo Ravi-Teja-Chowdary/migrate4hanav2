@@ -13,7 +13,7 @@
 | Side | Host | sysnr | client | user |
 |---|---|---|---|---|
 | **Source — laptop ECC** | `192.168.0.5` | `41` | `800` | `sapuser` |
-| **Target — S/4HANA on AWS** | `32.195.65.246` | `00` | `100` | `SAP*` |
+| **Target — S/4HANA on AWS** | `32.195.65.246` | `00` | `100` | `MIGRATE_ADMI` |
 
 Required env vars in every PowerShell session (the runner reads these — do not skip):
 ```powershell
@@ -23,8 +23,8 @@ $env:M4H_TARGET_MODE    = "basis_handover_only"
 $env:SAPNWRFC_HOME      = "$PWD\sapnwrfc"
 ```
 
-> **PowerShell gotcha:** `SAP*` is a literal SAP superuser name and is safe inside
-> single-quoted strings (`user='SAP*'`). Do NOT pass it unquoted to PowerShell or it
+> **PowerShell gotcha:** `MIGRATE_ADMI` is a literal SAP superuser name and is safe inside
+> single-quoted strings (`user='MIGRATE_ADMI'`). Do NOT pass it unquoted to PowerShell or it
 > will be interpreted as a glob. Always wrap it in single quotes.
 
 > **Local-mode architecture (verified by audit 2026-05-11):** the runner auto-activates
@@ -181,7 +181,7 @@ python run_local_lift_and_shift.py --only stage4 --run-id RUN-2025-01-15
 
 ```powershell
 # from laptop, RFC ping via pyrfc:
-python -c "from pyrfc import Connection; c=Connection(ashost='32.195.65.246',sysnr='00',client='100',user='SAP*',passwd='$env:M4H_TARGET_PASSWD'); print(c.call('RFC_PING'))"
+python -c "from pyrfc import Connection; c=Connection(ashost='32.195.65.246',sysnr='00',client='100',user='MIGRATE_ADMI',passwd='$env:M4H_TARGET_PASSWD'); print(c.call('RFC_PING'))"
 ```
 
 If you see `{}` it's good. The runner auto-approves the gate in local mode.
@@ -586,7 +586,7 @@ Tailscale is down, or the SAP CAL appliance is suspended. Check `tailscale statu
 the CAL Web UI.
 
 ### "MC OData returns 401"
-The `mc_user` in `connections.json` lacks the `/IWFND/RT_GW_USER` role. Use `SAP*` for the
+The `mc_user` in `connections.json` lacks the `/IWFND/RT_GW_USER` role. Use `MIGRATE_ADMI` for the
 first run.
 
 ### "Transport import RC=12"

@@ -11,7 +11,7 @@ This probe checks each one against your live S/4 and prints a plain-English
 verdict so we know the easiest lane to prove first.
 
 Run:
-    $env:M4H_TARGET_PASSWD = "Parupallitejaajay#92"
+    $env:M4H_TARGET_PASSWD = "Parupalliajayteja@2020"
     python writepath_probe.py
 """
 from __future__ import annotations
@@ -38,7 +38,7 @@ def main() -> int:
     t = conns["lift_and_shift_target"]
     host = t["target_ashost"]                      # vhcals4hci.dummy.nodomain
     pub = t.get("target_public_ip", host)
-    user = t.get("target_user", "SAP*")
+    user = t.get("target_user", "MIGRATE_ADMI")
     pw = os.environ.get("M4H_TARGET_PASSWD")
     if not pw:
         print("ERROR: set $env:M4H_TARGET_PASSWD first"); return 2

@@ -3,7 +3,7 @@
 mc_role_probe.py — can we unlock Migration Cockpit for our user over RFC?
 
 Checks, against the live S/4 (read-only):
-  1. Which roles the target user (SAP*) currently has.
+  1. Which roles the target user (MIGRATE_ADMI) currently has.
   2. Which Migration-Cockpit / data-migration roles exist on the system.
   3. Whether the standard MC roles are already assigned.
 
@@ -11,7 +11,7 @@ This tells us if we can assign the MC role programmatically (no SAP GUI) or
 whether a human needs to do it once in transaction SU01.
 
 Run:
-    $env:M4H_TARGET_PASSWD = "Parupallitejaajay#92"
+    $env:M4H_TARGET_PASSWD = "Parupalliajayteja@2020"
     python mc_role_probe.py
 """
 from __future__ import annotations
@@ -155,7 +155,7 @@ def main() -> int:
 
     conns = json.loads((ROOT / "connections.json").read_text())
     t = conns["lift_and_shift_target"]
-    user = t.get("target_user", "SAP*")
+    user = t.get("target_user", "MIGRATE_ADMI")
     pw = os.environ.get("M4H_TARGET_PASSWD")
     if not pw:
         print("ERROR: set $env:M4H_TARGET_PASSWD first"); return 2

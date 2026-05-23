@@ -67,8 +67,8 @@ Paste this **whole block** once. It saves the settings so every future
 PowerShell window already has them — you won't need to do this again.
 ```powershell
 [Environment]::SetEnvironmentVariable("M4H_ECC_PASSWD","India123","User")
-[Environment]::SetEnvironmentVariable("M4H_TARGET_PASSWD","Parupallitejaajay#92","User")
-[Environment]::SetEnvironmentVariable("M4H_HANA_PASSWD","Parupallitejaajay#92","User")
+[Environment]::SetEnvironmentVariable("M4H_TARGET_PASSWD","Parupalliajayteja@2020","User")
+[Environment]::SetEnvironmentVariable("M4H_HANA_PASSWD","Parupalliajayteja@2020","User")
 [Environment]::SetEnvironmentVariable("M4H_TARGET_MODE","basis_handover_only","User")
 [Environment]::SetEnvironmentVariable("SAPNWRFC_HOME","C:\Users\ajays\Downloads\migrate4hanav2\sapnwrfc","User")
 "Saved. Now CLOSE this PowerShell window and open a NEW one."
@@ -91,7 +91,7 @@ Test-NetConnection 3.231.211.143 -Port 3300    # S/4  — want TcpTestSucceeded 
 ### 1.4 Prove the tool can actually log in to both
 ```powershell
 python -c "from pyrfc import Connection; import os; c=Connection(ashost='192.168.0.6',sysnr='41',client='800',user='sapuser',passwd=os.environ['M4H_ECC_PASSWD']); print('ECC login OK'); c.close()"
-python -c "from pyrfc import Connection; import os; c=Connection(ashost='vhcals4hci.dummy.nodomain',sysnr='00',client='100',user='SAP*',passwd=os.environ['M4H_TARGET_PASSWD']); print('S4 login OK'); c.close()"
+python -c "from pyrfc import Connection; import os; c=Connection(ashost='vhcals4hci.dummy.nodomain',sysnr='00',client='100',user='MIGRATE_ADMI',passwd=os.environ['M4H_TARGET_PASSWD']); print('S4 login OK'); c.close()"
 ```
 - **Both print `... OK`** → you are fully ready. Skip to Section 3.
 - **`S4 login OK` does NOT appear** (says "name or password is incorrect" or
@@ -103,7 +103,7 @@ python -c "from pyrfc import Connection; import os; c=Connection(ashost='vhcals4
 
 You only need this if the **S/4 login test failed**. Skip otherwise.
 
-The user `SAP*` is often locked on a fresh system. Easiest fixes, in order of
+The user `MIGRATE_ADMI` is often locked on a fresh system. Easiest fixes, in order of
 preference:
 
 **Option A — use a different login that already works.** Many S/4 systems ship
@@ -111,11 +111,11 @@ with `DDIC` or `BPINST` enabled using the same master password. Try:
 ```powershell
 python -c "from pyrfc import Connection; import os; c=Connection(ashost='vhcals4hci.dummy.nodomain',sysnr='00',client='100',user='DDIC',passwd=os.environ['M4H_TARGET_PASSWD']); print('DDIC login OK'); c.close()"
 ```
-If `DDIC login OK` appears, tell me and I'll switch the config from `SAP*` to
+If `DDIC login OK` appears, tell me and I'll switch the config from `MIGRATE_ADMI` to
 `DDIC` (one line in `connections.json`).
 
-**Option B — unlock `SAP*`.** This needs someone to log into the S/4 system's
-graphical screen (SAP GUI) once and run transaction `SU01` → user `SAP*` →
+**Option B — unlock `MIGRATE_ADMI`.** This needs someone to log into the S/4 system's
+graphical screen (SAP GUI) once and run transaction `SU01` → user `MIGRATE_ADMI` →
 Unlock. If you have the **Windows Remote Desktop** machine (`3.237.83.66`), SAP
 GUI is usually installed there. If this sounds unfamiliar, just use Option A.
 
@@ -132,7 +132,7 @@ Paste this whole block:
 cd C:\Users\ajays\Downloads\migrate4hanav2
 $env:SAPNWRFC_HOME    = "C:\Users\ajays\Downloads\migrate4hanav2\sapnwrfc"
 $env:M4H_ECC_PASSWD   = "India123"
-$env:M4H_TARGET_PASSWD= "Parupallitejaajay#92"
+$env:M4H_TARGET_PASSWD= "Parupalliajayteja@2020"
 $env:M4H_TARGET_MODE  = "basis_handover_only"
 python run_local_lift_and_shift.py `
     --from-stage stage1 --through stage21 `
@@ -201,7 +201,7 @@ When you're ready:
 cd C:\Users\ajays\Downloads\migrate4hanav2
 $env:SAPNWRFC_HOME    = "C:\Users\ajays\Downloads\migrate4hanav2\sapnwrfc"
 $env:M4H_ECC_PASSWD   = "India123"
-$env:M4H_TARGET_PASSWD= "Parupallitejaajay#92"
+$env:M4H_TARGET_PASSWD= "Parupalliajayteja@2020"
 $env:M4H_TARGET_MODE  = "basis_handover_only"
 python run_local_lift_and_shift.py `
     --from-stage stage22 --through stage27 `
@@ -244,7 +244,7 @@ from "writes a to-do file" to "does it for you."
 cd C:\Users\ajays\Downloads\migrate4hanav2
 $env:SAPNWRFC_HOME    = "C:\Users\ajays\Downloads\migrate4hanav2\sapnwrfc"
 $env:M4H_ECC_PASSWD   = "India123"
-$env:M4H_TARGET_PASSWD= "Parupallitejaajay#92"
+$env:M4H_TARGET_PASSWD= "Parupalliajayteja@2020"
 $env:M4H_TARGET_MODE  = "basis_handover_only"
 
 # health check
