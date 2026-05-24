@@ -35,11 +35,13 @@ RECIPES = {
         "verify_table": "MARA", "verify_key": "MATNR",
         "segments": [
             {"name": "E1MARAM", "hlevel": "01", "segnum": "000001", "psgnum": "000000",
+             "app_table": "MARA",
              "map": {"MATNR": "MATNR", "MTART": "MTART", "MBRSH": "MBRSH", "MEINS": "MEINS"},
              "defaults": {"MSGFN": "005", "MTART": "HALB", "MBRSH": "M", "MEINS": "EA",
                           "PSTAT": "K", "GEWEI": "KG"},
              "dynamic": {"MATKL": "material_group"}},
             {"name": "E1MAKTM", "hlevel": "02", "segnum": "000002", "psgnum": "000001",
+             "app_table": "MAKT",
              "map": {"MAKTX": "MAKTX"},
              "defaults": {"MSGFN": "005", "SPRAS": "E", "SPRAS_ISO": "EN",
                           "MAKTX": "Migrated by Migrate4HANA"}},
@@ -148,6 +150,55 @@ class IDocLoader:
             pass
         time.sleep(2)
         return self._status(recipe, row)
+
+    # ── META post: resolve every field via the resolver ────────────────────
+    def post_resolved(self, object_name: str, source_row: dict, resolver) -> dict:
+        """Like post(), but each field value is derived by the MetaRecipeResolver
+        (source-if-valid -> default -> check-table), with the recipe's declared
+        default as a final fallback. This is the meta-recipe path: adding a new
+        object type needs only its segment skeleton, not hand-picked values."""
+        recipe = RECIPES.get(object_name)
+        if not recipe:
+            return {"object": object_name, "status": "no_recipe"}
+        now = datetime.now()
+        control = [{
+            "TABNAM": "EDI_DC40", "MANDT": self.client, "DIRECT": "2",
+            "IDOCTYP": recipe["idoc_type"], "MESTYP": recipe["message_type"],
+            "SNDPOR": "SAPM4H", "SNDPRT": "LS", "SNDPRN": self.sender,
+            "RCVPOR": f"SAP{self.sid}", "RCVPRT": "LS", "RCVPRN": self.own_ls,
+            "CREDAT": now.strftime("%Y%m%d"), "CRETIM": now.strftime("%H%M%S"),
+        }]
+        data, resolution = [], {}
+        for seg in recipe["segments"]:
+            app = seg.get("app_table", "")
+            needed = list(dict.fromkeys(
+                list(seg.get("defaults", {}).keys())
+                + list(seg.get("map", {}).keys())
+                + list(seg.get("dynamic", {}).keys())))
+            vals = {}
+            for f in needed:
+                r = resolver.resolve(app, f, source_row) if app else {"value": None, "via": "no_table"}
+                v = r.get("value")
+                if v is None:                       # fall back to recipe's hardcoded default
+                    v = seg.get("defaults", {}).get(f)
+                    r = {"value": v, "via": "recipe_default"}
+                if v is not None:
+                    vals[f] = v
+                resolution[f"{seg['name']}.{f}"] = r.get("via")
+            data.append({"SEGNAM": seg["name"], "MANDT": self.client,
+                         "SEGNUM": seg["segnum"], "PSGNUM": seg["psgnum"],
+                         "HLEVEL": seg["hlevel"], "SDATA": self._build_sdata(seg["name"], vals)})
+
+        self.c.call("IDOC_INBOUND_ASYNCHRONOUS",
+                    IDOC_CONTROL_REC_40=control, IDOC_DATA_REC_40=data)
+        try:
+            self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        except Exception:
+            pass
+        time.sleep(2)
+        out = self._status(recipe, source_row)
+        out["resolution"] = resolution
+        return out
 
     # ── read status + self-diagnose ─────────────────────────────────────────
     def _status(self, recipe: dict, row: dict) -> dict:
