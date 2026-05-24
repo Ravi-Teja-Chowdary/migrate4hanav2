@@ -38,12 +38,24 @@ except Exception:  # pragma: no cover
     def log_stage_event(*a, **k):  # type: ignore
         pass
 
+try:
+    from idoc_loader import IDocLoader, RECIPES as IDOC_RECIPES  # type: ignore
+except Exception:  # pragma: no cover
+    IDocLoader = None
+    IDOC_RECIPES = {}
+
 S3 = boto3.client("s3")
 SECRETS = boto3.client("secretsmanager")
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hanav2-staging-dev")
 
 # Conservative per-invoke caps; production batching happens upstream.
 MAX_ROWS_PER_TEMPLATE = int(os.environ.get("MAX_ROWS_PER_TEMPLATE", "50000"))
+
+# Actually post extracted data into S/4 (via idoc_loader) when M4H_LOAD_TO_S4=1.
+LOAD_TO_S4 = os.environ.get("M4H_LOAD_TO_S4", "0") == "1"
+LOAD_MAX_ROWS = int(os.environ.get("M4H_LOAD_MAX_ROWS", "5"))
+OWN_LOGICAL_SYSTEM = os.environ.get("M4H_TARGET_LOGSYS", "S4HCLNT100")
+IDOC_SENDER = os.environ.get("M4H_IDOC_SENDER", "M4HSENDER")
 
 
 def _ecc(secret_id: str):
@@ -58,13 +70,25 @@ def _ecc(secret_id: str):
 def _read_table(conn, table: str, fields: list, where: str = "", max_rows: int = MAX_ROWS_PER_TEMPLATE) -> list:
     opts = [{"TEXT": where}] if where else []
     fld = [{"FIELDNAME": f} for f in fields]
-    res = conn.call("RFC_READ_TABLE", QUERY_TABLE=table, OPTIONS=opts, FIELDS=fld, ROWCOUNT=max_rows)
+    # DELIMITER='|' so multi-field rows split cleanly (without it RFC_READ_TABLE
+    # returns fixed-width WA and the split produces garbage columns).
+    res = conn.call("RFC_READ_TABLE", QUERY_TABLE=table, DELIMITER="|",
+                    OPTIONS=opts, FIELDS=fld, ROWCOUNT=max_rows)
     cols = [f["FIELDNAME"] for f in res.get("FIELDS", [])]
     rows = []
     for r in res.get("DATA", []):
         parts = [p.strip() for p in r["WA"].split("|")]
         rows.append(dict(zip(cols, parts)))
     return rows, cols
+
+
+def _target_connection():
+    """RFC connection to the TARGET S/4 (for loading data in), from local:target."""
+    sec = json.loads(SECRETS.get_secret_value(SecretId="local:target")["SecretString"])
+    from pyrfc import Connection
+    return Connection(ashost=sec["ashost"], sysnr=sec.get("sysnr", "00"),
+                      client=sec["client"], user=sec["user"],
+                      passwd=sec.get("passwd") or sec.get("password"), lang="EN")
 
 
 def _emit_mc_csv(run_id: str, obj_name: str, rows: list, cols: list) -> str:
@@ -142,7 +166,26 @@ def _load_dag(run_id: str) -> dict:
         return {"nodes": [], "_load_error": str(ex)}
 
 
-def _process_one_object(conn, run_id: str, node: dict) -> dict:
+def _load_rows_to_s4(loader, obj_name: str, rows: list) -> dict:
+    """Post extracted rows into S/4 via the IDoc loader (capped at LOAD_MAX_ROWS)."""
+    posted, created, statuses, samples = 0, 0, {}, []
+    for row in rows[:LOAD_MAX_ROWS]:
+        res = loader.post(obj_name, row)
+        posted += 1
+        st = res.get("status", "?")
+        statuses[st] = statuses.get(st, 0) + 1
+        if res.get("created"):
+            created += 1
+        if len(samples) < 3:
+            samples.append({"docnum": res.get("docnum"), "status": st,
+                            "created": res.get("created"),
+                            "missing_fields": res.get("missing_fields"),
+                            "messages": res.get("messages", [])[:2]})
+    return {"attempted": posted, "created_in_s4": created,
+            "status_breakdown": statuses, "samples": samples}
+
+
+def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
     """Extract one object from ECC and emit lane-appropriate artifact."""
     obj_name = node.get("object", "UNKNOWN")
     lane = (node.get("lane") or "MC").upper()
@@ -182,9 +225,17 @@ def _process_one_object(conn, run_id: str, node: dict) -> dict:
     else:
         artifacts["raw_csv"] = _emit_mc_csv(run_id, obj_name, rows, cols)
 
-    return {"object": obj_name, "lane": target_lane, "row_count": len(rows),
-            "artifacts": artifacts, "note": err_note,
-            "status": "ok" if err_note is None else "partial"}
+    result = {"object": obj_name, "lane": target_lane, "row_count": len(rows),
+              "artifacts": artifacts, "note": err_note,
+              "status": "ok" if err_note is None else "partial"}
+
+    # Optionally LOAD the extracted rows into S/4 (real write via IDoc loader)
+    if loader is not None and rows and obj_name in IDOC_RECIPES:
+        try:
+            result["load"] = _load_rows_to_s4(loader, obj_name, rows)
+        except Exception as e:
+            result["load"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
+    return result
 
 
 def lambda_handler(event, context):
@@ -216,20 +267,38 @@ def lambda_handler(event, context):
             log_stage_event(run_id, "data-migrator", "error", {"connect": str(e)})
             return {"status": "error", "reason": f"ECC connect failed: {e}", "run_id": run_id}
 
+        # Optional S/4 loader (real write path) — only when M4H_LOAD_TO_S4=1
+        loader = None
+        if LOAD_TO_S4 and IDocLoader is not None:
+            try:
+                tconn = _target_connection()
+                target_sid = json.loads(SECRETS.get_secret_value(SecretId="local:target")["SecretString"]).get("sid", "S4H")
+                loader = IDocLoader(tconn, own_logical_system=OWN_LOGICAL_SYSTEM,
+                                    sender=IDOC_SENDER,
+                                    client=event.get("input", {}).get("ecc_client", "100"),
+                                    target_sid=target_sid)
+                log_stage_event(run_id, "data-migrator", "load_enabled",
+                                {"max_rows": LOAD_MAX_ROWS, "recipes": list(IDOC_RECIPES)})
+            except Exception as e:
+                log_stage_event(run_id, "data-migrator", "load_disabled", {"reason": str(e)[:160]})
+
         results = []
         for node in nodes:
             try:
-                results.append(_process_one_object(conn, run_id, node))
+                results.append(_process_one_object(conn, run_id, node, loader=loader))
             except Exception as e:
                 results.append({"object": node.get("object"), "status": "error",
                                 "error": f"{type(e).__name__}: {str(e)[:200]}"})
 
         # Write batch summary so downstream validator can read it
+        loaded_to_s4 = sum((r.get("load", {}) or {}).get("created_in_s4", 0) for r in results)
         summary = {"run_id": run_id, "mode": mode, "object_count": len(results),
                    "ok_count": sum(1 for r in results if r.get("status") == "ok"),
                    "partial_count": sum(1 for r in results if r.get("status") == "partial"),
                    "error_count": sum(1 for r in results if r.get("status") == "error"),
                    "skipped_count": sum(1 for r in results if r.get("status") == "skipped"),
+                   "load_to_s4_enabled": bool(loader),
+                   "objects_created_in_s4": loaded_to_s4,
                    "results": results}
         S3.put_object(Bucket=STAGING_BUCKET,
                       Key=f"runs/{run_id}/data-migrator/summary.json",
