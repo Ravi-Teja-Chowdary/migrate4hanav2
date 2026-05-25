@@ -40,6 +40,13 @@ BP_TARGET_ORG = {
     "PURCH_ORG":  os.environ.get("M4H_BP_PURCH_ORG", "1710"),
 }
 
+# object -> the SOURCE key field used for cross-run idempotency (the migration ledger).
+# If a source record's key is already in the ledger, we reuse its target, never re-create.
+OBJECT_SOURCE_KEY = {
+    "Customer": "KUNNR", "Vendor": "LIFNR", "BusinessPartner": "PARTNER",
+    "Material": "MATNR", "OpenPO": "EBELN", "OpenAR": "BELNR", "OpenAP": "BELNR",
+}
+
 # object -> (mechanism, sub-kind)
 OBJECT_MECHANISM = {
     "Customer":        ("bapi", "bp"),
@@ -114,26 +121,35 @@ class UnifiedLoader:
         if mech == ("bapi", "exrate"):
             return self._load_exrate(obj, mech, rows, max_rows)
         # Scan for max_rows successes (collisions/skips don't consume the budget),
-        # capped so a fully-blocked object can't loop forever.
-        out, created, scanned = [], 0, 0
+        # capped so a fully-blocked object can't loop forever. Records already migrated
+        # in a prior run (in the cross-run ledger) are REUSED, never re-created.
+        out, ok_count, scanned = [], 0, 0
         scan_cap = max(max_rows * 20, 60)
         for row in rows:
-            if created >= max_rows or scanned >= scan_cap:
+            if ok_count >= max_rows or scanned >= scan_cap:
                 break
             scanned += 1
-            try:
-                res = self._load_one(obj, mech, row)
-            except Exception as e:
-                res = {"ok": False, "status": "exception",
-                       "msg": f"{type(e).__name__}: {str(e)[:140]}"}
+            reuse = self._ledger_hit(obj, row)
+            if reuse:
+                res = {"ok": True, "status": "already_migrated", "id": reuse, "reused": True}
+            else:
+                try:
+                    res = self._load_one(obj, mech, row)
+                except Exception as e:
+                    res = {"ok": False, "status": "exception",
+                           "msg": f"{type(e).__name__}: {str(e)[:140]}"}
             out.append(res)
             if res.get("ok"):
-                created += 1
+                ok_count += 1
+        created = sum(1 for r in out if r.get("ok") and not r.get("reused"))
+        reused = sum(1 for r in out if r.get("reused"))
         result = {"object": obj, "mechanism": f"{mech[0]}/{mech[1] or ''}".rstrip("/"),
                   "attempted": len(out), "created_in_s4": created,
                   "status_breakdown": dict(Counter(r.get("status") for r in out)),
                   "created_keys": self._created_keys(out),
                   "samples": [r for r in out if r.get("ok")][:3] or out[:3]}
+        if reused:
+            result["reused_from_ledger"] = reused
         kmaps = self._key_mappings(out)
         if kmaps:
             result["key_mappings"] = kmaps
@@ -142,6 +158,17 @@ class UnifiedLoader:
         if self.key_map is not None:
             self.key_map.add_many(obj, kmaps)
         return result
+
+    def _ledger_hit(self, obj: str, row: dict):
+        """If this source record was already migrated (present in the cross-run ledger),
+        return its target key so we reuse it instead of creating a duplicate."""
+        if self.key_map is None:
+            return None
+        field = OBJECT_SOURCE_KEY.get(obj)
+        if not field:
+            return None
+        sk = (row.get(field) or "").strip()
+        return self.key_map.resolve(obj, sk) if sk else None
 
     def _load_exrate(self, obj: str, mech: tuple, rows: list, max_rows: int,
                      scan_cap: int = 120) -> dict:

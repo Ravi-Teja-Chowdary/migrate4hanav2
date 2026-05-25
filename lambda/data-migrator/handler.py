@@ -216,6 +216,32 @@ DEFAULT_OBJECT_TABLES = {
 }
 
 
+# Cross-run migration ledger: the durable source->target record that makes re-runs
+# idempotent (resume, don't duplicate). Stable key (not per run_id) so it accumulates.
+LEDGER_KEY = "migration-ledger/key_mapping.json"
+
+
+def _load_ledger():
+    """Load the cross-run migration ledger into a KeyMap (empty if first run)."""
+    if KeyMap is None:
+        return None
+    try:
+        obj = S3.get_object(Bucket=STAGING_BUCKET, Key=LEDGER_KEY)
+        return KeyMap.from_dict(json.loads(obj["Body"].read()))
+    except Exception:
+        return KeyMap()
+
+
+def _save_ledger(km) -> None:
+    """Persist the (now-merged) ledger so the next run reuses instead of re-creating."""
+    try:
+        S3.put_object(Bucket=STAGING_BUCKET, Key=LEDGER_KEY,
+                      Body=json.dumps(km.to_dict(), indent=2).encode(),
+                      ContentType="application/json")
+    except Exception:
+        pass
+
+
 def _load_dag(run_id: str) -> dict:
     """Load the routing DAG written by stage 3 (object-router)."""
     try:
@@ -354,8 +380,7 @@ def lambda_handler(event, context):
                                        target_sid=tsec.get("sid", "S4H"))
                 # Live source->target registry, shared across the run so dependent
                 # objects (OpenPO -> Vendor) resolve refs; source conn for PO items.
-                if KeyMap is not None:
-                    loader.key_map = KeyMap()
+                loader.key_map = _load_ledger()   # cross-run ledger -> idempotent re-runs
                 loader.source_conn = conn
                 loader.odata = _target_odata()   # transaction-ready partner creation (OData)
                 log_stage_event(run_id, "data-migrator", "load_enabled",
@@ -378,6 +403,7 @@ def lambda_handler(event, context):
         km = getattr(loader, "key_map", None) if loader else None
         if km is not None and km.to_rows():
             key_map_info = {**_emit_key_map(run_id, km), "stats": km.stats()}
+            _save_ledger(km)   # persist the merged ledger for idempotent re-runs
 
         # Write batch summary so downstream validator can read it
         loaded_to_s4 = sum((r.get("load", {}) or {}).get("created_in_s4", 0) for r in results)
@@ -391,6 +417,9 @@ def lambda_handler(event, context):
                    "skipped_count": sum(1 for r in results if r.get("status") == "skipped"),
                    "load_to_s4_enabled": bool(loader),
                    "objects_created_in_s4": loaded_to_s4,
+                   "idempotency": {"newly_created": loaded_to_s4,
+                                   "reused_from_ledger": sum((r.get("load", {}) or {}).get("reused_from_ledger", 0)
+                                                             for r in results)},
                    "reconciliation": Reconciler.rollup(recon_reports) if Reconciler else None,
                    "support_compliance": compliance.audit(results) if compliance else None,
                    "key_mapping": key_map_info,
