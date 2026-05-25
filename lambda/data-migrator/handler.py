@@ -242,6 +242,46 @@ def _save_ledger(km) -> None:
         pass
 
 
+# ── Delta / CDC: extract only records changed since the last watermark ────────
+# Delta mode (M4H_CDC_DELTA=1) filters each object's extraction by a change-date field
+# >= the persisted watermark — incremental migration + the cutover delta load. NOTE:
+# KNA1/LFA1 only carry ERDAT (created) — so customer/vendor delta catches NEW masters;
+# CHANGED existing ones need change documents (CDHDR/CDPOS), a future enhancement.
+CDC_DELTA = os.environ.get("M4H_CDC_DELTA", "0") == "1"
+CDC_STATE_KEY = "migration-ledger/cdc-watermark.json"
+CDC_FIELDS = {
+    "Customer": ["ERDAT"], "Vendor": ["ERDAT"], "Material": ["LAEDA", "ERSDA"],
+    "OpenPO": ["AEDAT"], "OpenAR": ["CPUDT"], "OpenAP": ["CPUDT"],
+}
+
+
+def _load_watermark():
+    """Last CDC watermark (YYYYMMDD) — None on first run (=> full extract)."""
+    if os.environ.get("M4H_CDC_WATERMARK"):
+        return os.environ["M4H_CDC_WATERMARK"]
+    try:
+        obj = S3.get_object(Bucket=STAGING_BUCKET, Key=CDC_STATE_KEY)
+        return json.loads(obj["Body"].read()).get("watermark")
+    except Exception:
+        return None
+
+
+def _save_watermark(wm: str) -> None:
+    try:
+        S3.put_object(Bucket=STAGING_BUCKET, Key=CDC_STATE_KEY,
+                      Body=json.dumps({"watermark": wm}).encode(), ContentType="application/json")
+    except Exception:
+        pass
+
+
+def _cdc_where(obj: str, watermark: str) -> str:
+    """Delta WHERE for an object: any of its change-date fields >= watermark."""
+    fields = CDC_FIELDS.get(obj)
+    if not (fields and watermark):
+        return ""
+    return "( " + " OR ".join("%s >= '%s'" % (f, watermark) for f in fields) + " )"
+
+
 def _load_dag(run_id: str) -> dict:
     """Load the routing DAG written by stage 3 (object-router)."""
     try:
@@ -251,7 +291,7 @@ def _load_dag(run_id: str) -> dict:
         return {"nodes": [], "_load_error": str(ex)}
 
 
-def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
+def _process_one_object(conn, run_id: str, node: dict, loader=None, cdc_watermark=None) -> dict:
     """Extract one object from ECC and emit lane-appropriate artifact."""
     obj_name = node.get("object", "UNKNOWN")
     lane = (node.get("lane") or "MC").upper()
@@ -269,14 +309,27 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
 
     table = mapping["table"]
     fields = mapping["fields"]
+    base_where = mapping.get("where", "")
+    # Delta/CDC: AND a change-date filter onto the base WHERE when a watermark is set.
+    cdc_where = _cdc_where(obj_name, cdc_watermark) if cdc_watermark else ""
+    delta_applied = bool(cdc_where)
+    where = (f"( {base_where} ) AND {cdc_where}" if base_where and cdc_where
+             else cdc_where or base_where)
+    err_note = None
     try:
-        rows, cols = _read_table(conn, table, fields, mapping.get("where", ""))
+        rows, cols = _read_table(conn, table, fields, where)
     except Exception as e:
-        # Empty placeholder — pipeline shouldn't halt on a single missing table
-        rows, cols = [], fields
-        err_note = f"ECC read failed: {type(e).__name__}: {str(e)[:120]}"
-    else:
-        err_note = None
+        if delta_applied:   # bad CDC field etc. — fall back to a full extract
+            try:
+                rows, cols = _read_table(conn, table, fields, base_where)
+                delta_applied = False
+                err_note = "cdc filter failed; full extract fallback"
+            except Exception as e2:
+                rows, cols = [], fields
+                err_note = f"ECC read failed: {type(e2).__name__}: {str(e2)[:120]}"
+        else:
+            rows, cols = [], fields
+            err_note = f"ECC read failed: {type(e).__name__}: {str(e)[:120]}"
 
     artifacts = {}
     target_lane = mapping.get("lane", lane).upper()
@@ -294,6 +347,9 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
     result = {"object": obj_name, "lane": target_lane, "row_count": len(rows),
               "artifacts": artifacts, "note": err_note,
               "status": "ok" if err_note is None else "partial"}
+    if cdc_watermark and delta_applied:   # only objects that actually have a CDC field
+        result["delta"] = {"applied": True, "since": cdc_watermark,
+                           "changed_rows": len(rows)}
 
     # Optionally LOAD the extracted rows into S/4 via the best mechanism (BAPI/IDoc).
     # Per-object cap overrides the global one (M4H_LOAD_MAX_ROWS_<OBJECT>) — e.g. run
@@ -389,13 +445,22 @@ def lambda_handler(event, context):
             except Exception as e:
                 log_stage_event(run_id, "data-migrator", "load_disabled", {"reason": str(e)[:160]})
 
+        # Delta/CDC: in delta mode, extract only records changed since the watermark.
+        run_watermark = _load_watermark() if CDC_DELTA else None
+
         results = []
         for node in nodes:
             try:
-                results.append(_process_one_object(conn, run_id, node, loader=loader))
+                results.append(_process_one_object(conn, run_id, node, loader=loader,
+                                                   cdc_watermark=run_watermark))
             except Exception as e:
                 results.append({"object": node.get("object"), "status": "error",
                                 "error": f"{type(e).__name__}: {str(e)[:200]}"})
+
+        # Advance the watermark to today so the next delta run only picks up newer changes.
+        new_watermark = time.strftime("%Y%m%d")
+        if CDC_DELTA or _load_watermark() is None:
+            _save_watermark(new_watermark)
 
         # Persist the live source->target key registry (built during the run as
         # objects loaded; consumed by dependent objects, then written for audit).
@@ -417,6 +482,10 @@ def lambda_handler(event, context):
                    "skipped_count": sum(1 for r in results if r.get("status") == "skipped"),
                    "load_to_s4_enabled": bool(loader),
                    "objects_created_in_s4": loaded_to_s4,
+                   "cdc": {"mode": "delta" if CDC_DELTA else "full",
+                           "watermark_used": run_watermark, "next_watermark": new_watermark,
+                           "changed_rows_extracted": sum((r.get("delta") or {}).get("changed_rows", 0)
+                                                         for r in results if r.get("delta"))},
                    "idempotency": {"newly_created": loaded_to_s4,
                                    "reused_from_ledger": sum((r.get("load", {}) or {}).get("reused_from_ledger", 0)
                                                              for r in results)},
