@@ -39,10 +39,10 @@ except Exception:  # pragma: no cover
         pass
 
 try:
-    from idoc_loader import IDocLoader, RECIPES as IDOC_RECIPES  # type: ignore
+    from unified_loader import UnifiedLoader, OBJECT_MECHANISM  # type: ignore
 except Exception:  # pragma: no cover
-    IDocLoader = None
-    IDOC_RECIPES = {}
+    UnifiedLoader = None
+    OBJECT_MECHANISM = {}
 
 S3 = boto3.client("s3")
 SECRETS = boto3.client("secretsmanager")
@@ -149,7 +149,7 @@ DEFAULT_OBJECT_TABLES = {
     "OpenAR":            {"table": "BSID", "fields": ["BUKRS", "KUNNR", "BELNR", "DMBTR"], "lane": "MC"},
     "OpenAP":            {"table": "BSIK", "fields": ["BUKRS", "LIFNR", "BELNR", "DMBTR"], "lane": "MC"},
     "BankStatements":    {"table": "FEBKO", "fields": ["KUKEY", "ESNUM", "BANKL", "BANKN"], "lane": "IDOC", "idoc_type": "FINSTA01"},
-    "ExchangeRates":     {"table": "TCURR", "fields": ["KURST", "FCURR", "TCURR", "UKURS"], "lane": "IDOC", "idoc_type": "EXCHRATE_CREATE01"},
+    "ExchangeRates":     {"table": "TCURR", "fields": ["KURST", "FCURR", "TCURR", "GDATU", "UKURS", "FFACT", "TFACT"], "lane": "IDOC", "idoc_type": "EXCHRATE_CREATE01"},
     "AssetMaster":       {"table": "ANLA", "fields": ["BUKRS", "ANLN1", "ANLN2", "ANLKL"], "lane": "MC"},
     "BOM":               {"table": "MAST", "fields": ["MATNR", "WERKS", "STLAN", "STLNR"], "lane": "MC"},
     "Routing":           {"table": "MAPL", "fields": ["MATNR", "WERKS", "PLNTY", "PLNNR"], "lane": "MC"},
@@ -164,25 +164,6 @@ def _load_dag(run_id: str) -> dict:
         return json.loads(obj["Body"].read())
     except Exception as ex:
         return {"nodes": [], "_load_error": str(ex)}
-
-
-def _load_rows_to_s4(loader, obj_name: str, rows: list) -> dict:
-    """Post extracted rows into S/4 via the IDoc loader (capped at LOAD_MAX_ROWS)."""
-    posted, created, statuses, samples = 0, 0, {}, []
-    for row in rows[:LOAD_MAX_ROWS]:
-        res = loader.post(obj_name, row)
-        posted += 1
-        st = res.get("status", "?")
-        statuses[st] = statuses.get(st, 0) + 1
-        if res.get("created"):
-            created += 1
-        if len(samples) < 3:
-            samples.append({"docnum": res.get("docnum"), "status": st,
-                            "created": res.get("created"),
-                            "missing_fields": res.get("missing_fields"),
-                            "messages": res.get("messages", [])[:2]})
-    return {"attempted": posted, "created_in_s4": created,
-            "status_breakdown": statuses, "samples": samples}
 
 
 def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
@@ -229,10 +210,10 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
               "artifacts": artifacts, "note": err_note,
               "status": "ok" if err_note is None else "partial"}
 
-    # Optionally LOAD the extracted rows into S/4 (real write via IDoc loader)
-    if loader is not None and rows and obj_name in IDOC_RECIPES:
+    # Optionally LOAD the extracted rows into S/4 via the best mechanism (BAPI/IDoc)
+    if loader is not None and rows and loader.supported(obj_name):
         try:
-            result["load"] = _load_rows_to_s4(loader, obj_name, rows)
+            result["load"] = loader.load_object(obj_name, rows, LOAD_MAX_ROWS)
         except Exception as e:
             result["load"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
     return result
@@ -269,16 +250,16 @@ def lambda_handler(event, context):
 
         # Optional S/4 loader (real write path) — only when M4H_LOAD_TO_S4=1
         loader = None
-        if LOAD_TO_S4 and IDocLoader is not None:
+        if LOAD_TO_S4 and UnifiedLoader is not None:
             try:
+                tsec = json.loads(SECRETS.get_secret_value(SecretId="local:target")["SecretString"])
                 tconn = _target_connection()
-                target_sid = json.loads(SECRETS.get_secret_value(SecretId="local:target")["SecretString"]).get("sid", "S4H")
-                loader = IDocLoader(tconn, own_logical_system=OWN_LOGICAL_SYSTEM,
-                                    sender=IDOC_SENDER,
-                                    client=event.get("input", {}).get("ecc_client", "100"),
-                                    target_sid=target_sid)
+                loader = UnifiedLoader(tconn, own_logical_system=OWN_LOGICAL_SYSTEM,
+                                       sender=IDOC_SENDER,
+                                       client=tsec.get("client", "100"),
+                                       target_sid=tsec.get("sid", "S4H"))
                 log_stage_event(run_id, "data-migrator", "load_enabled",
-                                {"max_rows": LOAD_MAX_ROWS, "recipes": list(IDOC_RECIPES)})
+                                {"max_rows": LOAD_MAX_ROWS, "mechanisms": OBJECT_MECHANISM})
             except Exception as e:
                 log_stage_event(run_id, "data-migrator", "load_disabled", {"reason": str(e)[:160]})
 

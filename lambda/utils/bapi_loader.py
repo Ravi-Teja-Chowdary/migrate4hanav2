@@ -8,6 +8,17 @@ BAPIs are SAP-shipped, business-logic-honoring APIs — fully support-preserving
 path sidesteps the DEBMAS/MDG IDoc bottleneck entirely.
 """
 from __future__ import annotations
+import datetime
+
+try:
+    from sap_number import parse_sap_number
+except Exception:  # pragma: no cover
+    def parse_sap_number(v, default=0.0):
+        try:
+            s = str(v).strip()
+            return -float(s[:-1]) if s.endswith("-") else float(s)
+        except Exception:
+            return default
 
 
 class BapiLoader:
@@ -82,3 +93,112 @@ class BapiLoader:
             self._commit()
         return {"status": "created", "material": matnr,
                 "messages": [m.get("MESSAGE") for m in ret]}
+
+    # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
+    # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
+    # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).
+    _EXRATE_FLOOR = datetime.date(1900, 1, 1)
+    _EXRATE_CEILING = datetime.date(2050, 1, 1)
+
+    @classmethod
+    def _gdatu_to_date(cls, gdatu):
+        """TCURR-GDATU is an INVERTED date (99999999 - YYYYMMDD). Un-invert it
+        and clamp into the BAPI's accepted window. The IDES 'beginning of time'
+        baseline decodes to 1798 (below the floor) -> clamp up to the floor so
+        the rate still loads and applies to all current dates.
+        Returns (datetime.date, clamped_bool)."""
+        try:
+            ymd = 99999999 - int(str(gdatu).strip())
+            d = datetime.date(ymd // 10000, (ymd // 100) % 100, ymd % 100)
+        except Exception:
+            return datetime.date.today(), False
+        if d < cls._EXRATE_FLOOR:
+            return cls._EXRATE_FLOOR, True
+        if d > cls._EXRATE_CEILING:
+            return cls._EXRATE_CEILING, True
+        return d, False
+
+    def target_rate_types(self) -> set:
+        """Cached set of exchange-rate types (TCURV-KURST) the target defines.
+        A rate cannot be created for a type the target doesn't have configured,
+        and exchange-rate types are *customizing* (no BAPI to create them) — so we
+        screen against this list rather than letting the BAPI hard-fail per row."""
+        cache = getattr(self, "_rate_types_cache", None)
+        if cache is not None:
+            return cache
+        types = set()
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="TCURV", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "KURST"}], ROWCOUNT=1000)
+            types = {row["WA"].split("|")[0].strip() for row in r.get("DATA", [])}
+        except Exception:
+            types = set()  # screening disabled if we can't read TCURV
+        self._rate_types_cache = types
+        return types
+
+    def configured_rate_types(self) -> set:
+        """Cached set of rate types that are actually *operational* in the target —
+        i.e. have translation factors (TCURF). A type can exist in TCURV yet still
+        reject rates with 'valid system settings have not been made' when its factor
+        config is absent (standard B/G are the classic example on a vanilla system).
+        Used to try the most-likely-to-succeed rows first."""
+        cache = getattr(self, "_conf_types_cache", None)
+        if cache is not None:
+            return cache
+        types = set()
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="TCURF", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "KURST"}], ROWCOUNT=100000)
+            types = {row["WA"].split("|")[0].strip() for row in r.get("DATA", [])}
+        except Exception:
+            types = set()
+        self._conf_types_cache = types
+        return types
+
+    def create_exchange_rate(self, row: dict, commit: bool = True) -> dict:
+        """Create one exchange-rate entry from a TCURR-shaped source row via
+        BAPI_EXCHRATE_CREATEMULTIPLE (writes TCURR). Expects
+        KURST/FCURR/TCURR/GDATU/UKURS (+ optional FFACT/TFACT)."""
+        fcurr = (row.get("FCURR") or "").strip()
+        tcurr = (row.get("TCURR") or "").strip()
+        if not (fcurr and tcurr):
+            return {"status": "skipped", "messages": ["missing FROM/TO currency"]}
+        rate_type = (row.get("KURST") or "M").strip()
+        known = self.target_rate_types()
+        if known and rate_type not in known:
+            # Type isn't defined in the target (a config/customizing gap, not bad
+            # data). Set aside cleanly so the rest of the rates still load.
+            return {"status": "skipped_missing_ratetype", "rate_type": rate_type,
+                    "messages": [f"rate type '{rate_type}' not defined in target (TCURV)"]}
+        valid_from, clamped = self._gdatu_to_date(row.get("GDATU"))
+        line = {
+            "RATE_TYPE":   rate_type,
+            "FROM_CURR":   fcurr,
+            "TO_CURRNCY":  tcurr,
+            "VALID_FROM":  valid_from,                           # datetime.date (DATS)
+            "EXCH_RATE":   parse_sap_number(row.get("UKURS")),   # FLTP; honors trailing-minus (indirect quote)
+            "FROM_FACTOR": str(int(parse_sap_number(row.get("FFACT"), 1)) or 1),  # DEC -> string
+            "TO_FACTOR":   str(int(parse_sap_number(row.get("TFACT"), 1)) or 1),
+        }
+        res = self.c.call("BAPI_EXCHRATE_CREATEMULTIPLE",
+                          UPD_ALLOW="X", EXCHRATE_LIST=[line])
+        ret = self._ret(res)
+        errs = [m for m in ret if m.get("TYPE") in ("E", "A")]
+        if errs:
+            self._rollback()
+            # Distinguish a customizing gap (rate type exists but the currency-pair
+            # factor/settings are absent) from a genuine data error. The former is a
+            # target-config prerequisite, not bad source data — report, don't fail.
+            txt = " ".join((m.get("MESSAGE") or "") for m in errs).lower()
+            cfg_gap = ("system settings" in txt or "not been made" in txt
+                       or "no exchange rate type" in txt)
+            return {"status": "skipped_config_gap" if cfg_gap else "failed",
+                    "rate_type": rate_type,
+                    "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret]}
+        if commit:
+            self._commit()
+        msgs = [m.get("MESSAGE") for m in ret]
+        if clamped:
+            msgs.append(f"valid-from clamped to {valid_from.isoformat()} (source date out of BAPI range)")
+        return {"status": "created",
+                "rate": f"{fcurr}->{tcurr}@{valid_from.isoformat()}", "messages": msgs}
