@@ -63,6 +63,7 @@ class UnifiedLoader:
         return {"object": obj, "mechanism": f"{mech[0]}/{mech[1] or ''}".rstrip("/"),
                 "attempted": len(out), "created_in_s4": created,
                 "status_breakdown": dict(Counter(r.get("status") for r in out)),
+                "created_keys": self._created_keys(out),
                 "samples": out[:3]}
 
     def _load_exrate(self, obj: str, mech: tuple, rows: list, max_rows: int,
@@ -102,6 +103,7 @@ class UnifiedLoader:
         result = {"object": obj, "mechanism": "bapi/exrate",
                   "attempted": len(out), "created_in_s4": created,
                   "status_breakdown": dict(Counter(r.get("status") for r in out)),
+                  "created_keys": self._created_keys(out),
                   "samples": [r for r in out if r.get("ok")][:3] or out[:3],
                   "total_rows": len(rows), "loadable_candidates": len(candidates)}
         if missing:
@@ -117,19 +119,28 @@ class UnifiedLoader:
             r = self.bapi.create_business_partner(name.strip() or "Migrated BP",
                                                   category="2", commit=True)
             return {"ok": r["status"] == "created", "status": r["status"],
-                    "id": r.get("partner"), "msg": r.get("messages")}
+                    "id": r.get("partner"), "verify_key": r.get("verify_key"),
+                    "msg": r.get("messages")}
         if kind == "bapi" and sub == "material":
             matnr = (row.get("MATNR") or "").strip()
             mtart = self.resolver.resolve("MARA", "MTART", row)["value"] or "HALB"
             meins = self.resolver.resolve("MARA", "MEINS", row)["value"] or "EA"
             r = self.bapi.create_material(matnr or None, mtype=mtart, uom=meins, commit=True)
             return {"ok": r["status"] == "created", "status": r["status"],
-                    "id": r.get("material"), "msg": r.get("messages")}
+                    "id": r.get("material"), "verify_key": r.get("verify_key"),
+                    "msg": r.get("messages")}
         if kind == "bapi" and sub == "exrate":
             r = self.bapi.create_exchange_rate(row, commit=True)
             return {"ok": r["status"] == "created", "status": r["status"],
-                    "id": r.get("rate"), "msg": r.get("messages")}
+                    "id": r.get("rate"), "verify_key": r.get("verify_key"),
+                    "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)
             return {"ok": bool(r.get("created")), "status": r.get("status"), "id": r.get("docnum")}
         return {"ok": False, "status": "unknown_mechanism"}
+
+    @staticmethod
+    def _created_keys(out: list) -> list:
+        """Verification keys for the records that loaded — fed to the Reconciler to
+        prove each one persisted in the target system of record."""
+        return [r["verify_key"] for r in out if r.get("ok") and r.get("verify_key")]

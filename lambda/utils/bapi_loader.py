@@ -64,6 +64,7 @@ class BapiLoader:
             self._commit()
         verified = self._verify_but000(bp) if (commit and verify) else None
         return {"status": "created", "partner": bp, "verified": verified,
+                "verify_key": {"table": "BUT000", "key": {"PARTNER": bp}},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") == "W"]}
 
     def _verify_but000(self, partner: str) -> bool:
@@ -92,6 +93,7 @@ class BapiLoader:
         if commit:
             self._commit()
         return {"status": "created", "material": matnr,
+                "verify_key": {"table": "MARA", "key": {"MATNR": matnr}},
                 "messages": [m.get("MESSAGE") for m in ret]}
 
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
@@ -200,5 +202,10 @@ class BapiLoader:
         msgs = [m.get("MESSAGE") for m in ret]
         if clamped:
             msgs.append(f"valid-from clamped to {valid_from.isoformat()} (source date out of BAPI range)")
+        gdatu = str(99999999 - int(valid_from.strftime("%Y%m%d")))   # TCURR stores inverted date
         return {"status": "created",
-                "rate": f"{fcurr}->{tcurr}@{valid_from.isoformat()}", "messages": msgs}
+                "rate": f"{fcurr}->{tcurr}@{valid_from.isoformat()}",
+                "verify_key": {"table": "TCURR",
+                               "key": {"KURST": rate_type, "FCURR": fcurr,
+                                       "TCURR": tcurr, "GDATU": gdatu}},
+                "messages": msgs}

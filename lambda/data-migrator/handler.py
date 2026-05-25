@@ -49,6 +49,11 @@ try:
 except Exception:  # pragma: no cover
     CurrencyConfigReconciler = None
 
+try:
+    from reconciler import Reconciler  # type: ignore
+except Exception:  # pragma: no cover
+    Reconciler = None
+
 S3 = boto3.client("s3")
 SECRETS = boto3.client("secretsmanager")
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hanav2-staging-dev")
@@ -235,6 +240,16 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
         except Exception as e:
             result["load"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
 
+    # RECONCILE: prove every record the BAPI said it created actually persisted in
+    # the target's system of record (reads keys back; ties created == verified).
+    if (loader is not None and Reconciler is not None and result.get("load")
+            and "error" not in result["load"]):
+        try:
+            result["reconciliation"] = Reconciler(loader.c).reconcile(
+                obj_name, result["load"], extracted=len(rows))
+        except Exception as e:
+            result["reconciliation"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
+
     # ExchangeRates: run the currency-customizing READINESS check. Rates only post
     # when their TCURV type + TCURF factor exist in the target; this reports the
     # exact prerequisite delta (and its coverage impact) and emits a deploy package
@@ -313,6 +328,9 @@ def lambda_handler(event, context):
 
         # Write batch summary so downstream validator can read it
         loaded_to_s4 = sum((r.get("load", {}) or {}).get("created_in_s4", 0) for r in results)
+        recon_reports = [r["reconciliation"] for r in results
+                         if isinstance(r.get("reconciliation"), dict)
+                         and "error" not in r["reconciliation"]]
         summary = {"run_id": run_id, "mode": mode, "object_count": len(results),
                    "ok_count": sum(1 for r in results if r.get("status") == "ok"),
                    "partial_count": sum(1 for r in results if r.get("status") == "partial"),
@@ -320,6 +338,7 @@ def lambda_handler(event, context):
                    "skipped_count": sum(1 for r in results if r.get("status") == "skipped"),
                    "load_to_s4_enabled": bool(loader),
                    "objects_created_in_s4": loaded_to_s4,
+                   "reconciliation": Reconciler.rollup(recon_reports) if Reconciler else None,
                    "results": results}
         S3.put_object(Bucket=STAGING_BUCKET,
                       Key=f"runs/{run_id}/data-migrator/summary.json",
