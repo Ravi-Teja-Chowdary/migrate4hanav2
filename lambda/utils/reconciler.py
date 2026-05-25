@@ -31,6 +31,8 @@ except Exception:  # pragma: no cover
 _OPTLINE = 72          # RFC_READ_TABLE OPTIONS: each line must be <= 72 chars
 _CHUNK = 10            # keys per existence query (keeps the WHERE well within limits)
 _NUM_TOL = 1e-4        # relative tolerance for numeric (amount/rate) value tie-out
+_EFF_TOL = 1e-3        # looser tol for effective rates: TCURR.UKURS has finite decimals,
+                       # so factor-scaled rates carry ~0.01-0.1% storage rounding
 
 
 class Reconciler:
@@ -130,6 +132,61 @@ class Reconciler:
                 value_ok += 1
         return exists, value_checked, value_ok, mismatches
 
+    def _read_keyed(self, table: str, keyf: list, records: list, extra: list) -> dict:
+        """Batch-read `table` for the records' keys; return {keytuple: {field: val}}."""
+        out, readf = {}, keyf + [f for f in extra if f not in keyf]
+        for i in range(0, len(records), _CHUNK):
+            terms = ["( " + " AND ".join("%s = '%s'" % (f, str(r["key"][f]).strip())
+                                         for f in keyf) + " )" for r in records[i:i + _CHUNK]]
+            try:
+                res = self.c.call("RFC_READ_TABLE", QUERY_TABLE=table, DELIMITER="|",
+                                  OPTIONS=self._pack_options(" OR ".join(terms)),
+                                  FIELDS=[{"FIELDNAME": f} for f in readf], ROWCOUNT=0)
+                for d in res.get("DATA", []):
+                    vals = [x.strip() for x in d["WA"].split("|")]
+                    rowd = dict(zip(readf, vals))
+                    out[tuple(rowd[f] for f in keyf)] = rowd
+            except Exception:
+                pass
+        return out
+
+    def _verify_exrate_effective(self, records: list) -> tuple:
+        """Exchange-rate value tie-out done right: TCURR.UKURS is factor-normalized, so
+        compare stored UKURS * (TCURF TFACT/FFACT) against the rate we sent. Reads UKURS
+        and the per-pair TCURF factor in batches (scales to thousands)."""
+        keyf = ["KURST", "FCURR", "TCURR", "GDATU"]
+        stored = self._read_keyed("TCURR", keyf, records, ["UKURS"])
+        # one factor per (type,from,to) — stable across GDATU; default 1:1 if none
+        pf = ["KURST", "FCURR", "TCURR"]
+        pair_recs, seen = [], set()
+        for r in records:
+            p = tuple(r["key"][f] for f in pf)
+            if p not in seen:
+                seen.add(p)
+                pair_recs.append({"key": {f: r["key"][f] for f in pf}})
+        facrows = self._read_keyed("TCURF", pf, pair_recs, ["FFACT", "TFACT"])
+        factor = {k: (parse_sap_number(v.get("FFACT"), 1) or 1, parse_sap_number(v.get("TFACT"), 1) or 1)
+                  for k, v in facrows.items()}
+
+        exists = value_checked = value_ok = 0
+        mismatches = []
+        for r in records:
+            ktup = tuple(str(r["key"][f]).strip() for f in keyf)
+            row = stored.get(ktup)
+            if row is None:
+                continue
+            exists += 1
+            value_checked += 1
+            ff, tf = factor.get(tuple(str(r["key"][f]).strip() for f in pf), (1.0, 1.0))
+            effective = parse_sap_number(row.get("UKURS")) * tf / ff
+            expected = parse_sap_number(r.get("effective_rate"))
+            if abs(expected - effective) <= _EFF_TOL * max(abs(expected), abs(effective), 1.0):
+                value_ok += 1
+            else:
+                mismatches.append({"key": r["key"], "field": "effective_rate",
+                                   "expected": r.get("effective_rate"), "actual": round(effective, 5)})
+        return exists, value_checked, value_ok, mismatches[:10]
+
     def reconcile(self, obj: str, load_result: dict, extracted: int = None) -> dict:
         """Tie out one object's load against the target system of record — both
         existence (created == verified) and value (sent == stored)."""
@@ -141,7 +198,10 @@ class Reconciler:
         verified = value_checked = value_ok = 0
         mismatches = []
         for table, recs in grouped.items():
-            ex, vc, vo, mm = self._verify_records(table, recs)
+            if table == "TCURR" and any("effective_rate" in r for r in recs):
+                ex, vc, vo, mm = self._verify_exrate_effective(recs)
+            else:
+                ex, vc, vo, mm = self._verify_records(table, recs)
             verified += ex
             value_checked += vc
             value_ok += vo

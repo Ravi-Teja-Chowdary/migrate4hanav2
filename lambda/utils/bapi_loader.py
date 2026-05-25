@@ -339,10 +339,9 @@ class BapiLoader:
                 "EXCH_RATE": exch,
                 "FROM_FACTOR": str(int(parse_sap_number(row.get("FFACT"), 1)) or 1),
                 "TO_FACTOR": str(int(parse_sap_number(row.get("TFACT"), 1)) or 1)}
-        # Existence-only verify: TCURR.UKURS is factor-normalized by the BAPI (a rate
-        # for a pair with a TCURF factor of 100 is stored /100), so a raw value compare
-        # would false-flag. Effective-rate tie-out (UKURS x factor) is a future step.
-        vkey = {"table": "TCURR",
+        # Effective-rate tie-out: TCURR.UKURS is factor-normalized by the BAPI, so the
+        # reconciler verifies stored UKURS * TCURF(TFACT/FFACT) == the rate we sent.
+        vkey = {"table": "TCURR", "effective_rate": exch,
                 "key": {"KURST": rate_type, "FCURR": line["FROM_CURR"],
                         "TCURR": line["TO_CURRNCY"], "GDATU": gdatu}}
         return line, vkey
@@ -434,9 +433,8 @@ class BapiLoader:
         gdatu = str(99999999 - int(valid_from.strftime("%Y%m%d")))   # TCURR stores inverted date
         return {"status": "created",
                 "rate": f"{fcurr}->{tcurr}@{valid_from.isoformat()}",
-                # Existence-only: TCURR.UKURS is factor-normalized by the BAPI, so a raw
-                # value compare false-flags factored currencies (see _exrate_line).
-                "verify_key": {"table": "TCURR",
+                # Effective-rate tie-out: reconciler checks UKURS*TCURF factor == sent.
+                "verify_key": {"table": "TCURR", "effective_rate": exch_rate,
                                "key": {"KURST": rate_type, "FCURR": fcurr,
                                        "TCURR": tcurr, "GDATU": gdatu}},
                 "messages": msgs}
