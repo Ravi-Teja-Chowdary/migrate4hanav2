@@ -37,21 +37,30 @@ def _bp_name_fields(name: str, category: str) -> dict:
     return {"OrganizationBPName1": name[:40]}            # organization
 
 
+def _address(country, city, postal_code, street, language):
+    # A BP needs a standard address; the address language also supplies KNA1/LFA1-SPRAS.
+    return {"results": [{"Country": country, "CityName": city, "PostalCode": postal_code,
+                         "StreetName": street, "Language": language}]}
+
+
 def create_customer(oc, name: str, company_code: str, recon_account: str,
                     grouping: str = "", sales_org: str = None, distr_chan: str = None,
-                    division: str = None, country: str = "US", category: str = "2") -> dict:
-    """Create a customer (BP + FLCU01 role + company-code [+ sales area]) in one deep-insert.
-    Returns {status, partner, customer, messages}."""
+                    division: str = None, country: str = "US", city: str = "New York",
+                    postal_code: str = "10001", street: str = "1 Migration Way",
+                    language: str = "EN", currency: str = "USD", category: str = "2") -> dict:
+    """Create a customer (BP + FLCU01 role + standard address + company-code [+ sales area])
+    in one deep-insert. Returns {status, partner, customer, messages}."""
     customer = {"to_CustomerCompany": {"results": [
         {"CompanyCode": company_code, "ReconciliationAccount": recon_account}]}}
     if sales_org:
         customer["to_CustomerSalesArea"] = {"results": [
             {"SalesOrganization": sales_org, "DistributionChannel": distr_chan or "10",
-             "Division": division or "00"}]}
+             "Division": division or "00", "Currency": currency}]}
     payload = {
         "BusinessPartnerCategory": category,
         "BusinessPartnerGrouping": grouping,            # blank -> standard internal grouping
         "to_BusinessPartnerRole": {"results": [{"BusinessPartnerRole": "FLCU01"}]},
+        "to_BusinessPartnerAddress": _address(country, city, postal_code, street, language),
         "to_Customer": customer,
     }
     payload.update(_bp_name_fields(name, category))
@@ -60,8 +69,10 @@ def create_customer(oc, name: str, company_code: str, recon_account: str,
 
 def create_supplier(oc, name: str, company_code: str, recon_account: str,
                     grouping: str = "", purch_org: str = None, country: str = "US",
+                    city: str = "New York", postal_code: str = "10001",
+                    street: str = "1 Migration Way", language: str = "EN",
                     category: str = "2") -> dict:
-    """Create a supplier (BP + FLVN01 role + company-code [+ purchasing org]) in one deep-insert."""
+    """Create a supplier (BP + FLVN01 role + standard address + company-code [+ purchasing org])."""
     supplier = {"to_SupplierCompany": {"results": [
         {"CompanyCode": company_code, "ReconciliationAccount": recon_account}]}}
     if purch_org:
@@ -70,6 +81,7 @@ def create_supplier(oc, name: str, company_code: str, recon_account: str,
         "BusinessPartnerCategory": category,
         "BusinessPartnerGrouping": grouping,
         "to_BusinessPartnerRole": {"results": [{"BusinessPartnerRole": "FLVN01"}]},
+        "to_BusinessPartnerAddress": _address(country, city, postal_code, street, language),
         "to_Supplier": supplier,
     }
     payload.update(_bp_name_fields(name, category))
