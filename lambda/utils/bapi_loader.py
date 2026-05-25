@@ -79,25 +79,93 @@ class BapiLoader:
             return False
 
     # ── Material (BAPI is cleaner than the MATMAS IDoc) ─────────────────────
-    def create_material(self, matnr: str, mtype="HALB", ind="M", uom="EA",
-                        desc="Migrate4HANA material", commit: bool = True) -> dict:
+    def _material_identity(self, matnr: str):
+        """(MTART, MBRSH) if the material exists in the target, else None."""
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="MARA", DELIMITER="|",
+                            OPTIONS=[{"TEXT": f"MATNR = '{matnr}'"}],
+                            FIELDS=[{"FIELDNAME": "MTART"}, {"FIELDNAME": "MBRSH"}], ROWCOUNT=1)
+            if r.get("DATA"):
+                v = [x.strip() for x in r["DATA"][0]["WA"].split("|")]
+                return (v[0], v[1])
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _remap_matnr(matnr: str) -> str:
+        """Deterministic, reversible collision-free target number for a source MATNR."""
+        return ("M4H" + (matnr.lstrip("0") or "0"))[:40]
+
+    def _save_material(self, matnr, mtype, ind, uom, desc, commit):
         res = self.c.call("BAPI_MATERIAL_SAVEDATA",
                           HEADDATA={"MATERIAL": matnr, "IND_SECTOR": ind,
                                     "MATL_TYPE": mtype, "BASIC_VIEW": "X"},
                           CLIENTDATA={"BASE_UOM": uom}, CLIENTDATAX={"BASE_UOM": "X"},
                           MATERIALDESCRIPTION=[{"LANGU": "EN", "MATL_DESC": desc}])
         ret = self._ret(res)
-        errs = [m for m in ret if m.get("TYPE") in ("E", "A")]
-        if errs:
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
             self._rollback()
-            return {"status": "failed", "material": matnr,
-                    "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret]}
+            return None, [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret]
         if commit:
             self._commit()
-        return {"status": "created", "material": matnr,
-                "verify_key": {"table": "MARA", "key": {"MATNR": matnr},
-                               "values": {"MTART": mtype, "MEINS": uom}},
-                "messages": [m.get("MESSAGE") for m in ret]}
+        return matnr, [m.get("MESSAGE") for m in ret]
+
+    def create_material(self, matnr: str, mtype="HALB", ind="M", uom="EA",
+                        desc="Migrate4HANA material", commit: bool = True,
+                        on_collision: str = "remap") -> dict:
+        """Collision-aware material load with a source->target key strategy. A source
+        MATNR may already name a DIFFERENT material in the target (common between IDES
+        clones). We never silently extend the wrong material:
+          - absent in target           -> create with the retained number ("created")
+          - present, same identity      -> idempotent ("matched_existing")
+          - present, different identity -> COLLISION: remap to a collision-free number
+            preserving the source's identity ("remapped"), or skip if on_collision=skip.
+        Always returns a key_mapping (source->target+disposition) for traceability and
+        for dependent objects to follow."""
+        matnr = (matnr or "").strip()
+
+        def ok(status, target, msgs):
+            return {"status": status, "material": target,
+                    "verify_key": {"table": "MARA", "key": {"MATNR": target},
+                                   "values": {"MTART": mtype}},
+                    "key_mapping": {"source": matnr, "target": target, "disposition": status},
+                    "messages": msgs}
+
+        ident = self._material_identity(matnr) if matnr else None
+        if matnr and ident is None:                              # net-new -> retain number
+            tgt, msgs = self._save_material(matnr, mtype, ind, uom, desc, commit)
+            return ok("created", tgt, msgs) if tgt else {
+                "status": "failed", "material": matnr,
+                "key_mapping": {"source": matnr, "target": matnr, "disposition": "create_failed"},
+                "messages": msgs}
+        if ident and ident == (mtype, ind):                      # already there, same identity
+            return ok("matched_existing", matnr,
+                      [f"material {matnr} already present with type {mtype}"])
+        # COLLISION — a different material occupies this number
+        if on_collision == "skip" or not matnr:
+            return {"status": "collision", "material": matnr,
+                    "key_mapping": {"source": matnr, "target": None,
+                                    "disposition": "collision_skipped",
+                                    "existing": ident, "desired": [mtype, ind]},
+                    "messages": [f"MATNR {matnr} collides (target {ident} vs source "
+                                 f"{(mtype, ind)}); skipped to avoid corrupting it"]}
+        remapped = self._remap_matnr(matnr)
+        rident = self._material_identity(remapped)
+        tag = f"{desc} [migrated from {matnr}]"
+        if rident is None:
+            tgt, msgs = self._save_material(remapped, mtype, ind, uom, tag, commit)
+            return ok("remapped", tgt, msgs) if tgt else {
+                "status": "failed", "material": remapped,
+                "key_mapping": {"source": matnr, "target": remapped, "disposition": "remap_failed"},
+                "messages": msgs}
+        if rident == (mtype, ind):
+            return ok("remapped_matched", remapped,
+                      [f"remapped material {remapped} already present with type {mtype}"])
+        return {"status": "collision", "material": matnr,
+                "key_mapping": {"source": matnr, "target": remapped,
+                                "disposition": "remap_collision"},
+                "messages": [f"both {matnr} and remap {remapped} occupied by other materials"]}
 
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window

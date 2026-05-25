@@ -52,19 +52,31 @@ class UnifiedLoader:
         # no static screen fully predicts. So attempt-and-classify — see _load_exrate.
         if mech == ("bapi", "exrate"):
             return self._load_exrate(obj, mech, rows, max_rows)
-        out = []
-        for row in rows[:max_rows]:
+        # Scan for max_rows successes (collisions/skips don't consume the budget),
+        # capped so a fully-blocked object can't loop forever.
+        out, created, scanned = [], 0, 0
+        scan_cap = max(max_rows * 20, 60)
+        for row in rows:
+            if created >= max_rows or scanned >= scan_cap:
+                break
+            scanned += 1
             try:
-                out.append(self._load_one(obj, mech, row))
+                res = self._load_one(obj, mech, row)
             except Exception as e:
-                out.append({"ok": False, "status": "exception",
-                            "msg": f"{type(e).__name__}: {str(e)[:140]}"})
-        created = sum(1 for r in out if r.get("ok"))
-        return {"object": obj, "mechanism": f"{mech[0]}/{mech[1] or ''}".rstrip("/"),
-                "attempted": len(out), "created_in_s4": created,
-                "status_breakdown": dict(Counter(r.get("status") for r in out)),
-                "created_keys": self._created_keys(out),
-                "samples": out[:3]}
+                res = {"ok": False, "status": "exception",
+                       "msg": f"{type(e).__name__}: {str(e)[:140]}"}
+            out.append(res)
+            if res.get("ok"):
+                created += 1
+        result = {"object": obj, "mechanism": f"{mech[0]}/{mech[1] or ''}".rstrip("/"),
+                  "attempted": len(out), "created_in_s4": created,
+                  "status_breakdown": dict(Counter(r.get("status") for r in out)),
+                  "created_keys": self._created_keys(out),
+                  "samples": [r for r in out if r.get("ok")][:3] or out[:3]}
+        kmaps = self._key_mappings(out)
+        if kmaps:
+            result["key_mappings"] = kmaps
+        return result
 
     def _load_exrate(self, obj: str, mech: tuple, rows: list, max_rows: int,
                      scan_cap: int = 120) -> dict:
@@ -126,9 +138,10 @@ class UnifiedLoader:
             mtart = self.resolver.resolve("MARA", "MTART", row)["value"] or "HALB"
             meins = self.resolver.resolve("MARA", "MEINS", row)["value"] or "EA"
             r = self.bapi.create_material(matnr or None, mtype=mtart, uom=meins, commit=True)
-            return {"ok": r["status"] == "created", "status": r["status"],
+            ok_states = {"created", "matched_existing", "remapped", "remapped_matched"}
+            return {"ok": r["status"] in ok_states, "status": r["status"],
                     "id": r.get("material"), "verify_key": r.get("verify_key"),
-                    "msg": r.get("messages")}
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "bapi" and sub == "exrate":
             r = self.bapi.create_exchange_rate(row, commit=True)
             return {"ok": r["status"] == "created", "status": r["status"],
@@ -144,3 +157,9 @@ class UnifiedLoader:
         """Verification keys for the records that loaded — fed to the Reconciler to
         prove each one persisted in the target system of record."""
         return [r["verify_key"] for r in out if r.get("ok") and r.get("verify_key")]
+
+    @staticmethod
+    def _key_mappings(out: list) -> list:
+        """source->target key dispositions (created/matched/remapped/collision) — the
+        traceability record dependent objects follow, and proof we never corrupt."""
+        return [r["key_mapping"] for r in out if r.get("key_mapping")]
