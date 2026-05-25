@@ -23,6 +23,23 @@ except Exception:  # pragma: no cover
     BapiLoader = IDocLoader = MetaRecipeResolver = None
     IDOC_RECIPES = {}
 
+try:
+    import bp_odata   # OData path: create TRANSACTION-READY customers/suppliers (BP-led)
+except Exception:  # pragma: no cover
+    bp_odata = None
+
+# Target org/config for OData partner creation (env-overridable). Recon accounts are the
+# customer/vendor reconciliation GLs in the target company (verified live: 0012100100 / 0021102200).
+BP_TARGET_ORG = {
+    "COMP_CODE":  os.environ.get("M4H_BP_COMP_CODE", "1710"),
+    "CUST_RECON": os.environ.get("M4H_BP_CUST_RECON", "0012100100"),
+    "VEND_RECON": os.environ.get("M4H_BP_VEND_RECON", "0021102200"),
+    "SALES_ORG":  os.environ.get("M4H_BP_SALES_ORG", "1710"),
+    "DISTR_CHAN": os.environ.get("M4H_BP_DISTR_CHAN", "10"),
+    "DIVISION":   os.environ.get("M4H_BP_DIVISION", "00"),
+    "PURCH_ORG":  os.environ.get("M4H_BP_PURCH_ORG", "1710"),
+}
+
 # object -> (mechanism, sub-kind)
 OBJECT_MECHANISM = {
     "Customer":        ("bapi", "bp"),
@@ -68,8 +85,21 @@ class UnifiedLoader:
         self.resolver = MetaRecipeResolver(tconn)
         self.key_map = None        # live source->target registry (set by the handler)
         self.source_conn = None    # ECC conn, for reading dependent rows (PO items)
+        self.odata = None          # OData client for transaction-ready partner creation
         self.po_org = dict(PO_TARGET_ORG)
         self.fi_org = dict(FI_TARGET_ORG)
+        self.bp_org = dict(BP_TARGET_ORG)
+
+    def odata_ready(self) -> bool:
+        """True if the OData BP service is available — gates transaction-ready partner
+        creation; falls back to bare-BP RFC otherwise. Cached per run."""
+        if self.odata is None or bp_odata is None:
+            return False
+        cache = getattr(self, "_odata_ok", None)
+        if cache is None:
+            cache = bp_odata.is_service_active(self.odata)
+            self._odata_ok = cache
+        return cache
 
     def supported(self, obj: str) -> bool:
         return obj in OBJECT_MECHANISM
@@ -212,12 +242,34 @@ class UnifiedLoader:
         if kind == "bapi" and sub == "bp":
             src_key = (row.get("KUNNR") or row.get("LIFNR") or row.get("PARTNER") or "").strip()
             name = (row.get("NAME1") or row.get("MCOD1")
-                    or ("BP " + src_key).strip())
-            r = self.bapi.create_business_partner(name.strip() or "Migrated BP",
-                                                  category="2", commit=True)
+                    or ("BP " + src_key).strip()) or "Migrated BP"
+            # Preferred: create a TRANSACTION-READY customer/supplier via OData (BP-led,
+            # with company-code + sales/purchasing facets) so dependent docs reference a
+            # truly-migrated partner. Falls back to bare-BP RFC if the service is absent.
+            o = self.bp_org
+            if obj in ("Customer", "Vendor") and self.odata_ready():
+                if obj == "Customer":
+                    r = bp_odata.create_customer(self.odata, name, o["COMP_CODE"], o["CUST_RECON"],
+                                                 sales_org=o["SALES_ORG"], distr_chan=o["DISTR_CHAN"],
+                                                 division=o["DIVISION"])
+                    tbl, kf, recon = "KNB1", "KUNNR", o["CUST_RECON"]
+                else:
+                    r = bp_odata.create_supplier(self.odata, name, o["COMP_CODE"], o["VEND_RECON"],
+                                                 purch_org=o["PURCH_ORG"])
+                    tbl, kf, recon = "LFB1", "LIFNR", o["VEND_RECON"]
+                ok = r["status"] == "created"
+                num = (r.get("partner") or "")
+                pk = num.zfill(10) if num.isdigit() else num
+                vkey = ({"table": tbl, "key": {kf: pk, "BUKRS": o["COMP_CODE"]},
+                         "values": {"AKONT": recon}} if ok else None)
+                kmap = ({"source": src_key, "target": pk, "disposition": "created_ready"}
+                        if ok and src_key else None)
+                return {"ok": ok, "status": "created_ready" if ok else "failed",
+                        "id": pk, "verify_key": vkey, "key_mapping": kmap,
+                        "msg": r.get("messages")}
+            # fallback: bare BP via RFC (no company-code/sales facets)
+            r = self.bapi.create_business_partner(name, category="2", commit=True)
             created = r["status"] == "created"
-            # source customer/vendor/BP -> new target partner number (transactional
-            # data must follow this); recorded in the run's key registry.
             kmap = ({"source": src_key, "target": r.get("partner"), "disposition": "created"}
                     if created and src_key else None)
             return {"ok": created, "status": r["status"],

@@ -106,6 +106,19 @@ def _target_connection():
                       passwd=sec.get("passwd") or sec.get("password"), lang="EN")
 
 
+def _target_odata():
+    """OData (HTTPS gateway) client to the TARGET S/4 — the door RFC can't open for
+    transaction-ready partner creation. None if requests/odata_client unavailable."""
+    try:
+        from odata_client import ODataClient
+        sec = json.loads(SECRETS.get_secret_value(SecretId="local:target")["SecretString"])
+        port = int(os.environ.get("M4H_ODATA_PORT", "44300"))
+        return ODataClient(sec["ashost"], sec["user"], sec.get("passwd") or sec.get("password"),
+                           client=sec.get("client", "100"), port=port)
+    except Exception:
+        return None
+
+
 def _emit_mc_csv(run_id: str, obj_name: str, rows: list, cols: list) -> str:
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=cols)
@@ -339,8 +352,10 @@ def lambda_handler(event, context):
                 if KeyMap is not None:
                     loader.key_map = KeyMap()
                 loader.source_conn = conn
+                loader.odata = _target_odata()   # transaction-ready partner creation (OData)
                 log_stage_event(run_id, "data-migrator", "load_enabled",
-                                {"max_rows": LOAD_MAX_ROWS, "mechanisms": OBJECT_MECHANISM})
+                                {"max_rows": LOAD_MAX_ROWS, "mechanisms": OBJECT_MECHANISM,
+                                 "odata_partner_create": bool(loader.odata and loader.odata_ready())})
             except Exception as e:
                 log_stage_event(run_id, "data-migrator", "load_disabled", {"reason": str(e)[:160]})
 
