@@ -321,9 +321,13 @@ class BapiLoader:
         if commit:
             self._commit()
         belnr, bk, gj = objkey[:10], objkey[10:14], objkey[14:18]
+        # Verify against the OPEN-ITEM table (BSID/BSIK): proves the item exists AND
+        # carries the right amount (WRBTR, doc currency) — the financial tie-out that
+        # matters for receivables/payables. Stronger than a BKPF header existence check.
         return {"status": "created", "doc": belnr, "partner": partner_ref,
-                "verify_key": {"table": "BKPF", "key": {"BUKRS": bk or bukrs,
-                                                        "BELNR": belnr, "GJAHR": gj}},
+                "verify_key": {"table": "BSID" if is_ar else "BSIK",
+                               "key": {"BUKRS": bk or bukrs, "BELNR": belnr, "GJAHR": gj},
+                               "values": {"WRBTR": round(amount, 2)}},
                 "key_mapping": {"source": src_doc, "target": belnr, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
 
