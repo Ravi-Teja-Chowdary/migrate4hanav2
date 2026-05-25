@@ -44,6 +44,11 @@ except Exception:  # pragma: no cover
     UnifiedLoader = None
     OBJECT_MECHANISM = {}
 
+try:
+    from currency_config import CurrencyConfigReconciler  # type: ignore
+except Exception:  # pragma: no cover
+    CurrencyConfigReconciler = None
+
 S3 = boto3.client("s3")
 SECRETS = boto3.client("secretsmanager")
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hanav2-staging-dev")
@@ -127,6 +132,19 @@ def _emit_ltmom_spec(run_id: str, obj_name: str, cols: list) -> str:
     S3.put_object(Bucket=STAGING_BUCKET, Key=key, Body=json.dumps(spec, indent=2).encode(),
                   ContentType="application/json")
     return f"s3://{STAGING_BUCKET}/{key}"
+
+
+def _emit_currency_config(run_id: str, manifest: dict, csv_text: str) -> dict:
+    """Write the currency-customizing deploy package (the prerequisite TCURV rate
+    types + TCURF factors the target is missing) for controlled, transport-grade
+    apply. Returns the artifact locations."""
+    base = f"runs/{run_id}/data-migrator/config/exchange_rate_customizing"
+    S3.put_object(Bucket=STAGING_BUCKET, Key=f"{base}.json",
+                  Body=json.dumps(manifest, indent=2).encode(), ContentType="application/json")
+    S3.put_object(Bucket=STAGING_BUCKET, Key=f"{base}.csv",
+                  Body=csv_text.encode(), ContentType="text/csv")
+    return {"manifest": f"s3://{STAGING_BUCKET}/{base}.json",
+            "review_csv": f"s3://{STAGING_BUCKET}/{base}.csv"}
 
 
 # ── Object → source-table mapping for batch-mode runs ────────────────────────
@@ -216,6 +234,28 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
             result["load"] = loader.load_object(obj_name, rows, LOAD_MAX_ROWS)
         except Exception as e:
             result["load"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
+
+    # ExchangeRates: run the currency-customizing READINESS check. Rates only post
+    # when their TCURV type + TCURF factor exist in the target; this reports the
+    # exact prerequisite delta (and its coverage impact) and emits a deploy package
+    # the config team applies via transport — closing the gap to ~100% the right way.
+    if (obj_name == "ExchangeRates" and loader is not None and rows
+            and CurrencyConfigReconciler is not None):
+        try:
+            rec = CurrencyConfigReconciler(conn, loader.c)
+            rep = rec.diff(rate_rows=rows)
+            manifest, csv_text = rec.build_artifact(rep)
+            artifacts.update(_emit_currency_config(run_id, manifest, csv_text))
+            result["currency_config_readiness"] = {
+                "coverage_before": rep["coverage_before"],
+                "coverage_after_provisioning": rep["coverage_after_provisioning"],
+                "missing_rate_types": rep["missing_rate_type_count"],
+                "missing_factors": rep["missing_factor_count"],
+                "deploy_package": {"manifest": artifacts.get("manifest"),
+                                   "review_csv": artifacts.get("review_csv")},
+            }
+        except Exception as e:
+            result["currency_config_readiness"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
     return result
 
 
