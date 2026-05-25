@@ -59,6 +59,11 @@ try:
 except Exception:  # pragma: no cover
     KeyMap = None
 
+try:
+    import compliance  # type: ignore
+except Exception:  # pragma: no cover
+    compliance = None
+
 S3 = boto3.client("s3")
 SECRETS = boto3.client("secretsmanager")
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hanav2-staging-dev")
@@ -387,6 +392,7 @@ def lambda_handler(event, context):
                    "load_to_s4_enabled": bool(loader),
                    "objects_created_in_s4": loaded_to_s4,
                    "reconciliation": Reconciler.rollup(recon_reports) if Reconciler else None,
+                   "support_compliance": compliance.audit(results) if compliance else None,
                    "key_mapping": key_map_info,
                    "results": results}
         S3.put_object(Bucket=STAGING_BUCKET,
