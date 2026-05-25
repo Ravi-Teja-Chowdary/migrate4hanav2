@@ -11,6 +11,7 @@ whether an object goes via BAPI, IDoc, or (later) Migration Cockpit.
     BankStatements                      -> IDoc
 """
 from __future__ import annotations
+import os
 from collections import Counter
 
 try:
@@ -28,7 +29,22 @@ OBJECT_MECHANISM = {
     "BusinessPartner": ("bapi", "bp"),
     "Material":        ("bapi", "material"),
     "ExchangeRates":   ("bapi", "exrate"),
+    "OpenPO":          ("bapi", "po"),
     "BankStatements":  ("idoc", None),
+}
+
+# Target org model that source POs are remapped into. In production this is a
+# business-provided org-mapping table; here it's a config default (S/4 BP 1710 model).
+PO_TARGET_ORG = {
+    "COMP_CODE": os.environ.get("M4H_PO_COMP_CODE", "1710"),
+    "PURCH_ORG": os.environ.get("M4H_PO_PURCH_ORG", "1710"),
+    "PLANT":     os.environ.get("M4H_PO_PLANT", "1710"),
+    "PUR_GROUP": os.environ.get("M4H_PO_PUR_GROUP", "001"),
+    "DOC_TYPE":  os.environ.get("M4H_PO_DOC_TYPE", "NB"),
+    "PO_UNIT":   os.environ.get("M4H_PO_UNIT", "EA"),
+    "MATL_GROUP": os.environ.get("M4H_PO_MATL_GROUP", "L001"),
+    "GL_ACCOUNT": os.environ.get("M4H_PO_GL_ACCOUNT", "0052513000"),
+    "COSTCENTER": os.environ.get("M4H_PO_COSTCENTER", "0017101601"),
 }
 
 
@@ -39,6 +55,9 @@ class UnifiedLoader:
         self.bapi = BapiLoader(tconn)
         self.idoc = IDocLoader(tconn, own_logical_system, sender, client, target_sid)
         self.resolver = MetaRecipeResolver(tconn)
+        self.key_map = None        # live source->target registry (set by the handler)
+        self.source_conn = None    # ECC conn, for reading dependent rows (PO items)
+        self.po_org = dict(PO_TARGET_ORG)
 
     def supported(self, obj: str) -> bool:
         return obj in OBJECT_MECHANISM
@@ -76,6 +95,10 @@ class UnifiedLoader:
         kmaps = self._key_mappings(out)
         if kmaps:
             result["key_mappings"] = kmaps
+        # Populate the live registry as objects load (in DAG order), so later
+        # dependent objects (e.g. OpenPO -> Vendor) can resolve their references.
+        if self.key_map is not None:
+            self.key_map.add_many(obj, kmaps)
         return result
 
     def _load_exrate(self, obj: str, mech: tuple, rows: list, max_rows: int,
@@ -153,6 +176,14 @@ class UnifiedLoader:
             return {"ok": r["status"] == "created", "status": r["status"],
                     "id": r.get("rate"), "verify_key": r.get("verify_key"),
                     "msg": r.get("messages")}
+        if kind == "bapi" and sub == "po":
+            items = self._po_items(row.get("EBELN"))
+            r = self.bapi.create_purchase_order(row, items, self.po_org,
+                                                key_map=self.key_map, commit=True)
+            return {"ok": r["status"] == "created", "status": r["status"],
+                    "id": r.get("po"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "refs": r.get("vendor"),
+                    "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)
             return {"ok": bool(r.get("created")), "status": r.get("status"), "id": r.get("docnum")}
@@ -169,3 +200,21 @@ class UnifiedLoader:
         """source->target key dispositions (created/matched/remapped/collision) — the
         traceability record dependent objects follow, and proof we never corrupt."""
         return [r["key_mapping"] for r in out if r.get("key_mapping")]
+
+    _EKPO_FIELDS = ("EBELP", "MATNR", "WERKS", "MENGE", "MEINS", "NETPR", "KNTTP")
+
+    def _po_items(self, ebeln) -> list:
+        """Read a PO's items (EKPO) from the SOURCE system, on demand for the POs we
+        actually load (avoids enriching every extracted header)."""
+        ebeln = (ebeln or "").strip()
+        if not (self.source_conn and ebeln):
+            return []
+        try:
+            r = self.source_conn.call("RFC_READ_TABLE", QUERY_TABLE="EKPO", DELIMITER="|",
+                                      OPTIONS=[{"TEXT": f"EBELN = '{ebeln}'"}],
+                                      FIELDS=[{"FIELDNAME": f} for f in self._EKPO_FIELDS],
+                                      ROWCOUNT=100)
+            return [dict(zip(self._EKPO_FIELDS, [x.strip() for x in d["WA"].split("|")]))
+                    for d in r.get("DATA", [])]
+        except Exception:
+            return []

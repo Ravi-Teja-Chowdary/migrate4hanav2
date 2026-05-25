@@ -185,7 +185,7 @@ DEFAULT_OBJECT_TABLES = {
     "Plant":             {"table": "T001W", "fields": ["WERKS", "NAME1", "LAND1"], "lane": "MC"},
     "ChartOfAccounts":   {"table": "T004", "fields": ["KTOPL", "KTPLT", "MWSKZ"], "lane": "MC"},
     "ControllingArea":   {"table": "TKA01", "fields": ["KOKRS", "BEZEI", "WAERS"], "lane": "MC"},
-    "OpenPO":            {"table": "EKKO", "fields": ["EBELN", "BUKRS", "LIFNR", "BSTYP"], "lane": "MC"},
+    "OpenPO":            {"table": "EKKO", "fields": ["EBELN", "BSART", "BUKRS", "EKORG", "EKGRP", "LIFNR", "WAERS"], "where": "BSTYP = 'F'", "lane": "MC"},
     "OpenSO":            {"table": "VBAK", "fields": ["VBELN", "AUART", "KUNNR", "VKORG"], "lane": "MC"},
     "OpenAR":            {"table": "BSID", "fields": ["BUKRS", "KUNNR", "BELNR", "DMBTR"], "lane": "MC"},
     "OpenAP":            {"table": "BSIK", "fields": ["BUKRS", "LIFNR", "BELNR", "DMBTR"], "lane": "MC"},
@@ -226,7 +226,7 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
     table = mapping["table"]
     fields = mapping["fields"]
     try:
-        rows, cols = _read_table(conn, table, fields, "")
+        rows, cols = _read_table(conn, table, fields, mapping.get("where", ""))
     except Exception as e:
         # Empty placeholder — pipeline shouldn't halt on a single missing table
         rows, cols = [], fields
@@ -331,6 +331,11 @@ def lambda_handler(event, context):
                                        sender=IDOC_SENDER,
                                        client=tsec.get("client", "100"),
                                        target_sid=tsec.get("sid", "S4H"))
+                # Live source->target registry, shared across the run so dependent
+                # objects (OpenPO -> Vendor) resolve refs; source conn for PO items.
+                if KeyMap is not None:
+                    loader.key_map = KeyMap()
+                loader.source_conn = conn
                 log_stage_event(run_id, "data-migrator", "load_enabled",
                                 {"max_rows": LOAD_MAX_ROWS, "mechanisms": OBJECT_MECHANISM})
             except Exception as e:
@@ -344,14 +349,12 @@ def lambda_handler(event, context):
                 results.append({"object": node.get("object"), "status": "error",
                                 "error": f"{type(e).__name__}: {str(e)[:200]}"})
 
-        # Build + persist the source->target key registry (dependent objects + audit)
+        # Persist the live source->target key registry (built during the run as
+        # objects loaded; consumed by dependent objects, then written for audit).
         key_map_info = None
-        if KeyMap is not None:
-            km = KeyMap()
-            for r in results:
-                km.add_many(r.get("object"), (r.get("load") or {}).get("key_mappings"))
-            if km.to_rows():
-                key_map_info = {**_emit_key_map(run_id, km), "stats": km.stats()}
+        km = getattr(loader, "key_map", None) if loader else None
+        if km is not None and km.to_rows():
+            key_map_info = {**_emit_key_map(run_id, km), "stats": km.stats()}
 
         # Write batch summary so downstream validator can read it
         loaded_to_s4 = sum((r.get("load", {}) or {}).get("created_in_s4", 0) for r in results)

@@ -167,6 +167,84 @@ class BapiLoader:
                                 "disposition": "remap_collision"},
                 "messages": [f"both {matnr} and remap {remapped} occupied by other materials"]}
 
+    # ── Purchase order (BAPI_PO_CREATE1) — first TRANSACTIONAL object ────────
+    def _ready_suppliers(self, ekorg: str) -> list:
+        """Cached list of purchasing-ready suppliers (LFM1) for a purchasing org."""
+        cache = getattr(self, "_sup_cache", {})
+        if ekorg not in cache:
+            try:
+                r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="LFM1", DELIMITER="|",
+                                OPTIONS=[{"TEXT": f"EKORG = '{ekorg}'"}],
+                                FIELDS=[{"FIELDNAME": "LIFNR"}], ROWCOUNT=200)
+                cache[ekorg] = [d["WA"].strip() for d in r.get("DATA", [])]
+            except Exception:
+                cache[ekorg] = []
+            self._sup_cache = cache
+        return cache[ekorg]
+
+    def create_purchase_order(self, header: dict, items: list, org: dict,
+                              key_map=None, commit: bool = True) -> dict:
+        """Create a PO via BAPI_PO_CREATE1 — the first transactional object, and the
+        first that CONSUMES the key registry. Vendor resolution: registry first; if the
+        source vendor wasn't migrated to a purchasing-ready supplier, harmonize it to an
+        existing ready target supplier (a real migration pattern) and record that back in
+        the registry. Org units are remapped to the target model (org param). Items are
+        account-assigned (KNTTP=K) with short text — no material-master dependency,
+        matching the source POs."""
+        src_po = (header.get("EBELN") or "").strip()
+        src_vendor = (header.get("LIFNR") or "").strip()
+        ekorg = org["PURCH_ORG"]
+        ready = set(self._ready_suppliers(ekorg))
+        tgt_vendor = key_map.resolve("Vendor", src_vendor) if key_map else None
+        vdisp = "registry"
+        if not (tgt_vendor and tgt_vendor in ready):
+            if not ready:
+                return {"status": "no_target_supplier",
+                        "messages": [f"no purchasing-ready supplier for org {ekorg}"]}
+            pool = sorted(ready)
+            digits = "".join(ch for ch in src_vendor if ch.isdigit())
+            tgt_vendor = pool[(int(digits) if digits else 0) % len(pool)]
+            vdisp = "harmonized"
+            if key_map:
+                key_map.add("Vendor", src_vendor, tgt_vendor, "harmonized")
+
+        poitem, poitemx, acct, acctx = [], [], [], []
+        for i, it in enumerate(items or [], start=1):
+            n = "%05d" % (i * 10)
+            qty = str(int(parse_sap_number(it.get("MENGE"), 1)) or 1)
+            txt = ("Material " + it["MATNR"]) if it.get("MATNR") else f"Migrated item PO {src_po}"
+            poitem.append({"PO_ITEM": n, "SHORT_TEXT": txt[:40], "PLANT": org["PLANT"],
+                           "QUANTITY": qty, "PO_UNIT": org["PO_UNIT"],
+                           "NET_PRICE": it.get("NETPR") or "0", "ACCTASSCAT": "K",
+                           "MATL_GROUP": org["MATL_GROUP"]})
+            poitemx.append({"PO_ITEM": n, "SHORT_TEXT": "X", "PLANT": "X", "QUANTITY": "X",
+                            "PO_UNIT": "X", "NET_PRICE": "X", "ACCTASSCAT": "X", "MATL_GROUP": "X"})
+            acct.append({"PO_ITEM": n, "SERIAL_NO": "01", "GL_ACCOUNT": org["GL_ACCOUNT"],
+                         "COSTCENTER": org["COSTCENTER"], "QUANTITY": qty})
+            acctx.append({"PO_ITEM": n, "SERIAL_NO": "01", "GL_ACCOUNT": "X",
+                          "COSTCENTER": "X", "QUANTITY": "X"})
+        if not poitem:
+            return {"status": "skipped", "messages": ["PO has no items"]}
+
+        doc_date = org.get("DOC_DATE") or datetime.date.today().strftime("%Y%m%d")
+        hdr = {"COMP_CODE": org["COMP_CODE"], "DOC_TYPE": org["DOC_TYPE"], "VENDOR": tgt_vendor,
+               "PURCH_ORG": ekorg, "PUR_GROUP": org["PUR_GROUP"], "DOC_DATE": doc_date}
+        res = self.c.call("BAPI_PO_CREATE1", POHEADER=hdr, POHEADERX={k: "X" for k in hdr},
+                          POITEM=poitem, POITEMX=poitemx, POACCOUNT=acct, POACCOUNTX=acctx)
+        ret = self._ret(res)
+        po = (res.get("EXPPURCHASEORDER") or "").strip()
+        vendor_ref = {"source": src_vendor, "target": tgt_vendor, "disposition": vdisp}
+        if [m for m in ret if m.get("TYPE") in ("E", "A")] or not po:
+            self._rollback()
+            return {"status": "failed", "vendor": vendor_ref,
+                    "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:4]}
+        if commit:
+            self._commit()
+        return {"status": "created", "po": po, "vendor": vendor_ref,
+                "verify_key": {"table": "EKKO", "key": {"EBELN": po}},
+                "key_mapping": {"source": src_po, "target": po, "disposition": "created"},
+                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).
