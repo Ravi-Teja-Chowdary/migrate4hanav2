@@ -63,8 +63,10 @@ class BapiLoader:
         if commit:
             self._commit()
         verified = self._verify_but000(bp) if (commit and verify) else None
+        name_field = "NAME_LAST" if category == "1" else "NAME_ORG1"
         return {"status": "created", "partner": bp, "verified": verified,
-                "verify_key": {"table": "BUT000", "key": {"PARTNER": bp}},
+                "verify_key": {"table": "BUT000", "key": {"PARTNER": bp},
+                               "values": {"TYPE": category, name_field: name[:40]}},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") == "W"]}
 
     def _verify_but000(self, partner: str) -> bool:
@@ -93,7 +95,8 @@ class BapiLoader:
         if commit:
             self._commit()
         return {"status": "created", "material": matnr,
-                "verify_key": {"table": "MARA", "key": {"MATNR": matnr}},
+                "verify_key": {"table": "MARA", "key": {"MATNR": matnr},
+                               "values": {"MTART": mtype, "MEINS": uom}},
                 "messages": [m.get("MESSAGE") for m in ret]}
 
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
@@ -173,12 +176,13 @@ class BapiLoader:
             return {"status": "skipped_missing_ratetype", "rate_type": rate_type,
                     "messages": [f"rate type '{rate_type}' not defined in target (TCURV)"]}
         valid_from, clamped = self._gdatu_to_date(row.get("GDATU"))
+        exch_rate = parse_sap_number(row.get("UKURS"))           # honors trailing-minus (indirect quote)
         line = {
             "RATE_TYPE":   rate_type,
             "FROM_CURR":   fcurr,
             "TO_CURRNCY":  tcurr,
             "VALID_FROM":  valid_from,                           # datetime.date (DATS)
-            "EXCH_RATE":   parse_sap_number(row.get("UKURS")),   # FLTP; honors trailing-minus (indirect quote)
+            "EXCH_RATE":   exch_rate,                            # FLTP
             "FROM_FACTOR": str(int(parse_sap_number(row.get("FFACT"), 1)) or 1),  # DEC -> string
             "TO_FACTOR":   str(int(parse_sap_number(row.get("TFACT"), 1)) or 1),
         }
@@ -207,5 +211,6 @@ class BapiLoader:
                 "rate": f"{fcurr}->{tcurr}@{valid_from.isoformat()}",
                 "verify_key": {"table": "TCURR",
                                "key": {"KURST": rate_type, "FCURR": fcurr,
-                                       "TCURR": tcurr, "GDATU": gdatu}},
+                                       "TCURR": tcurr, "GDATU": gdatu},
+                               "values": {"UKURS": exch_rate}},   # financial value tie-out
                 "messages": msgs}
