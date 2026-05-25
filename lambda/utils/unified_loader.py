@@ -126,13 +126,19 @@ class UnifiedLoader:
     def _load_one(self, obj: str, mech: tuple, row: dict) -> dict:
         kind, sub = mech
         if kind == "bapi" and sub == "bp":
+            src_key = (row.get("KUNNR") or row.get("LIFNR") or row.get("PARTNER") or "").strip()
             name = (row.get("NAME1") or row.get("MCOD1")
-                    or ("BP " + (row.get("KUNNR") or row.get("LIFNR") or "")).strip())
+                    or ("BP " + src_key).strip())
             r = self.bapi.create_business_partner(name.strip() or "Migrated BP",
                                                   category="2", commit=True)
-            return {"ok": r["status"] == "created", "status": r["status"],
+            created = r["status"] == "created"
+            # source customer/vendor/BP -> new target partner number (transactional
+            # data must follow this); recorded in the run's key registry.
+            kmap = ({"source": src_key, "target": r.get("partner"), "disposition": "created"}
+                    if created and src_key else None)
+            return {"ok": created, "status": r["status"],
                     "id": r.get("partner"), "verify_key": r.get("verify_key"),
-                    "msg": r.get("messages")}
+                    "key_mapping": kmap, "msg": r.get("messages")}
         if kind == "bapi" and sub == "material":
             matnr = (row.get("MATNR") or "").strip()
             mtart = self.resolver.resolve("MARA", "MTART", row)["value"] or "HALB"

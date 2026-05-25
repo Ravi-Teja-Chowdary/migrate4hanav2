@@ -54,6 +54,11 @@ try:
 except Exception:  # pragma: no cover
     Reconciler = None
 
+try:
+    from key_map import KeyMap  # type: ignore
+except Exception:  # pragma: no cover
+    KeyMap = None
+
 S3 = boto3.client("s3")
 SECRETS = boto3.client("secretsmanager")
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hanav2-staging-dev")
@@ -150,6 +155,19 @@ def _emit_currency_config(run_id: str, manifest: dict, csv_text: str) -> dict:
                   Body=csv_text.encode(), ContentType="text/csv")
     return {"manifest": f"s3://{STAGING_BUCKET}/{base}.json",
             "review_csv": f"s3://{STAGING_BUCKET}/{base}.csv"}
+
+
+def _emit_key_map(run_id: str, km) -> dict:
+    """Persist the run's source->target key registry as a first-class artifact:
+    a JSON for programmatic lookup by later stages / dependent objects, and a CSV
+    for audit. This is how transactional data follows remapped/renumbered keys."""
+    base = f"runs/{run_id}/data-migrator/keymap/key_mapping"
+    S3.put_object(Bucket=STAGING_BUCKET, Key=f"{base}.json",
+                  Body=json.dumps(km.to_dict(), indent=2).encode(), ContentType="application/json")
+    S3.put_object(Bucket=STAGING_BUCKET, Key=f"{base}.csv",
+                  Body=km.to_csv().encode(), ContentType="text/csv")
+    return {"registry": f"s3://{STAGING_BUCKET}/{base}.json",
+            "audit_csv": f"s3://{STAGING_BUCKET}/{base}.csv"}
 
 
 # ── Object → source-table mapping for batch-mode runs ────────────────────────
@@ -326,6 +344,15 @@ def lambda_handler(event, context):
                 results.append({"object": node.get("object"), "status": "error",
                                 "error": f"{type(e).__name__}: {str(e)[:200]}"})
 
+        # Build + persist the source->target key registry (dependent objects + audit)
+        key_map_info = None
+        if KeyMap is not None:
+            km = KeyMap()
+            for r in results:
+                km.add_many(r.get("object"), (r.get("load") or {}).get("key_mappings"))
+            if km.to_rows():
+                key_map_info = {**_emit_key_map(run_id, km), "stats": km.stats()}
+
         # Write batch summary so downstream validator can read it
         loaded_to_s4 = sum((r.get("load", {}) or {}).get("created_in_s4", 0) for r in results)
         recon_reports = [r["reconciliation"] for r in results
@@ -339,6 +366,7 @@ def lambda_handler(event, context):
                    "load_to_s4_enabled": bool(loader),
                    "objects_created_in_s4": loaded_to_s4,
                    "reconciliation": Reconciler.rollup(recon_reports) if Reconciler else None,
+                   "key_mapping": key_map_info,
                    "results": results}
         S3.put_object(Bucket=STAGING_BUCKET,
                       Key=f"runs/{run_id}/data-migrator/summary.json",
