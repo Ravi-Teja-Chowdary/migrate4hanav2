@@ -9,6 +9,7 @@ path sidesteps the DEBMAS/MDG IDoc bottleneck entirely.
 """
 from __future__ import annotations
 import datetime
+import re
 
 try:
     from sap_number import parse_sap_number
@@ -306,6 +307,84 @@ class BapiLoader:
         self._conf_types_cache = types
         return types
 
+    def free_rate_types(self) -> set:
+        """Cached set of NON-fixed rate types (TCURV XEURO/XFIXD both off). Fixed/EMU
+        types (e.g. EURX) reject free rate creation, so for bulk loading we try the
+        free types (M, etc.) first — they actually post."""
+        cache = getattr(self, "_free_types_cache", None)
+        if cache is not None:
+            return cache
+        free = set()
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="TCURV", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "KURST"}, {"FIELDNAME": "XEURO"},
+                                    {"FIELDNAME": "XFIXD"}], ROWCOUNT=1000)
+            for row in r.get("DATA", []):
+                kt, xeuro, xfixd = [x.strip() for x in row["WA"].split("|")]
+                if xeuro != "X" and xfixd != "X":
+                    free.add(kt)
+        except Exception:
+            free = set()
+        self._free_types_cache = free
+        return free
+
+    def _exrate_line(self, row: dict):
+        """Build one EXCHRATE_LIST line + its TCURR verify-key from a source row."""
+        vf, _ = self._gdatu_to_date(row.get("GDATU"))
+        exch = parse_sap_number(row.get("UKURS"))
+        gdatu = str(99999999 - int(vf.strftime("%Y%m%d")))
+        rate_type = (row.get("KURST") or "M").strip()
+        line = {"RATE_TYPE": rate_type, "FROM_CURR": (row.get("FCURR") or "").strip(),
+                "TO_CURRNCY": (row.get("TCURR") or "").strip(), "VALID_FROM": vf,
+                "EXCH_RATE": exch,
+                "FROM_FACTOR": str(int(parse_sap_number(row.get("FFACT"), 1)) or 1),
+                "TO_FACTOR": str(int(parse_sap_number(row.get("TFACT"), 1)) or 1)}
+        # Existence-only verify: TCURR.UKURS is factor-normalized by the BAPI (a rate
+        # for a pair with a TCURF factor of 100 is stored /100), so a raw value compare
+        # would false-flag. Effective-rate tie-out (UKURS x factor) is a future step.
+        vkey = {"table": "TCURR",
+                "key": {"KURST": rate_type, "FCURR": line["FROM_CURR"],
+                        "TCURR": line["TO_CURRNCY"], "GDATU": gdatu}}
+        return line, vkey
+
+    def create_exchange_rates_batch(self, rows: list, commit: bool = True) -> dict:
+        """Load MANY rates in one BAPI_EXCHRATE_CREATEMULTIPLE call — the production
+        throughput path (the API is built for it). Screens out missing-type rows, then
+        maps the BAPI's per-line 'Line N:' failures back so created_keys reflect exactly
+        what persisted. Partial success is honored (good lines commit)."""
+        known = self.target_rate_types()
+        lines, meta, skipped_missing = [], [], 0
+        for row in rows:
+            fcurr = (row.get("FCURR") or "").strip()
+            tcurr = (row.get("TCURR") or "").strip()
+            rate_type = (row.get("KURST") or "M").strip()
+            if not (fcurr and tcurr):
+                continue
+            if known and rate_type not in known:
+                skipped_missing += 1
+                continue
+            line, vkey = self._exrate_line(row)
+            lines.append(line)
+            meta.append(vkey)
+        if not lines:
+            return {"created": 0, "failed": 0, "skipped_missing": skipped_missing,
+                    "created_keys": [], "sample_errors": []}
+        res = self.c.call("BAPI_EXCHRATE_CREATEMULTIPLE", UPD_ALLOW="X", EXCHRATE_LIST=lines)
+        ret = self._ret(res)
+        failed = set()
+        for m in ret:
+            if m.get("TYPE") in ("E", "A"):
+                mm = re.search(r"Line\s+(\d+)", m.get("MESSAGE") or "")
+                if mm:
+                    failed.add(int(mm.group(1)))
+        if commit:
+            self._commit()
+        created_keys = [meta[i] for i in range(len(lines)) if (i + 1) not in failed]
+        return {"created": len(lines) - len(failed), "failed": len(failed),
+                "skipped_missing": skipped_missing, "created_keys": created_keys,
+                "sample_errors": [(m.get("MESSAGE") or "").strip()[:90] for m in ret
+                                  if m.get("TYPE") in ("E", "A")][:3]}
+
     def create_exchange_rate(self, row: dict, commit: bool = True) -> dict:
         """Create one exchange-rate entry from a TCURR-shaped source row via
         BAPI_EXCHRATE_CREATEMULTIPLE (writes TCURR). Expects
@@ -355,8 +434,9 @@ class BapiLoader:
         gdatu = str(99999999 - int(valid_from.strftime("%Y%m%d")))   # TCURR stores inverted date
         return {"status": "created",
                 "rate": f"{fcurr}->{tcurr}@{valid_from.isoformat()}",
+                # Existence-only: TCURR.UKURS is factor-normalized by the BAPI, so a raw
+                # value compare false-flags factored currencies (see _exrate_line).
                 "verify_key": {"table": "TCURR",
                                "key": {"KURST": rate_type, "FCURR": fcurr,
-                                       "TCURR": tcurr, "GDATU": gdatu},
-                               "values": {"UKURS": exch_rate}},   # financial value tie-out
+                                       "TCURR": tcurr, "GDATU": gdatu}},
                 "messages": msgs}

@@ -251,10 +251,13 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None) -> dict:
               "artifacts": artifacts, "note": err_note,
               "status": "ok" if err_note is None else "partial"}
 
-    # Optionally LOAD the extracted rows into S/4 via the best mechanism (BAPI/IDoc)
+    # Optionally LOAD the extracted rows into S/4 via the best mechanism (BAPI/IDoc).
+    # Per-object cap overrides the global one (M4H_LOAD_MAX_ROWS_<OBJECT>) — e.g. run
+    # ExchangeRates at volume while keeping side-effecting objects (BP/PO) at a few rows.
     if loader is not None and rows and loader.supported(obj_name):
+        omax = int(os.environ.get("M4H_LOAD_MAX_ROWS_" + obj_name.upper(), LOAD_MAX_ROWS))
         try:
-            result["load"] = loader.load_object(obj_name, rows, LOAD_MAX_ROWS)
+            result["load"] = loader.load_object(obj_name, rows, omax)
         except Exception as e:
             result["load"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
 

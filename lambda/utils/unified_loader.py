@@ -12,6 +12,7 @@ whether an object goes via BAPI, IDoc, or (later) Migration Cockpit.
 """
 from __future__ import annotations
 import os
+import time
 from collections import Counter
 
 try:
@@ -107,7 +108,10 @@ class UnifiedLoader:
         operational (factor-configured) rate types first so we spend the budget on
         the rates that will actually post; rows whose type is missing entirely are
         set aside without an attempt. Each outcome is classified so the summary
-        cleanly separates real loads, target-config gaps, and genuine failures."""
+        cleanly separates real loads, target-config gaps, and genuine failures.
+        At volume (max_rows > 50) we switch to the batched path below."""
+        if max_rows > 50:
+            return self._load_exrate_batched(obj, rows, max_rows)
         known = self.bapi.target_rate_types()           # exists in TCURV
         configured = self.bapi.configured_rate_types()  # has TCURF factors
         missing = Counter()
@@ -144,6 +148,52 @@ class UnifiedLoader:
         if missing:
             result["missing_ratetype_rows"] = sum(missing.values())
             result["missing_rate_types"] = dict(sorted(missing.items(), key=lambda x: -x[1]))
+        return result
+
+    def _load_exrate_batched(self, obj: str, rows: list, max_rows: int,
+                             batch_size: int = 200, scan_cap: int = 20000) -> dict:
+        """Volume path: load rates in batches via BAPI_EXCHRATE_CREATEMULTIPLE. Tries
+        FREE rate types first (M, …) — fixed/EMU types like EURX reject free creation —
+        and stops once max_rows have posted. Reports throughput; created_keys feed the
+        reconciler so the scale claim is proven, not asserted."""
+        known = self.bapi.target_rate_types()
+        free = self.bapi.free_rate_types()
+        missing = Counter()
+        candidates = []
+        for r in rows:
+            kt = (r.get("KURST") or "M").strip()
+            if known and kt not in known:
+                missing[kt] += 1
+            else:
+                candidates.append(r)
+        # free (postable) types first; 'M' the workhorse ahead of the rest
+        candidates.sort(key=lambda r: (0 if (r.get("KURST") or "M").strip() == "M"
+                                       else 1 if (r.get("KURST") or "M").strip() in free else 2))
+        created = failed = processed = 0
+        created_keys, errsample = [], []
+        t0 = time.time()
+        for i in range(0, min(len(candidates), scan_cap), batch_size):
+            if created >= max_rows:
+                break
+            rb = self.bapi.create_exchange_rates_batch(candidates[i:i + batch_size], commit=True)
+            created += rb["created"]
+            failed += rb["failed"]
+            processed += rb["created"] + rb["failed"]
+            created_keys.extend(rb["created_keys"])
+            if rb.get("sample_errors") and not errsample:
+                errsample = rb["sample_errors"]
+        elapsed = round(time.time() - t0, 2)
+        result = {"object": obj, "mechanism": "bapi/exrate", "mode": "batched",
+                  "attempted": processed, "created_in_s4": created,
+                  "config_or_data_gaps": failed,
+                  "status_breakdown": {"created": created, "config_or_data_gap": failed},
+                  "created_keys": created_keys,
+                  "batch_size": batch_size, "elapsed_sec": elapsed,
+                  "throughput_per_sec": round(created / elapsed, 1) if elapsed else None,
+                  "total_rows": len(rows), "loadable_candidates": len(candidates),
+                  "sample_gap_messages": errsample}
+        if missing:
+            result["missing_ratetype_rows"] = sum(missing.values())
         return result
 
     def _load_one(self, obj: str, mech: tuple, row: dict) -> dict:
