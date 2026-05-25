@@ -31,6 +31,8 @@ OBJECT_MECHANISM = {
     "Material":        ("bapi", "material"),
     "ExchangeRates":   ("bapi", "exrate"),
     "OpenPO":          ("bapi", "po"),
+    "OpenAR":          ("bapi", "fi_ar"),
+    "OpenAP":          ("bapi", "fi_ap"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -48,6 +50,14 @@ PO_TARGET_ORG = {
     "COSTCENTER": os.environ.get("M4H_PO_COSTCENTER", "0017101601"),
 }
 
+# Target org/config for FI open-item (AR/AP) postings. The offset is a balance-sheet
+# 'data takeover' clearing account; profit center satisfies S/4 document splitting.
+FI_TARGET_ORG = {
+    "COMP_CODE":   os.environ.get("M4H_FI_COMP_CODE", "1710"),
+    "CLEARING_GL": os.environ.get("M4H_FI_CLEARING_GL", "0023007000"),
+    "PROFIT_CTR":  os.environ.get("M4H_FI_PROFIT_CTR", "YB600"),
+}
+
 
 class UnifiedLoader:
     def __init__(self, tconn, own_logical_system="S4HCLNT100", sender="M4HSENDER",
@@ -59,6 +69,7 @@ class UnifiedLoader:
         self.key_map = None        # live source->target registry (set by the handler)
         self.source_conn = None    # ECC conn, for reading dependent rows (PO items)
         self.po_org = dict(PO_TARGET_ORG)
+        self.fi_org = dict(FI_TARGET_ORG)
 
     def supported(self, obj: str) -> bool:
         return obj in OBJECT_MECHANISM
@@ -233,6 +244,14 @@ class UnifiedLoader:
             return {"ok": r["status"] == "created", "status": r["status"],
                     "id": r.get("po"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "refs": r.get("vendor"),
+                    "msg": r.get("messages")}
+        if kind == "bapi" and sub in ("fi_ar", "fi_ap"):
+            arap = "AR" if sub == "fi_ar" else "AP"
+            r = self.bapi.create_fi_open_item(row, arap, self.fi_org,
+                                              key_map=self.key_map, commit=True)
+            return {"ok": r["status"] == "created", "status": r["status"],
+                    "id": r.get("doc"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "refs": r.get("partner"),
                     "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)

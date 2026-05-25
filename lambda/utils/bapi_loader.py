@@ -246,6 +246,87 @@ class BapiLoader:
                 "key_mapping": {"source": src_po, "target": po, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
 
+    # ── Open AR / AP financial items (BAPI_ACC_DOCUMENT_POST) ───────────────
+    def _recon_partners(self, table: str, key_field: str, bukrs: str) -> list:
+        """Cached partners with company-code data (recon account) — KNB1 customers /
+        LFB1 suppliers. Only these can carry an open item in that company code."""
+        cache = getattr(self, "_recon_cache", {})
+        ck = (table, bukrs)
+        if ck not in cache:
+            try:
+                r = self.c.call("RFC_READ_TABLE", QUERY_TABLE=table, DELIMITER="|",
+                                OPTIONS=[{"TEXT": f"BUKRS = '{bukrs}'"}],
+                                FIELDS=[{"FIELDNAME": key_field}], ROWCOUNT=300)
+                cache[ck] = [d["WA"].strip() for d in r.get("DATA", [])]
+            except Exception:
+                cache[ck] = []
+            self._recon_cache = cache
+        return cache[ck]
+
+    def create_fi_open_item(self, item: dict, kind: str, org: dict,
+                            key_map=None, commit: bool = True) -> dict:
+        """Post one open AR/AP item as a balanced FI document via BAPI_ACC_DOCUMENT_POST
+        — the most business-critical transactional data. Consumes the key registry to
+        resolve the customer/vendor; if the migrated partner isn't recon-account-ready,
+        harmonizes to an existing ready partner (and records it). The offset is a
+        balance-sheet 'data takeover' clearing account (no P&L impact), with a profit
+        center so S/4 document splitting is satisfied. Org units remapped to target."""
+        is_ar = (kind == "AR")
+        bukrs = org["COMP_CODE"]
+        src_partner = ((item.get("KUNNR") if is_ar else item.get("LIFNR")) or "").strip()
+        src_doc = (item.get("BELNR") or "").strip()
+        amount = parse_sap_number(item.get("DMBTR"))
+        shkzg = (item.get("SHKZG") or ("S" if is_ar else "H")).strip()
+        curr = (item.get("WAERS") or "USD").strip()
+        reg_obj, table, kf = ("Customer", "KNB1", "KUNNR") if is_ar else ("Vendor", "LFB1", "LIFNR")
+        pool = self._recon_partners(table, kf, bukrs)
+        tgt = key_map.resolve(reg_obj, src_partner) if key_map else None
+        pdisp = "registry"
+        if not (tgt and tgt in set(pool)):
+            if not pool:
+                return {"status": "no_target_partner",
+                        "messages": [f"no recon-ready {reg_obj} in company {bukrs}"]}
+            digits = "".join(ch for ch in src_partner if ch.isdigit())
+            tgt = pool[(int(digits) if digits else 0) % len(pool)]
+            pdisp = "harmonized"
+            if key_map:
+                key_map.add(reg_obj, src_partner, tgt, "harmonized")
+
+        if amount <= 0:
+            return {"status": "skipped", "messages": ["zero/negative open amount"]}
+        # partner debit when SHKZG='S' (receivable), credit when 'H' (payable); GL offsets
+        pamt = amount if shkzg == "S" else -amount
+        doc_date = org.get("DOC_DATE") or datetime.date.today().strftime("%Y%m%d")
+        hdr = {"USERNAME": org.get("USERNAME", "MIGRATE_ADMI"), "COMP_CODE": bukrs,
+               "DOC_DATE": doc_date, "PSTNG_DATE": doc_date,
+               "DOC_TYPE": "DR" if is_ar else "KR", "BUS_ACT": "RFBU",
+               "REF_DOC_NO": ("M4H-" + src_doc)[:16]}
+        gl = [{"ITEMNO_ACC": "0000000002", "GL_ACCOUNT": org["CLEARING_GL"],
+               "ITEM_TEXT": f"M4H open {kind} {src_doc}"[:50], "PROFIT_CTR": org["PROFIT_CTR"]}]
+        cur = [{"ITEMNO_ACC": "0000000001", "CURRENCY": curr, "AMT_DOCCUR": "%.2f" % pamt},
+               {"ITEMNO_ACC": "0000000002", "CURRENCY": curr, "AMT_DOCCUR": "%.2f" % (-pamt)}]
+        kwargs = {"DOCUMENTHEADER": hdr, "ACCOUNTGL": gl, "CURRENCYAMOUNT": cur}
+        if is_ar:
+            kwargs["ACCOUNTRECEIVABLE"] = [{"ITEMNO_ACC": "0000000001", "CUSTOMER": tgt}]
+        else:
+            kwargs["ACCOUNTPAYABLE"] = [{"ITEMNO_ACC": "0000000001", "VENDOR_NO": tgt}]
+        res = self.c.call("BAPI_ACC_DOCUMENT_POST", **kwargs)
+        ret = self._ret(res)
+        objkey = (res.get("OBJ_KEY") or "").strip()
+        partner_ref = {"source": src_partner, "target": tgt, "disposition": pdisp}
+        if [m for m in ret if m.get("TYPE") in ("E", "A")] or not objkey or objkey == "$":
+            self._rollback()
+            return {"status": "failed", "partner": partner_ref,
+                    "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:4]}
+        if commit:
+            self._commit()
+        belnr, bk, gj = objkey[:10], objkey[10:14], objkey[14:18]
+        return {"status": "created", "doc": belnr, "partner": partner_ref,
+                "verify_key": {"table": "BKPF", "key": {"BUKRS": bk or bukrs,
+                                                        "BELNR": belnr, "GJAHR": gj}},
+                "key_mapping": {"source": src_doc, "target": belnr, "disposition": "created"},
+                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).
