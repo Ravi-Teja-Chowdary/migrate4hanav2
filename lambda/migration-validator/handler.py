@@ -842,7 +842,7 @@ def validate_sum_completion(conn):
 # =============================================================================
 # SCORECARD GENERATOR
 # =============================================================================
-def generate_scorecard(validation_results):
+def generate_scorecard(validation_results, simulated=False):
     """
     Generate a GO-LIVE readiness scorecard.
 
@@ -865,12 +865,20 @@ def generate_scorecard(validation_results):
             total_checks += checked
             total_passed += check_results.get("passed", 0)
 
+    # PRODUCTION SAFETY: simulated/dry-run results, or zero real checks, can NEVER certify
+    # go-live. Return an explicit NOT-VALIDATED verdict that is not gate-eligible.
+    if simulated:
+        return {"grade": "N/A", "score": "n/a", "total_checks": total_checks,
+                "total_passed": total_passed, "total_failed": 0,
+                "validated": False, "gate_eligible": False, "color": "grey",
+                "recommendation": "NOT VALIDATED — results are simulated (no live S/4 "
+                                  "connection); cannot certify go-live"}
     if total_checks == 0:
-        score_pct = 100  # No checks = assume ok (mock mode)
-        total_checks = 1
-        total_passed = 1
-    else:
-        score_pct = (total_passed / total_checks) * 100
+        return {"grade": "N/A", "score": "n/a", "total_checks": 0,
+                "total_passed": 0, "total_failed": 0,
+                "validated": False, "gate_eligible": False, "color": "grey",
+                "recommendation": "NOT VALIDATED — no checks executed"}
+    score_pct = (total_passed / total_checks) * 100
 
     if score_pct >= 95:
         grade = "A"
@@ -897,6 +905,8 @@ def generate_scorecard(validation_results):
         "total_failed": total_checks - total_passed,
         "recommendation": recommendation,
         "color": color,
+        "validated": True,
+        "gate_eligible": grade in ("A", "B"),
     }
 
 
@@ -950,6 +960,17 @@ def lambda_handler(event, context):
                 has_rfc = True
             except (ImportError, Exception) as e:
                 logger.warning(f"No RFC to S/4HANA — generating simulated validation: {e}")
+
+        # PRODUCTION SAFETY: a real run (not an explicit dry_run) that cannot reach S/4HANA
+        # must NEVER fabricate a passing validation. Refuse to emit a go-live verdict instead
+        # of letting a dropped connection masquerade as a green scorecard.
+        if not has_rfc and not dry_run:
+            msg = ("migration-validator could not connect to S/4HANA; refusing to emit a "
+                   "simulated go-live verdict (set dry_run for an intentional offline smoke test)")
+            logger.error(msg)
+            log_stage_event("migration-validator", "Validation Blocked", "BLOCKED", {"reason": msg})
+            return {"status": "blocked", "validation_mode": "none", "gate_eligible": False,
+                    "reason": msg, "run_id": run_id}
 
         if has_rfc:
             # Run all validations against live system
@@ -1108,8 +1129,8 @@ def lambda_handler(event, context):
         pre_validation_data = bp_results.get("pre_validation", event.get("pre_validation", {}))
         results["validations"]["bp_data_quality"] = validate_bp_data_quality(pre_validation_data)
 
-        # Generate scorecard
-        results["scorecard"] = generate_scorecard(results["validations"])
+        # Generate scorecard (simulated results are explicitly not gate-eligible)
+        results["scorecard"] = generate_scorecard(results["validations"], simulated=not has_rfc)
 
         # Save to S3
         s3.put_object(
@@ -1128,7 +1149,9 @@ def lambda_handler(event, context):
         )
 
         result = {
-            "status": "success",
+            "status": "success" if has_rfc else "simulated",
+            "validation_mode": "live" if has_rfc else "simulated",
+            "gate_eligible": results["scorecard"].get("gate_eligible", False),
             "scorecard": results["scorecard"],
             "results": results,
             "run_id": run_id,
