@@ -64,6 +64,11 @@ try:
 except Exception:  # pragma: no cover
     compliance = None
 
+try:
+    import config_discovery  # type: ignore
+except Exception:  # pragma: no cover
+    config_discovery = None
+
 S3 = boto3.client("s3")
 SECRETS = boto3.client("secretsmanager")
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hanav2-staging-dev")
@@ -238,6 +243,27 @@ def _save_ledger(km) -> None:
         S3.put_object(Bucket=STAGING_BUCKET, Key=LEDGER_KEY,
                       Body=json.dumps(km.to_dict(), indent=2).encode(),
                       ContentType="application/json")
+    except Exception:
+        pass
+
+
+# Discovered target config is cached (it involves probe calls; ~minutes). Reuse across
+# runs; re-discover only for a new target or when M4H_REDISCOVER=1.
+DISCOVERED_CONFIG_KEY = "migration-ledger/discovered-config.json"
+
+
+def _load_discovered_config():
+    try:
+        obj = S3.get_object(Bucket=STAGING_BUCKET, Key=DISCOVERED_CONFIG_KEY)
+        return json.loads(obj["Body"].read())
+    except Exception:
+        return None
+
+
+def _save_discovered_config(cfg) -> None:
+    try:
+        S3.put_object(Bucket=STAGING_BUCKET, Key=DISCOVERED_CONFIG_KEY,
+                      Body=json.dumps(cfg, indent=2).encode(), ContentType="application/json")
     except Exception:
         pass
 
@@ -491,6 +517,7 @@ def lambda_handler(event, context):
 
         # Optional S/4 loader (real write path) — only when M4H_LOAD_TO_S4=1
         loader = None
+        discovered_config = None
         if LOAD_TO_S4 and UnifiedLoader is not None:
             try:
                 tsec = json.loads(SECRETS.get_secret_value(SecretId="local:target")["SecretString"])
@@ -508,6 +535,22 @@ def lambda_handler(event, context):
                 loader.target_conn_factory = _target_connection
                 loader.source_conn_factory = lambda: _ecc(secret_id)
                 loader.odata_factory = _target_odata
+                # Auto-discover target org units/accounts so we adapt to THIS landscape
+                # (not the appliance we were built on). Env overrides win; on failure we
+                # keep the built-in defaults.
+                if config_discovery is not None:
+                    try:
+                        _cfg = _load_discovered_config()
+                        if _cfg is None or os.environ.get("M4H_REDISCOVER") == "1":
+                            _cfg = config_discovery.discover(tconn)
+                            _save_discovered_config(_cfg)
+                            log_stage_event(run_id, "data-migrator", "config_discovered", _cfg["summary"])
+                        else:
+                            log_stage_event(run_id, "data-migrator", "config_cached", _cfg["summary"])
+                        loader.po_org, loader.fi_org, loader.bp_org = _cfg["po"], _cfg["fi"], _cfg["bp"]
+                        discovered_config = _cfg["summary"]
+                    except Exception as e:
+                        log_stage_event(run_id, "data-migrator", "config_discovery_skipped", {"reason": str(e)[:160]})
                 log_stage_event(run_id, "data-migrator", "load_enabled",
                                 {"max_rows": LOAD_MAX_ROWS, "mechanisms": OBJECT_MECHANISM,
                                  "odata_partner_create": bool(loader.odata and loader.odata_ready())})
@@ -572,6 +615,7 @@ def lambda_handler(event, context):
                    "idempotency": {"newly_created": loaded_to_s4,
                                    "reused_from_ledger": sum((r.get("load", {}) or {}).get("reused_from_ledger", 0)
                                                              for r in results)},
+                   "discovered_config": discovered_config,
                    "reconciliation": Reconciler.rollup(recon_reports) if Reconciler else None,
                    "support_compliance": compliance.audit(results) if compliance else None,
                    "key_mapping": key_map_info,

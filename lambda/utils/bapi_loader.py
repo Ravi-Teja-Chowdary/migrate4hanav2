@@ -228,8 +228,12 @@ class BapiLoader:
             return {"status": "skipped", "messages": ["PO has no items"]}
 
         doc_date = org.get("DOC_DATE") or datetime.date.today().strftime("%Y%m%d")
+        # Pass currency explicitly (the source PO's WAERS) rather than relying on the
+        # vendor's default — robust across vendors/landscapes.
+        curr = (header.get("WAERS") or org.get("CURRENCY") or "USD").strip()
         hdr = {"COMP_CODE": org["COMP_CODE"], "DOC_TYPE": org["DOC_TYPE"], "VENDOR": tgt_vendor,
-               "PURCH_ORG": ekorg, "PUR_GROUP": org["PUR_GROUP"], "DOC_DATE": doc_date}
+               "PURCH_ORG": ekorg, "PUR_GROUP": org["PUR_GROUP"], "DOC_DATE": doc_date,
+               "CURRENCY": curr}
         res = self.c.call("BAPI_PO_CREATE1", POHEADER=hdr, POHEADERX={k: "X" for k in hdr},
                           POITEM=poitem, POITEMX=poitemx, POACCOUNT=acct, POACCOUNTX=acctx)
         ret = self._ret(res)
