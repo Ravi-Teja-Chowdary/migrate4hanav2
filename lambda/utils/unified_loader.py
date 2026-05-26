@@ -125,6 +125,7 @@ class UnifiedLoader:
         # in a prior run (in the cross-run ledger) are REUSED, never re-created.
         out, ok_count, scanned = [], 0, 0
         scan_cap = max(max_rows * 20, 60)
+        t0 = time.time()
         for row in rows:
             if ok_count >= max_rows or scanned >= scan_cap:
                 break
@@ -141,13 +142,16 @@ class UnifiedLoader:
             out.append(res)
             if res.get("ok"):
                 ok_count += 1
+        elapsed = round(time.time() - t0, 1)
         created = sum(1 for r in out if r.get("ok") and not r.get("reused"))
         reused = sum(1 for r in out if r.get("reused"))
         result = {"object": obj, "mechanism": f"{mech[0]}/{mech[1] or ''}".rstrip("/"),
                   "attempted": len(out), "created_in_s4": created,
                   "status_breakdown": dict(Counter(r.get("status") for r in out)),
                   "created_keys": self._created_keys(out),
-                  "samples": [r for r in out if r.get("ok")][:3] or out[:3]}
+                  "samples": [r for r in out if r.get("ok")][:3] or out[:3],
+                  "elapsed_sec": elapsed,
+                  "throughput_per_sec": round(created / elapsed, 2) if elapsed and created else None}
         if reused:
             result["reused_from_ledger"] = reused
         kmaps = self._key_mappings(out)
