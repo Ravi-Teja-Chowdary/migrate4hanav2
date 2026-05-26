@@ -30,26 +30,40 @@ So three things must be true:
 
 ---
 
-## 2. Assumptions / what you need before starting
+## 2. Your setup: SAP CAL free-trial appliance in your own AWS account
 
-- **You control the S/4HANA EC2 instance in your own AWS account** (you can attach an IAM role
-  and open an OS shell on it). ⚠️ *If the S/4 appliance lives in a SAP-managed CAL account where
-  you can't attach an IAM instance profile, SSM can't manage it — see §8 for the fallback.*
-- AWS CLI installed on **your laptop**, logged in (`aws sts get-caller-identity` works).
-- The S/4 host SID is **`S4H`**, instance **`00`**, OS user **`s4hadm`** (CAL default). Adjust if different.
-- Your AWS **region** (e.g. `us-east-1`). Set it once: `setx AWS_DEFAULT_REGION us-east-1` (new shell after).
+Good news — a **SAP CAL "fully-activated appliance" deploys the EC2 instance(s) into YOUR AWS
+account**, so you have full EC2 + IAM control and the standard SSM path works. A few CAL-specific
+facts that shape the steps below:
+
+- **The EC2 *instance ID* is stable across CAL Suspend/Activate** — only the *public IP* drifts (the
+  thing that keeps breaking your hosts file). So you set `transport_host_instance_id` **once** and it
+  keeps working through restarts. 🎉 (SSM addresses the host by instance ID, not IP — immune to the drift.)
+- CAL usually deploys the SAP system on a **single SLES (SUSE Linux) host**; some templates add a
+  small **Windows RDP/jump host**. You want the **Linux** instance (the one you RFC to on `:3200/3300`).
+- ⚠️ **CAL may have already attached an IAM instance profile/role to the instance.** An instance can
+  have only ONE instance profile, so in Step 3 you **check first** and *add policies to the existing
+  role* rather than attaching a second one.
+- You have OS access to the Linux host via **SSH as the master user** (the master password you set
+  during CAL deployment) — that's how you install the SSM agent in Step 4. CAL's security group
+  already opens your IP to the SAP ports; confirm it also allows your SSH (port 22).
+
+**Before starting:** AWS CLI on your laptop (`aws sts get-caller-identity` works); know your **region**
+(`setx AWS_DEFAULT_REGION us-east-1`, new shell after). SID is **`S4H`**, instance **`00`**, OS user
+**`s4hadm`** (CAL S/4 defaults — adjust if your appliance differs).
 
 ---
 
 ## 3. Step-by-step
 
-### Step 1 — Identify the S/4 EC2 instance
-In the AWS console → EC2 → Instances, find the S/4HANA appliance and copy its **Instance ID**
-(`i-0abc123…`). Note its **region**. Quick CLI check:
+### Step 1 — Identify the S/4 (Linux) EC2 instance
+List your running instances and pick the **Linux SLES** one (the SAP/HANA host you RFC to). If CAL
+also made a Windows RDP host, ignore it. Confirm the IP matches the one in your `connections.json`.
 ```powershell
 aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" `
-  --query "Reservations[].Instances[].{ID:InstanceId,IP:PublicIpAddress,Name:Tags[?Key=='Name']|[0].Value}" --output table
+  --query "Reservations[].Instances[].{ID:InstanceId,IP:PublicIpAddress,OS:PlatformDetails,Name:Tags[?Key=='Name']|[0].Value}" --output table
 ```
+Copy the **Instance ID** (`i-0abc123…`) of the Linux host — this is stable across CAL Suspend/Activate.
 
 ### Step 2 — Create (or reuse) the S3 staging bucket
 The stages read/write `s3://<bucket>/runs/<run_id>/…`. Create one (globally-unique name):
@@ -58,32 +72,41 @@ aws s3 mb s3://m4h-staging-<your-initials> --region us-east-1
 ```
 Remember this bucket name — it becomes `S3_STAGING_BUCKET` for the run.
 
-### Step 3 — IAM role for the S/4 host (instance profile)
-This lets SSM manage the host **and** lets the host pull/push transport files from S3.
+### Step 3 — Give the host an IAM role (SSM + S3) — **check for an existing one first**
+An EC2 instance can have only ONE instance profile, and **CAL may have already attached one**. Check:
+```powershell
+aws ec2 describe-instances --instance-ids i-0abc123… `
+  --query "Reservations[].Instances[].IamInstanceProfile" --output json
+```
 
-1. Create the role with the SSM trust + managed policy:
+**Case A — it returns `null` (no profile attached).** Create and attach a fresh one:
 ```powershell
 aws iam create-role --role-name m4h-s4-host `
   --assume-role-policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"ec2.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}'
-aws iam attach-role-policy --role-name m4h-s4-host `
-  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-```
-2. Add S3 read+write on just the staging bucket (least-privilege):
-```powershell
+aws iam attach-role-policy --role-name m4h-s4-host --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 aws iam put-role-policy --role-name m4h-s4-host --policy-name m4h-s3-staging `
   --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:PutObject\",\"s3:ListBucket\"],\"Resource\":[\"arn:aws:s3:::m4h-staging-<your-initials>\",\"arn:aws:s3:::m4h-staging-<your-initials>/*\"]}]}'
-```
-3. Wrap it in an instance profile and attach to the S/4 instance:
-```powershell
 aws iam create-instance-profile --instance-profile-name m4h-s4-host
 aws iam add-role-to-instance-profile --instance-profile-name m4h-s4-host --role-name m4h-s4-host
-aws ec2 associate-iam-instance-profile --instance-id i-0abc123… `
-  --iam-instance-profile Name=m4h-s4-host
+aws ec2 associate-iam-instance-profile --instance-id i-0abc123… --iam-instance-profile Name=m4h-s4-host
 ```
 
+**Case B — a profile/role IS already attached (typical for CAL).** Do NOT detach CAL's role —
+just **add the two policies to the existing role**. Grab the role name from the ARN the check
+returned (`…:instance-profile/<name>` → find its role), then:
+```powershell
+# <EXISTING_ROLE> = the role behind CAL's attached instance profile
+aws iam attach-role-policy --role-name <EXISTING_ROLE> --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+aws iam put-role-policy --role-name <EXISTING_ROLE> --policy-name m4h-s3-staging `
+  --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:PutObject\",\"s3:ListBucket\"],\"Resource\":[\"arn:aws:s3:::m4h-staging-<your-initials>\",\"arn:aws:s3:::m4h-staging-<your-initials>/*\"]}]}'
+```
+(To find the role name behind an instance profile: `aws iam get-instance-profile --instance-profile-name <NAME> --query "InstanceProfile.Roles[].RoleName"`.)
+
 ### Step 4 — Install the SSM agent + AWS CLI on the S/4 host
-Open a shell on the S/4 host (SSH as your admin user, or the CAL web console). The CAL appliance
-is SUSE Linux. As **root**:
+SSH into the Linux host as the **master user** (the password you set during CAL deployment) — e.g.
+`ssh root@<current-public-ip>` or the CAL-provided user, then `sudo -i`. If SSH refuses, open port
+22 to your IP in the instance's security group (AWS console → EC2 → Security Groups). The appliance
+is SUSE Linux (SLES). As **root**:
 ```bash
 # SSM agent (SUSE)
 sudo zypper install -y amazon-ssm-agent   # or: download the .rpm from AWS docs for SLES
@@ -187,12 +210,16 @@ Reply **"infra ready"** with the **instance ID** + **bucket name**, and I will:
 
 ---
 
-## 8. Fallback if you DON'T control the S/4 instance in your AWS account
+## 8. SAP CAL specifics — gotchas to expect
 
-If the S/4 appliance is in a SAP-managed CAL account (no IAM access to attach a role), SSM can't
-manage it. Options, in order of preference:
-1. **SSM hybrid activation** — register the host as a *managed instance* (works for non-EC2/non-owned
-   hosts) and install the agent with an activation code. Then everything else is identical.
-2. **Switch the host runner to SSH** — I can add a small `paramiko`-based alternative to
-   `sap_host_runner.run` (key-based SSH to `s4hadm@<host>`) so transports run over SSH instead of SSM.
-   Tell me and I'll build it; you'd just provide an SSH key on the host.
+- **Suspend/Activate keeps the same instance ID** → your transport infra survives the IP drift; you
+  only ever re-point the *hosts file* for RFC/OData (the data spine), never the transport instance ID.
+- **Existing instance profile** (Step 3 Case B) is the most common CAL surprise — add policies to the
+  existing role, don't fight it.
+- **Trial expiry (30 days):** if you let the trial lapse and redeploy, you get a NEW instance ID —
+  just update `connections.json` and re-run Step 4 on the new host.
+- **Don't reconfigure CAL's STMS destructively.** If `TP_DOMAIN_S4H.PFL` already exists (it usually
+  does on a fully-activated appliance), leave it; only run the `STMS` single-system setup if it's missing.
+- **Optional, if you'd rather not install the SSM agent:** I can add a `paramiko`-based SSH runner as a
+  drop-in alternative to `sap_host_runner.run` (key/password SSH to the Linux host). Say the word and
+  I'll build it — but since the instance is in your account, the SSM path above is cleaner and free.
