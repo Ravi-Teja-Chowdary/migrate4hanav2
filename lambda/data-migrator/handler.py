@@ -282,6 +282,57 @@ def _cdc_where(obj: str, watermark: str) -> str:
     return "( " + " OR ".join("%s >= '%s'" % (f, watermark) for f in fields) + " )"
 
 
+# Change documents (CDHDR) let the delta also catch CHANGED masters (not just NEW), which
+# the date-field filter alone misses (KNA1/LFA1 have no change date). object -> (class, key).
+CDC_CHANGE_DOC = {"Customer": ("DEBI", "KUNNR"), "Vendor": ("KRED", "LIFNR"),
+                  "Material": ("MATERIAL", "MATNR")}
+
+
+def _pack_opts(where: str) -> list:
+    """Split a WHERE into <=72-char OPTIONS lines (RFC_READ_TABLE limit), space-padded."""
+    lines, cur = [], ""
+    for w in where.split():
+        if cur and len(cur) + len(w) + 1 > 72:
+            lines.append(cur)
+            cur = ""
+        cur += w + " "
+    if cur.strip():
+        lines.append(cur)
+    return [{"TEXT": ln} for ln in lines]
+
+
+def _cdc_changed_keys(conn, obj: str, watermark: str, cap: int = 20000) -> set:
+    """Master keys CHANGED since the watermark, from change documents (CDHDR)."""
+    spec = CDC_CHANGE_DOC.get(obj)
+    if not (spec and watermark):
+        return set()
+    cls, _ = spec
+    try:
+        r = conn.call("RFC_READ_TABLE", QUERY_TABLE="CDHDR", DELIMITER="|",
+                      OPTIONS=_pack_opts("OBJECTCLAS = '%s' AND UDATE >= '%s'" % (cls, watermark)),
+                      FIELDS=[{"FIELDNAME": "OBJECTID"}], ROWCOUNT=cap)
+        return {d["WA"].strip() for d in r.get("DATA", []) if d["WA"].strip()}
+    except Exception:
+        return set()
+
+
+def _read_by_keys(conn, table: str, fields: list, keyfield: str, keys: list, chunk: int = 40) -> list:
+    """Read master rows for a set of keys (chunked OR-list); rows as field-keyed dicts."""
+    rows, keys = [], list(keys)
+    for i in range(0, len(keys), chunk):
+        where = " OR ".join("%s = '%s'" % (keyfield, k) for k in keys[i:i + chunk])
+        try:
+            r = conn.call("RFC_READ_TABLE", QUERY_TABLE=table, DELIMITER="|",
+                          OPTIONS=_pack_opts(where),
+                          FIELDS=[{"FIELDNAME": f} for f in fields], ROWCOUNT=0)
+            cols = [f["FIELDNAME"] for f in r.get("FIELDS", [])]
+            for d in r.get("DATA", []):
+                rows.append(dict(zip(cols, [p.strip() for p in d["WA"].split("|")])))
+        except Exception:
+            pass
+    return rows
+
+
 def _load_dag(run_id: str) -> dict:
     """Load the routing DAG written by stage 3 (object-router)."""
     try:
@@ -331,6 +382,19 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None, cdc_watermar
             rows, cols = [], fields
             err_note = f"ECC read failed: {type(e).__name__}: {str(e)[:120]}"
 
+    # Delta completeness: also pull masters CHANGED since the watermark (change docs),
+    # which the date-field filter misses (e.g. a customer changed but not newly created).
+    changed_via_cdhdr = 0
+    if delta_applied and obj_name in CDC_CHANGE_DOC and not err_note:
+        kf = CDC_CHANGE_DOC[obj_name][1]
+        changed = _cdc_changed_keys(conn, obj_name, cdc_watermark)
+        have = {r.get(kf) for r in rows}
+        missing = [k for k in changed if k and k not in have]
+        if missing:
+            extra = _read_by_keys(conn, table, fields, kf, missing)
+            rows = rows + extra
+            changed_via_cdhdr = len(extra)
+
     artifacts = {}
     target_lane = mapping.get("lane", lane).upper()
     if target_lane == "MC":
@@ -349,7 +413,8 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None, cdc_watermar
               "status": "ok" if err_note is None else "partial"}
     if cdc_watermark and delta_applied:   # only objects that actually have a CDC field
         result["delta"] = {"applied": True, "since": cdc_watermark,
-                           "changed_rows": len(rows)}
+                           "changed_rows": len(rows),
+                           "changed_via_change_docs": changed_via_cdhdr}
 
     # Optionally LOAD the extracted rows into S/4 via the best mechanism (BAPI/IDoc).
     # Per-object cap overrides the global one (M4H_LOAD_MAX_ROWS_<OBJECT>) — e.g. run
