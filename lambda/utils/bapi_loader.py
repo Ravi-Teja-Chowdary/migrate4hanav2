@@ -375,6 +375,45 @@ class BapiLoader:
                 "key_mapping": {"source": kostl, "target": kostl, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
 
+    # ── Profit center (CO master, BAPI_PROFITCENTER_CREATE) ────────────────
+    def _profit_center_exists(self, prctr: str, kokrs: str) -> bool:
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="CEPC", DELIMITER="|",
+                            OPTIONS=[{"TEXT": "KOKRS = '%s' AND PRCTR = '%s'" % (kokrs, prctr)}],
+                            FIELDS=[{"FIELDNAME": "PRCTR"}], ROWCOUNT=1)
+            return bool(r.get("DATA"))
+        except Exception:
+            return False
+
+    def create_profit_center(self, row: dict, org: dict, commit: bool = True) -> dict:
+        """Create a profit center (CO master). Idempotent: reuse if it already exists in the
+        target controlling area. org supplies CO area / PC standard-hierarchy node."""
+        prctr = (row.get("PRCTR") or "").strip()
+        if not prctr:
+            return {"status": "skipped", "messages": ["no profit center number"]}
+        kokrs = org["CO_AREA"]
+        verify = {"table": "CEPC", "key": {"KOKRS": kokrs, "PRCTR": prctr}}
+        if self._profit_center_exists(prctr, kokrs):
+            return {"status": "matched_existing", "profit_center": prctr, "verify_key": verify,
+                    "key_mapping": {"source": prctr, "target": prctr, "disposition": "matched_existing"},
+                    "messages": [f"profit center {prctr} already exists in {kokrs}"]}
+        name = ((row.get("KTEXT") or ("PC " + prctr)).strip() or prctr)[:20]
+        res = self.c.call("BAPI_PROFITCENTER_CREATE",
+                          PROFITCENTERID={"CO_AREA": kokrs, "PROFIT_CTR": prctr},
+                          VALIDFROM=org.get("VALID_FROM", "20240101"), VALIDTO="99991231",
+                          BASICDATA={"PRCTR_NAME": name, "LONG_TEXT": name, "IN_CHARGE": "M4H",
+                                     "PRCTR_HIER_GRP": org.get("PC_HIER", "")},
+                          LANGUAGE={"LANGU": "E"})
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        if commit:
+            self._commit()
+        return {"status": "created", "profit_center": prctr, "verify_key": verify,
+                "key_mapping": {"source": prctr, "target": prctr, "disposition": "created"},
+                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).

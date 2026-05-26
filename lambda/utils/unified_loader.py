@@ -53,7 +53,7 @@ BP_TARGET_ORG = {
 OBJECT_SOURCE_KEY = {
     "Customer": "KUNNR", "Vendor": "LIFNR", "BusinessPartner": "PARTNER",
     "Material": "MATNR", "OpenPO": "EBELN", "OpenAR": "BELNR", "OpenAP": "BELNR",
-    "CostCenter": "KOSTL",
+    "CostCenter": "KOSTL", "ProfitCenter": "PRCTR",
 }
 
 # object -> (mechanism, sub-kind)
@@ -67,6 +67,7 @@ OBJECT_MECHANISM = {
     "OpenAR":          ("bapi", "fi_ar"),
     "OpenAP":          ("bapi", "fi_ap"),
     "CostCenter":      ("bapi", "costcenter"),
+    "ProfitCenter":    ("bapi", "profitcenter"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -459,6 +460,11 @@ class UnifiedLoader:
             r = self.bapi.create_cost_center(row, self.cc_org, commit=True)
             return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
                     "id": r.get("cost_center"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
+        if kind == "bapi" and sub == "profitcenter":
+            r = self.bapi.create_profit_center(row, self.cc_org, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("profit_center"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)

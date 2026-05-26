@@ -152,8 +152,12 @@ def discover(conn) -> dict:
                    if r.get("KOSAR"))
     cc_cat = env("M4H_CC_CATEGORY") or (cats.most_common(1)[0][0] if cats else "1")
     comp_curr = _first(conn, "T001", "WAERS", "BUKRS = '%s'" % comp) or "USD"
-    co = {"CO_AREA": kokrs, "CC_HIER": cc_hier, "CC_CATEGORY": cc_cat, "COMP_CODE": comp,
-          "CURRENCY": comp_curr, "PROFIT_CTR": pc, "VALID_FROM": env("M4H_CC_VALID_FROM") or "20240101"}
+    pc_hiers = Counter(r["KHINR"] for r in _rows(conn, "CEPC", ["KHINR"], "KOKRS = '%s'" % kokrs, 500)
+                       if r.get("KHINR"))
+    pc_hier = pc_hiers.most_common(1)[0][0] if pc_hiers else cc_hier
+    co = {"CO_AREA": kokrs, "CC_HIER": cc_hier, "CC_CATEGORY": cc_cat, "PC_HIER": pc_hier,
+          "COMP_CODE": comp, "CURRENCY": comp_curr, "PROFIT_CTR": pc,
+          "VALID_FROM": env("M4H_CC_VALID_FROM") or "20240101"}
 
     po = {"COMP_CODE": comp, "PURCH_ORG": porg, "PLANT": plant, "PUR_GROUP": pgrp,
           "DOC_TYPE": dtype, "PO_UNIT": env("M4H_PO_UNIT") or _FB["PO_UNIT"],
