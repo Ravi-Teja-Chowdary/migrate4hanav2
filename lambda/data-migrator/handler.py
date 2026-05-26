@@ -471,6 +471,20 @@ def lambda_handler(event, context):
             key_map_info = {**_emit_key_map(run_id, km), "stats": km.stats()}
             _save_ledger(km)   # persist the merged ledger for idempotent re-runs
 
+        # Dead-letter: genuinely failed records across objects -> a report for targeted
+        # reprocessing (a subsequent idempotent re-run picks these up; successes are skipped).
+        dead_letters = [{"object": r.get("object"), **d}
+                        for r in results for d in (r.get("load") or {}).get("dead_letter", [])]
+        dead_letter_info = None
+        if dead_letters:
+            dkey = f"runs/{run_id}/data-migrator/dead-letter/failed_records.json"
+            S3.put_object(Bucket=STAGING_BUCKET, Key=dkey,
+                          Body=json.dumps(dead_letters, indent=2).encode(),
+                          ContentType="application/json")
+            dead_letter_info = {"failed_records": len(dead_letters),
+                                "artifact": f"s3://{STAGING_BUCKET}/{dkey}",
+                                "reprocess": "idempotent re-run reloads these; loaded records are skipped"}
+
         # Write batch summary so downstream validator can read it
         loaded_to_s4 = sum((r.get("load", {}) or {}).get("created_in_s4", 0) for r in results)
         recon_reports = [r["reconciliation"] for r in results
@@ -493,6 +507,7 @@ def lambda_handler(event, context):
                    "reconciliation": Reconciler.rollup(recon_reports) if Reconciler else None,
                    "support_compliance": compliance.audit(results) if compliance else None,
                    "key_mapping": key_map_info,
+                   "dead_letter": dead_letter_info,
                    "results": results}
         S3.put_object(Bucket=STAGING_BUCKET,
                       Key=f"runs/{run_id}/data-migrator/summary.json",

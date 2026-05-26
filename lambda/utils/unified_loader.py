@@ -133,7 +133,7 @@ class UnifiedLoader:
         # Scan for max_rows successes (collisions/skips don't consume the budget),
         # capped so a fully-blocked object can't loop forever. Records already migrated
         # in a prior run (in the cross-run ledger) are REUSED, never re-created.
-        out, ok_count, scanned = [], 0, 0
+        out, src_keys, ok_count, scanned = [], [], 0, 0
         scan_cap = max(max_rows * 20, 60)
         t0 = time.time()
         for row in rows:
@@ -150,6 +150,7 @@ class UnifiedLoader:
                     res = {"ok": False, "status": "exception",
                            "msg": f"{type(e).__name__}: {str(e)[:140]}"}
             out.append(res)
+            src_keys.append(self._source_key(obj, row))
             if res.get("ok"):
                 ok_count += 1
         elapsed = round(time.time() - t0, 1)
@@ -164,6 +165,10 @@ class UnifiedLoader:
                   "throughput_per_sec": round(created / elapsed, 2) if elapsed and created else None}
         if reused:
             result["reused_from_ledger"] = reused
+        dl = self._dead_letter(out, src_keys)
+        if dl:
+            result["failed_count"] = len(dl)
+            result["dead_letter"] = dl[:50]
         kmaps = self._key_mappings(out)
         if kmaps:
             result["key_mappings"] = kmaps
@@ -173,16 +178,32 @@ class UnifiedLoader:
             self.key_map.add_many(obj, kmaps)
         return result
 
+    @staticmethod
+    def _source_key(obj: str, row: dict) -> str:
+        field = OBJECT_SOURCE_KEY.get(obj)
+        return (row.get(field) or "").strip() if field else ""
+
     def _ledger_hit(self, obj: str, row: dict):
         """If this source record was already migrated (present in the cross-run ledger),
         return its target key so we reuse it instead of creating a duplicate."""
         if self.key_map is None:
             return None
-        field = OBJECT_SOURCE_KEY.get(obj)
-        if not field:
-            return None
-        sk = (row.get(field) or "").strip()
+        sk = self._source_key(obj, row)
         return self.key_map.resolve(obj, sk) if sk else None
+
+    @staticmethod
+    def _dead_letter(out: list, source_keys: list) -> list:
+        """Genuinely failed records (status failed/exception) with source key + reason —
+        a dead-letter for targeted reprocessing (the idempotent re-run picks these up;
+        records already loaded are skipped). Intentional skips are NOT dead-lettered."""
+        dl = []
+        for r, sk in zip(out, source_keys):
+            if r.get("status") in ("failed", "exception"):
+                msg = r.get("msg") or r.get("messages")
+                if isinstance(msg, list):
+                    msg = "; ".join(str(m) for m in msg[:2])
+                dl.append({"source": sk, "status": r.get("status"), "reason": str(msg)[:160]})
+        return dl
 
     def _load_fi_parallel(self, obj: str, mech: tuple, rows: list, max_rows: int,
                           workers: int) -> dict:
@@ -196,11 +217,13 @@ class UnifiedLoader:
         pool = [BapiLoader(self.target_conn_factory()) for _ in range(workers)]
         chunks = [work[i::workers] for i in range(workers)]
         out = [[] for _ in range(workers)]
+        keys = [[] for _ in range(workers)]
 
         def run(wi):
             bl = pool[wi]
             for row in chunks[wi]:
                 sk = (row.get(field) or "").strip() if field else ""
+                keys[wi].append(sk)
                 reuse = self.key_map.resolve(obj, sk) if (self.key_map and sk) else None
                 if reuse:
                     out[wi].append({"ok": True, "status": "already_migrated", "id": reuse, "reused": True})
@@ -226,6 +249,7 @@ class UnifiedLoader:
                 pass
 
         flat = [x for sub in out for x in sub]
+        flat_keys = [k for sub in keys for k in sub]
         created = sum(1 for r in flat if r.get("ok") and not r.get("reused"))
         reused = sum(1 for r in flat if r.get("reused"))
         kmaps = self._key_mappings(flat)
@@ -242,6 +266,10 @@ class UnifiedLoader:
             result["reused_from_ledger"] = reused
         if kmaps:
             result["key_mappings"] = kmaps
+        dl = self._dead_letter(flat, flat_keys)
+        if dl:
+            result["failed_count"] = len(dl)
+            result["dead_letter"] = dl[:50]
         return result
 
     def _load_exrate(self, obj: str, mech: tuple, rows: list, max_rows: int,
