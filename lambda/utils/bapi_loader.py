@@ -335,6 +335,46 @@ class BapiLoader:
                 "key_mapping": {"source": src_doc, "target": belnr, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
 
+    # ── Cost center (CO master, BAPI_COSTCENTER_CREATEMULTIPLE) ─────────────
+    def _cost_center_exists(self, kostl: str, kokrs: str) -> bool:
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="CSKS", DELIMITER="|",
+                            OPTIONS=[{"TEXT": "KOKRS = '%s' AND KOSTL = '%s'" % (kokrs, kostl)}],
+                            FIELDS=[{"FIELDNAME": "KOSTL"}], ROWCOUNT=1)
+            return bool(r.get("DATA"))
+        except Exception:
+            return False
+
+    def create_cost_center(self, row: dict, org: dict, commit: bool = True) -> dict:
+        """Create a cost center (CO master). Idempotent: if it already exists in the target
+        controlling area, reuse it. org supplies the discovered CO area / hierarchy node /
+        category / company / currency / profit center."""
+        kostl = (row.get("KOSTL") or "").strip()
+        if not kostl:
+            return {"status": "skipped", "messages": ["no cost center number"]}
+        kokrs = org["CO_AREA"]
+        verify = {"table": "CSKS", "key": {"KOKRS": kokrs, "KOSTL": kostl}}
+        if self._cost_center_exists(kostl, kokrs):
+            return {"status": "matched_existing", "cost_center": kostl, "verify_key": verify,
+                    "key_mapping": {"source": kostl, "target": kostl, "disposition": "matched_existing"},
+                    "messages": [f"cost center {kostl} already exists in {kokrs}"]}
+        name = ((row.get("KTEXT") or ("CC " + kostl)).strip() or kostl)[:20]
+        cc = {"COSTCENTER": kostl, "VALID_FROM": org.get("VALID_FROM", "20240101"),
+              "VALID_TO": "99991231", "PERSON_IN_CHARGE": "M4H",
+              "COSTCENTER_TYPE": org["CC_CATEGORY"], "COSTCTR_HIER_GRP": org["CC_HIER"],
+              "COMP_CODE": org["COMP_CODE"], "CURRENCY": org["CURRENCY"],
+              "PROFIT_CTR": org.get("PROFIT_CTR", ""), "NAME": name, "DESCRIPT": name}
+        res = self.c.call("BAPI_COSTCENTER_CREATEMULTIPLE", CONTROLLINGAREA=kokrs, COSTCENTERLIST=[cc])
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        if commit:
+            self._commit()
+        return {"status": "created", "cost_center": kostl, "verify_key": verify,
+                "key_mapping": {"source": kostl, "target": kostl, "disposition": "created"},
+                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).

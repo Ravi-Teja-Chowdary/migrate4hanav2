@@ -53,6 +53,7 @@ BP_TARGET_ORG = {
 OBJECT_SOURCE_KEY = {
     "Customer": "KUNNR", "Vendor": "LIFNR", "BusinessPartner": "PARTNER",
     "Material": "MATNR", "OpenPO": "EBELN", "OpenAR": "BELNR", "OpenAP": "BELNR",
+    "CostCenter": "KOSTL",
 }
 
 # object -> (mechanism, sub-kind)
@@ -65,6 +66,7 @@ OBJECT_MECHANISM = {
     "OpenPO":          ("bapi", "po"),
     "OpenAR":          ("bapi", "fi_ar"),
     "OpenAP":          ("bapi", "fi_ap"),
+    "CostCenter":      ("bapi", "costcenter"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -110,6 +112,7 @@ class UnifiedLoader:
         self.po_org = dict(PO_TARGET_ORG)
         self.fi_org = dict(FI_TARGET_ORG)
         self.bp_org = dict(BP_TARGET_ORG)
+        self.cc_org = {}           # CO master config (set from discovery by the handler)
 
     def odata_ready(self) -> bool:
         """True if the OData BP service is available — gates transaction-ready partner
@@ -220,7 +223,7 @@ class UnifiedLoader:
         needs: a source (ECC) conn for PO item reads; an OData client for bp creation."""
         w = UnifiedLoader(self.target_conn_factory(), **self._init_kwargs)
         w.key_map = self.key_map
-        w.po_org, w.fi_org, w.bp_org = self.po_org, self.fi_org, self.bp_org
+        w.po_org, w.fi_org, w.bp_org, w.cc_org = self.po_org, self.fi_org, self.bp_org, self.cc_org
         if mech == ("bapi", "po") and self.source_conn_factory:
             w.source_conn = self.source_conn_factory()
         if mech == ("bapi", "bp") and self.odata_factory:
@@ -452,6 +455,11 @@ class UnifiedLoader:
                     "id": r.get("doc"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "refs": r.get("partner"),
                     "msg": r.get("messages")}
+        if kind == "bapi" and sub == "costcenter":
+            r = self.bapi.create_cost_center(row, self.cc_org, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("cost_center"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)
             return {"ok": bool(r.get("created")), "status": r.get("status"), "id": r.get("docnum")}

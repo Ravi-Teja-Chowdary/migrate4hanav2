@@ -548,6 +548,7 @@ def lambda_handler(event, context):
                         else:
                             log_stage_event(run_id, "data-migrator", "config_cached", _cfg["summary"])
                         loader.po_org, loader.fi_org, loader.bp_org = _cfg["po"], _cfg["fi"], _cfg["bp"]
+                        loader.cc_org = _cfg.get("co", {})
                         discovered_config = _cfg["summary"]
                     except Exception as e:
                         log_stage_event(run_id, "data-migrator", "config_discovery_skipped", {"reason": str(e)[:160]})
