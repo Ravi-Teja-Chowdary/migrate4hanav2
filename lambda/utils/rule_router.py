@@ -13,50 +13,51 @@ from typing import List, Dict, Any
 logger = logging.getLogger("dynamodb_rule_router")
 logger.setLevel(logging.INFO)
 
-# Initialize DynamoDB resource
 DYNAMODB_TABLE_NAME = os.environ.get("RULES_TABLE_NAME", "sap-simplification-rules")
-dynamodb = boto3.resource('dynamodb')
 
-# Module-level cache: rule sets rarely change within a single process run,
-# so we cache by category to avoid repeated DynamoDB scans (and log spam).
+# Rules source is STATIC by default — the static set below is complete and needs no
+# infrastructure. DynamoDB is opt-in (set M4H_RULES_SOURCE=dynamodb) for deployments that
+# centrally manage rules in a table. This avoids a hidden infra dependency and the ERROR-log
+# spam that an unprovisioned table produced on every cold start.
+RULES_SOURCE = os.environ.get("M4H_RULES_SOURCE", "static").strip().lower()
+
+# Module-level cache: rule sets rarely change within a single process run, so we cache by
+# category to avoid repeated lookups.
 _RULES_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 
+
 def get_simplification_rules(category: str = None) -> List[Dict[str, Any]]:
-    """
-    Fetches rules from DynamoDB. If category is provided, filters by category using GSI.
-    """
+    """Return ABAP simplification rules. Static by default; DynamoDB only when
+    M4H_RULES_SOURCE=dynamodb (filtered by category via GSI when provided)."""
     cache_key = category or "__all__"
     if cache_key in _RULES_CACHE:
         return _RULES_CACHE[cache_key]
-    table = dynamodb.Table(DYNAMODB_TABLE_NAME)
-    
+
+    # Default path: static rules — no network call, no infra dependency, no log noise.
+    if RULES_SOURCE != "dynamodb":
+        rules = _get_fallback_rules(category)
+        _RULES_CACHE[cache_key] = rules
+        return rules
+
+    # Opt-in DynamoDB path (lazy client init so the static path never touches boto3 resources).
     try:
+        table = boto3.resource('dynamodb').Table(DYNAMODB_TABLE_NAME)
         if category:
-            # Query using Global Secondary Index for efficient category retrieval
             response = table.query(
                 IndexName="CategoryIndex",
-                KeyConditionExpression=boto3.dynamodb.conditions.Key('category').eq(category)
-            )
-            rules = response.get('Items', [])
-            logger.info(f"DynamoDB Rule Router: Fetched {len(rules)} rules for category '{category}'")
-            return rules
+                KeyConditionExpression=boto3.dynamodb.conditions.Key('category').eq(category))
         else:
-            # Scan all if no category specified (less efficient, use carefully)
             response = table.scan()
-            rules = response.get('Items', [])
-            logger.info(f"DynamoDB Rule Router: Scanned and fetched {len(rules)} total rules.")
-            if not rules:
-                # Empty table (e.g. local-shim or unprovisioned env) → use static fallback
-                rules = _get_fallback_rules(category)
-            _RULES_CACHE[cache_key] = rules
-            return rules
-            
-    except ClientError as e:
-        logger.error(f"Failed to fetch rules from DynamoDB: {e}. Falling back to static JSON rules.")
-        return _get_fallback_rules(category)
-    except Exception as e:
-        logger.error(f"Unexpected error when fetching rules: {e}")
-        return _get_fallback_rules(category)
+        rules = response.get('Items', []) or _get_fallback_rules(category)
+        logger.info(f"DynamoDB Rule Router: {len(rules)} rules (category={category or 'all'})")
+        _RULES_CACHE[cache_key] = rules
+        return rules
+    except (ClientError, Exception) as e:
+        # Expected when the table isn't provisioned / no access — fall back, WARNING not ERROR.
+        logger.warning(f"DynamoDB rules unavailable ({type(e).__name__}); using static rules.")
+        rules = _get_fallback_rules(category)
+        _RULES_CACHE[cache_key] = rules
+        return rules
 
 def _get_fallback_rules(category: str = None) -> List[Dict[str, Any]]:
     """Emergency fallback to full static rule set if DynamoDB is offline."""

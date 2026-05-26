@@ -1,14 +1,12 @@
 """
-Migrate4HANA — Enhanced ABAP Code Analyzer
-============================================
-Analyzes ABAP source code against 100 simplification rules.
-Produces detailed reports with effort estimates and auto-fixes.
-
-Usage:
-    from abap_analyzer import ABAPAnalyzer
-    analyzer = ABAPAnalyzer()
-    report = analyzer.analyze_program("ZPROGRAM", source_code)
-    fixed_code = analyzer.auto_remediate("ZPROGRAM", source_code)
+Migrate4HANA — ABAP Code Analyzer  [DEPRECATED — NOT ON THE ACTIVE PATH]
+========================================================================
+This regex-rule analyzer is superseded and is NOT used by the pipeline. The live
+analysis path is ``code-analyzer/handler.analyze_program`` (rules via
+``utils/rule_router.get_simplification_rules``) plus the AST engine in
+``abap_ast_engine.py`` for remediation. This module's original ``simplification_rules``
+dependency no longer exists; instantiating ``ABAPAnalyzer`` now raises a clear,
+actionable error instead of a cryptic ImportError. Retained for reference only.
 """
 
 import re
@@ -76,8 +74,17 @@ class ABAPAnalyzer:
     EFFORT_BASE_HOURS = 0.5
 
     def __init__(self):
-        # Import rules
-        from simplification_rules import get_all_rules, get_auto_fixable_rules
+        # DEPRECATED: the original 'simplification_rules' module was removed. Fail loud and
+        # actionable instead of with a cryptic ModuleNotFoundError.
+        try:
+            from simplification_rules import get_all_rules, get_auto_fixable_rules
+        except ImportError as e:
+            raise RuntimeError(
+                "abap_analyzer.ABAPAnalyzer is DEPRECATED and not on the active path "
+                "(its 'simplification_rules' dependency was removed). Use the live analyzer: "
+                "code-analyzer/handler.analyze_program + abap_ast_engine, with rules from "
+                "utils/rule_router.get_simplification_rules()."
+            ) from e
         self.rules = get_all_rules()
         self.auto_fix_rules = get_auto_fixable_rules()
 
