@@ -62,6 +62,46 @@ def _list_remediated_objects(run_id: str) -> list:
     return out
 
 
+def _load_approval(run_id: str, name: str) -> dict | None:
+    """Read the per-object approval record written after ATC + human review."""
+    key = f"runs/{run_id}/code-analyzer/approvals/{name}.json"
+    try:
+        obj = S3.get_object(Bucket=STAGING_BUCKET, Key=key)
+        return json.loads(obj["Body"].read())
+    except Exception:
+        return None
+
+
+def _approval_gate(run_id: str, code_objects: list, event: dict) -> dict:
+    """GOVERNANCE GATE — AI-remediated ABAP must not reach the target without (1) an ATC
+    pass and (2) explicit human approval. Cleared only when every object has an approval
+    record (approved=true AND atc_status in passed/green/ok), or a pipeline supplies a
+    pre-cleared override (approved_by + atc_passed=true). Otherwise we ship NOTHING."""
+    if event.get("approved_by") and event.get("atc_passed") is True:
+        return {"cleared": True, "mode": "event_override",
+                "approver": event["approved_by"], "atc": "passed"}
+    approved, pending = [], []
+    for obj in code_objects:
+        name = obj.get("name")
+        rec = _load_approval(run_id, name)
+        atc_ok = rec and str(rec.get("atc_status", "")).lower() in ("passed", "green", "ok")
+        if rec and rec.get("approved") is True and atc_ok:
+            approved.append(name)
+        else:
+            why = ("no approval record" if not rec
+                   else "not approved" if rec.get("approved") is not True
+                   else f"ATC not passed (atc_status={rec.get('atc_status')!r})")
+            pending.append({"object": name, "reason": why})
+    if pending:
+        return {"cleared": False, "approved": approved, "pending": pending,
+                "reason": "AI-remediated ABAP requires an ATC pass + human approval before transport",
+                "how_to_approve": (f"After reviewing the diff and ATC run, write "
+                                   f"runs/{run_id}/code-analyzer/approvals/<object>.json = "
+                                   '{"approved": true, "atc_status": "passed", '
+                                   '"approver": "<user>", "reviewed_at": "<iso8601>"}')}
+    return {"cleared": True, "mode": "per_object_approval", "approved": approved}
+
+
 def lambda_handler(event, context):
     run_id = event.get("run_id", f"run-{int(time.time())}")
     log_stage_event(run_id, "code-deployer", "start", {})
@@ -70,6 +110,14 @@ def lambda_handler(event, context):
     if not code_objects:
         log_stage_event(run_id, "code-deployer", "skipped", {"reason": "no remediated code"})
         return {"status": "skipped", "reason": "no remediated code objects found", "run_id": run_id}
+
+    # GOVERNANCE GATE: never transport AI-remediated code without ATC pass + human approval.
+    gate = _approval_gate(run_id, code_objects, event)
+    if not gate["cleared"]:
+        log_stage_event(run_id, "code-deployer", "manual_gate",
+                        {"pending": gate["pending"], "approved": gate.get("approved")})
+        return {"status": "manual_gate", "run_id": run_id, "object_count": len(code_objects),
+                **gate}
 
     build = _invoke(ARTIFACT_BUILDER_FN, {
         "run_id": run_id, "object_kind": "code", "objects": code_objects,
