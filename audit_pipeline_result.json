@@ -1,0 +1,707 @@
+[
+  {
+    "stage": "config-replicator",
+    "files": 2,
+    "loc": 2348,
+    "defs": 7,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 5,
+    "caps": {
+      "SAP_RFC": 6,
+      "AWS": 8,
+      "ABAP_ANALYSIS": 38,
+      "TRANSPORT": 2,
+      "FILES": 6
+    },
+    "scaffold_score": 2,
+    "scaf": {
+      "STUB_WORD": 2
+    },
+    "verdict": "REAL",
+    "claim": "Migrate4HANA \u2014 Stage 4: Config & Org Structure Replicator"
+  },
+  {
+    "stage": "data-hygiene",
+    "files": 5,
+    "loc": 1403,
+    "defs": 32,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 6,
+    "caps": {
+      "SAP_RFC": 4,
+      "ODATA_HTTP": 2,
+      "AWS": 8,
+      "AI_LLM": 1,
+      "ABAP_ANALYSIS": 5,
+      "FILES": 4
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "REAL",
+    "claim": "data-hygiene \u2014 Phase 4, Stage 14"
+  },
+  {
+    "stage": "data-migrator",
+    "files": 1,
+    "loc": 524,
+    "defs": 23,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 5,
+    "caps": {
+      "SAP_RFC": 15,
+      "ODATA_HTTP": 15,
+      "AWS": 21,
+      "ABAP_ANALYSIS": 1,
+      "FILES": 11
+    },
+    "scaffold_score": 1,
+    "scaf": {
+      "STUB_WORD": 1
+    },
+    "verdict": "REAL",
+    "claim": "data-migrator (lift-and-shift) \u2014 MC/IDoc/LTMOM template generator only."
+  },
+  {
+    "stage": "integration-mapper",
+    "files": 1,
+    "loc": 338,
+    "defs": 6,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 4,
+    "caps": {
+      "SAP_RFC": 23,
+      "ODATA_HTTP": 17,
+      "AWS": 8,
+      "FILES": 5
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "REAL",
+    "claim": "Migrate4HANA \u2014 Stage 6: Integration Mapper"
+  },
+  {
+    "stage": "migration-completeness-analyzer",
+    "files": 1,
+    "loc": 312,
+    "defs": 10,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "ODATA_HTTP": 3,
+      "AI_LLM": 15,
+      "ABAP_ANALYSIS": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "REAL",
+    "claim": "Migrate4HANA \u2014 Migration Completeness Analyzer (Stage 9.5)"
+  },
+  {
+    "stage": "role-migrator",
+    "files": 1,
+    "loc": 279,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "SAP_RFC": 8,
+      "AWS": 8,
+      "FILES": 5
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "REAL",
+    "claim": "Migrate4HANA \u2014 Stage 5: Role & Authorization Migrator"
+  },
+  {
+    "stage": "transport-artifact-builder",
+    "files": 1,
+    "loc": 243,
+    "defs": 6,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 4,
+    "caps": {
+      "SAP_RFC": 5,
+      "AWS": 7,
+      "TRANSPORT": 36,
+      "FILES": 4
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "REAL",
+    "claim": "transport-artifact-builder \u2014 Phase 2/3"
+  },
+  {
+    "stage": "reconciliation-engine",
+    "files": 1,
+    "loc": 231,
+    "defs": 11,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 5,
+    "caps": {
+      "SAP_RFC": 3,
+      "ODATA_HTTP": 1,
+      "AWS": 7,
+      "ABAP_ANALYSIS": 1,
+      "FILES": 4
+    },
+    "scaffold_score": 1,
+    "scaf": {
+      "STUB_WORD": 1
+    },
+    "verdict": "REAL",
+    "claim": "reconciliation-engine"
+  },
+  {
+    "stage": "rollback-manager",
+    "files": 1,
+    "loc": 184,
+    "defs": 8,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 3,
+    "caps": {
+      "AWS": 11,
+      "ABAP_ANALYSIS": 4,
+      "FILES": 4
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "REAL",
+    "claim": "rollback-manager (lift-and-shift) \u2014 switch-back to ECC."
+  },
+  {
+    "stage": "bc-set-builder",
+    "files": 1,
+    "loc": 177,
+    "defs": 5,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 6,
+    "caps": {
+      "SAP_RFC": 3,
+      "ODATA_HTTP": 2,
+      "AWS": 7,
+      "ABAP_ANALYSIS": 3,
+      "TRANSPORT": 64,
+      "FILES": 3
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "REAL",
+    "claim": "bc-set-builder \u2014 Phase 3, Stage 11"
+  },
+  {
+    "stage": "code-analyzer",
+    "files": 15,
+    "loc": 15785,
+    "defs": 598,
+    "classes": 114,
+    "trivial_defs": 0,
+    "cap_cats": 7,
+    "caps": {
+      "SAP_RFC": 42,
+      "ODATA_HTTP": 40,
+      "AWS": 12,
+      "AI_LLM": 160,
+      "ABAP_ANALYSIS": 765,
+      "TRANSPORT": 13,
+      "FILES": 15
+    },
+    "scaffold_score": 10,
+    "scaf": {
+      "TODO": 2,
+      "STUB_WORD": 8
+    },
+    "verdict": "PARTIAL",
+    "claim": "Migrate4HANA \u2014 Stage 2: Code Analyzer"
+  },
+  {
+    "stage": "simplification-check",
+    "files": 5,
+    "loc": 12880,
+    "defs": 9,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 7,
+    "caps": {
+      "SAP_RFC": 244,
+      "ODATA_HTTP": 228,
+      "AWS": 6,
+      "AI_LLM": 2,
+      "ABAP_ANALYSIS": 1052,
+      "TRANSPORT": 10,
+      "FILES": 4
+    },
+    "scaffold_score": 5,
+    "scaf": {
+      "STUB_WORD": 5
+    },
+    "verdict": "PARTIAL",
+    "claim": "Migrate4HANA \u2014 Simplification Item Check Engine"
+  },
+  {
+    "stage": "test-generator",
+    "files": 2,
+    "loc": 1313,
+    "defs": 8,
+    "classes": 1,
+    "trivial_defs": 0,
+    "cap_cats": 6,
+    "caps": {
+      "SAP_RFC": 6,
+      "ODATA_HTTP": 925,
+      "AWS": 5,
+      "ABAP_ANALYSIS": 3,
+      "TRANSPORT": 1,
+      "FILES": 1
+    },
+    "scaffold_score": 4,
+    "scaf": {
+      "STUB_WORD": 4
+    },
+    "verdict": "PARTIAL",
+    "claim": "test-generator \u2014 Phase 6, Stage 20"
+  },
+  {
+    "stage": "migration-validator",
+    "files": 1,
+    "loc": 929,
+    "defs": 13,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 5,
+    "caps": {
+      "SAP_RFC": 33,
+      "AWS": 6,
+      "AI_LLM": 14,
+      "ABAP_ANALYSIS": 2,
+      "FILES": 3
+    },
+    "scaffold_score": 14,
+    "scaf": {
+      "STUB_WORD": 14
+    },
+    "verdict": "PARTIAL",
+    "claim": "Migrate4HANA \u2014 Stage 13: Migration Validator"
+  },
+  {
+    "stage": "process-miner",
+    "files": 1,
+    "loc": 713,
+    "defs": 3,
+    "classes": 1,
+    "trivial_defs": 0,
+    "cap_cats": 5,
+    "caps": {
+      "SAP_RFC": 7,
+      "AWS": 3,
+      "AI_LLM": 1,
+      "ABAP_ANALYSIS": 10,
+      "TRANSPORT": 1
+    },
+    "scaffold_score": 5,
+    "scaf": {
+      "STUB_WORD": 5
+    },
+    "verdict": "PARTIAL",
+    "claim": ""
+  },
+  {
+    "stage": "discovery-engine",
+    "files": 1,
+    "loc": 553,
+    "defs": 11,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 4,
+    "caps": {
+      "SAP_RFC": 14,
+      "AWS": 6,
+      "ABAP_ANALYSIS": 4,
+      "FILES": 5
+    },
+    "scaffold_score": 4,
+    "scaf": {
+      "STUB_WORD": 4
+    },
+    "verdict": "PARTIAL",
+    "claim": "Migrate4HANA \u2014 Stage 1: Discovery Engine"
+  },
+  {
+    "stage": "sizing-advisor",
+    "files": 1,
+    "loc": 138,
+    "defs": 5,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "SAP_RFC": 7,
+      "AWS": 5,
+      "FILES": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "sizing-advisor \u2014 Phase 0, Stage 2"
+  },
+  {
+    "stage": "migration-cockpit-orchestrator",
+    "files": 1,
+    "loc": 137,
+    "defs": 7,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 4,
+    "caps": {
+      "ODATA_HTTP": 3,
+      "AWS": 6,
+      "AI_LLM": 2,
+      "FILES": 2
+    },
+    "scaffold_score": 1,
+    "scaf": {
+      "STUB_WORD": 1
+    },
+    "verdict": "PARTIAL",
+    "claim": "migration-cockpit-orchestrator \u2014 Phase 5, Stage 16"
+  },
+  {
+    "stage": "role-provisioner",
+    "files": 1,
+    "loc": 126,
+    "defs": 6,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 5,
+    "caps": {
+      "SAP_RFC": 9,
+      "ODATA_HTTP": 1,
+      "AWS": 12,
+      "TRANSPORT": 8,
+      "FILES": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "role-provisioner (lift-and-shift) \u2014 PFCG transport export, never auto-assign."
+  },
+  {
+    "stage": "evidence-collector",
+    "files": 1,
+    "loc": 124,
+    "defs": 7,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 4,
+    "caps": {
+      "AWS": 4,
+      "ABAP_ANALYSIS": 1,
+      "TRANSPORT": 1,
+      "FILES": 1
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "evidence-collector"
+  },
+  {
+    "stage": "readiness-check",
+    "files": 1,
+    "loc": 111,
+    "defs": 7,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 5,
+    "caps": {
+      "SAP_RFC": 3,
+      "AWS": 6,
+      "ABAP_ANALYSIS": 1,
+      "TRANSPORT": 2,
+      "FILES": 1
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "readiness-check (lift-and-shift) \u2014 greenfield-relevant readiness scoring."
+  },
+  {
+    "stage": "manual-gate",
+    "files": 1,
+    "loc": 109,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 2,
+    "caps": {
+      "AWS": 5,
+      "FILES": 3
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "Migrate4HANA - Manual-Gate Lambda"
+  },
+  {
+    "stage": "transport-import-executor",
+    "files": 1,
+    "loc": 109,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "AWS": 3,
+      "TRANSPORT": 16,
+      "FILES": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "transport-import-executor"
+  },
+  {
+    "stage": "object-router",
+    "files": 1,
+    "loc": 108,
+    "defs": 3,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "AWS": 3,
+      "TRANSPORT": 5,
+      "FILES": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "object-router \u2014 Phase 0, Stage 3"
+  },
+  {
+    "stage": "idoc-orchestrator",
+    "files": 1,
+    "loc": 105,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "SAP_RFC": 5,
+      "AWS": 6,
+      "FILES": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "idoc-orchestrator \u2014 Phase 5, Stage 18"
+  },
+  {
+    "stage": "integration-activator",
+    "files": 1,
+    "loc": 102,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 3,
+    "caps": {
+      "AWS": 10,
+      "TRANSPORT": 7,
+      "FILES": 1
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "integration-activator (lift-and-shift) \u2014 customizing-transport + AWS-side flip."
+  },
+  {
+    "stage": "delta-extractor",
+    "files": 1,
+    "loc": 93,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "SAP_RFC": 12,
+      "AWS": 6,
+      "FILES": 3
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "delta-extractor \u2014 Phase 7, Stage 22"
+  },
+  {
+    "stage": "data-loader",
+    "files": 1,
+    "loc": 92,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 4,
+    "caps": {
+      "SAP_RFC": 2,
+      "ODATA_HTTP": 2,
+      "AWS": 7,
+      "FILES": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "data-loader (lift-and-shift) \u2014 pure orchestrator."
+  },
+  {
+    "stage": "transport-import-verifier",
+    "files": 1,
+    "loc": 92,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "AWS": 4,
+      "TRANSPORT": 4,
+      "FILES": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "transport-import-verifier"
+  },
+  {
+    "stage": "config-applier",
+    "files": 1,
+    "loc": 86,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 5,
+    "caps": {
+      "SAP_RFC": 1,
+      "ODATA_HTTP": 1,
+      "AWS": 11,
+      "TRANSPORT": 15,
+      "FILES": 1
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "config-applier (lift-and-shift) \u2014 BC Sets + customizing transports only."
+  },
+  {
+    "stage": "code-deployer",
+    "files": 1,
+    "loc": 82,
+    "defs": 4,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 3,
+    "caps": {
+      "AWS": 9,
+      "TRANSPORT": 9,
+      "FILES": 1
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "code-deployer (lift-and-shift) \u2014 STMS-only."
+  },
+  {
+    "stage": "cutover-orchestrator",
+    "files": 1,
+    "loc": 80,
+    "defs": 3,
+    "classes": 0,
+    "trivial_defs": 1,
+    "cap_cats": 1,
+    "caps": {
+      "AWS": 3
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "cutover-orchestrator (lift-and-shift) \u2014 ECC-lock-first, then delta gate."
+  },
+  {
+    "stage": "target-provisioner",
+    "files": 1,
+    "loc": 71,
+    "defs": 3,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "AWS": 5,
+      "AI_LLM": 1,
+      "FILES": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "target-provisioner \u2014 Phase 1, Stage 4"
+  },
+  {
+    "stage": "ltmom-orchestrator",
+    "files": 1,
+    "loc": 62,
+    "defs": 2,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 2,
+    "caps": {
+      "AWS": 3,
+      "FILES": 1
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "ltmom-orchestrator \u2014 Phase 5, Stage 17"
+  },
+  {
+    "stage": "transport-file-placer",
+    "files": 1,
+    "loc": 54,
+    "defs": 1,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 3,
+    "caps": {
+      "AWS": 2,
+      "TRANSPORT": 15,
+      "FILES": 1
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "transport-file-placer"
+  },
+  {
+    "stage": "basis-validator",
+    "files": 1,
+    "loc": 50,
+    "defs": 1,
+    "classes": 0,
+    "trivial_defs": 0,
+    "cap_cats": 4,
+    "caps": {
+      "SAP_RFC": 3,
+      "AWS": 5,
+      "ABAP_ANALYSIS": 8,
+      "FILES": 2
+    },
+    "scaffold_score": 0,
+    "scaf": {},
+    "verdict": "PARTIAL",
+    "claim": "basis-validator \u2014 Phase 1, Stage 5"
+  }
+]
