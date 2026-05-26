@@ -439,7 +439,10 @@ def lambda_handler(event, context):
                 loader.key_map = _load_ledger()   # cross-run ledger -> idempotent re-runs
                 loader.source_conn = conn
                 loader.odata = _target_odata()   # transaction-ready partner creation (OData)
-                loader.target_conn_factory = _target_connection   # parallel mass-load pool
+                # Factories for the parallel worker pool (fresh per-worker connections):
+                loader.target_conn_factory = _target_connection
+                loader.source_conn_factory = lambda: _ecc(secret_id)
+                loader.odata_factory = _target_odata
                 log_stage_event(run_id, "data-migrator", "load_enabled",
                                 {"max_rows": LOAD_MAX_ROWS, "mechanisms": OBJECT_MECHANISM,
                                  "odata_partner_create": bool(loader.odata and loader.odata_ready())})

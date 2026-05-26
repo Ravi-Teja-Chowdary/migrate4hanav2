@@ -19,6 +19,9 @@ from concurrent.futures import ThreadPoolExecutor
 # Parallel workers for mass loading (pyrfc releases the GIL during RFC calls, so worker
 # threads with their OWN connection post concurrently). 1 = single-threaded (default).
 LOAD_WORKERS = int(os.environ.get("M4H_LOAD_WORKERS", "1"))
+# Per-document BAPI objects safe to parallelize across a worker pool.
+PARALLEL_MECHS = {("bapi", "bp"), ("bapi", "material"), ("bapi", "po"),
+                  ("bapi", "fi_ar"), ("bapi", "fi_ap")}
 
 try:
     from bapi_loader import BapiLoader
@@ -92,13 +95,18 @@ class UnifiedLoader:
     def __init__(self, tconn, own_logical_system="S4HCLNT100", sender="M4HSENDER",
                  client="100", target_sid="S4H"):
         self.c = tconn
+        self._init_kwargs = dict(own_logical_system=own_logical_system, sender=sender,
+                                 client=client, target_sid=target_sid)
         self.bapi = BapiLoader(tconn)
         self.idoc = IDocLoader(tconn, own_logical_system, sender, client, target_sid)
         self.resolver = MetaRecipeResolver(tconn)
         self.key_map = None        # live source->target registry (set by the handler)
         self.source_conn = None    # ECC conn, for reading dependent rows (PO items)
         self.odata = None          # OData client for transaction-ready partner creation
-        self.target_conn_factory = None  # callable -> fresh target RFC conn (parallel pool)
+        # Factories for the parallel worker pool (fresh per-worker connections):
+        self.target_conn_factory = None
+        self.source_conn_factory = None
+        self.odata_factory = None
         self.po_org = dict(PO_TARGET_ORG)
         self.fi_org = dict(FI_TARGET_ORG)
         self.bp_org = dict(BP_TARGET_ORG)
@@ -126,10 +134,11 @@ class UnifiedLoader:
         # no static screen fully predicts. So attempt-and-classify — see _load_exrate.
         if mech == ("bapi", "exrate"):
             return self._load_exrate(obj, mech, rows, max_rows)
-        # Mass FI posting: parallelize across a connection pool (proven ~Nx throughput).
-        if (mech in (("bapi", "fi_ar"), ("bapi", "fi_ap")) and LOAD_WORKERS > 1
-                and self.target_conn_factory):
-            return self._load_fi_parallel(obj, mech, rows, max_rows, LOAD_WORKERS)
+        # Mass load: parallelize per-document BAPI objects across a connection pool
+        # (proven ~Nx throughput) when there's enough work to justify the worker setup.
+        if (mech in PARALLEL_MECHS and LOAD_WORKERS > 1 and self.target_conn_factory
+                and max_rows >= LOAD_WORKERS):
+            return self._load_parallel(obj, mech, rows, max_rows, LOAD_WORKERS)
         # Scan for max_rows successes (collisions/skips don't consume the budget),
         # capped so a fully-blocked object can't loop forever. Records already migrated
         # in a prior run (in the cross-run ledger) are REUSED, never re-created.
@@ -205,35 +214,43 @@ class UnifiedLoader:
                 dl.append({"source": sk, "status": r.get("status"), "reason": str(msg)[:160]})
         return dl
 
-    def _load_fi_parallel(self, obj: str, mech: tuple, rows: list, max_rows: int,
-                          workers: int) -> dict:
-        """Mass-post FI open items (AR/AP) across a pool of `workers` target connections.
-        FI posting is round-trip bound; pyrfc frees the GIL per call, so worker threads
-        each with their OWN BapiLoader/connection post concurrently. The ledger is shared
-        (thread-safe). Same per-record outcomes as the serial path — just parallel."""
-        kind = "AR" if mech[1] == "fi_ar" else "AP"
-        field = OBJECT_SOURCE_KEY.get(obj)
+    def _make_worker(self, mech):
+        """A parallel worker = a full loader on a FRESH target connection, sharing the
+        thread-safe ledger + org configs. Only opens the extra connections the mechanism
+        needs: a source (ECC) conn for PO item reads; an OData client for bp creation."""
+        w = UnifiedLoader(self.target_conn_factory(), **self._init_kwargs)
+        w.key_map = self.key_map
+        w.po_org, w.fi_org, w.bp_org = self.po_org, self.fi_org, self.bp_org
+        if mech == ("bapi", "po") and self.source_conn_factory:
+            w.source_conn = self.source_conn_factory()
+        if mech == ("bapi", "bp") and self.odata_factory:
+            w.odata = self.odata_factory()
+            w._odata_ok = getattr(self, "_odata_ok", None)
+        return w
+
+    def _load_parallel(self, obj: str, mech: tuple, rows: list, max_rows: int,
+                       workers: int) -> dict:
+        """Mass-load a per-document BAPI object across a pool of `workers`, each a loader
+        on its own connections. pyrfc frees the GIL per RFC call, so the posts overlap
+        (~Nx). The ledger is shared + thread-safe; per-record outcomes match the serial
+        path. Used for bp / material / po / fi (each via the worker's _load_one)."""
         work = rows[:max_rows]
-        pool = [BapiLoader(self.target_conn_factory()) for _ in range(workers)]
+        pool = [self._make_worker(mech) for _ in range(workers)]
         chunks = [work[i::workers] for i in range(workers)]
         out = [[] for _ in range(workers)]
         keys = [[] for _ in range(workers)]
 
         def run(wi):
-            bl = pool[wi]
+            w = pool[wi]
             for row in chunks[wi]:
-                sk = (row.get(field) or "").strip() if field else ""
+                sk = self._source_key(obj, row)
                 keys[wi].append(sk)
                 reuse = self.key_map.resolve(obj, sk) if (self.key_map and sk) else None
                 if reuse:
                     out[wi].append({"ok": True, "status": "already_migrated", "id": reuse, "reused": True})
                     continue
                 try:
-                    r = bl.create_fi_open_item(row, kind, self.fi_org,
-                                               key_map=self.key_map, commit=True)
-                    out[wi].append({"ok": r["status"] == "created", "status": r["status"],
-                                    "id": r.get("doc"), "verify_key": r.get("verify_key"),
-                                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")})
+                    out[wi].append(w._load_one(obj, mech, row))
                 except Exception as e:
                     out[wi].append({"ok": False, "status": "exception",
                                     "msg": f"{type(e).__name__}: {str(e)[:120]}"})
@@ -242,11 +259,12 @@ class UnifiedLoader:
         with ThreadPoolExecutor(max_workers=workers) as ex:
             list(ex.map(run, range(workers)))
         elapsed = round(time.time() - t0, 1)
-        for bl in pool:
-            try:
-                bl.c.close()
-            except Exception:
-                pass
+        for w in pool:
+            for c in (w.c, w.source_conn):
+                try:
+                    c and c.close()
+                except Exception:
+                    pass
 
         flat = [x for sub in out for x in sub]
         flat_keys = [k for sub in keys for k in sub]
@@ -255,8 +273,8 @@ class UnifiedLoader:
         kmaps = self._key_mappings(flat)
         if self.key_map is not None:
             self.key_map.add_many(obj, kmaps)
-        result = {"object": obj, "mechanism": f"bapi/{mech[1]}", "attempted": len(flat),
-                  "created_in_s4": created,
+        result = {"object": obj, "mechanism": f"{mech[0]}/{mech[1] or ''}".rstrip("/"),
+                  "attempted": len(flat), "created_in_s4": created,
                   "status_breakdown": dict(Counter(r.get("status") for r in flat)),
                   "created_keys": self._created_keys(flat),
                   "samples": [r for r in flat if r.get("ok")][:3] or flat[:3],
