@@ -57,28 +57,61 @@ def _get_connections_table():
     return None
 
 
-def log_stage_event(stage_name: str, action: str, status: str, payload: Any, duration_ms: float = 0.0) -> None:
-    """Emit a structured JSON telemetry event to CloudWatch + WebSocket UI."""
+# Status words that mark the LEGACY (stage, action, STATUS, payload[, duration]) convention.
+_STATUS_WORDS = {"SUCCESS", "ERROR", "FAILED", "BLOCKED", "WARNING", "OK",
+                 "STARTED", "COMPLETED", "SKIPPED", "INFO", "RUNNING"}
 
-    # Safely snippet payload
-    payload_str = str(payload)
-    if len(payload_str) > 300:
-        snippet = payload_str[:297] + "..."
-    else:
-        snippet = payload_str
 
-    log_entry = {
-        "event_id": str(uuid.uuid4()),
-        "stage": stage_name,
-        "action": action,
-        "status": status,
-        "duration_ms": duration_ms,
-        "timestamp": int(time.time() * 1000),
-        "payload_snippet": snippet
-    }
+def log_stage_event(*args, duration_ms: float = 0.0, **kwargs) -> None:
+    """Emit a structured JSON telemetry event to CloudWatch + WebSocket UI.
+
+    Normalizes the two historical call conventions so every stage's telemetry is
+    labelled correctly (run_id was previously landing in the ``stage`` field for the
+    dominant convention):
+
+      A (dominant, 96 call-sites): ``log_stage_event(run_id, stage, action, payload[, duration_ms])``
+      B (legacy):                  ``log_stage_event(stage, action, STATUS, payload[, duration_ms])``
+
+    Distinguished by signal: convention B passes an UPPERCASE status word in the 3rd
+    position and/or a numeric 5th (duration) arg. Telemetry must never break the
+    pipeline, so any malformed call degrades to a best-effort entry instead of raising.
+    """
+    try:
+        a = list(args)
+        while len(a) < 4:
+            a.append(None)
+        a0, a1, a2, a3 = a[0], a[1], a[2], a[3]
+        dur = a[4] if len(a) > 4 and isinstance(a[4], (int, float)) else duration_ms
+
+        is_conv_b = (len(a) > 4 and isinstance(a[4], (int, float))) or (
+            isinstance(a2, str) and a2.strip() and a2.strip().upper() in _STATUS_WORDS
+            and not a2.islower())
+        if is_conv_b:
+            run_id, stage, action, status, payload = kwargs.get("run_id", "-"), a0, a1, a2, a3
+        else:
+            run_id, stage, action, status, payload = a0, a1, a2, kwargs.get("status"), a3
+
+        payload_str = str(payload)
+        snippet = payload_str[:297] + "..." if len(payload_str) > 300 else payload_str
+
+        log_entry = {
+            "event_id": str(uuid.uuid4()),
+            "run_id": run_id,
+            "stage": stage,
+            "action": action,
+            "status": status,
+            "duration_ms": dur,
+            "timestamp": int(time.time() * 1000),
+            "payload_snippet": snippet,
+        }
+    except Exception:
+        # Telemetry must never break the pipeline.
+        log_entry = {"event_id": str(uuid.uuid4()), "stage": "unknown",
+                     "timestamp": int(time.time() * 1000),
+                     "payload_snippet": str(args)[:297]}
 
     # 1. Always emit to CloudWatch
-    cw_logger.info(json.dumps(log_entry))
+    cw_logger.info(json.dumps(log_entry, default=str))
 
     # 2. Broadcast to connected WebSocket clients
     _broadcast_to_websocket(log_entry)
