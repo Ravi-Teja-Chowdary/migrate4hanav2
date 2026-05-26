@@ -205,6 +205,7 @@ DEFAULT_OBJECT_TABLES = {
     "GLAccount":         {"table": "SKA1", "fields": ["KTOPL", "SAKNR", "XBILK"], "lane": "MC"},
     "CostCenter":        {"table": "CSKS", "fields": ["KOKRS", "KOSTL", "DATBI"], "lane": "MC"},
     "ProfitCenter":      {"table": "CEPC", "fields": ["KOKRS", "PRCTR", "DATBI"], "lane": "MC"},
+    "FixedAsset":        {"table": "ANLA", "fields": ["BUKRS", "ANLN1", "ANLN2", "ANLKL", "TXT50"], "lane": "MC"},
     "Plant":             {"table": "T001W", "fields": ["WERKS", "NAME1", "LAND1"], "lane": "MC"},
     "ChartOfAccounts":   {"table": "T004", "fields": ["KTOPL", "KTPLT", "MWSKZ"], "lane": "MC"},
     "ControllingArea":   {"table": "TKA01", "fields": ["KOKRS", "BEZEI", "WAERS"], "lane": "MC"},
@@ -549,6 +550,7 @@ def lambda_handler(event, context):
                             log_stage_event(run_id, "data-migrator", "config_cached", _cfg["summary"])
                         loader.po_org, loader.fi_org, loader.bp_org = _cfg["po"], _cfg["fi"], _cfg["bp"]
                         loader.cc_org = _cfg.get("co", {})
+                        loader.asset_org = _cfg.get("asset", {})
                         discovered_config = _cfg["summary"]
                     except Exception as e:
                         log_stage_event(run_id, "data-migrator", "config_discovery_skipped", {"reason": str(e)[:160]})

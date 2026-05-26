@@ -159,6 +159,21 @@ def discover(conn) -> dict:
           "COMP_CODE": comp, "CURRENCY": comp_curr, "PROFIT_CTR": pc,
           "VALID_FROM": env("M4H_CC_VALID_FROM") or "20240101"}
 
+    # Fixed-asset config: pick a company code that ACTUALLY has assets and a
+    # demonstrably-valid asset class (most-common ANLKL among real assets) so the
+    # class customizing (account determination, default depreciation) is guaranteed
+    # usable. Default to internal numbering (BAPI assigns; source->target mapped),
+    # which is the support-safe choice and needs no number-range discovery.
+    a_rows = _rows(conn, "ANLA", ["BUKRS", "ANLKL"], "ANLN2 = '0000'", 1000)
+    a_bukrs_ct = Counter(r["BUKRS"] for r in a_rows if r.get("BUKRS"))
+    a_bukrs = env("M4H_ASSET_COMP_CODE") or (a_bukrs_ct.most_common(1)[0][0] if a_bukrs_ct else comp)
+    a_cls_ct = Counter(r["ANLKL"] for r in a_rows if r.get("BUKRS") == a_bukrs and r.get("ANLKL"))
+    a_class = env("M4H_ASSET_CLASS") or (a_cls_ct.most_common(1)[0][0] if a_cls_ct else "")
+    asset = {"ASSET_COMP_CODE": a_bukrs, "ASSET_CLASS": a_class, "COMP_CODE": comp,
+             "ASSET_EXTERNAL_NUM": bool(env("M4H_ASSET_EXTERNAL_NUM")),
+             "CAP_DATE": env("M4H_ASSET_CAP_DATE") or env("M4H_CC_VALID_FROM") or "20240101",
+             "VALID_FROM": env("M4H_CC_VALID_FROM") or "20240101"}
+
     po = {"COMP_CODE": comp, "PURCH_ORG": porg, "PLANT": plant, "PUR_GROUP": pgrp,
           "DOC_TYPE": dtype, "PO_UNIT": env("M4H_PO_UNIT") or _FB["PO_UNIT"],
           "MATL_GROUP": mgrp, "GL_ACCOUNT": gl_po, "COSTCENTER": cc}
@@ -169,5 +184,6 @@ def discover(conn) -> dict:
                "sales_area": f"{sorg}/{dch}/{div}", "plant": plant, "purch_org": porg,
                "cust_recon": cust_recon, "vend_recon": vend_recon,
                "po_gl": gl_po, "clearing_gl": gl_clr, "cost_center": cc, "profit_center": pc,
-               "cc_hierarchy": cc_hier, "cc_category": cc_cat}
-    return {"po": po, "fi": fi, "bp": bp, "co": co, "summary": summary}
+               "cc_hierarchy": cc_hier, "cc_category": cc_cat,
+               "asset_comp_code": a_bukrs, "asset_class": a_class}
+    return {"po": po, "fi": fi, "bp": bp, "co": co, "asset": asset, "summary": summary}

@@ -414,6 +414,115 @@ class BapiLoader:
                 "key_mapping": {"source": prctr, "target": prctr, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
 
+    # ── Fixed asset master (BAPI_FIXEDASSET_CREATE1) ───────────────────────
+    def _fixed_asset_exists(self, anln1: str, bukrs: str) -> bool:
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="ANLA", DELIMITER="|",
+                            OPTIONS=[{"TEXT": "BUKRS = '%s' AND ANLN1 = '%s' AND ANLN2 = '0000'"
+                                      % (bukrs, anln1)}],
+                            FIELDS=[{"FIELDNAME": "ANLN1"}], ROWCOUNT=1)
+            return bool(r.get("DATA"))
+        except Exception:
+            return False
+
+    def _asset_class_valid(self, bukrs: str, anlkl: str, cap_date: str) -> bool:
+        """Is this asset class usable in this company code's chart of depreciation?
+        Validated once per (company,class) via a TESTRUN create and cached, so a mass
+        load probes each distinct class only once, not once per asset."""
+        cache = getattr(self, "_acls_cache", None)
+        if cache is None:
+            cache = self._acls_cache = {}
+        k = (bukrs, anlkl)
+        if k in cache:
+            return cache[k]
+        try:
+            res = self.c.call("BAPI_FIXEDASSET_CREATE1", KEY={"COMPANYCODE": bukrs},
+                              GENERALDATA={"ASSETCLASS": anlkl, "DESCRIPT": "validate"},
+                              GENERALDATAX={"ASSETCLASS": "X", "DESCRIPT": "X"},
+                              POSTINGINFORMATION={"CAP_DATE": cap_date},
+                              POSTINGINFORMATIONX={"CAP_DATE": "X"}, TESTRUN="X")
+            ok = not [m for m in self._ret(res) if m.get("TYPE") in ("E", "A")]
+        except Exception:
+            ok = False
+        cache[k] = ok
+        return ok
+
+    def create_fixed_asset(self, row: dict, org: dict, commit: bool = True,
+                           testrun: bool = False) -> dict:
+        """Create a fixed-asset master via BAPI_FIXEDASSET_CREATE1 (probe-validated shape).
+
+        Company code -> KEY.COMPANYCODE; asset class -> GENERALDATA.ASSETCLASS; an external
+        asset number (when the class uses external numbering) -> KEY.ASSET. The X-structures
+        flag which fields we supply. Depreciation areas/keys/useful-life DEFAULT from the
+        asset-class customizing (table ANKB) — we only pass DEPRECIATIONAREAS as a fallback
+        when org supplies ASSET_DEP_AREAS. Numbering: external preserves the source ANLN1;
+        otherwise the BAPI assigns an internal number and we record source->target (cross-run
+        idempotency then carried by the unified loader's ledger, like Material/BP).
+
+        Source assets often live in a different company code/asset class than the target
+        (e.g. ECC 1000/3000 -> S/4 1710): the handler maps row.BUKRS/row.ANLKL via the
+        discovered asset config before calling, so here we trust row.ANLKL + org company code.
+
+        org keys: ASSET_COMP_CODE (or COMP_CODE), ASSET_CLASS (fallback class),
+        ASSET_EXTERNAL_NUM (bool), CAP_DATE (yyyymmdd), ASSET_DEP_AREAS (optional)."""
+        anln1 = (row.get("ANLN1") or "").strip()
+        bukrs = org.get("ASSET_COMP_CODE") or org.get("COMP_CODE")
+        anlkl = (row.get("ANLKL") or org.get("ASSET_CLASS") or "").strip()
+        if not anlkl or not bukrs:
+            return {"status": "skipped", "messages": ["missing asset class or company code"]}
+        external = bool(org.get("ASSET_EXTERNAL_NUM")) and bool(anln1)
+        # idempotent only when we preserve the source number (external numbering)
+        if external and self._fixed_asset_exists(anln1, bukrs):
+            verify = {"table": "ANLA", "key": {"BUKRS": bukrs, "ANLN1": anln1, "ANLN2": "0000"}}
+            return {"status": "matched_existing", "asset": anln1, "verify_key": verify,
+                    "key_mapping": {"source": anln1, "target": anln1, "disposition": "matched_existing"},
+                    "messages": [f"asset {anln1} already exists in {bukrs}"]}
+        desc = ((row.get("TXT50") or ("Asset " + (anln1 or anlkl))).strip())[:50]
+        cap_date = org.get("CAP_DATE") or org.get("VALID_FROM", "20240101")
+        # Source class may not exist in the target chart of depreciation (e.g. ECC class
+        # 00004001 -> S/4 chart 1710). Validate once; if unusable, fall back to the
+        # discovered default class and record the remap transparently.
+        src_class, class_remapped = anlkl, False
+        fallback = (org.get("ASSET_CLASS") or "").strip()
+        if not testrun and fallback and anlkl != fallback and not self._asset_class_valid(bukrs, anlkl, cap_date):
+            anlkl, class_remapped = fallback, True
+        key = {"COMPANYCODE": bukrs}
+        if external:
+            key["ASSET"] = anln1
+        kwargs = dict(KEY=key,
+                      GENERALDATA={"ASSETCLASS": anlkl, "DESCRIPT": desc},
+                      GENERALDATAX={"ASSETCLASS": "X", "DESCRIPT": "X"},
+                      POSTINGINFORMATION={"CAP_DATE": cap_date},
+                      POSTINGINFORMATIONX={"CAP_DATE": "X"})
+        if testrun:
+            kwargs["TESTRUN"] = "X"
+        deps = org.get("ASSET_DEP_AREAS")  # optional fallback: [{AREA,DEP_KEY,ULIFE_YRS}, ...]
+        if deps:
+            kwargs["DEPRECIATIONAREAS"] = [{"AREA": d["AREA"], **({"DEP_KEY": d["DEP_KEY"]} if d.get("DEP_KEY") else {}),
+                                            **({"ULIFE_YRS": d["ULIFE_YRS"]} if d.get("ULIFE_YRS") else {})}
+                                           for d in deps]
+            kwargs["DEPRECIATIONAREASX"] = [{"AREA": d["AREA"], "DEP_KEY": "X" if d.get("DEP_KEY") else "",
+                                             "ULIFE_YRS": "X" if d.get("ULIFE_YRS") else ""} for d in deps]
+        res = self.c.call("BAPI_FIXEDASSET_CREATE1", **kwargs)
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        target = (res.get("ASSET") or anln1 or "").strip()
+        if testrun:
+            return {"status": "tested", "asset": target,
+                    "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
+        if commit:
+            self._commit()
+        verify = {"table": "ANLA", "key": {"BUKRS": bukrs, "ANLN1": target, "ANLN2": "0000"}}
+        msgs = [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]
+        if class_remapped:
+            msgs.append(f"asset class {src_class} not valid in {bukrs}; loaded under {anlkl}")
+        return {"status": "created", "asset": target, "asset_class": anlkl, "verify_key": verify,
+                "key_mapping": {"source": anln1 or target, "target": target,
+                                "disposition": "created" if target == anln1 else "remapped"},
+                "messages": msgs}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).

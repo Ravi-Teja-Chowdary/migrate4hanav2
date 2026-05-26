@@ -53,7 +53,7 @@ BP_TARGET_ORG = {
 OBJECT_SOURCE_KEY = {
     "Customer": "KUNNR", "Vendor": "LIFNR", "BusinessPartner": "PARTNER",
     "Material": "MATNR", "OpenPO": "EBELN", "OpenAR": "BELNR", "OpenAP": "BELNR",
-    "CostCenter": "KOSTL", "ProfitCenter": "PRCTR",
+    "CostCenter": "KOSTL", "ProfitCenter": "PRCTR", "FixedAsset": "ANLN1",
 }
 
 # object -> (mechanism, sub-kind)
@@ -68,6 +68,7 @@ OBJECT_MECHANISM = {
     "OpenAP":          ("bapi", "fi_ap"),
     "CostCenter":      ("bapi", "costcenter"),
     "ProfitCenter":    ("bapi", "profitcenter"),
+    "FixedAsset":      ("bapi", "fixedasset"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -114,6 +115,7 @@ class UnifiedLoader:
         self.fi_org = dict(FI_TARGET_ORG)
         self.bp_org = dict(BP_TARGET_ORG)
         self.cc_org = {}           # CO master config (set from discovery by the handler)
+        self.asset_org = {}        # fixed-asset config (set from discovery by the handler)
 
     def odata_ready(self) -> bool:
         """True if the OData BP service is available — gates transaction-ready partner
@@ -225,6 +227,7 @@ class UnifiedLoader:
         w = UnifiedLoader(self.target_conn_factory(), **self._init_kwargs)
         w.key_map = self.key_map
         w.po_org, w.fi_org, w.bp_org, w.cc_org = self.po_org, self.fi_org, self.bp_org, self.cc_org
+        w.asset_org = self.asset_org
         if mech == ("bapi", "po") and self.source_conn_factory:
             w.source_conn = self.source_conn_factory()
         if mech == ("bapi", "bp") and self.odata_factory:
@@ -465,6 +468,11 @@ class UnifiedLoader:
             r = self.bapi.create_profit_center(row, self.cc_org, commit=True)
             return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
                     "id": r.get("profit_center"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
+        if kind == "bapi" and sub == "fixedasset":
+            r = self.bapi.create_fixed_asset(row, self.asset_org, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("asset"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)
