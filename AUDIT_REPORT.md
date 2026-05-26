@@ -115,7 +115,17 @@ SCAFFOLD 0** — but "PARTIAL" mostly means "thin handler" or "real-but-AWS-env"
 4. ⏳ **NEXT — Execution harness for the B-bucket** (transport + config) — needs the AWS SSM/bastion
    env or a local `tp`/`R3trans` equivalent; then live-run + validate them like the data spine.
 5. ⏳ **F-bucket hardening** — apply the same per-stage "definition of done" (live run + evidence).
-6. ⏳ **Cross-cutting** — structured logging, secrets, idempotency/restart across all stages.
+6. 🔶 **Cross-cutting — substantially done (commits a2e4de5, 9245bbc):**
+   - ✅ **Structured logging fixed** — `log_stage_event` was mislabeling telemetry for 96 of 125
+     call-sites (run_id landed in the `stage` field). Now normalizes both historical conventions,
+     adds `run_id` as a first-class field, and never raises. Unit-verified.
+   - ✅ **Secrets hygiene attested CLEAN** — repo-wide scan found **no** hardcoded passwords / API
+     keys / AWS keys; all credentials come from Secrets Manager or env vars.
+   - ✅ **Rules source hardened** — static-by-default (no hidden DynamoDB dependency / ERROR spam);
+     DynamoDB now opt-in via `M4H_RULES_SOURCE=dynamodb`.
+   - ✅ **Orphaned `abap_analyzer.py`** deprecated with an actionable error (was a broken-import landmine).
+   - ⏳ **Idempotency/restart** — the data spine has the cross-run ledger; the non-spine stages
+     (transport/config/roles) need per-stage idempotency, mostly tied to the Gap #4 exec env. Pending.
 
 ## Coverage & honesty — AUDIT COMPLETE (all 36 stages)
 
