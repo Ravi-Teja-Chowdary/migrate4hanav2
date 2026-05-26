@@ -91,19 +91,20 @@ SCAFFOLD 0** — but "PARTIAL" mostly means "thin handler" or "real-but-AWS-env"
 
 ## Production-grade plan (prioritized)
 
-1. **Harden `migration-validator`** — remove silent `simulated`; offline ⇒ explicit
-   `NOT_VALIDATED`/blocked, never a pass. *(Quick, high-trust win.)*
-2. **Add the ABAP remediation governance gate** — `code-analyzer` → ATC re-check + human
-   approval before `code-deployer`; record an auditable before/after diff per object.
-3. **Build an execution harness for the B-bucket** — a local/AWS path to actually RUN the
-   transport + config stages end-to-end and validate them the way the data spine was validated
-   (SSM target or a local `tp`/`R3trans` equivalent). Then live-run them.
-4. **Live-validate the C-bucket engines** — run `simplification-check` + `code-analyzer`
-   against the real ECC custom code; capture evidence.
-5. **Deep-audit + harden the F-bucket** (assessment / validation / roles / integration stages),
-   one tier at a time, same evidence standard.
-6. **Cross-cutting hardening** — structured logging, secrets, idempotency/restart, and a
-   per-stage "definition of done" (live run + evidence) mirroring the data-spine bar.
+1. ✅ **DONE (commit e31284b) — Hardened `migration-validator`**: a real run that can't reach
+   S/4 now `blocked` (no fabrication); `generate_scorecard(simulated=…)` returns NOT-VALIDATED
+   (grade N/A, not gate-eligible) for simulated OR zero-check results; result carries
+   `validation_mode` + `gate_eligible`. Unit-verified.
+2. ✅ **DONE (commit b7bfd6b) — ABAP remediation governance gate**: `code-deployer` now refuses
+   to transport AI-remediated ABAP without a per-object approval record (approved + ATC passed)
+   or an explicit pre-cleared override; otherwise `manual_gate`, ships nothing. Unit-verified.
+   *Follow-on:* an automated ATC-run stage to populate `atc_status` (today operator-supplied).
+3. ⏳ **NEXT — Live-validate the engines that don't need AWS SSM**: run `simplification-check`
+   (D010TAB custom-code scan) + `code-analyzer` against the real ECC, capture evidence.
+4. ⏳ **Execution harness for the B-bucket** (transport + config) — needs the AWS SSM/bastion
+   env or a local `tp`/`R3trans` equivalent; then live-run + validate them like the data spine.
+5. ⏳ **F-bucket hardening** — apply the same per-stage "definition of done" (live run + evidence).
+6. ⏳ **Cross-cutting** — structured logging, secrets, idempotency/restart across all stages.
 
 ## Coverage & honesty — AUDIT COMPLETE (all 36 stages)
 
