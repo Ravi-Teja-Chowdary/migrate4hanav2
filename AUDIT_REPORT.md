@@ -99,9 +99,20 @@ SCAFFOLD 0** — but "PARTIAL" mostly means "thin handler" or "real-but-AWS-env"
    to transport AI-remediated ABAP without a per-object approval record (approved + ATC passed)
    or an explicit pre-cleared override; otherwise `manual_gate`, ships nothing. Unit-verified.
    *Follow-on:* an automated ATC-run stage to populate `atc_status` (today operator-supplied).
-3. ⏳ **NEXT — Live-validate the engines that don't need AWS SSM**: run `simplification-check`
-   (D010TAB custom-code scan) + `code-analyzer` against the real ECC, capture evidence.
-4. ⏳ **Execution harness for the B-bucket** (transport + config) — needs the AWS SSM/bastion
+3. ✅ **DONE — Live-validated the engines against real ECC (Y01)**:
+   - **simplification-check**: `execute_si_check` ran live in **4.3s**, `execution_status:
+     completed` (real D010TAB scan, not fallback) — **1,003 items checked, 501 relevant,
+     77 RED / 278 YELLOW / 146 GREEN**. Real finding e.g. `BAS_014` (RED): 94 custom objects
+     touch `MARA`/`VBAK`/`EKKO`.
+   - **code-analyzer**: read real custom program `ZBOCK_ESH_FIX_DATE_TIME_4_HANA` (455 lines)
+     via `RPY_PROGRAM_READ`; `analyze_program` found **32 real issues** (21 SYNTAX /
+     10 PERFORMANCE / 1 DATA_MODEL); **AST engine applied 11 remediation changes**. Engine works.
+   - *Follow-on hardening surfaced:* (a) `get_simplification_rules()` fetches from a DynamoDB
+     table and **falls back to static JSON on AccessDenied** — provision the table/IAM or make
+     static the documented default; (b) `code-analyzer/abap_analyzer.py` is an **orphaned module**
+     (imports a non-existent `simplification_rules`; nothing in the pipeline uses it) — remove or
+     restore. Neither blocks the live path (the handler uses dynamic-rules + AST engine).
+4. ⏳ **NEXT — Execution harness for the B-bucket** (transport + config) — needs the AWS SSM/bastion
    env or a local `tp`/`R3trans` equivalent; then live-run + validate them like the data spine.
 5. ⏳ **F-bucket hardening** — apply the same per-stage "definition of done" (live run + evidence).
 6. ⏳ **Cross-cutting** — structured logging, secrets, idempotency/restart across all stages.
