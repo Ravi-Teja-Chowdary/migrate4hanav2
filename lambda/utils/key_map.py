@@ -15,20 +15,23 @@ and Vendor 100 never clash.
 Dispositions: created | matched_existing | remapped | remapped_matched | collision_skipped ...
 """
 from __future__ import annotations
+import threading
 from collections import Counter
 
 
 class KeyMap:
     def __init__(self):
         self._m = {}   # object -> { source_key -> {"target":.., "disposition":..} }
+        self._lock = threading.Lock()   # writes are safe under parallel loaders
 
     def add(self, obj: str, source, target, disposition: str = "") -> None:
         if obj is None or source is None or str(source).strip() == "":
             return
-        self._m.setdefault(obj, {})[str(source).strip()] = {
-            "target": (str(target).strip() if target is not None else None),
-            "disposition": disposition or "",
-        }
+        with self._lock:
+            self._m.setdefault(obj, {})[str(source).strip()] = {
+                "target": (str(target).strip() if target is not None else None),
+                "disposition": disposition or "",
+            }
 
     def add_many(self, obj: str, mappings: list) -> None:
         for km in mappings or []:

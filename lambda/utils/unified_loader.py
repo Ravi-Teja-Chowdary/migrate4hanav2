@@ -14,6 +14,11 @@ from __future__ import annotations
 import os
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+
+# Parallel workers for mass loading (pyrfc releases the GIL during RFC calls, so worker
+# threads with their OWN connection post concurrently). 1 = single-threaded (default).
+LOAD_WORKERS = int(os.environ.get("M4H_LOAD_WORKERS", "1"))
 
 try:
     from bapi_loader import BapiLoader
@@ -93,6 +98,7 @@ class UnifiedLoader:
         self.key_map = None        # live source->target registry (set by the handler)
         self.source_conn = None    # ECC conn, for reading dependent rows (PO items)
         self.odata = None          # OData client for transaction-ready partner creation
+        self.target_conn_factory = None  # callable -> fresh target RFC conn (parallel pool)
         self.po_org = dict(PO_TARGET_ORG)
         self.fi_org = dict(FI_TARGET_ORG)
         self.bp_org = dict(BP_TARGET_ORG)
@@ -120,6 +126,10 @@ class UnifiedLoader:
         # no static screen fully predicts. So attempt-and-classify — see _load_exrate.
         if mech == ("bapi", "exrate"):
             return self._load_exrate(obj, mech, rows, max_rows)
+        # Mass FI posting: parallelize across a connection pool (proven ~Nx throughput).
+        if (mech in (("bapi", "fi_ar"), ("bapi", "fi_ap")) and LOAD_WORKERS > 1
+                and self.target_conn_factory):
+            return self._load_fi_parallel(obj, mech, rows, max_rows, LOAD_WORKERS)
         # Scan for max_rows successes (collisions/skips don't consume the budget),
         # capped so a fully-blocked object can't loop forever. Records already migrated
         # in a prior run (in the cross-run ledger) are REUSED, never re-created.
@@ -173,6 +183,66 @@ class UnifiedLoader:
             return None
         sk = (row.get(field) or "").strip()
         return self.key_map.resolve(obj, sk) if sk else None
+
+    def _load_fi_parallel(self, obj: str, mech: tuple, rows: list, max_rows: int,
+                          workers: int) -> dict:
+        """Mass-post FI open items (AR/AP) across a pool of `workers` target connections.
+        FI posting is round-trip bound; pyrfc frees the GIL per call, so worker threads
+        each with their OWN BapiLoader/connection post concurrently. The ledger is shared
+        (thread-safe). Same per-record outcomes as the serial path — just parallel."""
+        kind = "AR" if mech[1] == "fi_ar" else "AP"
+        field = OBJECT_SOURCE_KEY.get(obj)
+        work = rows[:max_rows]
+        pool = [BapiLoader(self.target_conn_factory()) for _ in range(workers)]
+        chunks = [work[i::workers] for i in range(workers)]
+        out = [[] for _ in range(workers)]
+
+        def run(wi):
+            bl = pool[wi]
+            for row in chunks[wi]:
+                sk = (row.get(field) or "").strip() if field else ""
+                reuse = self.key_map.resolve(obj, sk) if (self.key_map and sk) else None
+                if reuse:
+                    out[wi].append({"ok": True, "status": "already_migrated", "id": reuse, "reused": True})
+                    continue
+                try:
+                    r = bl.create_fi_open_item(row, kind, self.fi_org,
+                                               key_map=self.key_map, commit=True)
+                    out[wi].append({"ok": r["status"] == "created", "status": r["status"],
+                                    "id": r.get("doc"), "verify_key": r.get("verify_key"),
+                                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")})
+                except Exception as e:
+                    out[wi].append({"ok": False, "status": "exception",
+                                    "msg": f"{type(e).__name__}: {str(e)[:120]}"})
+
+        t0 = time.time()
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            list(ex.map(run, range(workers)))
+        elapsed = round(time.time() - t0, 1)
+        for bl in pool:
+            try:
+                bl.c.close()
+            except Exception:
+                pass
+
+        flat = [x for sub in out for x in sub]
+        created = sum(1 for r in flat if r.get("ok") and not r.get("reused"))
+        reused = sum(1 for r in flat if r.get("reused"))
+        kmaps = self._key_mappings(flat)
+        if self.key_map is not None:
+            self.key_map.add_many(obj, kmaps)
+        result = {"object": obj, "mechanism": f"bapi/{mech[1]}", "attempted": len(flat),
+                  "created_in_s4": created,
+                  "status_breakdown": dict(Counter(r.get("status") for r in flat)),
+                  "created_keys": self._created_keys(flat),
+                  "samples": [r for r in flat if r.get("ok")][:3] or flat[:3],
+                  "elapsed_sec": elapsed, "workers": workers,
+                  "throughput_per_sec": round(created / elapsed, 2) if elapsed and created else None}
+        if reused:
+            result["reused_from_ledger"] = reused
+        if kmaps:
+            result["key_mappings"] = kmaps
+        return result
 
     def _load_exrate(self, obj: str, mech: tuple, rows: list, max_rows: int,
                      scan_cap: int = 120) -> dict:
