@@ -19,10 +19,21 @@ You picked abapGit — let's do **OFFLINE first** (it unblocks everything and ne
 
 ---
 
+## STATUS (2026-05-27): `ZABAPGIT_STANDALONE` is ALREADY installed on this S/4 — but it's the
+## bundled report (local classes only, no global API). To let the agent drive abapGit over RFC we
+## need the DEVELOPER version (global `ZCL_ABAPGIT_*` classes). Install it OFFLINE via the standalone
+## (no STRUST / no internet from S/4):
+##   1. Browser: github.com/abapGit/abapGit → Code → Download ZIP (abapGit-main.zip).
+##   2. Run ZABAPGIT_STANDALONE (SE38, F8).
+##   3. + New → Offline repo → Package = $ABAPGIT (create as local if prompted).
+##   4. Import the ZIP → Pull/Deserialize → installs the dev version (global classes).
+## Then reply "abapGit dev installed" and the agent drives zcl_abapgit_* to record+ship transports.
+
 ## Part A — OFFLINE abapGit (do this first)
 
 ### A1. Install the abapGit standalone report
 The standalone version is a **single self-contained ABAP report** (no installation dependencies).
+*(Already present on this appliance — see STATUS above; install the DEV version instead.)*
 
 1. On a browser, open the raw standalone source (one file):
    `https://raw.githubusercontent.com/abapGit/build/main/zabapgit_standalone.prog.abap`
