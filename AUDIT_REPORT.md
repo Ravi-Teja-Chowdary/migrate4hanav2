@@ -125,17 +125,25 @@ SCAFFOLD 0** — but "PARTIAL" mostly means "thin handler" or "real-but-AWS-env"
      RFC-enabled) and its `tp` fallback uses **`tp newreq`/`tp addtobuffer <obj>` which are not real
      `tp` commands** → it degrades to a manual manifest. **Finding: artifact-builder needs reworking
      to the CTS_API + in-system task handling, or accept an in-system (SE10) release step.**
-   - **BOTTLENECK OVERCOME (commit 422bd1f) — in-system ABAP agent runner.** Rather than accept a
-     manual SE10 step, built the supported "remote agent" capability: deploy an ABAP report to the
-     target as a LOCAL `$TMP` object via `RPY_PROGRAM_INSERT` (no transport → no TK511) and execute
-     it IN-SYSTEM via `RZL_SUBMIT`, retrieving results via SSM. Proven live end-to-end. Hard-won
-     mechanics: source must use **`SOURCE_EXTENDED`** (plain `SOURCE` is dropped over RFC);
-     `RPY_PROGRAM_UPDATE/DELETE` aren't remote → auto-version the name; **batch scheduling is blocked**
-     here (`SAP_UPGRADE`) → `RZL_SUBMIT` (async). This lets the orchestrator run the CTS request-
-     create/object-record/release in-system (where the FMs work) — all released APIs, support intact.
-     **Next build:** the `ZM4H_TR_BUILDER` agent + rework `transport-artifact-builder` to use it,
-     then certify the full build→place→import→verify chain. *(Probe cleanup: no stray program; cofile
-     removed; empty request `S4HK903321` left for optional SE10 deletion.)*
+   - **BOTTLENECK OVERCOME (commit 422bd1f) — in-system ABAP agent runner.** Built the supported
+     "remote agent": deploy an ABAP report as a LOCAL `$TMP` object via `RPY_PROGRAM_INSERT`
+     (`SOURCE_EXTENDED`; auto-version the name since UPDATE/DELETE aren't remote) and execute it
+     IN-SYSTEM via `RZL_SUBMIT` (batch scheduling is blocked here — `SAP_UPGRADE`), results via SSM.
+     Proven live. `agent/deploy_run_abap.py` + a reusable in-system **syntax-checker**.
+   - **Transport BUILD proven in-system:** `TR_INSERT_REQUEST_WITH_TASKS` creates request+task;
+     abapGit dev version installed (457 `ZCL_ABAPGIT_*` classes). Object recording is the finicky
+     non-dialog tail (`RS_CORR_INSERT` cancels, `TR_TADIR_INTERFACE` type-conflicts) — solved
+     pragmatically: created `ZM4H_TPROBE01` in package `Z001` recorded to task `S4HK903330` (released).
+   - 🔴 **FINAL IMPORT DEFERRED (decided 2026-05-27) — appliance environment limit, not a tool gap.**
+     The request `S4HK903329` cannot release+export a **datafile** because this standalone CAL box has
+     **no active TMS transport route** (`TASYS` empty; task released, request stuck `D`; `tp` release
+     test → RC 12). Without a datafile there's nothing to `tp import`. On a real DEV→target landscape
+     (the actual deployment context) release+export+import works normally, and the `tp` import
+     mechanism + RC-certification logic are already proven. **Revisit when the end-to-end tool is built
+     out** (configure an STMS route, or run against a routed landscape), then certify
+     build→place→`tp import`→verify. *Cleanup pending:* stray probe requests `S4HK903319`–`903329`
+     (+ tasks) and `$TMP` programs (`ZM4H_AGENT_PROBE*`,`ZM4H_TR_BUILDER*`,`ZM4H_SYNCHK*`,`ZM4H_TPROBE01`)
+     — harmless; delete in SE09/SE38.
 5. ⏳ **F-bucket hardening** — apply the same per-stage "definition of done" (live run + evidence).
 6. 🔶 **Cross-cutting — substantially done (commits a2e4de5, 9245bbc):**
    - ✅ **Structured logging fixed** — `log_stage_event` was mislabeling telemetry for 96 of 125
