@@ -155,16 +155,19 @@ su - s4hadm -c 'tp connect S4H pf=/usr/sap/trans/bin/TP_DOMAIN_S4H.PFL'   # expe
   run transaction **`STMS`** → accept "Configure as single-system transport domain" → Save. That
   generates the domain profile. (I can walk you through the exact screens if needed.)
 
-### Step 8 — Wire the instance ID into the tool
-Edit `connections.json` → `lift_and_shift_target`, set the S/4 EC2 instance ID in both fields the
-stages read:
+### Step 8 — Wire the instance ID into the tool (one value, one place)
+The **EC2 instance ID** (`i-0abc123…`, from Step 1) is how SSM finds the host. In this
+single-appliance setup it's the same value everywhere the code reads it (the various
+`*_bastion_instance_id` / `transport_host_instance_id` names all mean "the host that runs
+`tp`"). You only set it in **one place** — `connections.json` → `lift_and_shift_target`:
 ```json
 "transport_host_instance_id": "i-0abc123…",
 "bastion_instance_id": "i-0abc123…"
 ```
-And make sure the target secret the stages load (Secrets Manager, or the local shim) carries the
-same `bastion_instance_id` / `target_bastion_instance_id`, `target_sid: "S4H"`, `target_client`.
-Set the bucket for the run: `setx S3_STAGING_BUCKET m4h-staging-<your-initials>`.
+The local shim (`local_aws_shim.target_creds`) now **automatically copies this instance ID and the
+SID into the "target secret"** the transport stages load — so no separate secret edit is needed.
+(`target_sid` is already `"S4H"`.) Finally, set the bucket for the run:
+`setx S3_STAGING_BUCKET m4h-staging-<your-initials>` (open a new shell after `setx`).
 
 ---
 

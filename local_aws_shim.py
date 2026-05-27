@@ -157,6 +157,11 @@ def _resolve_secret(secret_id: str) -> Dict[str, Any]:
         }
 
     def target_creds():
+        # The transport host = the SAP host EC2 instance (SSM addresses it by instance ID).
+        # In a single-appliance setup transport_host_instance_id and bastion_instance_id are
+        # the same value; surface it under every name the transport stages read.
+        inst = tgt.get("bastion_instance_id") or tgt.get("transport_host_instance_id", "")
+        sid = tgt.get("target_sid", "S4H")
         return {
             "host": tgt.get("target_ashost", os.environ.get("TARGET_HOST", "")),
             "ashost": tgt.get("target_ashost", os.environ.get("TARGET_HOST", "")),
@@ -168,6 +173,13 @@ def _resolve_secret(secret_id: str) -> Dict[str, Any]:
             "idoc_endpoint": tgt.get("idoc_endpoint", ""),
             "idoc_partner": tgt.get("idoc_partner", ""),
             "saprouter": tgt.get("target_saprouter", ""),
+            # Transport chain (Gap #4): instance ID + SID propagated from connections.json.
+            "sid": sid,
+            "target_sid": sid,
+            "build_sid": tgt.get("build_sid", sid),
+            "bastion_instance_id": inst,
+            "target_bastion_instance_id": inst,
+            "ssh_instance_id": inst,
         }
 
     # Heuristic mapping — be generous, lambdas use a variety of names.
