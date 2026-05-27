@@ -548,6 +548,46 @@ class BapiLoader:
                                 "disposition": "created" if target == anln1 else "remapped"},
                 "messages": msgs}
 
+    # ── Bank master (BAPI_BANK_CREATE) ─────────────────────────────────────
+    def _bank_exists(self, ctry: str, key: str) -> bool:
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="BNKA", DELIMITER="|",
+                            OPTIONS=[{"TEXT": "BANKS = '%s' AND BANKL = '%s'" % (ctry, key)}],
+                            FIELDS=[{"FIELDNAME": "BANKL"}], ROWCOUNT=1)
+            return bool(r.get("DATA"))
+        except Exception:
+            return False
+
+    def create_bank(self, row: dict, commit: bool = True) -> dict:
+        """Create a bank master (global, no org config). Idempotent on (BANKS, BANKL).
+        Source ECC BNKA: BANKS=country, BANKL=bank key, BANKA=name, SWIFT, BRNCH, ORT01=city."""
+        ctry = (row.get("BANKS") or "").strip()
+        key = (row.get("BANKL") or "").strip()
+        if not ctry or not key:
+            return {"status": "skipped", "messages": ["missing bank country/key"]}
+        verify = {"table": "BNKA", "key": {"BANKS": ctry, "BANKL": key}}
+        if self._bank_exists(ctry, key):
+            return {"status": "matched_existing", "bank": key, "verify_key": verify,
+                    "key_mapping": {"source": key, "target": key, "disposition": "matched_existing"},
+                    "messages": [f"bank {ctry}/{key} already exists"]}
+        addr = {"BANK_NAME": ((row.get("BANKA") or ("Bank " + key)).strip())[:60]}
+        if (row.get("SWIFT") or "").strip():
+            addr["SWIFT_CODE"] = row["SWIFT"].strip()
+        if (row.get("BRNCH") or "").strip():
+            addr["BANK_BRANCH"] = row["BRNCH"].strip()[:40]
+        if (row.get("ORT01") or "").strip():
+            addr["CITY"] = row["ORT01"].strip()[:35]
+        res = self.c.call("BAPI_BANK_CREATE", BANK_CTRY=ctry, BANK_KEY=key, BANK_ADDRESS=addr)
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        if commit:
+            self._commit()
+        return {"status": "created", "bank": key, "verify_key": verify,
+                "key_mapping": {"source": key, "target": key, "disposition": "created"},
+                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).

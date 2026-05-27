@@ -53,7 +53,7 @@ BP_TARGET_ORG = {
 OBJECT_SOURCE_KEY = {
     "Customer": "KUNNR", "Vendor": "LIFNR", "BusinessPartner": "PARTNER",
     "Material": "MATNR", "OpenPO": "EBELN", "OpenAR": "BELNR", "OpenAP": "BELNR",
-    "CostCenter": "KOSTL", "ProfitCenter": "PRCTR", "FixedAsset": "ANLN1",
+    "CostCenter": "KOSTL", "ProfitCenter": "PRCTR", "FixedAsset": "ANLN1", "Bank": "BANKL",
 }
 
 # object -> (mechanism, sub-kind)
@@ -69,6 +69,7 @@ OBJECT_MECHANISM = {
     "CostCenter":      ("bapi", "costcenter"),
     "ProfitCenter":    ("bapi", "profitcenter"),
     "FixedAsset":      ("bapi", "fixedasset"),
+    "Bank":            ("bapi", "bank"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -473,6 +474,11 @@ class UnifiedLoader:
             r = self.bapi.create_fixed_asset(row, self.asset_org, commit=True)
             return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
                     "id": r.get("asset"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
+        if kind == "bapi" and sub == "bank":
+            r = self.bapi.create_bank(row, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("bank"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)
