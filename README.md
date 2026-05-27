@@ -215,19 +215,19 @@ Sets). The tool **never** writes raw tables, runs arbitrary ABAP, or bypasses CT
 
 ## Key Capabilities
 
-- **Maintenance Planner integration** — stack.xml parsing, add-on compatibility validation, target system confirmation
-- **SAP Readiness Check automation** — RC_COLLECT_ANALYSIS_DATA execution with visual roadmap generation
-- **Simplification Item Check** — /SDF/RC_START_CHECK with remediation task generation
-- **Custom code analysis** — 6,400-line AST compiler with 160 transform rules + ATC (/SDF/ATC_RUN_API) + Deep Knowledge Engine (249 table transformations) + GenAI escalation (Bedrock / Air-Gapped). **Runs on ECS Fargate** (4 vCPU / 16 GB) for enterprise-scale processing
-- **CVI/Business Partner preparation** — CVI_UPGRADE_CHECK_RESOLVE pre-checks, ML-powered deduplication (226 IDoc partner profiles), crosswalk tables
-- **SUM/DMO orchestration** — CLI orchestration, real-time log monitoring, progress tracking
-- **FINS_MASS_DATA_MONITOR execution** — Finance migration orchestration with zero-variance reconciliation
-- **Material Ledger activation** — CKMSTART execution and validation
-- **SPAU/SPDD adjustment tracking** — Worklist parsing, delta management, transport deployment
-- **Automated business process testing** — DITL Cypress test generation with 443 T-code-to-OData mappings, real Fiori selectors, and OData intercepts
-- **Go-Live cutover orchestration** — DMS CDC finalization, system lockdown, controlled handover
-- **85-check validation scorecard** — 7 dimensions: Code, Data, Finance, Config, Roles, Integrations, Business Processes
-- **Process mining** — ST03N workload analysis with 611 T-code-to-Fiori catalog mappings
+- **Released-API-only data migration** — a best-mechanism-per-object dispatcher (released BAPIs + `API_BUSINESS_PARTNER` OData + IDoc inbound); **11 object types load live, ~20 extract**; zero direct table writes
+- **Value-level reconciliation** — every loaded record read back; existence **and** value tie-out (FI amounts, factor-aware exchange rates, recon accounts); a hard RECONCILED / DISCREPANCY verdict
+- **Cross-run idempotent ledger** — re-runs resume, never duplicate (persisted source→target key registry)
+- **Delta / CDC** — extract only records changed since a watermark, including changed masters via CDHDR change documents
+- **Collision-safe key strategy + dead-letter** — never silently corrupts a target record; genuine failures captured with the SAP reason for safe reprocessing
+- **Parallel mass-load** — connection-pool parallelism (pyrfc frees the GIL) at ~9× single-thread throughput
+- **Landscape-agnostic auto-discovery** — reads org units / accounts / hierarchies from whatever target it connects to (PO expense GL is probe-validated; env-overridable; cached)
+- **Support-clean attestation** — a machine-checkable proof that every write used a released SAP API (no raw table writes, no arbitrary ABAP, no SUM/Maintenance-Planner bypass)
+- **Custom code analysis + remediation** — 6,400-line AST compiler + ATC (`/SDF/ATC_RUN_API`) + GenAI (Bedrock / air-gapped Ollama), **gated by an ATC + human approval** before transport. **Runs on ECS Fargate** (4 vCPU / 16 GB) for scale
+- **Simplification-item check** — live `D010TAB` custom-code scan against a ~9,200-rule knowledge base, mapped to remediation tasks
+- **In-system ABAP agent** — deploy + execute ABAP on the target over RFC (drives in-system CTS work that isn't RFC-exposed)
+- **Governed cutover** — initial full load → delta → reconcile → GO/NO-GO runbook
+- **Process mining** — ST03N workload analysis
 - **RFC call timeouts** — `call_rfc_with_timeout()` prevents indefinite hangs with configurable timeout (default 120s)
 - **Paginated table reads** — `read_table_chunked()` generator with ROWSKIPS/ROWCOUNT pagination for safe large-table scanning
 - **Lambda event validation** — Shared `validation.py` validates run_id, ecc_client, mode, dry_run, stage across 4 handlers
@@ -240,7 +240,7 @@ Sets). The tool **never** writes raw tables, runs arbitrary ABAP, or bypasses CT
 
 | Metric | Value |
 |--------|-------|
-| Pipeline Stages | 17 across 5 SAP Activate phases |
+| Pipeline Stages | 28 across 9 phases (ASSESS → RUN) |
 | Lambda Functions | 18 (15 pipeline + 3 support) |
 | ECS Fargate Stages | 4 (Stages 1, 5, 12, 12A — 4 vCPU / 16 GB) |
 | Terraform Modules | 14 |
@@ -263,104 +263,75 @@ Sets). The tool **never** writes raw tables, runs arbitrary ABAP, or bypasses CT
 
 ```
 migrate4hana/
-+-- .github/
-|   +-- workflows/
-|       +-- ci.yml                  # CI: test, scan, build, validate
-|       +-- deploy.yml              # CD: staging/prod deploy with OIDC + SAP SDK S3 download + ECS image build
++-- lambda/                               # Migration engine — 36 stage handlers + shared utils
+|   |  # Phase 0 ASSESS
+|   +-- discovery-engine/                 # ECC scan: custom code, org, objects, roles [ECS Fargate]
+|   +-- sizing-advisor/                   # HANA/app sizing from DBSTATTORA + ST03N workload
+|   +-- object-router/                    # Route each object to a load lane (MC/LTMOM/IDoc/manual)
+|   |  # Phase 1 PROVISION
+|   +-- target-provisioner/               # Stand up / hand over the target
+|   +-- basis-validator/                  # Target readiness (clients, STMS, MC, idoc_xml SICF)
+|   |  # Phase 2 CODE
+|   +-- code-analyzer/                    # ABAP AST + ATC + GenAI remediation [ECS Fargate]
+|   |   +-- abap_ast_engine.py            #   6,400-line ABAP parser -> transformer -> codegen
+|   |   +-- genai_router.py               #   dual-backend router (Bedrock / Ollama)
+|   |   +-- bedrock_genai_engine.py       #   AWS Bedrock (Claude) invoke
+|   |   +-- ollama_genai_engine.py        #   air-gapped Ollama invoke
+|   |   +-- data_scrubber.py              #   PII masking before any LLM dispatch
+|   |   +-- country_rules.py · fixers/    #   country rules; Deep-Knowledge + level1/2/2b/3 fixers
+|   +-- code-deployer/                    # Ship remediated ABAP via CTS+ (ATC + HUMAN approval gate)
+|   +-- transport-artifact-builder/       # Build CTS+ transport (create/record/release)
+|   +-- transport-file-placer/            # S3 -> host /usr/sap/trans (via AWS SSM)
+|   +-- transport-import-executor/        # `tp import` on the SAP host (via SSM), RC-certified
+|   +-- transport-import-verifier/        # Verify the import
+|   |  # Phase 3 CONFIG
+|   +-- config-replicator/ · config-applier/ · bc-set-builder/   # Extract / apply customizing; BC Sets
+|   |  # Phase 4 DATA-PREP
+|   +-- data-migrator/                    # Extract + LOAD objects + reconcile [ECS Fargate]
+|   +-- data-hygiene/                     # ML business-partner dedup / master-data hygiene
+|   |  # Phase 5 DATA-LOAD
+|   +-- migration-cockpit-orchestrator/   # MC / OData load lane
+|   +-- ltmom-orchestrator/               # LTMOM custom-object lane (manual_gate by design)
+|   +-- idoc-orchestrator/                # IDoc inbound lane
+|   |  # Phase 6 VALIDATE
+|   +-- migration-validator/              # Existence+value reconciliation + GO-LIVE scorecard
+|   +-- test-generator/ · migration-completeness-analyzer/       # Generated tests; completeness
+|   |  # Phase 7 CUTOVER
+|   +-- cutover-orchestrator/ · delta-extractor/ · integration-activator/   # Lock; final delta; integrations
+|   |  # Assessment / data-quality / roles / safety (used across phases)
+|   +-- readiness-check/ · simplification-check/ · process-miner/
+|   +-- reconciliation-engine/ · evidence-collector/ · data-loader/ · manual-gate/
+|   +-- role-migrator/ · role-provisioner/ · integration-mapper/ · rollback-manager/
+|   +-- utils/                            # Shared libraries
+|   |   +-- unified_loader.py             #   best-mechanism-per-object dispatcher (BAPI/OData/IDoc)
+|   |   +-- bapi_loader.py                #   released-BAPI creators (BP/Material/PO/FI/CC/PC/Asset/...)
+|   |   +-- odata_client.py · bp_odata.py #   transaction-ready Customer/Vendor via API_BUSINESS_PARTNER
+|   |   +-- reconciler.py                 #   existence + value reconciliation
+|   |   +-- key_map.py                    #   source->target key registry (idempotent ledger)
+|   |   +-- config_discovery.py           #   landscape-agnostic target config discovery
+|   |   +-- compliance.py                 #   machine-checkable support-clean attestation
+|   |   +-- sap_host_runner.py            #   AWS SSM Run Command -> SAP host (tp / R3trans / agent)
+|   |   +-- rule_router.py                #   simplification rules (static default; DynamoDB opt-in)
+|   |   +-- logger.py · validation.py · rfc_pool.py · sap_prereq_checks.py  (+ more)
+|   +-- _deprecated/                      # Legacy Brownfield/SUM-DMO lambdas (sum-orchestrator, ...)
 |
-+-- ecs/                            # ECS Fargate container (Stages 1, 5, 12, 12A)
-|   +-- Dockerfile                  # Multi-stage build (Amazon Linux 2023 + SAP NW RFC SDK)
-|   +-- entrypoint.py               # Unified Docker wrapper (STAGE_TARGET dispatch + SFN callbacks)
++-- agent/                                # In-system ABAP agent — deploy + run ABAP over RFC
+|   +-- deploy_run_abap.py                #   RPY_PROGRAM_INSERT($TMP) + RZL_SUBMIT + SSM result read
+|   +-- zm4h_*.abap                       #   probe / transport-builder / syntax-checker agent reports
++-- terraform/                            # IaC — 16 modules (see Architecture); environments/{dev,staging,prod}
++-- frontend/                             # React UI (Dashboard, Pipeline, Scorecard, Connections, Lift&Shift)
++-- tests/                                # Unit/integration/load (incl. tests/test_no_direct_writes.py CI gate)
++-- docs/                                 # SAP concepts reference
 |
-+-- .dockerignore                   # Docker build context exclusions
-|
-+-- frontend/                       # React web UI
-|   +-- src/
-|   |   +-- App.jsx                 # Main app with routing
-|   |   +-- index.css               # Tailwind + custom styles
-|   |   +-- pages/
-|   |   |   +-- Dashboard.jsx       # Overview dashboard
-|   |   |   +-- Pipeline.jsx        # 5-phase pipeline view with execution
-|   |   |   +-- StageDetail.jsx     # Per-stage drill-down
-|   |   |   +-- Scorecard.jsx       # GO-LIVE scorecard
-|   |   |   +-- Report.jsx          # Post-migration report
-|   |   |   +-- Connections.jsx     # SAP system connections
-|   |   +-- components/
-|   |       +-- Layout.jsx          # App layout shell
-|   |       +-- LogViewer.jsx       # Real-time WebSocket log viewer
-|   |       +-- StageCard.jsx       # Stage status card
-|   |       +-- MetricCard.jsx      # Metric display card
-|   +-- package.json
-|
-+-- lambda/                          # Migration engine (18 Lambdas + 3 ECS stages)
-|   +-- discovery-engine/            # Stage 1  -- ECC system scanning [ECS Fargate]
-|   +-- maint-planner-integrator/    # Stage 2  -- Maintenance Planner integration
-|   +-- readiness-check-runner/      # Stage 3  -- SAP Readiness Check automation
-|   +-- si-check-executor/           # Stage 4  -- Simplification Item Check
-|   +-- code-analyzer/               # Stage 5  -- AST parser + ATC + GenAI remediation [ECS Fargate]
-|   |   +-- abap_ast_engine.py       #   6,400-line production-grade AST compiler (160 rules)
-|   |   +-- abap_analyzer.py         #   ABAP analysis orchestrator
-|   |   +-- genai_router.py          #   Dual-path GenAI (Bedrock / Air-Gapped)
-|   |   +-- data_scrubber.py         #   PII masking before LLM dispatch
-|   |   +-- country_rules.py         #   Country-specific rule engine (535 rules, 57 countries)
-|   |   +-- fixers/                  #   Deep Knowledge Engine + Level 1-3 fixers
-|   +-- cvi-bp-preparer/             # Stage 6  -- CVI/BP preparation + dedup
-|   +-- data-assessor/               # Stage 7  -- AWS DMS CDC data assessment
-|   +-- config-integration-assessor/ # Stage 8  -- Config + integration analysis
-|   +-- pre-conversion-gate/         # Stage 9  -- GO/NO-GO gate
-|   +-- migration-completeness-analyzer/ # Stage 9.5 -- Weighted completion scoring (6 dimensions)
-|   +-- sum-dmo-monitor/             # Stage 10 -- SUM/DMO orchestration & monitoring
-|   +-- spau-spdd-code-deployer/     # Stage 11 -- SPAU/SPDD + code deployment
-|   +-- fins-migration-executor/     # Stage 12 -- FINS_MASS_DATA_MONITOR execution [ECS Fargate]
-|   +-- matledger-config-applier/    # Stage 13 -- Material Ledger + config application
-|   +-- roles-integrations-prov/     # Stage 14 -- Roles + integrations provisioning
-|   +-- bpt-test-executor/           # Stage 15 -- Business process testing
-|   +-- cutover-orchestrator/        # Stage 16 -- Go-live cutover orchestration
-|   +-- migration-validator/         # Stage 17 -- 85-check validation & scorecard
-|   +-- rollback-manager/            # Safety -- Automated reversal on failure
-|   +-- data-hygiene/                # MDM -- BP deduplication (fuzzy + ML)
-|   |   +-- bp_deduplication_engine.py  # Levenshtein + Soundex + weighted scoring
-|   |   +-- mdm_data_cleanser.py        # Master data cleansing
-|   +-- process-miner/              # Analytics -- ST03N workload analysis
-|   +-- test-generator/             # QA -- DITL test case generation
-|   +-- utils/
-|       +-- logger.py               # Structured logger + WebSocket broadcast
-|       +-- rule_router.py          # DynamoDB rule routing
-|       +-- rfc_pool.py             # Thread-safe RFC pool + call timeouts + paginated reads + credential refresh
-|       +-- validation.py           # Shared Lambda event input validation
-|
-+-- tests/                           # Unit, integration & load tests
-|   +-- load_test.py                 # Locust load testing (2 user profiles)
-|
-+-- terraform/                       # Infrastructure as Code (14 modules)
-|   +-- environments/
-|   |   +-- dev/                     # Dev environment config
-|   |   +-- staging/                 # Staging (10.20/16, 2 AZ, WAF+Audit)
-|   |   +-- prod/                    # Production (10.30/16, 3 AZ, WAF+Audit)
-|   +-- modules/
-|       +-- vpc/                     # VPC with private subnets
-|       +-- lambda/                  # Lambda function deployment
-|       +-- ecs/                     # ECS Fargate cluster + ECR + task definition (NEW v6.0)
-|       +-- step-functions/          # 17-stage state machine (ECS + Lambda)
-|       +-- s3-staging/              # Intermediate data staging
-|       +-- cloudwatch/              # Monitoring & alerts
-|       +-- dms/                     # AWS DMS for CDC data sync
-|       +-- dynamodb/                # Country rules & simplification tables
-|       +-- vpc-endpoints/           # PrivateLink for Bedrock
-|       +-- airgapped-llm/          # Air-gapped GPU LLM instance
-|       +-- entity-resolution/      # AWS Entity Resolution for BP dedup
-|       +-- websocket-telemetry/    # API Gateway WebSocket for real-time logs
-|       +-- waf/                    # WAFv2: rate limiting, OWASP, SQLi, IP reputation
-|       +-- audit/                  # CloudTrail + S3 WORM (7-year) + compliance metrics
-|
-+-- scripts/                         # deploy.sh, setup-pyrfc.sh
-+-- run_local_pipeline.py            # Local 17-stage test runner
-+-- api_server.py                    # Local API server (15 REST endpoints, JWT auth)
-+-- pdf_report_generator.py          # PDF report generation
-+-- multi_volume_report_generator.py # Multi-volume PDF report (Stage 9.6, ecc_full mode)
-+-- PROJECT_STATUS.md                # Audit scorecard & upgrade status
-+-- PRODUCTION_READINESS_GUIDE.md    # Full deployment & production readiness playbook
-+-- docs/                            # SAP concepts reference
++-- run_local_lift_and_shift.py           # The 28-stage / 9-phase local orchestrator
++-- cutover.py                            # Governed cutover rehearsal (full -> delta -> reconcile -> GO/NO-GO)
++-- volume_load.py                        # Parallel mass-load harness (~9x throughput)
++-- audit_pipeline.py                     # Automated stage real-vs-scaffold auditor
++-- local_aws_shim.py                     # Local AWS shim (Secrets/S3/SSM over connections.json)
++-- api_server.py                         # FastAPI server (REST + JWT)
++-- connections.json                      # ECC + S/4 hosts (gitignored; passwords via env vars)
++-- AUDIT_REPORT.md · CAPABILITY_DOSSIER.md · BREADTH_BUILDOUT_PROMPT.md
++-- TRANSPORT_INFRA_SETUP.md · ABAPGIT_SETUP.md · MIGRATE4HANA-LIFT-AND-SHIFT.md
 ```
 
 ## Quick Start
@@ -371,10 +342,13 @@ migrate4hana/
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Save an ECC connection on the Connections page of the UI (writes connections.json),
-# then run the 17-stage pipeline against live ECC data:
-set M4H_ECC_PASSWD=<password>
-python run_local_pipeline.py
+# Save connections on the Connections page of the UI (writes connections.json),
+# then run the 28-stage / 9-phase lift-and-shift pipeline against live ECC -> S/4HANA:
+set M4H_ECC_PASSWD=<ecc-password>
+set M4H_TARGET_PASSWD=<s4-password>
+python run_local_lift_and_shift.py --run-id RUN-001          # full pipeline
+#   --list-stages | --from-stage <id> --through <id> | --only <id> | --dry-run
+#   M4H_LOAD_TO_S4=1 enables real loads (else extract + assess only)
 ```
 
 Mock mode has been removed — a working pyrfc install plus `connections.json` and the
@@ -399,7 +373,7 @@ with `-var='enable_airgapped_llm=true'`. Relevant Lambda/ECS env vars:
 
 | Mode | Description | Phases | S/4HANA Required |
 |------|-------------|--------|------------------|
-| `full` | End-to-end migration: all 17 stages across 5 phases | 1-5 | Yes |
+| `full` | End-to-end migration: all 28 stages across 9 phases | 0-8 | Yes |
 | `assess` | Assessment only: discovery, readiness, code analysis | 1-2 | No |
 | `quick` | Fast assessment: subset of Phase 1-2 checks | 1-2 | No |
 | `delta` | Delta run: re-process only changed objects since last run | 1-2 | No |
@@ -423,7 +397,7 @@ The `ecc_full` mode runs the complete assessment and remediation pipeline (Phase
 
 This mode enables a **two-phase commercial model**:
 - **Phase A (ECC-Only):** Run Migrate4HANA against the customer's ECC system. All custom code is remediated, business partners are deduplicated and crosswalked, data is assessed, configurations are mapped, and a comprehensive multi-volume report is delivered proving the work is done.
-- **Phase B (Conversion):** When the customer is ready, provision S/4HANA and run Stages 10-17 (SUM/DMO conversion and post-conversion) to complete the migration.
+- **Phase B (Migration):** When the customer is ready, provision S/4HANA and run the DATA-LOAD → VALIDATE → CUTOVER phases (released-API data migration + value-level reconciliation + governed GO/NO-GO cutover) to complete the migration.
 
 ### How to Run
 
@@ -497,14 +471,14 @@ docker push $ECR_URL:latest
 cd scripts && ./deploy.sh
 ```
 
-### Infrastructure Modules (14 Terraform Modules)
+### Infrastructure Modules (16 Terraform Modules)
 
 | Module | Description |
 |--------|-------------|
 | `vpc` | VPC with private subnets for SAP connectivity |
 | `lambda` | 18 Lambda functions with telemetry env vars |
 | `ecs` | ECS Fargate cluster, ECR repo, task definition (4 vCPU / 16 GB) for Stages 1, 5, 12, 12A |
-| `step-functions` | 17-stage state machine with ECS `waitForTaskToken` + Lambda invoke + error chaining to rollback-manager |
+| `step-functions` | 28-stage state machine with ECS `waitForTaskToken` + Lambda invoke + error chaining to rollback-manager |
 | `s3-staging` | Intermediate data staging bucket |
 | `cloudwatch` | Monitoring, alerts, and log retention |
 | `dms` | AWS DMS for full-load + CDC continuous data sync |
@@ -538,7 +512,7 @@ aws stepfunctions start-execution \
   --state-machine-arn $STATE_MACHINE_ARN \
   --input '{"mode":"assess","ecc_client":"100","execute":false}'
 
-# 5. Start migration -- full execution (all 5 phases)
+# 5. Start migration -- full execution (all 9 phases)
 aws stepfunctions start-execution \
   --state-machine-arn $STATE_MACHINE_ARN \
   --input '{"mode":"full","ecc_client":"100","execute":true}'
@@ -585,167 +559,70 @@ Migrate4HANA utilizes Dynamic Rules stored in **DynamoDB** (`terraform/modules/d
 - **DITL Test Generator (`lambda/test-generator/ditl_generator.py`)** — Generates runnable Day-In-The-Life Cypress test scripts with 443 T-code-to-OData mappings, real Fiori selectors, custom commands (`loginToS4HANA`, `navToApp`, `waitForFioriApp`), and S/4HANA OData service intercepts.
 - **Process Miner (`lambda/process-miner/st03n_analyzer.py`)** — ST03N workload analysis with 611 T-code-to-Fiori catalog mappings for identifying high-value programs and hot tables.
 
-## Latest Pipeline Run (March 8, 2026)
+## Latest Live Run (E2E-003 — full pipeline against live ECC→S/4HANA)
 
-All 17 stages completed in **72.9 seconds** against a realistic Indian manufacturer reference dataset (Bharat Industrial Solutions Pvt Ltd) extracted via live RFC.
+The **28-stage pipeline ran end-to-end against a live ECC (Y01) → S/4HANA (S4H) pair**, `rc=0`,
+**zero failed records** (S/4HANA on a SAP CAL fully-activated appliance + an ECC reference system).
 
 | Metric | Value |
-|--------|-------|
-| GO-LIVE Grade | **A (100%)** — 85 of 85 checks passed |
-| Custom ABAP Programs Scanned | 861 |
-| Programs Analyzed with AST Engine | 27 (with extended source) |
-| Code Issues Found | 216 (110 critical) |
-| Auto-Remediated | 213 (98.6% fix rate) |
-| Manual Review Required | 3 (Dynpro, EXEC SQL, SAPGui-dependent) |
-| Customers -> Business Partners | 3,500 |
-| Vendors -> Business Partners | 1,500 |
-| Finance Documents Migrated | 5,000 BKPF + 19,762 BSEG -> ACDOCA |
-| Cross-walk Entries Generated | 5,000 |
-| Number Range Overlaps Resolved | 1,500 |
-| Re-pointing Instructions | 12,000 |
-| PFCG Roles Mapped | 342 -> 15 single + 3 composite roles |
-| Users Assigned | 375 |
-| RFC Destinations | 67 (63 auto-migrated, 7 created) |
-| IDoc Partners | 13 (3 created) |
+|---|---|
+| Stages executed | **28 / 28** — no crashes, no hard failures |
+| Objects extracted from live ECC | **20 types** at production-like volume |
+| — examples | GLAccount 14,408 · BusinessPartner 28,242 · Customer 19,575 · CostCenter 2,645 · Vendor 2,415 · ProfitCenter 518 |
+| Objects that load **+ reconcile** (released BAPI/OData) | **11 types** — existence + value tie-out, verdict **RECONCILED** |
+| Idempotency (cross-run ledger) | re-run **reused 18 records, created 0 duplicates** |
+| Custom ABAP remediated | live programs analyzed + AST-transformed (e.g. `Y_CLONE_PERNR`, `YBAPI`) |
+| `migration-validator` verdict | **honest** — connected live and returned NOT-gate-eligible because data isn't fully loaded yet (it refuses to certify on partial/simulated data) |
+| Failed records (dead-letter) | **0** |
 
-Key transformations: BSEG/BKPF -> ACDOCA, KNA1/LFA1 -> BUT000 (Business Partner), KONV -> PRCD_ELEMENTS, MKPF/MSEG -> MATDOC, OCCURS -> modern ABAP, REUSE_ALV -> CL_SALV_TABLE.
+> A genuine defect the live run caught (that the unit test missed): `ProfitCenter` failed against real
+> data when the discovered config predated `PC_HIER`. Fixed (self-heal looks up the standard-hierarchy
+> node) and confirmed on re-run — exactly the value of running against the realtime environment.
 
 ## Production Readiness
 
-**Overall Assessment: 97% — SAP Activate Compliant Smart Orchestrator**
+**Honest maturity: ~TRL 6** — demonstrated end-to-end in a relevant environment (real ECC + real
+S/4HANA, real released APIs, real reconciliation) at sample volume. **Not yet TRL 8–9** (proven in
+operational use across customers). A full audit of **all 36 stages** confirms each is a real
+implementation (not scaffold) — see [AUDIT_REPORT.md](AUDIT_REPORT.md). For the AWS deployment playbook
+see [PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md).
 
-All 21 Lambda handlers have real SAP RFC/BAPI implementations. The pipeline successfully executes end-to-end across all 5 SAP Activate phases: Prepare -> Explore -> Realize (Conversion) -> Realize (Post-Conversion) -> Deploy & Run. Mock mode has been removed — all runs require a live SAP ECC RFC connection. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the full audit.
+### Component status (current pipeline)
 
-For step-by-step AWS deployment instructions, security hardening, CI/CD setup, and production gap closure, see **[PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md)**.
+| Component | Status | Notes |
+|---|---|---|
+| **Data spine** (`data-migrator` + `utils`) | ✅ proven live | 11 object types load + reconcile; idempotent ledger; delta/CDC; dead-letter; parallel (~9×); support-clean attestation |
+| **ASSESS** (discovery-engine · sizing-advisor · object-router) | ✅ proven live | real RFC scans, HANA sizing, object routing |
+| **CODE** (code-analyzer + AST + GenAI) | ✅ live-validated | 6,400-line AST + Bedrock/Ollama; remediated real ECC programs; **ATC + human gate** before deploy |
+| **simplification-check** | ✅ live-validated | live `D010TAB` scan vs a ~9,200-rule KB (1,003 items, 77 RED) |
+| **basis-validator / readiness-check** | ✅ real | release-aware RFC checks (clients, STMS, MC, `idoc_xml`) |
+| **migration-validator** | ✅ hardened | existence + value reconciliation; never certifies on simulated/offline data |
+| **CONFIG / DATA-LOAD orchestrators / cutover / delta** | ✅ run live | config extract, MC/LTMOM/IDoc lanes, cutover delta + GO/NO-GO |
+| **In-system ABAP agent** | ✅ proven | deploy + run ABAP on S/4 over RFC (RPY + RZL_SUBMIT + SSM) |
+| **Transport chain** (build → place → import) | 🔶 infra proven; final import deferred | `tp` via SSM + S3↔host place proven; release→import is blocked only by the single-box appliance having no TMS route (works on a routed landscape) |
+| **Terraform** (16 modules) | ✅ | VPC · Lambda · ECS · Step-Functions · S3 · DynamoDB · CloudWatch · WebSocket · WAF · Audit · Bedrock/air-gapped-LLM · Entity-Resolution · DMS · target-system · evidence-ledger · KMS |
+| **Frontend / API server** | ✅ | React UI; FastAPI + JWT |
 
-### Infrastructure Highlights (v4.0)
+### Cross-cutting hardening (from the audit)
+- **migration-validator** can no longer certify go-live on simulated/offline data (hard-blocks).
+- **AI ABAP remediation** is gated: `code-deployer` ships nothing without an ATC pass + human approval.
+- **Structured logging** normalized (`run_id` first-class); **secrets** attested clean (none in code);
+  remediation **rules static-by-default** (DynamoDB opt-in).
+- Retained from the platform: CI/CD (GitHub Actions, OIDC, SAP-SDK-from-S3, ECS image build), WAFv2,
+  CloudTrail + S3 WORM audit, ECS Fargate for heavy stages, RFC pool with timeouts + paginated reads.
 
-| Capability | Implementation |
-|------------|----------------|
-| **CI/CD** | GitHub Actions CI (`ci.yml`) + CD (`deploy.yml`) with OIDC federation, SAP SDK S3 download, ECS image build/push |
-| **Environments** | Dev, Staging (10.20/16), Production (10.30/16, 3 AZ) |
-| **WAF** | WAFv2 with rate limiting, OWASP Core Rules, SQLi, IP reputation |
-| **Audit & Compliance** | CloudTrail + S3 WORM (7-year) + metric alarms (SOX/GxP ready) |
-| **DR & Backup** | S3 cross-region replication, DynamoDB PITR, documented RTO/RPO |
-| **Load Testing** | Locust suite (`tests/load_test.py`) with 2 user profiles, CI integration |
-| **DMS Credentials** | AWS Secrets Manager for all environments (dev/staging/prod) |
+### Honest remaining gaps (the real ones)
+1. **A pilot go-live** — the only true proof. Requires SAP functional + Basis expertise (best with an SI partner).
+2. **Breadth** — 11 objects load today; ~40–60 of the ~120 Migration-Cockpit objects fit the proven
+   pattern (see [BREADTH_BUILDOUT_PROMPT.md](BREADTH_BUILDOUT_PROMPT.md)).
+3. **Transport final import on a routed landscape** (deferred — single-box appliance TMS-route limit;
+   see [TRANSPORT_INFRA_SETUP.md](TRANSPORT_INFRA_SETUP.md) and [ABAPGIT_SETUP.md](ABAPGIT_SETUP.md)).
+4. **A 2nd, non-IDES landscape** to confirm generalization (auto-discovery is the code-side enabler — done).
+5. **Ops hardening at customer scale** — monitoring, secrets management, packaging/deployment.
 
-### ECS Fargate Compute Upgrade (v6.0)
-
-| Capability | Implementation |
-|------------|----------------|
-| **ECS Fargate** | Stages 1, 5, 12, 12A run on 4 vCPU / 16 GB Fargate tasks — no 15-minute timeout |
-| **Docker Image** | Multi-stage build on Amazon Linux 2023 with SAP NW RFC SDK + PyRFC (`ecs/Dockerfile`) |
-| **Step Functions Integration** | `waitForTaskToken` callback pattern with heartbeat (300s) and per-stage timeouts (1h–4h) |
-| **ECR Repository** | `migrate4hana/worker` with lifecycle policy (keep last 10 images), scan-on-push |
-| **Unified Entrypoint** | `ecs/entrypoint.py` — dynamic handler selection via `STAGE_TARGET`, Lambda context shim |
-| **IAM** | Execution role (ECR pull + CloudWatch Logs) + Task role (S3, DynamoDB, Bedrock, Secrets, SFN callbacks) |
-| **Bootstrap Strategy** | Terraform uses `alpine:latest` placeholder image with `lifecycle { ignore_changes }` — CI/CD deploys real image |
-
-### Architectural Fixes (v6.1)
-
-| Capability | Implementation |
-|------------|----------------|
-| **CI/CD SAP SDK** | `deploy.yml` downloads SAP NW RFC SDK from private S3 bucket at build time — SDK never committed to Git |
-| **ECS Bootstrap** | Terraform uses `alpine:latest` placeholder image; CI/CD deploys real image via `lifecycle { ignore_changes }` |
-| **Streamed Reconciliation** | Stage 12A uses chunked reads (50K rows) with running aggregation — prevents OOM on 500M+ row tables |
-| **DMS Secrets Manager** | All 3 environments fetch DMS database passwords from AWS Secrets Manager — no hardcoded credentials |
-
-### Production Hardening Highlights (v5.0)
-
-| Capability | Implementation |
-|------------|----------------|
-| **RFC Call Timeouts** | `call_rfc_with_timeout()` — ThreadPoolExecutor wrapper (120s default) prevents indefinite hangs |
-| **Paginated Table Reads** | `read_table_chunked()` generator — ROWSKIPS/ROWCOUNT pagination (5000 rows/page default) |
-| **Credential Refresh** | Secrets Manager credential caching with 300s TTL + auth-failure auto-retry |
-| **Input Validation** | `lambda/utils/validation.py` — shared event validation across 4 handlers |
-| **Idempotency** | DynamoDB-backed idempotency for data-loader (7-day TTL, prevents duplicate processing on retries) |
-| **FINS Configurable Polling** | `FINS_MAX_POLLS` (480) × `FINS_POLL_INTERVAL` (30s) with adaptive backoff |
-| **Batch Rollback** | Commits in batches of 25 with BAPI_TRANSACTION_COMMIT after each |
-| **Source System Locking** | SCCR_LOCK_CLIENT + BAPI_USER_LOCK / SCCR_UNLOCK_CLIENT + BAPI_USER_UNLOCK |
-
-### Component Readiness
-
-| Component | Status | Score | Notes |
-|-----------|--------|-------|-------|
-| **Discovery Engine** (Stage 1) | Ready | 95% | Real RFC_READ_TABLE calls, scans TRDIR/DD02L/TFDIR + org structure. **ECS Fargate** (4 vCPU / 16 GB) |
-| **Maint Planner Integrator** (Stage 2) | Ready | 93% | stack.xml parsing, add-on validation, target product confirmation |
-| **Readiness Check Runner** (Stage 3) | Ready | 93% | RC_COLLECT_ANALYSIS_DATA automation, visual roadmap generation |
-| **SI-Check Executor** (Stage 4) | Ready | 92% | /SDF/RC_START_CHECK execution, remediation task list |
-| **Code Analyzer** (Stage 5) | Ready | 98% | 6,400-line AST + ATC + 160 transformation rules + 249 table mappings, Dual-GenAI escalation. **ECS Fargate** (4 vCPU / 16 GB) |
-| **CVI/BP Preparer** (Stage 6) | Ready | 95% | CVI pre-validation, Levenshtein+Soundex dedup, crosswalk generation |
-| **Data Assessor** (Stage 7) | Ready | 95% | DMS CDC planning, finance transformation mapping, custom table analysis |
-| **Config/Integration Assessor** (Stage 8) | Ready | 92% | 50+ SPRO tables, 57 country profiles, RFC/IDoc/API mapping |
-| **Pre-Conversion Gate** (Stage 9) | Ready | 95% | Pre-flight validation, S/4HANA connectivity test, DMS CDC monitoring |
-| **SUM/DMO Monitor** (Stage 10) | Ready | 90% | SUM CLI orchestration, real-time log monitoring, progress tracking |
-| **SPAU/SPDD + Code Deployer** (Stage 11) | Ready | 95% | Adjustment tracking, transport management (create->upload->activate->release) |
-| **FINS Migration Executor** (Stage 12) | Ready | 93% | FINS_MASS_DATA_MONITOR orchestration, reconciliation checks. **ECS Fargate** (4 vCPU / 16 GB) with Distributed Map. Stage 12A uses streamed aggregation (`_read_table_chunked()` generator, 50K rows/chunk) to prevent OOM on large data volumes |
-| **MatLedger + Config Applier** (Stage 13) | Ready | 90% | Material Ledger activation, number ranges, BP groupings, Fiori config |
-| **Roles + Integrations Provisioner** (Stage 14) | Ready | 92% | PFCG roles, Fiori catalogs, user assignments, RFC/IDoc activation |
-| **Business Process Testing** (Stage 15) | Ready | 90% | Automated DITL Cypress execution, Fiori app validation |
-| **Cutover Orchestrator** (Stage 16) | Ready | 93% | Go-live sequence management, DMS finalization, system handover |
-| **Migration Validator** (Stage 17) | Ready | 95% | 85-check validation, financial reconciliation, GO-LIVE scorecard |
-| **Rollback Manager** | Ready | 97% | Full post-conversion rollback: FI docs, transports, ACDOCA, SPRO, BPs, materials, roles, users, RFC, IDoc. Batch commits (25/batch), source system unlock |
-| **PDF Report Generator** | Ready | 90% | Professional 11-section branded report with ReportLab |
-| **Multi-Volume Report Generator** | Ready | 95% | 10-section multi-volume PDF (≤50 pages/volume), donut gauges, spider charts, before/after code blocks |
-| **Migration Completeness Analyzer** | Ready | 95% | 6-dimension weighted scoring (code 30%, data 20%, config 15%, roles 15%, integration 10%, test 10%), effort estimation |
-| **React Frontend** | Ready | 85% | 6 pages, 5-phase pipeline view, real-time telemetry, scorecard visualization |
-| **API Server** | Ready | 90% | JWT + API key authentication, rate limiting, structured endpoints |
-| **Terraform (14 modules)** | Ready | 92% | VPC, Lambda, ECS, Step Functions, S3, CloudWatch, DMS, DynamoDB, Entity Resolution, WebSocket, LLM, WAF, Audit. DMS credentials via Secrets Manager across all environments |
-| **Test Suite** | Ready | 95% | Unit tests (completeness analyzer, multi-volume report) + opt-in live RFC smoke test (gated by SAP_TEST_* env vars) + locust load suite |
-
-### What Works End-to-End Today
-
-- Full 17-stage pipeline executes against real SAP ECC via PyRFC (mock mode removed)
-- Full 17-stage pipeline executes against real SAP ECC/S4HANA via PyRFC
-- 4 heavy-compute stages (1, 5, 12, 12A) run on ECS Fargate with Step Functions `waitForTaskToken` callbacks
-- SAP Readiness Check + Simplification Item Check automation
-- Maintenance Planner integration with stack.xml validation
-- AST-based ABAP analysis with 160 transformation rules + 249 table mappings + ATC + GenAI escalation
-- Business Partner CVI migration with fuzzy dedup and crosswalk tables
-- Finance document migration (BKPF/BSEG -> ACDOCA Universal Journal)
-- SUM/DMO orchestration and real-time log monitoring
-- FINS_MASS_DATA_MONITOR execution with streamed reconciliation (OOM-safe for 500M+ rows)
-- Material Ledger (CKMSTART) activation and validation
-- SPAU/SPDD adjustment tracking and code deployment
-- SPRO configuration extraction and application (50+ tables)
-- PFCG role migration with T-code -> Fiori mapping (40+ mappings)
-- RFC/IDoc integration mapping and activation
-- India-specific localization (GST, TDS, E-Invoice, E-Way Bill)
-- Global localization (57 countries, 535 compliance rules: US, DE, BR, JP, AE, AU, FR, MX, KR, IT, SA, ZA, CH, SG, etc.)
-- Automated business process testing (DITL Cypress)
-- Real-time WebSocket telemetry to frontend
-- Professional PDF report generation (11 sections)
-- Multi-volume PDF migration reports (10 sections, ≤50 pages/volume, ecc_full mode)
-- ECC-only full execution mode (Phases 1-2 + completeness analysis + multi-volume report, no S/4HANA required)
-- Automated rollback on failure (FI reversal + transport cleanup)
-- 85-check GO-LIVE scorecard with Grade A-D assessment across 7 dimensions
-- Web UI with 7 pages: Dashboard, Pipeline, StageDetail, Scorecard, Report, Connections, Telemetry
-- ECS Fargate (4 vCPU / 16 GB) for stages exceeding Lambda's 15-minute timeout: discovery, code analysis, data loading, reconciliation
-- Docker image build (`ecs/Dockerfile`) with SAP NW RFC SDK + PyRFC for ECS container deployment
-- CI/CD automated SAP SDK download from S3 + ECS image build/push (SDK never in Git)
-- DMS credentials managed via AWS Secrets Manager across all environments (dev/staging/prod)
-
-### Previously Identified Gaps — All Resolved
-
-All 10 pre-production gaps have been addressed:
-
-| # | Gap | Resolution | Status |
-|---|-----|------------|--------|
-| 1 | API server authentication | JWT + API key auth implemented in `api_server.py` | Resolved |
-| 2 | DynamoDB encryption-at-rest | `server_side_encryption { enabled = true }` in `dynamodb/main.tf` | Resolved |
-| 3 | Entity Resolution workflow | Full `aws_entityresolution_matching_workflow` provisioned with ML_MATCHING | Resolved |
-| 4 | Rollback limited to FI + transports | Full post-conversion rollback: ACDOCA, SPRO, BPs, materials, roles, etc. | Resolved |
-| 5 | Config applier silent exceptions | Structured error collection + dry_run validation | Resolved |
-| 6 | DynamoDB fallback rules (2 of ~30) | 30 rules across 8 categories in `rule_router.py` | Resolved |
-| 7 | DMS CDC checkpoint/retry | CDC retry (5x), batch apply, stream buffer settings in `dms/main.tf` | Resolved |
-| 8 | Test suite coverage (8 tests) | 114 tests covering all components with positive + negative paths | Resolved |
-| 9 | DITL test scripts not executable | Real Fiori selectors, Cypress custom commands, OData intercepts | Resolved |
-| 10 | Limited country localizations | Expanded from 15 to 57 countries with 535 compliance rules | Resolved |
-
-See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the full audit with per-requirement breakdown.
-See [PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md) for full AWS deployment playbook and remaining production gap closure.
-
+> A note on prior claims: earlier README revisions reported "Grade A (100%), all gaps resolved" against
+> a synthetic reference dataset — that reflected the legacy System-Conversion mode and a fabricated run.
+> This section reports the **actual** live results and the **honest** remaining gaps.
 ## SAP / DevOps Glossary
 
 | SAP Term | DevOps Equivalent |
