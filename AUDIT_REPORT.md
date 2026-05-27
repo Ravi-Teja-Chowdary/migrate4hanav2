@@ -157,6 +157,27 @@ SCAFFOLD 0** — but "PARTIAL" mostly means "thin handler" or "real-but-AWS-env"
    - ⏳ **Idempotency/restart** — the data spine has the cross-run ledger; the non-spine stages
      (transport/config/roles) need per-stage idempotency, mostly tied to the Gap #4 exec env. Pending.
 
+## END-TO-END ORCHESTRATED LIVE RUN (2026-05-27, run E2E-002, rc=0)
+
+The full 28-stage pipeline (`run_local_lift_and_shift.py`) ran **end-to-end against live ECC→S/4**,
+no crashes, no hard failures. Per-phase outcome:
+- **ASSESS / PROVISION / DATA-PREP / VALIDATE / RUN** — `success`, real output. `data-migrator`
+  extracted **20 object types at production-like volume** (GLAccount 14,408; BusinessPartner 28,242;
+  Customer 19,575; CostCenter 2,645; Vendor 2,415; ProfitCenter 518; + Material/Open AR/AP/PO/SO/
+  AssetMaster/BOM/Routing/WorkCenter; honest `skipped/` for GLBalances/InventoryBalances/CustomZTable).
+- **CODE** — `code-analyzer` extract+remediate produced **real remediated ABAP** from live custom code
+  (Y_CLONE_PERNR, YBAPI, YCATASTROPH, …). Transport-build chain → `manual_required` (deferred no-route).
+- **VALIDATE** — `migration-validator` validated **LIVE** and correctly returned **Grade D / NOT
+  gate-eligible / "DO NOT GO LIVE"** (no data loaded in this extract+assess pass) — the Gap #1 fix
+  proven in context: it refused to fake a pass.
+- **CUTOVER** — delta/final-validate ran; ECC-lock → `manual_gate` (needs SSM/manual lock, by design);
+  3 manual gates behaved as honest checkpoints.
+
+**Verdict: the orchestrated pipeline works end-to-end on the realtime environment.** Remaining: a
+load-enabled capstone pass (`M4H_LOAD_TO_S4=1`, small caps) to show extract→**load**→reconcile→
+validate-green; normalize gate `status` (cosmetic — gates print `unknown` when they return no
+`status` key); and the deferred transport build.
+
 ## Coverage & honesty — AUDIT COMPLETE (all 36 stages)
 
 - **Deep-read:** `code-analyzer`, `simplification-check`, `transport-import-executor`,
