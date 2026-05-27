@@ -588,6 +588,84 @@ class BapiLoader:
                 "key_mapping": {"source": key, "target": key, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
 
+    # ── Internal order (CO master, BAPI_INTERNALORDER_CREATE) ──────────────
+    def _discover_profit_ctr(self, kokrs: str) -> str:
+        """Most-common real profit center in a controlling area (cached) — PROFIT_CTR is required
+        on S/4 (profit-center accounting active)."""
+        cache = getattr(self, "_prctr_cache", None)
+        if cache is None:
+            cache = self._prctr_cache = {}
+        if kokrs in cache:
+            return cache[kokrs]
+        val = ""
+        try:
+            from collections import Counter
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="CEPC", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "PRCTR"}],
+                            OPTIONS=[{"TEXT": "KOKRS = '%s'" % kokrs}], ROWCOUNT=300)
+            pc = Counter(x["WA"].strip() for x in r.get("DATA", []) if x["WA"].strip())
+            val = pc.most_common(1)[0][0] if pc else ""
+        except Exception:
+            val = ""
+        cache[kokrs] = val
+        return val
+
+    def _order_type_valid(self, kokrs: str, otype: str, comp: str, curr: str, prctr: str) -> bool:
+        cache = getattr(self, "_iotype_cache", None)
+        if cache is None:
+            cache = self._iotype_cache = {}
+        k = (kokrs, otype)
+        if k in cache:
+            return cache[k]
+        try:
+            res = self.c.call("BAPI_INTERNALORDER_CREATE", TESTRUN="X",
+                              I_MASTER_DATA={"ORDER_TYPE": otype, "CO_AREA": kokrs,
+                                             "ORDER_NAME": "validate", "COMP_CODE": comp,
+                                             "CURRENCY": curr, "PROFIT_CTR": prctr})
+            ok = not [m for m in self._ret(res) if m.get("TYPE") in ("E", "A")]
+        except Exception:
+            ok = False
+        cache[k] = ok
+        return ok
+
+    def create_internal_order(self, row: dict, org: dict, commit: bool = True) -> dict:
+        """Create an internal order (CO master). Internal numbering -> BAPI assigns ORDERID; source
+        AUFNR -> target order recorded (idempotency via the loader ledger). Source order types often
+        differ from the target (ECC 0100 vs S/4 Y600/...): validate once via TESTRUN (cached) and fall
+        back to the discovered default order type with a transparent remap. org = the discovered CO
+        config (CO_AREA, COMP_CODE, CURRENCY, PROFIT_CTR, ORDER_TYPE)."""
+        aufnr = (row.get("AUFNR") or "").strip()
+        kokrs = org.get("CO_AREA")
+        otype = (row.get("AUART") or org.get("ORDER_TYPE") or "").strip()
+        if not kokrs or not otype:
+            return {"status": "skipped", "messages": ["missing CO area / order type"]}
+        comp = org.get("COMP_CODE", "")
+        curr = org.get("CURRENCY", "")
+        prctr = (org.get("PROFIT_CTR") or "").strip() or self._discover_profit_ctr(kokrs)
+        fallback = (org.get("ORDER_TYPE") or "").strip()
+        src_ot, ot_remapped = otype, False
+        if fallback and otype != fallback and not self._order_type_valid(kokrs, otype, comp, curr, prctr):
+            otype, ot_remapped = fallback, True
+        name = ((row.get("KTEXT") or ("IO " + (aufnr or otype))).strip())[:40]
+        res = self.c.call("BAPI_INTERNALORDER_CREATE",
+                          I_MASTER_DATA={"ORDER_TYPE": otype, "CO_AREA": kokrs, "ORDER_NAME": name,
+                                         "COMP_CODE": comp, "CURRENCY": curr, "PROFIT_CTR": prctr})
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        target = (res.get("ORDERID") or (res.get("E_MASTER_DATA") or {}).get("ORDER") or "").strip()
+        if commit:
+            self._commit()
+        verify = {"table": "AUFK", "key": {"AUFNR": target}}
+        msgs = [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]
+        if ot_remapped:
+            msgs.append(f"order type {src_ot} not valid in {kokrs}; used {otype}")
+        return {"status": "created", "internal_order": target, "verify_key": verify,
+                "key_mapping": {"source": aufnr or target, "target": target,
+                                "disposition": "created" if target == aufnr else "remapped"},
+                "messages": msgs}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).

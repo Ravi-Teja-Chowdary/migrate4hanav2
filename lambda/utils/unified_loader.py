@@ -54,6 +54,7 @@ OBJECT_SOURCE_KEY = {
     "Customer": "KUNNR", "Vendor": "LIFNR", "BusinessPartner": "PARTNER",
     "Material": "MATNR", "OpenPO": "EBELN", "OpenAR": "BELNR", "OpenAP": "BELNR",
     "CostCenter": "KOSTL", "ProfitCenter": "PRCTR", "FixedAsset": "ANLN1", "Bank": "BANKL",
+    "InternalOrder": "AUFNR",
 }
 
 # object -> (mechanism, sub-kind)
@@ -70,6 +71,7 @@ OBJECT_MECHANISM = {
     "ProfitCenter":    ("bapi", "profitcenter"),
     "FixedAsset":      ("bapi", "fixedasset"),
     "Bank":            ("bapi", "bank"),
+    "InternalOrder":   ("bapi", "internalorder"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -479,6 +481,11 @@ class UnifiedLoader:
             r = self.bapi.create_bank(row, commit=True)
             return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
                     "id": r.get("bank"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
+        if kind == "bapi" and sub == "internalorder":
+            r = self.bapi.create_internal_order(row, self.cc_org, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("internal_order"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)

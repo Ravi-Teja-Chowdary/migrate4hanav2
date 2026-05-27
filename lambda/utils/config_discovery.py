@@ -155,8 +155,12 @@ def discover(conn) -> dict:
     pc_hiers = Counter(r["KHINR"] for r in _rows(conn, "CEPC", ["KHINR"], "KOKRS = '%s'" % kokrs, 500)
                        if r.get("KHINR"))
     pc_hier = pc_hiers.most_common(1)[0][0] if pc_hiers else cc_hier
+    # Internal-order default type: most-common internal-order (AUTYP='01') order type in the CO area
+    io_types = Counter(r["AUART"] for r in _rows(conn, "AUFK", ["AUART"],
+                       "AUTYP = '01' AND KOKRS = '%s'" % kokrs, 500) if r.get("AUART"))
+    io_type = env("M4H_ORDER_TYPE") or (io_types.most_common(1)[0][0] if io_types else "")
     co = {"CO_AREA": kokrs, "CC_HIER": cc_hier, "CC_CATEGORY": cc_cat, "PC_HIER": pc_hier,
-          "COMP_CODE": comp, "CURRENCY": comp_curr, "PROFIT_CTR": pc,
+          "COMP_CODE": comp, "CURRENCY": comp_curr, "PROFIT_CTR": pc, "ORDER_TYPE": io_type,
           "VALID_FROM": env("M4H_CC_VALID_FROM") or "20240101"}
 
     # Fixed-asset config: pick a company code that ACTUALLY has assets and a
