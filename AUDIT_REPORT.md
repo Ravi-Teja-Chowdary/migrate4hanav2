@@ -112,8 +112,23 @@ SCAFFOLD 0** — but "PARTIAL" mostly means "thin handler" or "real-but-AWS-env"
      static the documented default; (b) `code-analyzer/abap_analyzer.py` is an **orphaned module**
      (imports a non-existent `simplification_rules`; nothing in the pipeline uses it) — remove or
      restore. Neither blocks the live path (the handler uses dynamic-rules + AST engine).
-4. ⏳ **NEXT — Execution harness for the B-bucket** (transport + config) — needs the AWS SSM/bastion
-   env or a local `tp`/`R3trans` equivalent; then live-run + validate them like the data spine.
+4. 🔶 **Gap #4 — infra VALIDATED on the live CAL appliance; build-side limitation found:**
+   - ✅ **Transport infra fully operational** (SSM Online on the SLES host i-0dea60b2c9e82b680;
+     `tp connect S4H` → RC 0, DB OK; `tp showbuffer` RC 0; **S3→host `aws s3 cp` works** = the
+     file-placer mechanism; `TP_DOMAIN_S4H.PFL` present; cofile generation path confirmed). The
+     **import side** (`transport-file-placer` + `transport-import-executor`) is real and ready.
+   - ❌ **Full transport BUILD can't be RFC-automated on a stock appliance.** Request creation works
+     via the modern `CTS_API_CREATE_CHANGE_REQUEST` and release via `BAPI_CTREQUEST_RELEASE`, but
+     **task creation + object recording are not RFC-enabled** (TK511 PERMISSION_ERROR), so an object
+     can't be recorded and a content-bearing release can't complete over RFC. The existing
+     `transport-artifact-builder` paths also don't work here: its RFC path needs `TRINT_*` (not
+     RFC-enabled) and its `tp` fallback uses **`tp newreq`/`tp addtobuffer <obj>` which are not real
+     `tp` commands** → it degrades to a manual manifest. **Finding: artifact-builder needs reworking
+     to the CTS_API + in-system task handling, or accept an in-system (SE10) release step.**
+   - **To certify a full live import:** create+release one small transport in **SE10** (the in-system
+     step that can't be RFC-automated here), then the place→import→verify chain certifies the `tp` RC.
+   - *(Cleaned up the probe attempt: no stray program; stray cofile removed; empty request
+     `S4HK903321` left for optional SE10 deletion.)*
 5. ⏳ **F-bucket hardening** — apply the same per-stage "definition of done" (live run + evidence).
 6. 🔶 **Cross-cutting — substantially done (commits a2e4de5, 9245bbc):**
    - ✅ **Structured logging fixed** — `log_stage_event` was mislabeling telemetry for 96 of 125
