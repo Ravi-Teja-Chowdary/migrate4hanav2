@@ -173,10 +173,17 @@ no crashes, no hard failures. Per-phase outcome:
 - **CUTOVER** — delta/final-validate ran; ECC-lock → `manual_gate` (needs SSM/manual lock, by design);
   3 manual gates behaved as honest checkpoints.
 
-**Verdict: the orchestrated pipeline works end-to-end on the realtime environment.** Remaining: a
-load-enabled capstone pass (`M4H_LOAD_TO_S4=1`, small caps) to show extract→**load**→reconcile→
-validate-green; normalize gate `status` (cosmetic — gates print `unknown` when they return no
-`status` key); and the deferred transport build.
+**Verdict: the orchestrated pipeline works end-to-end on the realtime environment.**
+
+**Clean re-run (E2E-003, post-fix):** full pipeline `rc=0`; **zero failures, `dead_letter: None`**
+(was 50 ProfitCenter failures). The load pass surfaced + fixed a real defect — `create_profit_center`
+passed an empty `PRCTR_HIER_GRP` when the cached discovered-config predated `PC_HIER` (commit 5308049:
+self-heal looks up the CO area's hierarchy node from the target). Idempotency proven in-context
+(`reused_from_ledger: 18`); ExchangeRates created+RECONCILED (+13 `skipped_config_gap`, the known
+TCURV/TCURF customizing gap). Every stage is now `success`/`ok` or honest `manual_required`/`manual_gate`
+(deferred transport-build + cutover-lock).
+Remaining polish: normalize gate `status` (cosmetic — gates + stage21 print `unknown` when they return
+no `status` key); the deferred transport build (appliance TMS-route limit).
 
 ## Coverage & honesty — AUDIT COMPLETE (all 36 stages)
 
