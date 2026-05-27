@@ -54,7 +54,7 @@ OBJECT_SOURCE_KEY = {
     "Customer": "KUNNR", "Vendor": "LIFNR", "BusinessPartner": "PARTNER",
     "Material": "MATNR", "OpenPO": "EBELN", "OpenAR": "BELNR", "OpenAP": "BELNR",
     "CostCenter": "KOSTL", "ProfitCenter": "PRCTR", "FixedAsset": "ANLN1", "Bank": "BANKL",
-    "InternalOrder": "AUFNR", "Equipment": "EQUNR",
+    "InternalOrder": "AUFNR", "Equipment": "EQUNR", "FunctionalLocation": "TPLNR",
 }
 
 # object -> (mechanism, sub-kind)
@@ -73,6 +73,7 @@ OBJECT_MECHANISM = {
     "Bank":            ("bapi", "bank"),
     "InternalOrder":   ("bapi", "internalorder"),
     "Equipment":       ("bapi", "equipment"),
+    "FunctionalLocation": ("bapi", "funcloc"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -492,6 +493,11 @@ class UnifiedLoader:
             r = self.bapi.create_equipment(row, commit=True)
             return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
                     "id": r.get("equipment"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
+        if kind == "bapi" and sub == "funcloc":
+            r = self.bapi.create_funcloc(row, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("funcloc"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)

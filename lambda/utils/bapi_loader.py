@@ -715,6 +715,109 @@ class BapiLoader:
                                 "disposition": "created" if target == equnr else "remapped"},
                 "messages": msgs}
 
+    # ── Functional location (BAPI_FUNCLOC_CREATE) ─────────────────────────────
+    def _floc_config(self):
+        """Discover the target's in-use functional-location structure: the most-common
+        structure indicator (IFLOT.TPLKZ), category (FLTYP), the label delimiter and the
+        per-level segment widths (the editing mask), plus the set of existing labels.
+        Funcloc labels are *structure-bound*: they must conform to the target structure
+        indicator's mask. ECC source labels usually do NOT conform (different masks), so we
+        reformat source labels to the target mask (collision-safe), like a MATNR remap."""
+        cache = getattr(self, "_floc_cfg_cache", None)
+        if cache is not None:
+            return cache
+        from collections import Counter
+        strinds, cats, widths, existing = Counter(), Counter(), {}, set()
+        delim = "-"
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="IFLOT", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "TPLNR"}, {"FIELDNAME": "TPLKZ"},
+                                    {"FIELDNAME": "FLTYP"}], ROWCOUNT=1000)
+            for x in r.get("DATA", []):
+                tplnr, tplkz, fltyp = (c.strip() for c in (x["WA"].split("|") + ["", "", ""])[:3])
+                if tplkz:
+                    strinds[tplkz] += 1
+                if fltyp:
+                    cats[fltyp] += 1
+                if tplnr:
+                    existing.add(tplnr)
+                    for i, seg in enumerate(tplnr.split(delim)):
+                        widths[i] = max(widths.get(i, 0), len(seg))
+        except Exception:
+            pass
+        cfg = {
+            "strind": strinds.most_common(1)[0][0] if strinds else "",
+            "category": cats.most_common(1)[0][0] if cats else "M",
+            "delim": delim,
+            "widths": [widths[i] for i in sorted(widths)] or [4, 3, 3],
+            "existing": existing,
+        }
+        self._floc_cfg_cache = cfg
+        return cfg
+
+    def _floc_label(self, src_tplnr, cfg, taken):
+        """Reformat a source funcloc label to conform to the target mask (per-level widths),
+        truncating over-long segments; ensure uniqueness against existing + this-run labels.
+        Returns (label, remapped_bool)."""
+        delim, widths = cfg["delim"], cfg["widths"]
+        segs = (src_tplnr or "").split(delim)
+        fitted = [s[:(widths[i] if i < len(widths) else widths[-1])] for i, s in enumerate(segs) if s]
+        label = delim.join(fitted).rstrip(delim)
+        remapped = (label != (src_tplnr or "").strip())
+        if not label:  # nothing usable -> fully generate
+            label, remapped = "M4H" + delim + "001", True
+        # uniqueness: bump the trailing segment within its width
+        if label in taken or label in cfg["existing"]:
+            remapped = True
+            base = label.rsplit(delim, 1)
+            w = widths[len(base[0].split(delim))] if len(base) > 1 and len(base[0].split(delim)) < len(widths) else widths[-1]
+            n = 1
+            while True:
+                suffix = str(n).zfill(min(w, 3))[-w:]
+                cand = (base[0] + delim + suffix) if len(base) > 1 else suffix
+                if cand not in taken and cand not in cfg["existing"]:
+                    label = cand
+                    break
+                n += 1
+                if n > 99999:
+                    break
+        return label, remapped
+
+    def create_funcloc(self, row: dict, commit: bool = True) -> dict:
+        """Create a functional location (PM master). Funcloc labels are structure-indicator
+        bound: the external label must conform to the target structure indicator's editing mask.
+        We discover the in-use structure indicator + mask and reformat the source label to conform
+        (collision-safe, source->target recorded in the ledger). Source ECC IFLOT: TPLNR, FLTYP;
+        description IFLOTX-PLTXT. Standalone create (no auto-install into hierarchy)."""
+        cfg = self._floc_config()
+        if not cfg["strind"]:
+            return {"status": "skipped", "messages": ["target has no functional-location structure indicator"]}
+        src = (row.get("TPLNR") or "").strip()
+        taken = getattr(self, "_floc_taken", None)
+        if taken is None:
+            taken = self._floc_taken = set()
+        label, remapped = self._floc_label(src, cfg, taken)
+        desc = ((row.get("PLTXT") or row.get("SHTXT") or ("Functional location " + (src or label))).strip())[:40]
+        res = self.c.call("BAPI_FUNCLOC_CREATE", EXTERNAL_NUMBER=label,
+                          DATA_GENERAL={"DESCRIPT": desc},
+                          DATA_SPECIFIC={"STRIND": cfg["strind"], "CATEGORY": cfg["category"]})
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        target = (res.get("FUNCTLOCATION") or label).strip()
+        taken.add(target)
+        if commit:
+            self._commit()
+        verify = {"table": "IFLOT", "key": {"TPLNR": target}}
+        msgs = [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]
+        if remapped:
+            msgs.append(f"label {src} reformatted to target mask ({cfg['strind']}) -> {target}")
+        return {"status": "created", "funcloc": target, "verify_key": verify,
+                "key_mapping": {"source": src or target, "target": target,
+                                "disposition": "created" if target == src else "remapped"},
+                "messages": msgs}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).

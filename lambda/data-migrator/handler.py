@@ -209,6 +209,7 @@ DEFAULT_OBJECT_TABLES = {
     "Bank":              {"table": "BNKA", "fields": ["BANKS", "BANKL", "BANKA", "SWIFT", "BRNCH", "ORT01"], "lane": "MC"},
     "InternalOrder":     {"table": "AUFK", "fields": ["AUFNR", "AUART", "KTEXT", "KOKRS", "BUKRS"], "where": "AUTYP = '01'", "lane": "MC"},
     "Equipment":         {"table": "EQUI", "fields": ["EQUNR", "EQTYP"], "lane": "MC"},
+    "FunctionalLocation": {"table": "IFLOT", "fields": ["TPLNR", "FLTYP"], "lane": "MC"},
     "Plant":             {"table": "T001W", "fields": ["WERKS", "NAME1", "LAND1"], "lane": "MC"},
     "ChartOfAccounts":   {"table": "T004", "fields": ["KTOPL", "KTPLT", "MWSKZ"], "lane": "MC"},
     "ControllingArea":   {"table": "TKA01", "fields": ["KOKRS", "BEZEI", "WAERS"], "lane": "MC"},

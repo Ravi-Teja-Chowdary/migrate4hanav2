@@ -7,14 +7,13 @@ Recipe per object: probe BAPI/OData + ECC source → `create_<obj>` (+ idempoten
 → discovery if needed → wire 4 files (`bapi_loader`, `unified_loader` ×2, `handler`) → live
 load+reconcile RECONCILED → commit. See `BREADTH_BUILDOUT_PROMPT.md`.
 
-## Live today (✅ 14)
+## Live today (✅ 15)
 BusinessPartner · Customer · Vendor · Material · ExchangeRates · OpenPO · OpenAR · OpenAP ·
-CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **Equipment**
+CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **Equipment** · **FunctionalLocation**
 
 ## Queued — clean released BAPI confirmed on this S/4 (🔜)
 | Object | BAPI | ECC source | Notes |
 |---|---|---|---|
-| FunctionalLocation | BAPI_FUNCLOC_CREATE | IFLOT/IFLOTX | PM master |
 | Characteristic | BAPI_CHARACT_CREATE | CABN | classification |
 | Class | BAPI_CLASS_CREATE | KLAH | classification |
 | Batch | BAPI_BATCH_CREATE | MCH1 (~1,775) | needs material+batch |
