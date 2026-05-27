@@ -385,6 +385,28 @@ class BapiLoader:
         except Exception:
             return False
 
+    def _discover_pc_hier(self, kokrs: str) -> str:
+        """Profit-center standard-hierarchy node for a controlling area (most-common CEPC.KHINR),
+        looked up from the target and cached. Self-heals when the discovered config predates
+        PC_HIER (a stale cache) so PRCTR_HIER_GRP is never empty — empty => BAPI 'fill required fields'."""
+        cache = getattr(self, "_pchier_cache", None)
+        if cache is None:
+            cache = self._pchier_cache = {}
+        if kokrs in cache:
+            return cache[kokrs]
+        val = ""
+        try:
+            from collections import Counter
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="CEPC", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "KHINR"}],
+                            OPTIONS=[{"TEXT": "KOKRS = '%s'" % kokrs}], ROWCOUNT=300)
+            kh = Counter(x["WA"].strip() for x in r.get("DATA", []) if x["WA"].strip())
+            val = kh.most_common(1)[0][0] if kh else ""
+        except Exception:
+            val = ""
+        cache[kokrs] = val
+        return val
+
     def create_profit_center(self, row: dict, org: dict, commit: bool = True) -> dict:
         """Create a profit center (CO master). Idempotent: reuse if it already exists in the
         target controlling area. org supplies CO area / PC standard-hierarchy node."""
@@ -398,11 +420,14 @@ class BapiLoader:
                     "key_mapping": {"source": prctr, "target": prctr, "disposition": "matched_existing"},
                     "messages": [f"profit center {prctr} already exists in {kokrs}"]}
         name = ((row.get("KTEXT") or ("PC " + prctr)).strip() or prctr)[:20]
+        # PRCTR_HIER_GRP is required; if the discovered config lacks PC_HIER (e.g. a stale cache),
+        # self-heal by looking up the CO area's standard-hierarchy node from the target.
+        hier = (org.get("PC_HIER") or "").strip() or self._discover_pc_hier(kokrs)
         res = self.c.call("BAPI_PROFITCENTER_CREATE",
                           PROFITCENTERID={"CO_AREA": kokrs, "PROFIT_CTR": prctr},
                           VALIDFROM=org.get("VALID_FROM", "20240101"), VALIDTO="99991231",
                           BASICDATA={"PRCTR_NAME": name, "LONG_TEXT": name, "IN_CHARGE": "M4H",
-                                     "PRCTR_HIER_GRP": org.get("PC_HIER", "")},
+                                     "PRCTR_HIER_GRP": hier},
                           LANGUAGE={"LANGU": "E"})
         ret = self._ret(res)
         if [m for m in ret if m.get("TYPE") in ("E", "A")]:
