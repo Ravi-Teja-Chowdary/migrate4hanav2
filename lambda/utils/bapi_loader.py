@@ -666,6 +666,55 @@ class BapiLoader:
                                 "disposition": "created" if target == aufnr else "remapped"},
                 "messages": msgs}
 
+    # ── Equipment master (BAPI_EQUI_CREATE) ────────────────────────────────
+    def _equip_cats(self):
+        """(valid_categories_set, default_category) from the target's in-use EQUI.EQTYP, cached."""
+        cache = getattr(self, "_eqcat_cache", None)
+        if cache is not None:
+            return cache
+        from collections import Counter
+        cats = Counter()
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="EQUI", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "EQTYP"}], ROWCOUNT=500)
+            cats = Counter(x["WA"].strip() for x in r.get("DATA", []) if x["WA"].strip())
+        except Exception:
+            pass
+        self._eqcat_cache = (set(cats), cats.most_common(1)[0][0] if cats else "M")
+        return self._eqcat_cache
+
+    def create_equipment(self, row: dict, commit: bool = True) -> dict:
+        """Create an equipment master (PM). Internal numbering -> BAPI assigns EQUIPMENT; source
+        EQUNR -> target recorded (idempotency via the ledger). Equipment category (EQTYP) is
+        validated against the target's in-use set; falls back to the default with a transparent remap.
+        Self-contained (no org config). Source ECC EQUI: EQUNR, EQTYP; description EQKT-EQKTX."""
+        equnr = (row.get("EQUNR") or "").strip()
+        cat = (row.get("EQTYP") or "").strip()
+        valid, default = self._equip_cats()
+        src_cat, remapped = cat, False
+        if cat not in valid:
+            cat, remapped = (default, True)
+        name = ((row.get("EQKTX") or row.get("SHTXT") or ("Equipment " + (equnr or cat))).strip())[:40]
+        res = self.c.call("BAPI_EQUI_CREATE",
+                          DATA_GENERAL={"DESCRIPT": name},
+                          DATA_SPECIFIC={"EQUICATGRY": cat},
+                          VALID_DATE=datetime.date.today().strftime("%Y%m%d"))
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        target = (res.get("EQUIPMENT") or "").strip()
+        if commit:
+            self._commit()
+        verify = {"table": "EQUI", "key": {"EQUNR": target}}
+        msgs = [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]
+        if remapped:
+            msgs.append(f"equipment category {src_cat} not valid; used {cat}")
+        return {"status": "created", "equipment": target, "verify_key": verify,
+                "key_mapping": {"source": equnr or target, "target": target,
+                                "disposition": "created" if target == equnr else "remapped"},
+                "messages": msgs}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).
