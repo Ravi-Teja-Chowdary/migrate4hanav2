@@ -1,4 +1,4 @@
-# Migrate4HANA — Smart Orchestrator & Pre/Post Automation Engine for SAP ECC to S/4HANA System Conversion
+# Migrate4HANA — Automated, Support-Clean SAP ECC→S/4HANA Migration Engine
 
 > **Aligned with SAP Activate Methodology | SAP Post-Migration Support Retained**
 
@@ -23,7 +23,20 @@
 > auto-pushed to PROD — they are emitted to a CSV for the security team).
 
 
-> **Status (April 2026):** Production-ready. 17-stage pipeline across 5 SAP Activate phases fully operational — 4 heavy-compute stages (Discovery, Code Analysis, Data Loading, Reconciliation) upgraded to ECS Fargate (4 vCPU / 16 GB). Latest run scored **Grade A (100%)** with 861 custom programs scanned, 98.6% auto-fix rate, and 5,000 business partners migrated end-to-end. 114-test suite passing, all 10 previously identified gaps resolved. 160 AST transform rules, 535 country compliance rules across 57 countries, 443 OData mappings, 249 table transformations, 611 Fiori catalog mappings. See [Production Readiness](#production-readiness) for deployment considerations and [PRODUCTION_READINESS_GUIDE.md](PRODUCTION_READINESS_GUIDE.md) for the full deployment playbook.
+> **Status (May 2026 — `aws-lift-and-shift` branch, the active/primary mode):** The **28-stage /
+> 9-phase Greenfield / Selective-Data-Transition** pipeline runs **end-to-end against live
+> ECC→S/4HANA (`rc=0`, zero failed records)**. The support-clean data spine **loads + reconciles
+> 11 object types live** (idempotent cross-run ledger, value-level reconciliation), ~20 extract.
+> A full **pipeline audit of all 36 stages** is complete (every stage is a real implementation,
+> not scaffold), with **3 production-grade gaps fixed** (validator can't certify on simulated
+> data; AI-remediation ATC+human gate; cross-cutting logging/secrets/rules hardening). Code
+> remediation (6,400-line ABAP AST + Bedrock/Ollama, ATC + human gate) and simplification-check
+> (live `D010TAB` scan, ~9,200-rule knowledge base) are **live-validated** against real ECC custom
+> code. A novel **in-system ABAP agent** drives in-system CTS/ABAP over RFC. **Honest maturity:
+> ~TRL 6** — proven on a live ECC→S/4HANA pair at sample volume; **not yet pilot-go-live-proven at
+> customer scale** (the deliberate next bar). The transport-build final import is deferred (a
+> single-box appliance TMS-route limit, not a tool gap). See [AUDIT_REPORT.md](AUDIT_REPORT.md),
+> [CAPABILITY_DOSSIER.md](CAPABILITY_DOSSIER.md), and [Production Readiness](#production-readiness).
 
 ---
 
@@ -45,172 +58,146 @@ SAP S/4HANA migrations are among the most complex enterprise transformations und
 
 ---
 
-## The Solution: Smart Orchestration
+## The Solution: an automated, support-clean migration factory
 
-Migrate4HANA is a **Smart Orchestrator** that automates the pre-conversion, post-conversion, and validation phases of an SAP ECC to S/4HANA System Conversion, while wrapping around SAP's mandatory proprietary tools (SUM/DMO, Maintenance Planner, Readiness Check, FINS_MASS_DATA_MONITOR) for the core technical conversion.
+Migrate4HANA collapses the fragmented, consultant-heavy ECC→S/4HANA migration into **one governed,
+automated pipeline**. On this branch it runs the **Greenfield / Selective Data Transition** lane: it
+extracts from a live ECC source and loads into an S/4HANA target **exclusively through SAP-released
+APIs** (Migration Cockpit, `API_BUSINESS_PARTNER` OData, released BAPIs, LTMOM, IDoc inbound, CTS+/`tp`,
+BC Sets), with end-to-end reconciliation, idempotency, delta/CDC, and a governed cutover.
 
-Unlike manual migration approaches that take 2-4 years, **Migrate4HANA compresses months of manual effort into hours of orchestrated execution** — serving as a one-stop tool that reduces **time**, **effort**, and **cost** across the entire conversion lifecycle.
+Unlike manual approaches that take 2–4 years, it compresses months of effort into hours of orchestrated
+execution — one tool that reduces **time, effort, and cost** across discovery → code remediation →
+config → data migration → reconciliation → cutover.
 
-**What Migrate4HANA automates:**
-- Pre-conversion assessment, readiness checks, and custom code remediation
-- Business Partner preparation, ML-powered deduplication, and data validation
-- SUM/DMO orchestration and real-time monitoring
-- Post-conversion finance migration, Material Ledger activation, and config deployment
-- End-to-end validation with an 85-check GO-LIVE scorecard
+**What Migrate4HANA automates (the orchestration plane):**
+- Assessment: discovery, HANA sizing, simplification-item + custom-code analysis
+- AI ABAP custom-code remediation (6,400-line AST + ATC + GenAI) with an **ATC + human approval gate**
+- Config extraction + BC-Set packaging + CTS+ transport
+- Data migration via released BAPIs/OData, with **value-level reconciliation + an idempotent ledger**
+- Delta/CDC, dead-letter, a machine-checkable support-compliance attestation, and a governed GO/NO-GO cutover
 
-**What SAP's tools handle (orchestrated by Migrate4HANA):**
-- Database conversion (SUM/DMO)
-- Maintenance Planner stack generation
-- SAP Readiness Check execution
-- SPAU/SPDD adjustments
+**What stays in SAP's hands (the execution plane — zero direct writes):**
+- Every actual write: Migration Cockpit / OData / released BAPIs, LTMOM, IDoc inbound, CTS+/`tp`, BC Sets
+- Object recording + transport into the target system
+
+> **Note on modes:** the **Brownfield SUM/DMO in-place conversion** lane is a separate, **legacy** mode
+> (retired on this branch under `lambda/_deprecated/`) — it wrapped SAP's Software Update Manager for the
+> database conversion. This branch is the **Greenfield / Selective Data Transition** lane and does **not**
+> run SUM/DMO. Some deeper sections below (project structure, component-readiness) still describe the
+> legacy lane and are being progressively updated.
 
 ---
 
 ## Architecture
 
+Migrate4HANA uses a **two-plane design**: an **orchestration plane** on AWS drives an **execution
+plane** made entirely of SAP-shipped tools. The tool performs **zero direct writes** into the
+target — every change goes through a released SAP mechanism (Migration Cockpit / `API_BUSINESS_PARTNER`
+OData, released BAPIs, LTMOM, IDoc inbound, CTS+/`tp`, BC Sets) — so **SAP support is fully preserved**.
+
 ```
-+----------------------------------------------------------------------------------+
-|                              AWS CLOUD                                            |
-|                                                                                   |
-|  +----------+    +------------------+    +--------------------------------+       |
-|  | Web UI   |--->|  Step Functions   |--->|  Lambda Functions (18)        |       |
-|  | (React)  |    |  Orchestrator     |    |  + ECS Fargate Tasks (4)       |       |
-|  +----------+    |  (With Rollback)  |    |                               |       |
-|       |          |                   |    |  5 SAP ACTIVATE PHASES        |       |
-|       |          |                   |    |  17 Pipeline Stages            |       |
-|       |          |  PHASE 1: PREPARE |    |                               |       |
-|  +----v-----+    |  Stage 1  ---------->  |  * discovery-engine  [FARGATE] |       |
-|  |WebSocket |    |  Stage 2  ---------->  |  * maint-planner-integrator   |       |
-|  |Telemetry |    |  Stage 3  ---------->  |  * readiness-check-runner     |       |
-|  |(API GW)  |    |  Stage 4  ---------->  |  * si-check-executor          |       |
-|  +----------+    |                   |    |                               |       |
-|                  |  PHASE 2: EXPLORE |    |                               |       |
-|  +----------+    |  Stage 5  ---------->  |  * code-analyzer     [FARGATE]|       |
-|  |CloudWatch|    |  Stage 6  ---------->  |  * cvi-bp-preparer            |       |
-|  |& UI Logs |    |  Stage 7  ---------->  |  * data-assessor (AWS DMS)    |       |
-|  +----------+    |  Stage 8  ---------->  |  * config-integration-assess  |       |
-|                  |                   |    |                               |       |
-|  +----------+    |  PHASE 3: REALIZE |    |                               |       |
-|  | S3 / DB  |    |  +-- PRE-CONV --+|    |                               |       |
-|  | DynamoDB |    |  Stage 9  ---------->  |  * pre-conversion-gate        |       |
-|  +----------+    |  Stage 10 ---------->  |  * sum-dmo-monitor            |       |
-|                  |                   |    |  ! Orchestrates SAP SUM/DMO   |       |
-|  +----------+    |  PHASE 4: POST   |    |                               |       |
-|  | Local LLM|    |  Stage 11 ---------->  |  * spau-spdd-code-deployer    |       |
-|  | Bedrock  |    |  Stage 12 ---------->  |  * fins-migration    [FARGATE]|       |
-|  +----------+    |  Stage 13 ---------->  |  * matledger-config-applier   |       |
-|                  |  Stage 14 ---------->  |  * roles-integrations-prov    |       |
-|  +----------+    |                   |    |                               |       |
-|  | Entity   |    |  PHASE 5: DEPLOY  |    |                               |       |
-|  |Resolution|    |  Stage 15 ---------->  |  * bpt-test-executor          |       |
-|  +----------+    |  Stage 16 ---------->  |  * cutover-orchestrator       |       |
-|                  |  Stage 17 ---------->  |  * migration-validator        |       |
-|                  +------------------+    +---------------+----------------+       |
-|                                                          |                        |
-|                  +---------------------------------------+                        |
-|  SUPPORT         |  * rollback-manager    * data-hygiene (BP dedup)               |
-|  LAMBDAS         |  * process-miner       * test-generator (DITL)                 |
-|                  |                                                                |
-|  TERRAFORM       |  MODULES (14)                                                  |
-|                  |  vpc - lambda - ecs - step-functions - s3-staging - cloudwatch  |
-|                  |  dms - dynamodb - vpc-endpoints - airgapped-llm                |
-|                  |  entity-resolution - websocket-telemetry - waf - audit         |
-|                  |                                                                |
-|                  VPN / Direct Connect                                             |
-|  -------------------------------------------------------------------------        |
-|                                                                                   |
-|  +-----------------------+              +--------------------------------+        |
-|  |  ON-PREM SAP ECC 6.0  |              |  S/4HANA Target System         |        |
-|  |  (Source System)      |              |  (Target System)               |        |
-|  +-----------------------+              +--------------------------------+        |
-+----------------------------------------------------------------------------------+
++================================================================================================+
+|                                       AWS CLOUD (VPC)                                           |
+|                                                                                                 |
+|  +-----------+   +-------------------+   +--------------------------------------------------+    |
+|  | Web UI    |-->| API server        |-->| ORCHESTRATOR                                     |    |
+|  | (React)   |   | (FastAPI / ECS)   |   |  cloud : AWS Step Functions  (with rollback)     |    |
+|  +-----------+   +-------------------+   |  local : run_local_lift_and_shift.py             |    |
+|       ^ WebSocket (API GW)              |  drives the 28-stage / 9-phase pipeline on        |    |
+|       | live telemetry                 |  Lambda + ECS Fargate [F] (heavy stages)          |    |
+|  +-----------+                          +--------------------------------------------------+    |
+|  | Operator  |   CloudWatch + SNS alarms          |                                              |
+|  +-----------+                                     v                                              |
+|                          +------------------------------------------------------------------+   |
+|  AWS SERVICES            | 9 PHASES (released-API-only handlers)                            |   |
+|  +--------------------+  |  0 ASSESS    discovery-engine[F] · sizing-advisor · object-router|   |
+|  | S3 (staging +      |<-|  1 PROVISION target-provisioner · (gate) · basis-validator       |   |
+|  |  evidence packs)   |  |  2 CODE      code-analyzer[F] +ATC+GenAI --> transport-* (CTS+)   |   |
+|  | DynamoDB (ledger,  |<-|  3 CONFIG    config-replicator · bc-set-builder --> transport-*   |   |
+|  |  watermark, keymap)|  |  4 DATA-PREP data-migrator[F](extract) · data-hygiene(BP dedup)  |   |
+|  | Secrets Manager+KMS|->|  5 DATA-LOAD mc-orchestrator · ltmom-orch · idoc-orch            |   |
+|  | Bedrock + air-     |->|  6 VALIDATE  migration-validator · test-generator · completeness |   |
+|  |  gapped Ollama LLM |  |  7 CUTOVER   cutover-orch(lock) · delta-extractor · final-recon  |   |
+|  | Entity Resolution  |->|  8 RUN       evidence PDF report                                 |   |
+|  | WAF · Audit ledger |  +------------------------------------------------------------------+   |
+|  +--------------------+            |                                |                            |
+|  Terraform (terraform/modules/)    | RFC + OData (pyrfc):            | AWS SSM Run Command:       |
+|  vpc·vpc-endpoints·lambda·ecs·     | released BAPIs /               | tp / R3trans (CTS+) +      |
+|  step-functions·s3-staging·        | API_BUSINESS_PARTNER OData     | the in-system ABAP agent   |
+|  dynamodb·secretsmanager·          v                                v                            |
+|  cloudwatch·websocket-telemetry· +------------------+   +-----------+   +----------------------+ |
+|  waf·airgapped-llm·dms·           | S/4HANA TARGET   |   | SAP host  |   |   (target-system     | |
+|  entity-resolution·target-system· | (Migration       |   | EC2, SSM- |   |    Terraform module: | |
+|  audit·evidence-ledger·kms        |  Cockpit, OData, |<--| managed:  |   |    aws_instance +    | |
+|                                   |  released BAPIs) |   | /usr/sap/ |   |    instance profile) | |
+|        VPN / Direct Connect       +------------------+   | trans,STMS|   +----------------------+ |
+|  ---------------------------------+                      +-----------+                            |
+|                                   |                                                              |
+|  +-----------------------------+  |   EXECUTION PLANE = SAP-shipped tools only                   |
+|  |  ON-PREM SAP ECC (source,   |<-+   (zero direct writes; machine-attested support-clean)       |
+|  |  read-only RFC user)        |                                                                 |
+|  +-----------------------------+                                                                 |
++================================================================================================+
 ```
+
+**AWS deployment — is this diagram valid, and what changes in the cloud?** Yes, this topology is the
+one provisioned by the Terraform modules under `terraform/modules/` and is valid as drawn. Key points
+versus the legacy System-Conversion diagram:
+
+- **Data migration is via released BAPIs + OData over RFC (pyrfc)** — *not* AWS DMS. DMS remains an
+  optional CDC path (its module is retained); the proven, support-clean path is the Migration-Cockpit /
+  BAPI / `API_BUSINESS_PARTNER` spine.
+- **NEW — AWS SSM Run Command to an SSM-managed SAP host.** The CTS+ transport chain (`tp`/`R3trans`)
+  and the **in-system ABAP agent** run shell/ABAP on the SAP host via SSM, not over RFC (those CTS FMs
+  aren't RFC-exposed). Provisioned by the `target-system` module (`aws_instance` +
+  `aws_iam_instance_profile` for SSM + scoped S3). The host's **EC2 instance ID is stable across
+  stop/start** (only the public IP drifts), so transport addressing survives restarts.
+- **No SUM/DMO orchestration.** The Brownfield in-place lane is deliberately out of scope on this branch
+  (the old `sum-orchestrator` / `maintenance-planner` lambdas are retired to `lambda/_deprecated/`).
+- **GenAI is dual-backend** (AWS Bedrock or an air-gapped Ollama for regulated/offline sites);
+  remediation rules are **static-by-default**, with the DynamoDB rule table opt-in
+  (`M4H_RULES_SOURCE=dynamodb`).
+- **No credentials in code** — RFC/OData/host creds come from **Secrets Manager** (local runs use a
+  shim over `connections.json` + `M4H_ECC_PASSWD` / `M4H_TARGET_PASSWD`).
+- **Connectivity:** on-prem ECC reached via **VPN / Direct Connect**; the S/4HANA target and SAP host
+  live in the VPC (or are reachable from it). Telemetry streams to the UI over **API Gateway WebSocket**.
 
 ---
 
-## 17-Stage Pipeline — 5 SAP Activate Phases
+## 28-Stage Pipeline — 9 Phases (Greenfield / Selective Data Transition)
 
-```
-Phase 1: Prepare (4 stages) -- Assessment & Pre-Checks
-  | System Discovery | Maintenance Planner | Readiness Check | SI-Check |
+Driven by `run_local_lift_and_shift.py` locally, or AWS Step Functions in the cloud. Every stage is a
+released-API-only handler; results accumulate in a shared run context and the pipeline halts on any
+hard failure. Non-`success` statuses are **honest hand-offs**, not crashes — `manual_required`
+(transport build needs a routed landscape), `manual_gate` (e.g. ECC lock, custom-object LTMOM models),
+or `skipped`.
 
-Phase 2: Explore (4 stages) -- Application Preparation
-  | Code Analysis + ATC | CVI/BP Prep | Data Assessment | Config/Integration Assessment |
-
-Phase 3: Realize - Conversion (2 stages) -- SAP SUM/DMO Orchestration
-  | Pre-Conversion Gate | SUM/DMO Monitoring |
-  ! This phase orchestrates SAP's Software Update Manager -- the tool does NOT perform database conversions directly
-
-Phase 4: Realize - Post-Conversion (4 stages)
-  | SPAU/SPDD + Code Deploy | Finance Migration (FINS Monitor) | Material Ledger + Config | Roles + Integrations |
-
-Phase 5: Deploy & Run (3 stages) -- Testing & Go-Live
-  | Business Process Testing | Go-Live Cutover | Validation & Scorecard |
-```
-
-### Phase 1: Prepare — Assessment & Pre-Checks
-
-| Stage | Lambda | Description |
-|-------|--------|-------------|
-| 1 | `discovery-engine` | Scans ECC: custom programs, tables, function modules, org structure, roles, users, RFC destinations, IDoc partners. **Runs on ECS Fargate** (4 vCPU / 16 GB) |
-| 2 | `maint-planner-integrator` | Parses stack.xml from Maintenance Planner, validates add-on compatibility, confirms target product version |
-| 3 | `readiness-check-runner` | Automates RC_COLLECT_ANALYSIS_DATA execution, parses results into a visual readiness roadmap |
-| 4 | `si-check-executor` | Executes /SDF/RC_START_CHECK for Simplification Item analysis, generates remediation task list |
-
-### Phase 2: Explore — Application Preparation
-
-| Stage | Lambda | Description |
-|-------|--------|-------------|
-| 5 | `code-analyzer` | Parses ABAP with 6,400-line AST engine (160 transform rules) + ATC (/SDF/ATC_RUN_API with S/4HANA variant), auto-remediates with Deep Knowledge Engine (249 table transformations) + GenAI. **Runs on ECS Fargate** (4 vCPU / 16 GB) |
-| 6 | `cvi-bp-preparer` | CVI_UPGRADE_CHECK_RESOLVE pre-checks, ML-powered BP deduplication, crosswalk generation, number range resolution |
-| 7 | `data-assessor` | Plans data migration via AWS DMS CDC, finance document transformation (BSEG/BKPF to ACDOCA), custom table mapping |
-| 8 | `config-integration-assessor` | Extracts SPRO config (50+ tables, 57 country localizations), maps RFC/IDoc/API integrations, identifies migration scope |
-
-### Phase 3: Realize — Conversion (SAP SUM/DMO Orchestration)
-
-| Stage | Lambda | Description |
-|-------|--------|-------------|
-| 9 | `pre-conversion-gate` | Validates all Phases 1-2 passed, checks S/4HANA connectivity, creates recovery checkpoint — GO/NO-GO decision |
-| 10 | `sum-dmo-monitor` | Orchestrates SAP Software Update Manager (SUM) via CLI, monitors conversion progress, captures logs in real-time |
-
-> **Important:** Phase 3 orchestrates SAP's Software Update Manager with Database Migration Option (DMO). Migrate4HANA does NOT perform database conversions directly — it wraps and monitors SAP's own tool.
-
-### Phase 4: Realize — Post-Conversion
-
-| Stage | Lambda | Description |
-|-------|--------|-------------|
-| 11 | `spau-spdd-code-deployer` | Tracks SPAU/SPDD adjustments, parses worklists, deploys remediated custom code via transport requests |
-| 12 | `fins-migration-executor` | Orchestrates FINS_MASS_DATA_MONITOR execution for finance data migration, runs reconciliation checks. **Runs on ECS Fargate** (4 vCPU / 16 GB) with Distributed Map for parallel streams |
-| 13 | `matledger-config-applier` | Activates Material Ledger (CKMSTART), applies number ranges, BP groupings, Fiori catalogs, country-specific config |
-| 14 | `roles-integrations-provisioner` | Creates PFCG roles with Fiori menus, composite roles, user assignments, RFC destinations, IDoc partners |
-
-### Phase 5: Deploy & Run — Testing & Go-Live
-
-| Stage | Lambda | Description |
-|-------|--------|-------------|
-| 15 | `bpt-test-executor` | Executes automated business process tests (DITL Cypress scripts with 443 OData mappings), validates Fiori apps and OData services |
-| 16 | `cutover-orchestrator` | Manages go-live cutover sequence, DMS CDC finalization, system lockdown, and handover |
-| 17 | `migration-validator` | 85-check validation across 7 dimensions, financial reconciliation, GO-LIVE Scorecard (Grade A-D) |
-
----
-
-## SAP Compliance — Tool Integration Matrix
-
-Post-migration SAP support is fully retained because all structural database conversions are performed by SAP's Software Update Manager (SUM) with Database Migration Option (DMO).
-
-| SAP Mandatory Tool | Integration Method | Phase |
+| Phase | Stages (lambda handler) | What it does |
 |---|---|---|
-| **Maintenance Planner** | stack.xml parsing + add-on validation | Phase 1 |
-| **SAP Readiness Check** | RC_COLLECT_ANALYSIS_DATA automation | Phase 1 |
-| **Simplification Item Check** | /SDF/RC_START_CHECK execution + parsing | Phase 1 |
-| **ABAP Test Cockpit (ATC)** | /SDF/ATC_RUN_API with S/4HANA variant | Phase 2 |
-| **CVI Cockpit** | CVI_UPGRADE_CHECK_RESOLVE pre-checks | Phase 2 |
-| **SUM/DMO** | CLI orchestration + log monitoring | Phase 3 |
-| **SPAU/SPDD** | Adjustment tracking + worklist parsing | Phase 4 |
-| **FINS_MASS_DATA_MONITOR** | Execution orchestration + reconciliation | Phase 4 |
-| **Material Ledger (CKMSTART)** | Activation + validation | Phase 4 |
+| **0 · ASSESS** | `discovery-engine` [F] · `sizing-advisor` · `object-router` | Scan ECC (custom code, org units, objects, roles); recommend HANA/app sizing from real DB + ST03N workload; route every object to a load lane (MC / LTMOM / IDoc / manual) |
+| **1 · PROVISION** | `target-provisioner` · *gate: basis-handover* · `basis-validator` | Stand up or hand over the target; validate readiness (clients, STMS, Migration Cockpit, `idoc_xml` SICF) |
+| **2 · CODE** | `code-analyzer` [F] (extract → remediate) · `transport-artifact-builder` / `-file-placer` / `-import-executor` / `-import-verifier` | 6,400-line ABAP AST + ATC + GenAI remediation of live custom code; ship via **CTS+ transport** — with an **ATC + human approval gate** before anything deploys |
+| **3 · CONFIG** | `config-replicator` · `bc-set-builder` · `transport-*` | Extract customizing; package BC Sets; transport to target |
+| **4 · DATA-PREP** | `data-migrator` (extract) · `data-hygiene` · `data-migrator` (templates) | Extract objects (live ECC); ML business-partner dedup / hygiene; generate Migration-Cockpit templates |
+| **5 · DATA-LOAD** | `migration-cockpit-orchestrator` · `ltmom-orchestrator` · `idoc-orchestrator` | Load via the routed lane using **released BAPIs + `API_BUSINESS_PARTNER` OData**, with **value-level reconciliation** and a **cross-run idempotent ledger** (re-runs reuse, never duplicate) |
+| **6 · VALIDATE** | `migration-validator` · `test-generator` · `migration-completeness-analyzer` · *gate: pre-cutover* | Existence **and** value reconciliation; a GO-LIVE scorecard that **refuses to certify on simulated/offline data**; generated tests; completeness analysis |
+| **7 · CUTOVER** | `cutover-orchestrator` (lock ECC) · `delta-extractor` · `migration-cockpit-orchestrator` (delta) · `migration-validator` (final) · *gate: final-go-live* · `integration-activator` | Lock the source, pull the final delta, re-reconcile, GO/NO-GO, activate integrations |
+| **8 · RUN** | evidence PDF report | Auditable evidence pack |
 
-Migrate4HANA does not bypass or replace any SAP tool. It orchestrates them, automates what surrounds them, and validates what follows them.
+`[F]` = runs on **ECS Fargate** (heavy compute); the rest are Lambdas.
+
+### Support model — why SAP support is retained
+
+Every write goes through a **SAP-shipped, business-logic-honoring mechanism** (released BAPIs, the
+released `API_BUSINESS_PARTNER` OData service, Migration Cockpit, LTMOM, IDoc inbound, CTS+/`tp`, BC
+Sets). The tool **never** writes raw tables, runs arbitrary ABAP, or bypasses CTS — and each run emits a
+**machine-checkable attestation** that none of those support-breaking techniques were used.
+
+> The **Brownfield SUM/DMO in-place conversion** lane is a **separate, legacy mode** (retired on this
+> branch under `lambda/_deprecated/`). This pipeline is the **Greenfield / Selective Data Transition**
+> lane — the same lane as the SAP S/4HANA Migration Cockpit, but with far more automation around it
+> (discovery, reconciliation, idempotency, cutover) and an AI custom-code remediation arm.
 
 ---
 
