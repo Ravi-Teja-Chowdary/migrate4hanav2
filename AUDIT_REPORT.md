@@ -125,10 +125,17 @@ SCAFFOLD 0** — but "PARTIAL" mostly means "thin handler" or "real-but-AWS-env"
      RFC-enabled) and its `tp` fallback uses **`tp newreq`/`tp addtobuffer <obj>` which are not real
      `tp` commands** → it degrades to a manual manifest. **Finding: artifact-builder needs reworking
      to the CTS_API + in-system task handling, or accept an in-system (SE10) release step.**
-   - **To certify a full live import:** create+release one small transport in **SE10** (the in-system
-     step that can't be RFC-automated here), then the place→import→verify chain certifies the `tp` RC.
-   - *(Cleaned up the probe attempt: no stray program; stray cofile removed; empty request
-     `S4HK903321` left for optional SE10 deletion.)*
+   - **BOTTLENECK OVERCOME (commit 422bd1f) — in-system ABAP agent runner.** Rather than accept a
+     manual SE10 step, built the supported "remote agent" capability: deploy an ABAP report to the
+     target as a LOCAL `$TMP` object via `RPY_PROGRAM_INSERT` (no transport → no TK511) and execute
+     it IN-SYSTEM via `RZL_SUBMIT`, retrieving results via SSM. Proven live end-to-end. Hard-won
+     mechanics: source must use **`SOURCE_EXTENDED`** (plain `SOURCE` is dropped over RFC);
+     `RPY_PROGRAM_UPDATE/DELETE` aren't remote → auto-version the name; **batch scheduling is blocked**
+     here (`SAP_UPGRADE`) → `RZL_SUBMIT` (async). This lets the orchestrator run the CTS request-
+     create/object-record/release in-system (where the FMs work) — all released APIs, support intact.
+     **Next build:** the `ZM4H_TR_BUILDER` agent + rework `transport-artifact-builder` to use it,
+     then certify the full build→place→import→verify chain. *(Probe cleanup: no stray program; cofile
+     removed; empty request `S4HK903321` left for optional SE10 deletion.)*
 5. ⏳ **F-bucket hardening** — apply the same per-stage "definition of done" (live run + evidence).
 6. 🔶 **Cross-cutting — substantially done (commits a2e4de5, 9245bbc):**
    - ✅ **Structured logging fixed** — `log_stage_event` was mislabeling telemetry for 96 of 125
