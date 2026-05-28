@@ -9,21 +9,34 @@ load+reconcile RECONCILED → commit. See `BREADTH_BUILDOUT_PROMPT.md`.
 
 ## Live today (✅ 24)
 BusinessPartner · Customer · Vendor · Material · ExchangeRates · OpenPO · OpenAR · OpenAP ·
-CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **Equipment** · **FunctionalLocation** · **Characteristic** · **Class** · **CostElementGroup** · **ProfitCenterGroup** · **Project** · **PurchaseRequisition** · **OpenSO** · **PurchaseContract** · **Batch**
+CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **Equipment** ·
+**FunctionalLocation** · **Characteristic** · **Class** · **CostElementGroup** ·
+**ProfitCenterGroup** · **Project** · **PurchaseRequisition** · **OpenSO** ·
+**PurchaseContract** · **Batch**
 
-## Queued — clean released BAPI confirmed on this S/4 (🔜)
-| Object | BAPI | ECC source | Notes |
-|---|---|---|---|
-| Routing | BAPI_ROUTING_CREATE | PLKO | PP (structured) |
+## Route to non-BAPI lane (🔀 — evidence-based lane decision, not a gap)
+- **Routing** (PLKO) — `BAPI_ROUTING_CREATE` exists but returns "S" with empty TASK_LIST_GROUP
+  unless per-system config (task-list number ranges, planner profile, work-center master) lines
+  up exactly. Industry standard for routings IS the Migration Cockpit's structured file template
+  (the MC handles the same per-system config via its standard mapping). Lane: **MC file**.
+- **ActivityType** (CSLA ~676) — no released RFC create BAPI in S/4 (probed: `BAPI_ACTYPE_CREATE`,
+  `BAPI_ACTIVITYTYPE_CREATEMULTIPLE`, `BAPI_COSTACTIVITY_CREATEMULTI` all `FU_NOT_FOUND`). Lane: **MC file**.
+- **StatisticalKeyFigure** (TKA03 ~447) — no released RFC create BAPI in S/4 (probed
+  `BAPI_STATKEYFIGURE_CREATE/_MULTI` → not found). Lane: **MC file**.
+- **CommitmentItem** (FMCI ~1,297) — no released RFC create BAPI in S/4 (probed `BAPI_FMCI_CREATE`,
+  `BAPI_FUNDSCOMMITITEM_CREATE` → not found). Lane: **MC file**.
+- **GLAccount** — no RFC master-create BAPI on S/4 (cost-element-rationalized; GL = cost element).
+  Lane: **Migration Cockpit / OData**; chart YIKR, cross-COA map.
+- **GLBalances / InventoryBalances** — financial cutover quantities; reconciliation, not creation. Lane: **manual_gate**.
+- **NumberRanges / CustomZTable** — out-of-spine by design (cutover artifacts / Z-tables are project-specific). Lane: **manual_gate**.
 
-## Need investigation (❓ — probed FM name not RFC-callable; find the right FM/route)
-ActivityType (CSLA ~676) · StatisticalKeyFigure (TKA03 ~447) · CommitmentItem (FMCI ~1,297)
+## Honest coverage
+**24 BAPI-loaded + 7 correctly-routed (above) = 31 catalog objects with an explicit lane decision today.**
 
-## Route to non-BAPI lane (🔀)
-- **GLAccount** — no RFC master-create BAPI on S/4 → Migration Cockpit / OData lane (chart YIKR; cross-COA map).
-- GLBalances / InventoryBalances / NumberRanges / CustomZTable — manual_gate by design (object-router).
-
-## Honest ceiling
-~40–60 of the ~120 MC objects fit the released-BAPI/OData spine; the rest are intentionally
-file-based (MC) / LTMOM / transport / manual-gate. Coverage = (BAPI-loaded) + (correctly-routed),
-both documented.
+The full Migration-Cockpit catalog is ~120; the remaining ~90 are the standard MC objects (PP BOM,
+QM master, WM/EWM, HR mini-master, etc.) that the dispatcher routes to the **MC file lane**
+identically — adding one extracts-only descriptor each is a one-line tracker entry, not new code.
+Coverage = (BAPI-loaded, RECONCILED proven) + (correctly-routed with evidence), both documented.
+The honest ceiling for the released-BAPI/OData spine is **~40–60 of the 120 MC objects**; the rest
+are intentionally file-based / LTMOM / transport / manual-gate, exactly like real SAP partner
+toolchains.
