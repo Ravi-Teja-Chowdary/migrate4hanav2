@@ -56,6 +56,7 @@ OBJECT_SOURCE_KEY = {
     "CostCenter": "KOSTL", "ProfitCenter": "PRCTR", "FixedAsset": "ANLN1", "Bank": "BANKL",
     "InternalOrder": "AUFNR", "Equipment": "EQUNR", "FunctionalLocation": "TPLNR",
     "Characteristic": "ATNAM", "Class": ("CLASS", "KLART"),
+    "CostElementGroup": "SETNAME", "ProfitCenterGroup": "SETNAME",
 }
 
 # object -> (mechanism, sub-kind)
@@ -77,6 +78,8 @@ OBJECT_MECHANISM = {
     "FunctionalLocation": ("bapi", "funcloc"),
     "Characteristic":  ("bapi", "characteristic"),
     "Class":           ("bapi", "class"),
+    "CostElementGroup":  ("bapi", "costelementgroup"),
+    "ProfitCenterGroup": ("bapi", "profitcentergroup"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -515,6 +518,13 @@ class UnifiedLoader:
             r = self.bapi.create_class(row, commit=True)
             return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
                     "id": r.get("klass"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
+        if kind == "bapi" and sub in ("costelementgroup", "profitcentergroup"):
+            fn = (self.bapi.create_costelementgroup if sub == "costelementgroup"
+                  else self.bapi.create_profitcentergroup)
+            r = fn(row, self.cc_org, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("group"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)

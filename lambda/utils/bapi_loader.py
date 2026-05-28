@@ -922,6 +922,86 @@ class BapiLoader:
                 "key_mapping": {"source": name, "target": name, "disposition": "created"},
                 "messages": msgs}
 
+    # ── CO groups (cost element / profit center hierarchies) ───────────────────
+    def _co_chart(self) -> str:
+        """Most-common operative chart of accounts in the target (T001.KTOPL), cached."""
+        cache = getattr(self, "_co_chart_cache", None)
+        if cache is not None:
+            return cache
+        chart = ""
+        try:
+            from collections import Counter
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="T001", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "KTOPL"}], ROWCOUNT=300)
+            c = Counter(x["WA"].strip() for x in r.get("DATA", []) if x["WA"].strip())
+            chart = c.most_common(1)[0][0] if c else ""
+        except Exception:
+            pass
+        self._co_chart_cache = chart
+        return chart
+
+    def _cogroup_exists(self, setclass: str, subclass: str, name: str) -> bool:
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="SETHEADER", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "SETNAME"}],
+                            OPTIONS=[{"TEXT": f"SETCLASS = '{setclass}' AND SETNAME = '{name}'"}], ROWCOUNT=1)
+            return bool(r.get("DATA"))
+        except Exception:
+            return False
+
+    def _co_group_create(self, fm: str, key_arg: str, key_val: str, setclass: str,
+                         subclass: str, row: dict, commit: bool) -> dict:
+        """Shared create for a CO group/hierarchy (cost element or profit center). Creates the
+        top node (a valid, reconcilable hierarchy container); optional member value ranges from
+        row['VALUES'] (list of (from,to)) are added when present. Group name (SETNAME, max 12) is
+        preserved (uppercased/truncated); idempotent on SETHEADER. verify_key on SETHEADER."""
+        name = (row.get("SETNAME") or "").strip().upper()
+        if not name:
+            return {"status": "skipped", "messages": ["missing group name"]}
+        if len(name) > 12:  # SAP set-name limit; truncation yields invalid names -> route to manual rename
+            return {"status": "skipped",
+                    "messages": [f"group name {name} exceeds the 12-char SAP set-name limit (manual rename required)"]}
+        if not key_val:
+            return {"status": "skipped", "messages": [f"no target {key_arg.lower()} discovered"]}
+        verify = {"table": "SETHEADER", "key": {"SETCLASS": setclass, "SETNAME": name}}
+        if self._cogroup_exists(setclass, subclass, name):
+            return {"status": "matched_existing", "group": name, "verify_key": verify,
+                    "key_mapping": {"source": name, "target": name, "disposition": "matched_existing"},
+                    "messages": ["already present in target"]}
+        desc = ((row.get("DESCRIPT") or name).strip())[:40]
+        values = row.get("VALUES") or []
+        nodes = [{"GROUPNAME": name, "HIERLEVEL": 0, "VALCOUNT": len(values), "DESCRIPT": desc}]
+        hvals = [{"VALFROM": str(f).strip(), "VALTO": str(to).strip()} for f, to in values]
+        kwargs = {key_arg: key_val, "LANGUAGE": {"LANGU_ISO": "EN"},
+                  "HIERARCHYNODES": nodes}
+        if hvals:
+            kwargs["HIERARCHYVALUES"] = hvals
+        else:
+            kwargs["TOPNODEONLY"] = "X"
+        res = self.c.call(fm, **kwargs)
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        target = (res.get("GROUPNAME") or name).strip()
+        if commit:
+            self._commit()
+        return {"status": "created", "group": target, "verify_key": verify,
+                "key_mapping": {"source": name, "target": target, "disposition": "created"},
+                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][-1:]}
+
+    def create_costelementgroup(self, row: dict, org: dict, commit: bool = True) -> dict:
+        """Cost element group (KAH1) — set class 0102, sub-class = chart of accounts."""
+        chart = (org or {}).get("CHART") or self._co_chart()
+        return self._co_group_create("BAPI_COSTELEMENTGRP_CREATE", "CHARTOFACCOUNTSIMP", chart,
+                                     "0102", chart, row, commit)
+
+    def create_profitcentergroup(self, row: dict, org: dict, commit: bool = True) -> dict:
+        """Profit center group (KCH1) — set class 0106, sub-class = controlling area."""
+        coarea = (org or {}).get("CO_AREA") or ""
+        return self._co_group_create("BAPI_PROFITCENTERGRP_CREATE", "CONTROLLINGAREAIMP", coarea,
+                                     "0106", coarea, row, commit)
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).
