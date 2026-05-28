@@ -393,6 +393,72 @@ class BapiLoader:
                 "key_mapping": {"source": src_doc or doc, "target": doc, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:1]}
 
+    # ── Batch (BAPI_BATCH_CREATE) — batch master under a material+plant ────────
+    def _batch_target_mat(self):
+        """Discover a (material, plant) on the target that is batch-managed (MARC.XCHPF='X'), cached.
+        Batches need a batch-managed material+plant; source materials rarely carry the target's plant
+        view, so (like SO/material harmonization) batches are created under a target-ready material."""
+        cache = getattr(self, "_batch_mat_cache", None)
+        if cache is not None:
+            return cache
+        mat = plant = ""
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="MARC", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "MATNR"}, {"FIELDNAME": "WERKS"}],
+                            OPTIONS=[{"TEXT": "XCHPF = 'X'"}], ROWCOUNT=1)
+            if r.get("DATA"):
+                mat, plant = (c.strip() for c in (r["DATA"][0]["WA"].split("|") + ["", ""])[:2])
+        except Exception:
+            pass
+        self._batch_mat_cache = (mat, plant)
+        return mat, plant
+
+    def _batch_exists(self, mat: str, batch: str) -> bool:
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="MCH1", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "CHARG"}],
+                            OPTIONS=[{"TEXT": f"MATNR = '{mat}' AND CHARG = '{batch}'"}], ROWCOUNT=1)
+            return bool(r.get("DATA"))
+        except Exception:
+            return False
+
+    def create_batch(self, row: dict, commit: bool = True) -> dict:
+        """Create a batch master via BAPI_BATCH_CREATE. The batch is created under a target-ready
+        (material, plant) -- source materials rarely carry the target's plant view, so we harmonize
+        to a discovered batch-managed target material (recorded). The source batch number (CHARG) is
+        preserved 1:1 under the target material when free, else a collision-safe suffix is appended."""
+        src_mat = (row.get("MATNR") or "").strip()
+        src_batch = (row.get("CHARG") or "").strip()
+        if not src_batch:
+            return {"status": "skipped", "messages": ["missing batch number"]}
+        tgt_mat, plant = self._batch_target_mat()
+        if not tgt_mat or not plant:
+            return {"status": "skipped", "messages": ["no target batch-managed material/plant discovered"]}
+        tgt_batch, n = src_batch, 0
+        while self._batch_exists(tgt_mat, tgt_batch):
+            n += 1
+            tgt_batch = f"{src_batch}_{n}"[-10:]  # CHARG max 10 chars
+            if n > 999:
+                return {"status": "failed", "messages": [f"could not find a free batch number for {src_mat}/{src_batch}"]}
+        res = self.c.call("BAPI_BATCH_CREATE", MATERIAL=tgt_mat, PLANT=plant, BATCH=tgt_batch)
+        ret = self._ret(res)
+        target = (res.get("BATCH") or tgt_batch).strip()
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        if commit:
+            self._commit()
+        msgs = []
+        if tgt_mat != src_mat:
+            msgs.append(f"material {src_mat} harmonized to target batch-managed {tgt_mat}/plant {plant}")
+        if target != src_batch:
+            msgs.append(f"batch {src_batch} collided -> {target}")
+        return {"status": "created", "batch": target,
+                "verify_key": {"table": "MCH1", "key": {"MATNR": tgt_mat, "CHARG": target}},
+                "key_mapping": {"source": f"{src_mat}/{src_batch}", "target": f"{tgt_mat}/{target}",
+                                "disposition": "harmonized" if tgt_mat != src_mat else ("created" if target == src_batch else "remapped")},
+                "messages": msgs}
+
     # ── Sales order (BAPI_SALESORDER_CREATEFROMDAT2) — open SD doc ─────────────
     def _so_config(self):
         """Discover a coherent target sales setup: a sales area (VKORG/VTWEG/SPART) that has BOTH a

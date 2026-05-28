@@ -58,7 +58,7 @@ OBJECT_SOURCE_KEY = {
     "Characteristic": "ATNAM", "Class": ("CLASS", "KLART"),
     "CostElementGroup": "SETNAME", "ProfitCenterGroup": "SETNAME",
     "Project": "PSPID", "PurchaseRequisition": "BANFN", "OpenSO": "VBELN",
-    "PurchaseContract": "EBELN",
+    "PurchaseContract": "EBELN", "Batch": ("MATNR", "CHARG"),
 }
 
 # object -> (mechanism, sub-kind)
@@ -86,6 +86,7 @@ OBJECT_MECHANISM = {
     "PurchaseRequisition": ("bapi", "pr"),
     "OpenSO":          ("bapi", "salesorder"),
     "PurchaseContract": ("bapi", "contract"),
+    "Batch":           ("bapi", "batch"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -489,6 +490,11 @@ class UnifiedLoader:
                     "id": r.get("contract"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "refs": r.get("vendor"),
                     "msg": r.get("messages")}
+        if kind == "bapi" and sub == "batch":
+            r = self.bapi.create_batch(row, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("batch"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "bapi" and sub in ("fi_ar", "fi_ap"):
             arap = "AR" if sub == "fi_ar" else "AP"
             r = self.bapi.create_fi_open_item(row, arap, self.fi_org,
