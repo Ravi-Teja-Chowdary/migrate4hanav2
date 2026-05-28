@@ -55,7 +55,7 @@ OBJECT_SOURCE_KEY = {
     "Material": "MATNR", "OpenPO": "EBELN", "OpenAR": "BELNR", "OpenAP": "BELNR",
     "CostCenter": "KOSTL", "ProfitCenter": "PRCTR", "FixedAsset": "ANLN1", "Bank": "BANKL",
     "InternalOrder": "AUFNR", "Equipment": "EQUNR", "FunctionalLocation": "TPLNR",
-    "Characteristic": "ATNAM",
+    "Characteristic": "ATNAM", "Class": ("CLASS", "KLART"),
 }
 
 # object -> (mechanism, sub-kind)
@@ -76,6 +76,7 @@ OBJECT_MECHANISM = {
     "Equipment":       ("bapi", "equipment"),
     "FunctionalLocation": ("bapi", "funcloc"),
     "Characteristic":  ("bapi", "characteristic"),
+    "Class":           ("bapi", "class"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -203,7 +204,11 @@ class UnifiedLoader:
     @staticmethod
     def _source_key(obj: str, row: dict) -> str:
         field = OBJECT_SOURCE_KEY.get(obj)
-        return (row.get(field) or "").strip() if field else ""
+        if not field:
+            return ""
+        if isinstance(field, (tuple, list)):  # composite key (e.g. Class = CLASS+KLART)
+            return "/".join((row.get(f) or "").strip() for f in field)
+        return (row.get(field) or "").strip()
 
     def _ledger_hit(self, obj: str, row: dict):
         """If this source record was already migrated (present in the cross-run ledger),
@@ -505,6 +510,11 @@ class UnifiedLoader:
             r = self.bapi.create_characteristic(row, commit=True)
             return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
                     "id": r.get("characteristic"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
+        if kind == "bapi" and sub == "class":
+            r = self.bapi.create_class(row, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("klass"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)

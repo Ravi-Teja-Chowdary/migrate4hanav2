@@ -865,6 +865,63 @@ class BapiLoader:
                 "key_mapping": {"source": name, "target": name, "disposition": "created"},
                 "messages": msgs}
 
+    # ── Class (BAPI_CLASS_CREATE) — classification master ─────────────────────
+    def _class_types(self):
+        """Set of class types (KLART) configured in the target (TCLA), cached. A class can
+        only be created for a class type that exists in target customizing."""
+        cache = getattr(self, "_class_types_cache", None)
+        if cache is not None:
+            return cache
+        types = set()
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="TCLA", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "KLART"}], ROWCOUNT=200)
+            types = {x["WA"].strip() for x in r.get("DATA", []) if x["WA"].strip()}
+        except Exception:
+            pass
+        self._class_types_cache = types
+        return types
+
+    def _class_exists(self, name: str, ktype: str) -> bool:
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="KLAH", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "CLINT"}],
+                            OPTIONS=[{"TEXT": f"CLASS = '{name}' AND KLART = '{ktype}'"}], ROWCOUNT=1)
+            return bool(r.get("DATA"))
+        except Exception:
+            return False
+
+    def create_class(self, row: dict, commit: bool = True) -> dict:
+        """Create a classification class (CL02). Keyed by (CLASS, KLART) -> preserved 1:1 (no remap);
+        idempotent on existence. The class type (KLART) must be configured in the target (TCLA); if
+        not, the row is skipped with a reason (a customizing prerequisite, not a data defect). Source
+        ECC KLAH: CLASS, KLART; description SWOR/KLAH text."""
+        name = (row.get("CLASS") or "").strip().upper()
+        ktype = (row.get("KLART") or "").strip()
+        if not name or not ktype:
+            return {"status": "skipped", "messages": ["missing class name / type"]}
+        if ktype not in self._class_types():
+            return {"status": "skipped", "messages": [f"class type {ktype} not configured in target (TCLA)"]}
+        verify = {"table": "KLAH", "key": {"CLASS": name, "KLART": ktype}}
+        if self._class_exists(name, ktype):
+            return {"status": "matched_existing", "klass": name, "verify_key": verify,
+                    "key_mapping": {"source": name, "target": name, "disposition": "matched_existing"},
+                    "messages": ["already present in target"]}
+        desc = ((row.get("KSCHL") or row.get("SWOR") or name).strip())[:40]
+        res = self.c.call("BAPI_CLASS_CREATE", CLASSNUMNEW=name, CLASSTYPENEW=ktype,
+                          CLASSBASICDATA={"STATUS": "1"},
+                          CLASSDESCRIPTIONS=[{"LANGU_ISO": "EN", "CATCHWORD": desc}])
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        if commit:
+            self._commit()
+        msgs = [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W", "I")][-1:]
+        return {"status": "created", "klass": name, "verify_key": verify,
+                "key_mapping": {"source": name, "target": name, "disposition": "created"},
+                "messages": msgs}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).

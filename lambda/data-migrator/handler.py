@@ -211,6 +211,7 @@ DEFAULT_OBJECT_TABLES = {
     "Equipment":         {"table": "EQUI", "fields": ["EQUNR", "EQTYP"], "lane": "MC"},
     "FunctionalLocation": {"table": "IFLOT", "fields": ["TPLNR", "FLTYP"], "lane": "MC"},
     "Characteristic":    {"table": "CABN", "fields": ["ATNAM", "ATFOR", "ANZST", "ANZDZ"], "lane": "MC"},
+    "Class":             {"table": "KLAH", "fields": ["CLASS", "KLART"], "lane": "MC"},
     "Plant":             {"table": "T001W", "fields": ["WERKS", "NAME1", "LAND1"], "lane": "MC"},
     "ChartOfAccounts":   {"table": "T004", "fields": ["KTOPL", "KTPLT", "MWSKZ"], "lane": "MC"},
     "ControllingArea":   {"table": "TKA01", "fields": ["KOKRS", "BEZEI", "WAERS"], "lane": "MC"},
