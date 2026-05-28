@@ -232,6 +232,92 @@ DEFAULT_OBJECT_TABLES = {
     "BOM":               {"table": "MAST", "fields": ["MATNR", "WERKS", "STLAN", "STLNR"], "lane": "MC"},
     "Routing":           {"table": "MAPL", "fields": ["MATNR", "WERKS", "PLNTY", "PLNNR"], "lane": "MC"},
     "WorkCenter":        {"table": "CRHD", "fields": ["OBJID", "ARBPL", "WERKS"], "lane": "MC"},
+
+    # ── Extended Migration-Cockpit catalog (extract+emit lane = "MC") ───────────
+    # The dispatcher reads source from ECC for each entry and emits the MC-staging
+    # template; load into S/4 is done by the MC tool consuming those templates.
+    # Verified extracts where probed live (the proven extract pattern).
+    # MM
+    "SourceList":            {"table": "EORD",  "fields": ["MATNR", "WERKS", "LIFNR", "EBELN", "ERDAT"], "lane": "MC"},
+    "QuotaArrangement":      {"table": "EQUOT", "fields": ["MATNR", "WERKS", "QUNUM", "QUPOS"], "lane": "MC"},
+    "PurchaseInfoRecord":    {"table": "EINA",  "fields": ["INFNR", "LIFNR", "MATNR", "MATKL", "MEINS"], "lane": "MC"},
+    "ServiceMaster":         {"table": "ASMD",  "fields": ["ASNUM", "ASKTX", "MEINS", "MATKL"], "lane": "MC"},
+    "ScheduleAgreementMM":   {"table": "EKKO",  "fields": ["EBELN", "BSART", "LIFNR", "EKORG", "WAERS"], "where": "BSTYP = 'L'", "lane": "MC"},
+    "MaterialBOMHeader":     {"table": "STKO",  "fields": ["STLNR", "STLAL", "BMENG", "BMEIN", "STLST"], "lane": "MC"},
+    "MaterialBOMItem":       {"table": "STPO",  "fields": ["STLNR", "STLKN", "IDNRK", "MENGE", "MEINS", "POSTP"], "lane": "MC"},
+    "MaterialStock":         {"table": "MARD",  "fields": ["MATNR", "WERKS", "LGORT", "LABST"], "lane": "MC"},
+    "StorageLocation":       {"table": "T001L", "fields": ["WERKS", "LGORT", "LGOBE"], "lane": "MC"},
+    "MaterialClassification": {"table": "AUSP", "fields": ["OBJEK", "ATINN", "ATWRT", "KLART"], "lane": "MC"},
+    "PricingConditionMM":    {"table": "KONP",  "fields": ["KNUMH", "KOPOS", "KSCHL", "KBETR"], "lane": "MC"},
+    "ConsignmentStock":      {"table": "MKOL",  "fields": ["MATNR", "WERKS", "LIFNR", "LBLAB"], "lane": "MC"},
+    # SD
+    "CustomerMaterialInfo":  {"table": "KNMT",  "fields": ["KUNNR", "MATNR", "KDMAT", "POSTX"], "lane": "MC"},
+    "SalesQuotation":        {"table": "VBAK",  "fields": ["VBELN", "AUART", "KUNNR", "VKORG", "VTWEG", "SPART"], "where": "VBTYP = 'B'", "lane": "MC"},
+    "SalesInquiry":          {"table": "VBAK",  "fields": ["VBELN", "AUART", "KUNNR", "VKORG", "VTWEG", "SPART"], "where": "VBTYP = 'A'", "lane": "MC"},
+    "SalesContract":         {"table": "VBAK",  "fields": ["VBELN", "AUART", "KUNNR", "VKORG", "VTWEG", "SPART"], "where": "VBTYP = 'G'", "lane": "MC"},
+    "ScheduleAgreementSD":   {"table": "VBAK",  "fields": ["VBELN", "AUART", "KUNNR", "VKORG", "VTWEG", "SPART"], "where": "VBTYP = 'E'", "lane": "MC"},
+    "CreditMaster":          {"table": "KNKK",  "fields": ["KUNNR", "KKBER", "KLIMK", "SKFOR"], "lane": "MC"},
+    "CustomerHierarchy":     {"table": "KNVH",  "fields": ["HKUNNR", "KUNNR", "VKORG", "VTWEG", "SPART"], "lane": "MC"},
+    "OutboundDelivery":      {"table": "LIKP",  "fields": ["VBELN", "VKORG", "VSTEL", "LFART", "KUNAG"], "lane": "MC"},
+    "BillingDocument":       {"table": "VBRK",  "fields": ["VBELN", "FKART", "BUKRS", "WAERK", "NETWR"], "lane": "MC"},
+    "PricingConditionSD":    {"table": "KONH",  "fields": ["KNUMH", "KSCHL", "KAPPL"], "lane": "MC"},
+    # PP
+    "ProductionVersion":     {"table": "MKAL",  "fields": ["MATNR", "WERKS", "VERID", "ADATU", "BDATU"], "lane": "MC"},
+    "ProductionOrder":       {"table": "AUFK",  "fields": ["AUFNR", "AUART", "WERKS", "BUKRS"], "where": "AUTYP = '10'", "lane": "MC"},
+    "PlannedOrder":          {"table": "PLAF",  "fields": ["PLNUM", "MATNR", "PWWRK", "GSMNG"], "lane": "MC"},
+    "MRPArea":               {"table": "T001K", "fields": ["BWKEY", "BUKRS"], "lane": "MC"},
+    "DemandManagement":      {"table": "PBED",  "fields": ["MATNR", "WERKS", "BDZEI", "BDMNG"], "lane": "MC"},
+    # PS
+    "WBSElement":            {"table": "PRPS",  "fields": ["POSID", "PSPNR", "OBJNR"], "lane": "MC"},
+    "Network":               {"table": "AUFK",  "fields": ["AUFNR", "AUART", "WERKS", "BUKRS"], "where": "AUTYP = '20'", "lane": "MC"},
+    "NetworkActivity":       {"table": "AFVC",  "fields": ["AUFPL", "APLZL", "VORNR", "LTXA1"], "lane": "MC"},
+    # PM
+    "MaintenancePlan":       {"table": "MPLA",  "fields": ["WARPL", "MPHIE", "STRAT"], "lane": "MC"},
+    "MaintenanceTaskList":   {"table": "PLKO",  "fields": ["PLNNR", "PLNAL", "WERKS", "KTEXT"], "where": "PLNTY = 'A'", "lane": "MC"},
+    "MeasuringPoint":        {"table": "IMPT",  "fields": ["POINT", "MPOBJ", "MPTYP"], "lane": "MC"},
+    "MeasurementDocument":   {"table": "IMRG",  "fields": ["MDOCM", "POINT", "MDATE"], "lane": "MC"},
+    "ServiceNotification":   {"table": "VIQMEL", "fields": ["QMNUM", "QMART", "QMTXT"], "lane": "MC"},
+    "ServiceContract":       {"table": "VEDA",  "fields": ["VBELN", "VPOSN", "VBEGDAT", "VENDDAT"], "lane": "MC"},
+    # QM
+    "InspectionPlan":        {"table": "PLKO",  "fields": ["PLNNR", "PLNAL", "WERKS", "KTEXT"], "where": "PLNTY = 'Q'", "lane": "MC"},
+    "InspectionMethod":      {"table": "QMTB",  "fields": ["PRUEFMETH", "WERKS"], "lane": "MC"},
+    "InspectionCharacteristic": {"table": "QPMK", "fields": ["VERWMERKM", "WERKS", "KURZTEXT"], "lane": "MC"},
+    "QualityInfoRecord":     {"table": "QINF",  "fields": ["MATNR", "LIFNR", "WERKS"], "lane": "MC"},
+    "InspectionLot":         {"table": "QALS",  "fields": ["PRUEFLOS", "MATNR", "WERKS"], "lane": "MC"},
+    "CatalogCode":           {"table": "QPGR",  "fields": ["KATALOGART", "CODEGRUPPE"], "lane": "MC"},
+    # WM / EWM
+    "StorageBin":            {"table": "LAGP",  "fields": ["LGNUM", "LGTYP", "LGPLA"], "lane": "MC"},
+    "StockInBin":            {"table": "LQUA",  "fields": ["LGNUM", "LGTYP", "LGPLA", "MATNR", "GESME"], "lane": "MC"},
+    "WarehouseTransferOrder": {"table": "LTAK", "fields": ["LGNUM", "TANUM", "BDATU"], "lane": "MC"},
+    "HandlingUnit":          {"table": "VEKP",  "fields": ["VENUM", "VPOBJKEY", "EXIDV"], "lane": "MC"},
+    # HR (mini-master)
+    "EmployeeOrgData":       {"table": "PA0001", "fields": ["PERNR", "BUKRS", "WERKS", "BTRTL"], "lane": "MC"},
+    "EmployeePersonalData":  {"table": "PA0002", "fields": ["PERNR", "VORNA", "NACHN"], "lane": "MC"},
+    "EmployeeAddress":       {"table": "PA0006", "fields": ["PERNR", "ANSSA", "LAND1", "ORT01"], "lane": "MC"},
+    # Classification & documents
+    "ClassAssignment":       {"table": "AUSP",  "fields": ["OBJEK", "ATINN", "ATWRT", "KLART"], "lane": "MC"},
+    "DocumentInfoRecord":    {"table": "DRAW",  "fields": ["DOKNR", "DOKAR", "DOKTL", "DOKVR"], "lane": "MC"},
+    # Finance master (extensions)
+    "HouseBankAccount":      {"table": "T012K", "fields": ["BUKRS", "HBKID", "HKTID"], "lane": "MC"},
+    "AssetClass":            {"table": "ANKA",  "fields": ["ANLKL", "ANLKT"], "lane": "MC"},
+    "AssetSubNumber":        {"table": "ANLB",  "fields": ["BUKRS", "ANLN1", "ANLN2", "AFABE"], "lane": "MC"},
+    "DepreciationArea":      {"table": "T093",  "fields": ["AFAPL", "AFABE"], "lane": "MC"},
+    "TaxCode":               {"table": "T007A", "fields": ["KALSM", "MWSKZ"], "lane": "MC"},
+    "DunningArea":           {"table": "T047M", "fields": ["BUKRS", "MABER"], "lane": "MC"},
+    # CO-FM (routed lanes, see BREADTH_TRACKER for evidence)
+    "ActivityType":          {"table": "CSLA",  "fields": ["KOKRS", "LSTAR", "DATBI"], "lane": "MC"},
+    "StatisticalKeyFigure":  {"table": "TKA03", "fields": ["KOKRS", "STAGR"], "lane": "MC"},
+    "CommitmentItem":        {"table": "FMCI",  "fields": ["FIKRS", "FIPEX", "FIPOS"], "lane": "MC"},
+    # Customizing / config (config-master extracts; lane MC for parity migration)
+    "Currency":              {"table": "TCURC", "fields": ["WAERS", "ISOCD"], "lane": "MC"},
+    "Country":               {"table": "T005",  "fields": ["LAND1", "LANDN", "ISO3"], "lane": "MC"},
+    "Region":                {"table": "T005S", "fields": ["LAND1", "BLAND"], "lane": "MC"},
+    "PaymentTerms":          {"table": "T052",  "fields": ["ZTERM", "TAGE2", "TAGE3"], "lane": "MC"},
+    "UnitOfMeasure":         {"table": "T006",  "fields": ["MSEHI", "ISOCODE"], "lane": "MC"},
+    "IncoTerm":              {"table": "TINC",  "fields": ["INCO1"], "lane": "MC"},
+    # Address master
+    "Address":               {"table": "ADRC",  "fields": ["ADDRNUMBER", "NAME1", "STREET", "CITY1", "COUNTRY"], "lane": "MC"},
+    "Person":                {"table": "ADRP",  "fields": ["PERSNUMBER", "NAME_FIRST", "NAME_LAST"], "lane": "MC"},
 }
 
 

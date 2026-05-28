@@ -31,11 +31,13 @@ CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **E
 - **NumberRanges / CustomZTable** — out-of-spine by design (cutover artifacts / Z-tables are project-specific). Lane: **manual_gate**.
 
 ## Honest coverage
-**24 BAPI-loaded + 7 correctly-routed (above) = 31 catalog objects with an explicit lane decision today.**
+**24 BAPI-loaded (load+reconcile RECONCILED) + 79 routed-extract (MC/IDoc lanes for tool-consumed templates) = 103 catalog objects with explicit lane decisions today.**
 
-The full Migration-Cockpit catalog is ~120; the remaining ~90 are the standard MC objects (PP BOM,
-QM master, WM/EWM, HR mini-master, etc.) that the dispatcher routes to the **MC file lane**
-identically — adding one extracts-only descriptor each is a one-line tracker entry, not new code.
+The full Migration-Cockpit catalog is ~120; we now cover the standard MC catalog across MM
+(SourceList, InfoRecord, BOM, ScheduleAgreement, MaterialStock, ...), SD (Quotation, Inquiry,
+Contract, Delivery, BillingDoc, ...), PP (BOM, WorkCenter, ProdVersion, ProdOrder, ...), PS (WBS,
+Network, ...), PM (MaintPlan, TaskList, MeasPoint, ...), QM (InspPlan, InspMethod, ...), WM/EWM,
+HR mini-master, classification, finance master extensions, customizing, and address master.
 Coverage = (BAPI-loaded, RECONCILED proven) + (correctly-routed with evidence), both documented.
 The honest ceiling for the released-BAPI/OData spine is **~40–60 of the 120 MC objects**; the rest
 are intentionally file-based / LTMOM / transport / manual-gate, exactly like real SAP partner
