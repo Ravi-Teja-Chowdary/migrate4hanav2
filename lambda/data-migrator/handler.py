@@ -216,6 +216,7 @@ DEFAULT_OBJECT_TABLES = {
     "ProfitCenterGroup": {"table": "SETHEADER", "fields": ["SETNAME", "SUBCLASS"], "where": "SETCLASS = '0106'", "lane": "MC"},
     "Project":           {"table": "PROJ", "fields": ["PSPID", "POST1"], "lane": "MC"},
     "PurchaseRequisition": {"table": "EBAN", "fields": ["BANFN", "BNFPO", "MATNR", "WERKS", "MENGE", "TXZ01", "PREIS"], "where": "LOEKZ = '' AND EBELN = ''", "lane": "MC"},
+    "OpenSO":            {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR"], "lane": "MC"},
     "Plant":             {"table": "T001W", "fields": ["WERKS", "NAME1", "LAND1"], "lane": "MC"},
     "ChartOfAccounts":   {"table": "T004", "fields": ["KTOPL", "KTPLT", "MWSKZ"], "lane": "MC"},
     "ControllingArea":   {"table": "TKA01", "fields": ["KOKRS", "BEZEI", "WAERS"], "lane": "MC"},

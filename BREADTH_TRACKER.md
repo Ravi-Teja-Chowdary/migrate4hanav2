@@ -7,9 +7,9 @@ Recipe per object: probe BAPI/OData + ECC source → `create_<obj>` (+ idempoten
 → discovery if needed → wire 4 files (`bapi_loader`, `unified_loader` ×2, `handler`) → live
 load+reconcile RECONCILED → commit. See `BREADTH_BUILDOUT_PROMPT.md`.
 
-## Live today (✅ 21)
+## Live today (✅ 22)
 BusinessPartner · Customer · Vendor · Material · ExchangeRates · OpenPO · OpenAR · OpenAP ·
-CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **Equipment** · **FunctionalLocation** · **Characteristic** · **Class** · **CostElementGroup** · **ProfitCenterGroup** · **Project** · **PurchaseRequisition**
+CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **Equipment** · **FunctionalLocation** · **Characteristic** · **Class** · **CostElementGroup** · **ProfitCenterGroup** · **Project** · **PurchaseRequisition** · **OpenSO**
 
 ## Queued — clean released BAPI confirmed on this S/4 (🔜)
 | Object | BAPI | ECC source | Notes |
@@ -17,7 +17,6 @@ CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **E
 | Batch | BAPI_BATCH_CREATE | MCH1 (~1,775) | needs material+batch |
 | Routing | BAPI_ROUTING_CREATE | PLKO | PP (structured) |
 | PurchaseContract | BAPI_CONTRACT_CREATE | EKKO BSTYP='K' | MM (items) |
-| OpenSO (Sales Order) | BAPI_SALESORDER_CREATEFROMDAT2 | VBAK | SD (open docs) |
 
 ## Need investigation (❓ — probed FM name not RFC-callable; find the right FM/route)
 ActivityType (CSLA ~676) · StatisticalKeyFigure (TKA03 ~447) · CommitmentItem (FMCI ~1,297)

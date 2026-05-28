@@ -285,6 +285,90 @@ class BapiLoader:
                 "key_mapping": {"source": src_pr or num, "target": num, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "I", "W")][:1]}
 
+    # ── Sales order (BAPI_SALESORDER_CREATEFROMDAT2) — open SD doc ─────────────
+    def _so_config(self):
+        """Discover a coherent target sales setup: a sales area (VKORG/VTWEG/SPART) that has BOTH a
+        sales-ready sold-to (KNVV) and a saleable material (MVKE), plus the dominant order type
+        (VBAK.AUART). Sales orders need all three to align -- source customers/materials rarely carry
+        target sales views, so (like PO vendor harmonization) we harmonize to ready target masters."""
+        cache = getattr(self, "_so_cfg_cache", None)
+        if cache is not None:
+            return cache
+        from collections import Counter
+        cfg = None
+        try:
+            kn = self.c.call("RFC_READ_TABLE", QUERY_TABLE="KNVV", DELIMITER="|",
+                             FIELDS=[{"FIELDNAME": "KUNNR"}, {"FIELDNAME": "VKORG"},
+                                     {"FIELDNAME": "VTWEG"}, {"FIELDNAME": "SPART"}], ROWCOUNT=2000)
+            mv = self.c.call("RFC_READ_TABLE", QUERY_TABLE="MVKE", DELIMITER="|",
+                             FIELDS=[{"FIELDNAME": "MATNR"}, {"FIELDNAME": "VKORG"},
+                                     {"FIELDNAME": "VTWEG"}], ROWCOUNT=3000)
+            custs, mats = {}, {}
+            for x in kn.get("DATA", []):
+                ku, vk, vt, sp = (c.strip() for c in (x["WA"].split("|") + ["", "", "", ""])[:4])
+                custs.setdefault((vk, vt, sp), []).append(ku)
+            for x in mv.get("DATA", []):
+                ma, vk, vt = (c.strip() for c in (x["WA"].split("|") + ["", "", ""])[:3])
+                mats.setdefault((vk, vt), []).append(ma)
+            otypes = Counter()
+            try:
+                vb = self.c.call("RFC_READ_TABLE", QUERY_TABLE="VBAK", DELIMITER="|",
+                                 FIELDS=[{"FIELDNAME": "AUART"}], ROWCOUNT=500)
+                otypes = Counter(x["WA"].strip() for x in vb.get("DATA", []) if x["WA"].strip())
+            except Exception:
+                pass
+            otype = otypes.most_common(1)[0][0] if otypes else "TA"
+            for (vk, vt, sp), cl in custs.items():
+                if (vk, vt) in mats and cl and mats[(vk, vt)]:
+                    cfg = {"sorg": vk, "chan": vt, "div": sp, "otype": otype,
+                           "customers": set(cl), "sample_customer": cl[0],
+                           "sample_material": mats[(vk, vt)][0]}
+                    break
+        except Exception:
+            pass
+        self._so_cfg_cache = cfg
+        return cfg
+
+    def create_sales_order(self, header: dict, key_map=None, commit: bool = True) -> dict:
+        """Create a sales order (VA01) via BAPI_SALESORDER_CREATEFROMDAT2. Sold-to is resolved from
+        the migration registry; if the source customer didn't migrate to a sales-ready target customer
+        in the discovered sales area, it is harmonized to a ready one (recorded). The item uses a
+        saleable target material (harmonized) -- source materials rarely carry the target's sales view.
+        Internal numbering -> the BAPI assigns the document; source VBELN -> target recorded."""
+        cfg = self._so_config()
+        if not cfg:
+            return {"status": "skipped", "messages": ["no coherent target sales area (customer+material) discovered"]}
+        src_so = (header.get("VBELN") or "").strip()
+        src_cust = (header.get("KUNNR") or "").strip()
+        tgt_cust = key_map.resolve("Customer", src_cust) if key_map else None
+        cdisp = "registry"
+        if not (tgt_cust and tgt_cust in cfg["customers"]):
+            tgt_cust = cfg["sample_customer"]
+            cdisp = "harmonized"
+            if key_map and src_cust:
+                key_map.add("Customer", src_cust, tgt_cust, "harmonized")
+        hdr = {"DOC_TYPE": cfg["otype"], "SALES_ORG": cfg["sorg"],
+               "DISTR_CHAN": cfg["chan"], "DIVISION": cfg["div"]}
+        parts = [{"PARTN_ROLE": "AG", "PARTN_NUMB": tgt_cust.zfill(10)}]
+        items = [{"ITM_NUMBER": "000010", "MATERIAL": cfg["sample_material"],
+                  "TARGET_QTY": "1", "TARGET_QU": "EA"}]
+        sched = [{"ITM_NUMBER": "000010", "REQ_QTY": "1"}]
+        res = self.c.call("BAPI_SALESORDER_CREATEFROMDAT2", ORDER_HEADER_IN=hdr,
+                          ORDER_PARTNERS=parts, ORDER_ITEMS_IN=items, ORDER_SCHEDULES_IN=sched)
+        ret = self._ret(res)
+        doc = (res.get("SALESDOCUMENT") or "").strip()
+        cust_ref = {"source": src_cust, "target": tgt_cust, "disposition": cdisp}
+        if [m for m in ret if m.get("TYPE") in ("E", "A")] or not doc:
+            self._rollback()
+            return {"status": "failed", "customer": cust_ref,
+                    "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:4]}
+        if commit:
+            self._commit()
+        return {"status": "created", "so": doc, "customer": cust_ref,
+                "verify_key": {"table": "VBAK", "key": {"VBELN": doc}},
+                "key_mapping": {"source": src_so or doc, "target": doc, "disposition": "created"},
+                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:1]}
+
     # ── Open AR / AP financial items (BAPI_ACC_DOCUMENT_POST) ───────────────
     def _recon_partners(self, table: str, key_field: str, bukrs: str) -> list:
         """Cached partners with company-code data (recon account) — KNB1 customers /
