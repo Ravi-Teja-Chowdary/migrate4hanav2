@@ -223,7 +223,6 @@ DEFAULT_OBJECT_TABLES = {
     "ChartOfAccounts":   {"table": "T004", "fields": ["KTOPL", "KTPLT", "MWSKZ"], "lane": "MC"},
     "ControllingArea":   {"table": "TKA01", "fields": ["KOKRS", "BEZEI", "WAERS"], "lane": "MC"},
     "OpenPO":            {"table": "EKKO", "fields": ["EBELN", "BSART", "BUKRS", "EKORG", "EKGRP", "LIFNR", "WAERS"], "where": "BSTYP = 'F'", "lane": "MC"},
-    "OpenSO":            {"table": "VBAK", "fields": ["VBELN", "AUART", "KUNNR", "VKORG"], "lane": "MC"},
     "OpenAR":            {"table": "BSID", "fields": ["BUKRS", "KUNNR", "BELNR", "DMBTR", "SHKZG", "WAERS"], "lane": "MC"},
     "OpenAP":            {"table": "BSIK", "fields": ["BUKRS", "LIFNR", "BELNR", "DMBTR", "SHKZG", "WAERS"], "lane": "MC"},
     "BankStatements":    {"table": "FEBKO", "fields": ["KUKEY", "ESNUM", "BANKL", "BANKN"], "lane": "IDOC", "idoc_type": "FINSTA01"},
@@ -318,6 +317,40 @@ DEFAULT_OBJECT_TABLES = {
     # Address master
     "Address":               {"table": "ADRC",  "fields": ["ADDRNUMBER", "NAME1", "STREET", "CITY1", "COUNTRY"], "lane": "MC"},
     "Person":                {"table": "ADRP",  "fields": ["PERSNUMBER", "NAME_FIRST", "NAME_LAST"], "lane": "MC"},
+
+    # ── Catalog batch 2 — document items, FI/MM/SD extensions, FM ─────────────
+    # Doc items (extracted separately from headers; header is the parent extract)
+    "SalesOrderItem":        {"table": "VBAP",  "fields": ["VBELN", "POSNR", "MATNR", "KWMENG", "VRKME", "NETWR"], "lane": "MC"},
+    "PurchaseOrderItem":     {"table": "EKPO",  "fields": ["EBELN", "EBELP", "MATNR", "WERKS", "MENGE", "NETPR"], "lane": "MC"},
+    "BillingItem":           {"table": "VBRP",  "fields": ["VBELN", "POSNR", "MATNR", "FKIMG", "NETWR"], "lane": "MC"},
+    "DeliveryItem":          {"table": "LIPS",  "fields": ["VBELN", "POSNR", "MATNR", "LFIMG", "VRKME"], "lane": "MC"},
+    "PRItem":                {"table": "EBAN",  "fields": ["BANFN", "BNFPO", "MATNR", "WERKS", "MENGE", "PREIS"], "lane": "MC"},
+    # MM extensions
+    "GoodsReceipt":          {"table": "MSEG",  "fields": ["MBLNR", "ZEILE", "MATNR", "WERKS", "BWART", "MENGE"], "lane": "MC"},
+    "LogisticsInvoice":      {"table": "RBKP",  "fields": ["BELNR", "GJAHR", "LIFNR", "RMWWR", "WAERS"], "lane": "MC"},
+    "StockTransportOrder":   {"table": "EKKO",  "fields": ["EBELN", "BSART", "BUKRS", "EKORG", "LIFNR"], "where": "BSTYP = 'F' AND BSART = 'UB'", "lane": "MC"},
+    "PurchaseOrderHistory":  {"table": "EKBE",  "fields": ["EBELN", "EBELP", "BELNR", "VGABE", "MENGE"], "lane": "MC"},
+    "BidInvitation":         {"table": "EKKO",  "fields": ["EBELN", "BSART", "LIFNR", "EKORG"], "where": "BSTYP = 'A'", "lane": "MC"},
+    "VendorBankDetails":     {"table": "LFBK",  "fields": ["LIFNR", "BANKS", "BANKL", "BANKN"], "lane": "MC"},
+    "CustomerBankDetails":   {"table": "KNBK",  "fields": ["KUNNR", "BANKS", "BANKL", "BANKN"], "lane": "MC"},
+    # SD extensions
+    "ScheduleLines":         {"table": "VBEP",  "fields": ["VBELN", "POSNR", "ETENR", "EDATU", "WMENG"], "lane": "MC"},
+    "Shipment":              {"table": "VTTK",  "fields": ["TKNUM", "SHTYP", "TPLST"], "lane": "MC"},
+    # PP / process
+    "ProcessOrder":          {"table": "AUFK",  "fields": ["AUFNR", "AUART", "WERKS", "BUKRS"], "where": "AUTYP = '40'", "lane": "MC"},
+    # FI extensions
+    "AccountingDocHeader":   {"table": "BKPF",  "fields": ["BUKRS", "BELNR", "GJAHR", "BLART", "BLDAT"], "lane": "MC"},
+    "AccountingDocItem":     {"table": "BSEG",  "fields": ["BUKRS", "BELNR", "GJAHR", "BUZEI", "DMBTR", "SHKZG"], "lane": "MC"},
+    "AssetValues":           {"table": "ANLC",  "fields": ["BUKRS", "ANLN1", "ANLN2", "GJAHR", "AFABE"], "lane": "MC"},
+    # FM (Funds Management)
+    "FundsCenter":           {"table": "FMFCTR", "fields": ["FIKRS", "FICTR"], "lane": "MC"},
+    "Fund":                  {"table": "FMFINCODE", "fields": ["FIKRS", "FINCODE"], "lane": "MC"},
+    # Material / WM extras
+    "MaterialUnitConversion": {"table": "MARM", "fields": ["MATNR", "MEINH", "UMREZ", "UMREN"], "lane": "MC"},
+    "StorageTypeMaster":     {"table": "T331",  "fields": ["LGNUM", "LGTYP", "T331_LDESC"], "lane": "MC"},
+    # Determinations / pricing tables
+    "TaxDetermination":      {"table": "A053",  "fields": ["KAPPL", "KSCHL", "DATBI", "ALAND"], "lane": "MC"},
+    "AccountDetermination":  {"table": "T030",  "fields": ["KTOPL", "KTOSL", "BWMOD"], "lane": "MC"},
 }
 
 

@@ -42,7 +42,7 @@ auto-discovery adapts the run to the target system; everything is reconciled and
 
 ## 3. What's built and proven (on a live ECC → S/4HANA pair)
 
-### Object coverage — **24 object types load live, 79 routed to MC/IDoc lane = 103 catalog objects**
+### Object coverage — **24 object types load live, 102 routed to MC/IDoc lane = 126 catalog objects**
 | Object | Mechanism (released SAP API) |
 |---|---|
 | BusinessPartner | BAPI_BUPA_CREATE_FROM_DATA |
@@ -122,8 +122,8 @@ live system pair.
 2. **A real pilot go-live** with a customer — the only true proof. **Requires SAP functional
    + Basis expertise on the team** (this tool automates the data movement, not the whole
    project) — best pursued with an SAP consultancy partner.
-3. **Breadth to the full ~120 Migration-Cockpit objects** — **103 catalog objects today** (24 load live
-   via released BAPIs/OData with end-to-end reconciliation, 79 routed-extract via the MC/IDoc lanes
+3. **Breadth to the full ~120 Migration-Cockpit objects** — **126 catalog objects today** (24 load live
+   via released BAPIs/OData with end-to-end reconciliation, 102 routed-extract via the MC/IDoc lanes
    for tool-consumed templates); each additional object follows the same proven pattern.
 4. **Operational hardening** — monitoring, secrets management, packaging/deployment.
 

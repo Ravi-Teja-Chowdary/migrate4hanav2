@@ -31,7 +31,7 @@ CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **E
 - **NumberRanges / CustomZTable** — out-of-spine by design (cutover artifacts / Z-tables are project-specific). Lane: **manual_gate**.
 
 ## Honest coverage
-**24 BAPI-loaded (load+reconcile RECONCILED) + 79 routed-extract (MC/IDoc lanes for tool-consumed templates) = 103 catalog objects with explicit lane decisions today.**
+**24 BAPI-loaded (load+reconcile RECONCILED) + 102 routed-extract (MC/IDoc lanes for tool-consumed templates) = 126 catalog objects with explicit lane decisions today.**
 
 The full Migration-Cockpit catalog is ~120; we now cover the standard MC catalog across MM
 (SourceList, InfoRecord, BOM, ScheduleAgreement, MaterialStock, ...), SD (Quotation, Inquiry,
