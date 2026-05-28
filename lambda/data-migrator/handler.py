@@ -271,7 +271,7 @@ DEFAULT_OBJECT_TABLES = {
     "Network":               {"table": "AUFK",  "fields": ["AUFNR", "AUART", "WERKS", "BUKRS"], "where": "AUTYP = '20'", "lane": "MC"},
     "NetworkActivity":       {"table": "AFVC",  "fields": ["AUFPL", "APLZL", "VORNR", "LTXA1"], "lane": "MC"},
     # PM
-    "MaintenancePlan":       {"table": "MPLA",  "fields": ["WARPL", "MPHIE", "STRAT"], "lane": "MC"},
+    "MaintenancePlan":       {"table": "MPLA",  "fields": ["WARPL", "MPTYP", "STRAT"], "lane": "MC"},
     "MaintenanceTaskList":   {"table": "PLKO",  "fields": ["PLNNR", "PLNAL", "WERKS", "KTEXT"], "where": "PLNTY = 'A'", "lane": "MC"},
     "MeasuringPoint":        {"table": "IMPT",  "fields": ["POINT", "MPOBJ", "MPTYP"], "lane": "MC"},
     "MeasurementDocument":   {"table": "IMRG",  "fields": ["MDOCM", "POINT", "MDATE"], "lane": "MC"},
