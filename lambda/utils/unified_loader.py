@@ -55,6 +55,7 @@ OBJECT_SOURCE_KEY = {
     "Material": "MATNR", "OpenPO": "EBELN", "OpenAR": "BELNR", "OpenAP": "BELNR",
     "CostCenter": "KOSTL", "ProfitCenter": "PRCTR", "FixedAsset": "ANLN1", "Bank": "BANKL",
     "InternalOrder": "AUFNR", "Equipment": "EQUNR", "FunctionalLocation": "TPLNR",
+    "Characteristic": "ATNAM",
 }
 
 # object -> (mechanism, sub-kind)
@@ -74,6 +75,7 @@ OBJECT_MECHANISM = {
     "InternalOrder":   ("bapi", "internalorder"),
     "Equipment":       ("bapi", "equipment"),
     "FunctionalLocation": ("bapi", "funcloc"),
+    "Characteristic":  ("bapi", "characteristic"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -498,6 +500,11 @@ class UnifiedLoader:
             r = self.bapi.create_funcloc(row, commit=True)
             return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
                     "id": r.get("funcloc"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
+        if kind == "bapi" and sub == "characteristic":
+            r = self.bapi.create_characteristic(row, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("characteristic"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)

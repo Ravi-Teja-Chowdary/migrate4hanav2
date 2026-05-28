@@ -818,6 +818,53 @@ class BapiLoader:
                                 "disposition": "created" if target == src else "remapped"},
                 "messages": msgs}
 
+    # ── Characteristic (BAPI_CHARACT_CREATE) — classification master ───────────
+    _CHAR_DTYPES = {"CHAR", "NUM", "DATE", "TIME", "CURR"}
+
+    def _charact_exists(self, name: str) -> bool:
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="CABN", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "ATINN"}],
+                            OPTIONS=[{"TEXT": f"ATNAM = '{name}'"}], ROWCOUNT=1)
+            return bool(r.get("DATA"))
+        except Exception:
+            return False
+
+    def create_characteristic(self, row: dict, commit: bool = True) -> dict:
+        """Create a classification characteristic (CT04). The name (CABN.ATNAM) is a global key —
+        preserved 1:1 (no remap); idempotent on existence. Source ECC CABN: ATNAM, ATFOR (data type),
+        ANZST (length), ANZDZ (decimals). ATFOR (CHAR/NUM/DATE/TIME/CURR) maps directly to the BAPI
+        DATA_TYPE domain; unknown -> CHAR."""
+        name = (row.get("ATNAM") or "").strip().upper()
+        if not name:
+            return {"status": "skipped", "messages": ["missing characteristic name"]}
+        verify = {"table": "CABN", "key": {"ATNAM": name}}
+        if self._charact_exists(name):
+            return {"status": "matched_existing", "characteristic": name, "verify_key": verify,
+                    "key_mapping": {"source": name, "target": name, "disposition": "matched_existing"},
+                    "messages": ["already present in target"]}
+        dtype = (row.get("ATFOR") or "CHAR").strip().upper()
+        if dtype not in self._CHAR_DTYPES:
+            dtype = "CHAR"
+        length = (row.get("ANZST") or "").strip() or ("10" if dtype in ("CHAR", "NUM", "CURR") else "8")
+        detail = {"CHARACT_NAME": name, "DATA_TYPE": dtype, "LENGTH": str(length), "STATUS": "1"}
+        dec = (row.get("ANZDZ") or "").strip()
+        if dtype in ("NUM", "CURR") and dec:
+            detail["DECIMALS"] = str(dec)
+        desc = ((row.get("ATBEZ") or name).strip())[:30]
+        res = self.c.call("BAPI_CHARACT_CREATE", CHARACTDETAIL=detail,
+                          CHARACTDESCR=[{"LANGUAGE_ISO": "EN", "DESCRIPTION": desc}])
+        ret = self._ret(res)
+        if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        if commit:
+            self._commit()
+        msgs = [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][-1:]
+        return {"status": "created", "characteristic": name, "verify_key": verify,
+                "key_mapping": {"source": name, "target": name, "disposition": "created"},
+                "messages": msgs}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).

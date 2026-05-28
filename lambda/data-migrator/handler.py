@@ -210,6 +210,7 @@ DEFAULT_OBJECT_TABLES = {
     "InternalOrder":     {"table": "AUFK", "fields": ["AUFNR", "AUART", "KTEXT", "KOKRS", "BUKRS"], "where": "AUTYP = '01'", "lane": "MC"},
     "Equipment":         {"table": "EQUI", "fields": ["EQUNR", "EQTYP"], "lane": "MC"},
     "FunctionalLocation": {"table": "IFLOT", "fields": ["TPLNR", "FLTYP"], "lane": "MC"},
+    "Characteristic":    {"table": "CABN", "fields": ["ATNAM", "ATFOR", "ANZST", "ANZDZ"], "lane": "MC"},
     "Plant":             {"table": "T001W", "fields": ["WERKS", "NAME1", "LAND1"], "lane": "MC"},
     "ChartOfAccounts":   {"table": "T004", "fields": ["KTOPL", "KTPLT", "MWSKZ"], "lane": "MC"},
     "ControllingArea":   {"table": "TKA01", "fields": ["KOKRS", "BEZEI", "WAERS"], "lane": "MC"},
