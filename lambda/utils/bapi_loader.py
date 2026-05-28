@@ -250,6 +250,41 @@ class BapiLoader:
                 "key_mapping": {"source": src_po, "target": po, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
 
+    # ── Purchase requisition (BAPI_REQUISITION_CREATE) — open MM doc ───────────
+    def create_purchase_requisition(self, row: dict, org: dict, commit: bool = True) -> dict:
+        """Create a purchase requisition (ME51N) via BAPI_REQUISITION_CREATE. Account-assigned
+        item (ACCTASSCAT='K', GL + cost center) with short text -- no material-master dependency,
+        mirroring the PO loader and reusing the discovered po_org. Internal numbering -> the BAPI
+        assigns the PR number; source BANFN -> target recorded (idempotency via the ledger). A
+        valuation price (C_AMT_BAPI) is mandatory for account-assigned items."""
+        src_pr = (row.get("BANFN") or "").strip()
+        qty = str(int(parse_sap_number(row.get("MENGE"), 1)) or 1)
+        price = parse_sap_number(row.get("PREIS"), 0)
+        c_amt = ("%.2f" % price) if price else "100.00"
+        txt = ((row.get("TXZ01") or ("Migrated PR " + (src_pr or "item"))).strip())[:40]
+        deliv = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y%m%d")
+        item = [{"PREQ_ITEM": "00010", "DOC_TYPE": org.get("DOC_TYPE", "NB"),
+                 "PUR_GROUP": org["PUR_GROUP"], "SHORT_TEXT": txt, "PLANT": org["PLANT"],
+                 "QUANTITY": qty, "UNIT": org["PO_UNIT"], "DELIV_DATE": deliv,
+                 "MAT_GRP": org["MATL_GROUP"], "ACCTASSCAT": "K",
+                 "C_AMT_BAPI": c_amt, "PRICE_UNIT": "1"}]
+        acc = [{"PREQ_ITEM": "00010", "SERIAL_NO": "01",
+                "G_L_ACCT": org["GL_ACCOUNT"], "COST_CTR": org["COSTCENTER"]}]
+        res = self.c.call("BAPI_REQUISITION_CREATE",
+                          REQUISITION_ITEMS=item, REQUISITION_ACCOUNT_ASSIGNMENT=acc)
+        ret = self._ret(res)
+        num = (res.get("NUMBER") or "").strip()
+        if [m for m in ret if m.get("TYPE") in ("E", "A")] or not num:
+            self._rollback()
+            return {"status": "failed",
+                    "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:4]}
+        if commit:
+            self._commit()
+        return {"status": "created", "pr": num,
+                "verify_key": {"table": "EBAN", "key": {"BANFN": num}},
+                "key_mapping": {"source": src_pr or num, "target": num, "disposition": "created"},
+                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "I", "W")][:1]}
+
     # ── Open AR / AP financial items (BAPI_ACC_DOCUMENT_POST) ───────────────
     def _recon_partners(self, table: str, key_field: str, bukrs: str) -> list:
         """Cached partners with company-code data (recon account) — KNB1 customers /

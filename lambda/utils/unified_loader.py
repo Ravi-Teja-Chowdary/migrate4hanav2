@@ -57,7 +57,7 @@ OBJECT_SOURCE_KEY = {
     "InternalOrder": "AUFNR", "Equipment": "EQUNR", "FunctionalLocation": "TPLNR",
     "Characteristic": "ATNAM", "Class": ("CLASS", "KLART"),
     "CostElementGroup": "SETNAME", "ProfitCenterGroup": "SETNAME",
-    "Project": "PSPID",
+    "Project": "PSPID", "PurchaseRequisition": "BANFN",
 }
 
 # object -> (mechanism, sub-kind)
@@ -82,6 +82,7 @@ OBJECT_MECHANISM = {
     "CostElementGroup":  ("bapi", "costelementgroup"),
     "ProfitCenterGroup": ("bapi", "profitcentergroup"),
     "Project":         ("bapi", "project"),
+    "PurchaseRequisition": ("bapi", "pr"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -468,6 +469,11 @@ class UnifiedLoader:
                     "id": r.get("po"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "refs": r.get("vendor"),
                     "msg": r.get("messages")}
+        if kind == "bapi" and sub == "pr":
+            r = self.bapi.create_purchase_requisition(row, self.po_org, commit=True)
+            return {"ok": r["status"] == "created", "status": r["status"],
+                    "id": r.get("pr"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "bapi" and sub in ("fi_ar", "fi_ap"):
             arap = "AR" if sub == "fi_ar" else "AP"
             r = self.bapi.create_fi_open_item(row, arap, self.fi_org,
