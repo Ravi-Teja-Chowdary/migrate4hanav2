@@ -57,6 +57,7 @@ OBJECT_SOURCE_KEY = {
     "InternalOrder": "AUFNR", "Equipment": "EQUNR", "FunctionalLocation": "TPLNR",
     "Characteristic": "ATNAM", "Class": ("CLASS", "KLART"),
     "CostElementGroup": "SETNAME", "ProfitCenterGroup": "SETNAME",
+    "Project": "PSPID",
 }
 
 # object -> (mechanism, sub-kind)
@@ -80,6 +81,7 @@ OBJECT_MECHANISM = {
     "Class":           ("bapi", "class"),
     "CostElementGroup":  ("bapi", "costelementgroup"),
     "ProfitCenterGroup": ("bapi", "profitcentergroup"),
+    "Project":         ("bapi", "project"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -525,6 +527,11 @@ class UnifiedLoader:
             r = fn(row, self.cc_org, commit=True)
             return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
                     "id": r.get("group"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
+        if kind == "bapi" and sub == "project":
+            r = self.bapi.create_project(row, commit=True)
+            return {"ok": r["status"] in ("created", "matched_existing"), "status": r["status"],
+                    "id": r.get("project"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "msg": r.get("messages")}
         if kind == "idoc":
             r = self.idoc.post_resolved(obj, row, self.resolver)

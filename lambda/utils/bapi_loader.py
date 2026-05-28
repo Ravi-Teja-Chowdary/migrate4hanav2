@@ -1002,6 +1002,87 @@ class BapiLoader:
         return self._co_group_create("BAPI_PROFITCENTERGRP_CREATE", "CONTROLLINGAREAIMP", coarea,
                                      "0106", coarea, row, commit)
 
+    # ── Project definition (BAPI_PROJECTDEF_CREATE) — PS master ────────────────
+    def _project_config(self):
+        """Discover the target's dominant project profile + controlling area (from PROJ), cached.
+        A project definition requires a project profile that exists in target customizing."""
+        cache = getattr(self, "_proj_cfg_cache", None)
+        if cache is not None:
+            return cache
+        from collections import Counter
+        profs, areas = Counter(), Counter()
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="PROJ", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "PROFL"}, {"FIELDNAME": "VKOKR"}], ROWCOUNT=500)
+            for x in r.get("DATA", []):
+                pr, ar = (c.strip() for c in (x["WA"].split("|") + ["", ""])[:2])
+                if pr:
+                    profs[pr] += 1
+                if ar:
+                    areas[ar] += 1
+        except Exception:
+            pass
+        cfg = {"profile": profs.most_common(1)[0][0] if profs else "",
+               "co_area": areas.most_common(1)[0][0] if areas else ""}
+        self._proj_cfg_cache = cfg
+        return cfg
+
+    def _project_exists(self, pid: str) -> bool:
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="PROJ", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "PSPNR"}],
+                            OPTIONS=[{"TEXT": f"PSPID = '{pid}'"}], ROWCOUNT=1)
+            return bool(r.get("DATA"))
+        except Exception:
+            return False
+
+    def create_project(self, row: dict, commit: bool = True) -> dict:
+        """Create a project definition (CJ20N). Project IDs are coding-mask bound: a source ID whose
+        separators collide with a target mask is rejected, so we try the source ID as-is and, on a
+        mask error, retry a sanitized free-form ID (separators stripped) -- a collision-safe remap
+        recorded in the ledger. Profile + controlling area auto-discovered. Source ECC PROJ: PSPID,
+        POST1 (desc)."""
+        import re
+        cfg = self._project_config()
+        profile, coarea = cfg["profile"], cfg["co_area"]
+        if not profile:
+            return {"status": "skipped", "messages": ["no target project profile discovered"]}
+        pid = (row.get("PSPID") or "").strip()
+        if not pid:
+            return {"status": "skipped", "messages": ["missing project id"]}
+        desc = ((row.get("POST1") or ("Project " + pid)).strip())[:40]
+        if self._project_exists(pid):
+            verify = {"table": "PROJ", "key": {"PSPID": pid}}
+            return {"status": "matched_existing", "project": pid, "verify_key": verify,
+                    "key_mapping": {"source": pid, "target": pid, "disposition": "matched_existing"},
+                    "messages": ["already present in target"]}
+        sanitized = re.sub(r"[^A-Za-z0-9_]", "", pid)[:24] or ("PRJ" + pid[:8])
+        attempts = [pid] if pid == sanitized else [pid, sanitized]
+        last = None
+        for cand in attempts:
+            stru = {"PROJECT_DEFINITION": cand, "DESCRIPTION": desc,
+                    "PROJECT_PROFILE": profile, "CONTROLLING_AREA": coarea}
+            try:
+                res = self.c.call("BAPI_PROJECTDEF_CREATE", PROJECT_DEFINITION_STRU=stru)
+            except Exception as ex:
+                last = str(ex).splitlines()[0]
+                self._rollback()
+                continue
+            ret = self._ret(res)
+            if [m for m in ret if m.get("TYPE") in ("E", "A")]:
+                last = "; ".join(f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret)[:120]
+                self._rollback()
+                continue
+            if commit:
+                self._commit()
+            verify = {"table": "PROJ", "key": {"PSPID": cand}}
+            msgs = [] if cand == pid else [f"project id {pid} sanitized to target -> {cand}"]
+            return {"status": "created", "project": cand, "verify_key": verify,
+                    "key_mapping": {"source": pid, "target": cand,
+                                    "disposition": "created" if cand == pid else "remapped"},
+                    "messages": msgs}
+        return {"status": "failed", "messages": [f"project create failed: {last}"]}
+
     # ── Exchange rate (BAPI writes TCURR; cleaner than an EXCHANGE_RATE IDoc) ─
     # BAPI_EXCHRATE_CREATEMULTIPLE accepts VALID_FROM only within this window
     # (empirically: 1900-01-01 OK, 1798 rejected; 2050 OK, 2080 rejected).
