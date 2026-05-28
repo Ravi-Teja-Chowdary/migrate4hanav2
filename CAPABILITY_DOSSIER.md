@@ -42,7 +42,7 @@ auto-discovery adapts the run to the target system; everything is reconciled and
 
 ## 3. What's built and proven (on a live ECC → S/4HANA pair)
 
-### Object coverage — **22 object types load live**, ~20 extract
+### Object coverage — **23 object types load live**, ~20 extract
 | Object | Mechanism (released SAP API) |
 |---|---|
 | BusinessPartner | BAPI_BUPA_CREATE_FROM_DATA |
@@ -65,6 +65,7 @@ auto-discovery adapts the run to the target system; everything is reconciled and
 | Project (WBS) | BAPI_PROJECTDEF_CREATE (PS master; profile auto-discovered; coding-mask-safe ID remap) |
 | PurchaseRequisition | BAPI_REQUISITION_CREATE (open MM doc; account-assigned, reuses PO config) |
 | OpenSO (Sales Order) | BAPI_SALESORDER_CREATEFROMDAT2 (open SD doc; sold-to + sales area auto-discovered/harmonized) |
+| PurchaseContract | BAPI_CONTRACT_CREATE (MM outline agreement; TESTRUN-validated contract-capable vendor; currency normalized) |
 
 Adding a new object is **systematic**: its SAP API + discovered config + reconciliation
 keys slot into the spine (ProfitCenter and FixedAsset were added this way as the 10th and
@@ -120,7 +121,7 @@ live system pair.
 2. **A real pilot go-live** with a customer — the only true proof. **Requires SAP functional
    + Basis expertise on the team** (this tool automates the data movement, not the whole
    project) — best pursued with an SAP consultancy partner.
-3. **Breadth to the full ~100 Migration-Cockpit objects** — 22 load today; each additional
+3. **Breadth to the full ~100 Migration-Cockpit objects** — 23 load today; each additional
    object follows the proven pattern.
 4. **Operational hardening** — monitoring, secrets management, packaging/deployment.
 

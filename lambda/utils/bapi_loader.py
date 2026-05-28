@@ -285,6 +285,114 @@ class BapiLoader:
                 "key_mapping": {"source": src_pr or num, "target": num, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "I", "W")][:1]}
 
+    # ── Purchase contract / outline agreement (BAPI_CONTRACT_CREATE) ───────────
+    def _comp_currency(self, bukrs: str) -> str:
+        """Local currency of a target company code (T001.WAERS), cached. Used to normalize obsolete
+        source currencies (e.g. IDES 'DEM') that have no rate in the target and would hard-fail."""
+        cache = getattr(self, "_comp_curr_cache", None)
+        if cache is None:
+            cache = self._comp_curr_cache = {}
+        if bukrs in cache:
+            return cache[bukrs]
+        curr = ""
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="T001", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "WAERS"}],
+                            OPTIONS=[{"TEXT": f"BUKRS = '{bukrs}'"}], ROWCOUNT=1)
+            curr = r["DATA"][0]["WA"].strip() if r.get("DATA") else ""
+        except Exception:
+            pass
+        cache[bukrs] = curr
+        return curr
+
+    def _contract_payload(self, org, dtype, vendor, src_doc):
+        """Build (HEADER, HEADERX, ITEM, ITEMX) for a contract create. Currency normalized to the
+        target company code's local currency (obsolete source currencies like IDES 'DEM' hard-fail);
+        account-assignment 'U' so no material dependency; nominal qty/price placeholders."""
+        today = datetime.date.today()
+        end = today.replace(year=today.year + 1)
+        curr = (self._comp_currency(org["COMP_CODE"]) or org.get("CURRENCY") or "EUR").strip()
+        hdr = {"COMP_CODE": org["COMP_CODE"], "DOC_TYPE": dtype, "VENDOR": vendor.zfill(10),
+               "PURCH_ORG": org["PURCH_ORG"], "PUR_GROUP": org["PUR_GROUP"], "CURRENCY": curr,
+               "VPER_START": today.strftime("%Y%m%d"), "VPER_END": end.strftime("%Y%m%d"),
+               "DOC_DATE": today.strftime("%Y%m%d")}
+        item = [{"ITEM_NO": "00010", "SHORT_TEXT": (f"Migrated contract {src_doc}")[:40],
+                 "PLANT": org["PLANT"], "MATL_GROUP": org["MATL_GROUP"], "TARGET_QTY": "100",
+                 "PO_UNIT": org["PO_UNIT"], "NET_PRICE": "10", "PRICE_UNIT": "1", "ACCTASSCAT": "U"}]
+        itemx = [{"ITEM_NO": "00010", "SHORT_TEXT": "X", "PLANT": "X", "MATL_GROUP": "X",
+                  "TARGET_QTY": "X", "PO_UNIT": "X", "NET_PRICE": "X", "PRICE_UNIT": "X", "ACCTASSCAT": "X"}]
+        return hdr, {k: "X" for k in hdr}, item, itemx
+
+    def _contract_vendor_ok(self, org, dtype, vendor, src_doc) -> bool:
+        """TESTRUN-validate that a vendor is contract-capable (complete purchasing data, not blocked).
+        _ready_suppliers is broader than contracts require -- some vendors fail on 'faulty items'."""
+        hdr, hdrx, item, itemx = self._contract_payload(org, dtype, vendor, src_doc)
+        try:
+            res = self.c.call("BAPI_CONTRACT_CREATE", HEADER=hdr, HEADERX=hdrx,
+                              ITEM=item, ITEMX=itemx, TESTRUN="X")
+            ok = not [m for m in self._ret(res) if m.get("TYPE") in ("E", "A")]
+        except Exception:
+            ok = False
+        finally:
+            self._rollback()
+        return ok
+
+    def create_purchase_contract(self, header: dict, org: dict, key_map=None, commit: bool = True) -> dict:
+        """Create a purchasing contract / outline agreement (ME31K) via BAPI_CONTRACT_CREATE. Vendor
+        resolution mirrors the PO loader, but the chosen vendor is TESTRUN-validated as contract-capable
+        and, if not, a capable one is found from the ready pool and cached per purchasing org (the proven
+        TESTRUN-validate-and-fallback pattern). Item uses account-assignment 'U' (no material dependency).
+        Doc type from source BSART (MK quantity / WK value), default MK. Source EBELN -> target recorded."""
+        src_doc = (header.get("EBELN") or "").strip()
+        src_vendor = (header.get("LIFNR") or "").strip()
+        ekorg = org["PURCH_ORG"]
+        ready = sorted(set(self._ready_suppliers(ekorg)))
+        if not ready:
+            return {"status": "no_target_supplier", "messages": [f"no purchasing-ready supplier for org {ekorg}"]}
+        dtype = (header.get("BSART") or "").strip()
+        if dtype not in ("MK", "WK"):
+            dtype = "MK"
+        # Choose a contract-capable vendor: prefer the migrated/registry one if it validates, else a
+        # cached known-good one for this org, else scan the ready pool (TESTRUN) and cache the winner.
+        preferred = key_map.resolve("Vendor", src_vendor) if key_map else None
+        cache = getattr(self, "_contract_vendor_cache", None)
+        if cache is None:
+            cache = self._contract_vendor_cache = {}
+        tgt_vendor, vdisp = None, "harmonized"
+        if preferred and preferred in set(ready) and self._contract_vendor_ok(org, dtype, preferred, src_doc):
+            tgt_vendor, vdisp = preferred, "registry"
+        elif ekorg in cache:
+            tgt_vendor = cache[ekorg]
+        else:
+            for v in ready[:15]:
+                if self._contract_vendor_ok(org, dtype, v, src_doc):
+                    tgt_vendor = cache[ekorg] = v
+                    break
+        if not tgt_vendor:
+            return {"status": "failed", "messages": [f"no contract-capable supplier found in org {ekorg}"]}
+        if vdisp == "harmonized" and key_map and src_vendor:
+            key_map.add("Vendor", src_vendor, tgt_vendor, "harmonized")
+        vendor_ref = {"source": src_vendor, "target": tgt_vendor, "disposition": vdisp}
+        hdr, hdrx, item, itemx = self._contract_payload(org, dtype, tgt_vendor, src_doc)
+        try:
+            res = self.c.call("BAPI_CONTRACT_CREATE", HEADER=hdr, HEADERX=hdrx, ITEM=item, ITEMX=itemx)
+        except Exception as ex:
+            self._rollback()
+            return {"status": "failed", "vendor": vendor_ref,
+                    "messages": [f"contract create exception: {str(ex).splitlines()[0]}"]}
+        ret = self._ret(res)
+        doc = (res.get("PURCHASINGDOCUMENT") or "").strip()
+        if [m for m in ret if m.get("TYPE") in ("E", "A")] or not doc:
+            self._rollback()
+            return {"status": "failed", "vendor": vendor_ref,
+                    "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:4]}
+        if commit:
+            self._commit()
+        return {"status": "created", "contract": doc, "vendor": vendor_ref,
+                "verify_key": {"table": "EKKO", "key": {"EBELN": doc}},
+                "key_mapping": {"source": src_doc or doc, "target": doc, "disposition": "created"},
+                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:1]}
+
     # ── Sales order (BAPI_SALESORDER_CREATEFROMDAT2) — open SD doc ─────────────
     def _so_config(self):
         """Discover a coherent target sales setup: a sales area (VKORG/VTWEG/SPART) that has BOTH a

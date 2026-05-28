@@ -58,6 +58,7 @@ OBJECT_SOURCE_KEY = {
     "Characteristic": "ATNAM", "Class": ("CLASS", "KLART"),
     "CostElementGroup": "SETNAME", "ProfitCenterGroup": "SETNAME",
     "Project": "PSPID", "PurchaseRequisition": "BANFN", "OpenSO": "VBELN",
+    "PurchaseContract": "EBELN",
 }
 
 # object -> (mechanism, sub-kind)
@@ -84,6 +85,7 @@ OBJECT_MECHANISM = {
     "Project":         ("bapi", "project"),
     "PurchaseRequisition": ("bapi", "pr"),
     "OpenSO":          ("bapi", "salesorder"),
+    "PurchaseContract": ("bapi", "contract"),
     "BankStatements":  ("idoc", None),
 }
 
@@ -480,6 +482,12 @@ class UnifiedLoader:
             return {"ok": r["status"] == "created", "status": r["status"],
                     "id": r.get("so"), "verify_key": r.get("verify_key"),
                     "key_mapping": r.get("key_mapping"), "refs": r.get("customer"),
+                    "msg": r.get("messages")}
+        if kind == "bapi" and sub == "contract":
+            r = self.bapi.create_purchase_contract(row, self.po_org, key_map=self.key_map, commit=True)
+            return {"ok": r["status"] == "created", "status": r["status"],
+                    "id": r.get("contract"), "verify_key": r.get("verify_key"),
+                    "key_mapping": r.get("key_mapping"), "refs": r.get("vendor"),
                     "msg": r.get("messages")}
         if kind == "bapi" and sub in ("fi_ar", "fi_ap"):
             arap = "AR" if sub == "fi_ar" else "AP"
