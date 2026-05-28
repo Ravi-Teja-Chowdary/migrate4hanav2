@@ -7,12 +7,12 @@ Recipe per object: probe BAPI/OData + ECC source → `create_<obj>` (+ idempoten
 → discovery if needed → wire 4 files (`bapi_loader`, `unified_loader` ×2, `handler`) → live
 load+reconcile RECONCILED → commit. See `BREADTH_BUILDOUT_PROMPT.md`.
 
-## Live today (✅ 24)
+## Live today (✅ 25)
 BusinessPartner · Customer · Vendor · Material · ExchangeRates · OpenPO · OpenAR · OpenAP ·
 CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **Equipment** ·
 **FunctionalLocation** · **Characteristic** · **Class** · **CostElementGroup** ·
 **ProfitCenterGroup** · **Project** · **PurchaseRequisition** · **OpenSO** ·
-**PurchaseContract** · **Batch**
+**PurchaseContract** · **Batch** · **InventoryBalance**
 
 ## Route to non-BAPI lane (🔀 — evidence-based lane decision, not a gap)
 - **Routing** (PLKO) — `BAPI_ROUTING_CREATE` exists but returns "S" with empty TASK_LIST_GROUP
@@ -27,11 +27,12 @@ CostCenter · ProfitCenter · FixedAsset · **Bank** · **InternalOrder** · **E
   `BAPI_FUNDSCOMMITITEM_CREATE` → not found). Lane: **MC file**.
 - **GLAccount** — no RFC master-create BAPI on S/4 (cost-element-rationalized; GL = cost element).
   Lane: **Migration Cockpit / OData**; chart YIKR, cross-COA map.
-- **GLBalances / InventoryBalances** — financial cutover quantities; reconciliation, not creation. Lane: **manual_gate**.
+- **GLBalances** — financial cutover quantities; reconciliation, not creation. Lane: **manual_gate**.
+  (**InventoryBalance** is now LIVE via BAPI_GOODSMVT_CREATE mvt 561 — see above.)
 - **NumberRanges / CustomZTable** — out-of-spine by design (cutover artifacts / Z-tables are project-specific). Lane: **manual_gate**.
 
 ## Honest coverage
-**24 BAPI-loaded (load+reconcile RECONCILED) + 102 routed-extract (MC/IDoc lanes for tool-consumed templates) = 126 catalog objects with explicit lane decisions today.**
+**25 BAPI-loaded (load+reconcile RECONCILED) + 102 routed-extract (MC/IDoc lanes for tool-consumed templates) = 127 catalog objects with explicit lane decisions today.**
 
 The full Migration-Cockpit catalog is ~120; we now cover the standard MC catalog across MM
 (SourceList, InfoRecord, BOM, ScheduleAgreement, MaterialStock, ...), SD (Quotation, Inquiry,

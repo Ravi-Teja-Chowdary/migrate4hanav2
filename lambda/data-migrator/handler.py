@@ -219,6 +219,7 @@ DEFAULT_OBJECT_TABLES = {
     "OpenSO":            {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR"], "lane": "MC"},
     "PurchaseContract":  {"table": "EKKO", "fields": ["EBELN", "BSART", "LIFNR", "EKORG", "WAERS"], "where": "BSTYP = 'K'", "lane": "MC"},
     "Batch":             {"table": "MCH1", "fields": ["MATNR", "CHARG"], "lane": "MC"},
+    "InventoryBalance":  {"table": "MARD", "fields": ["MATNR", "WERKS", "LGORT", "LABST"], "where": "LABST > '0'", "lane": "MC"},
     "Plant":             {"table": "T001W", "fields": ["WERKS", "NAME1", "LAND1"], "lane": "MC"},
     "ChartOfAccounts":   {"table": "T004", "fields": ["KTOPL", "KTPLT", "MWSKZ"], "lane": "MC"},
     "ControllingArea":   {"table": "TKA01", "fields": ["KOKRS", "BEZEI", "WAERS"], "lane": "MC"},

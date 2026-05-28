@@ -393,6 +393,80 @@ class BapiLoader:
                 "key_mapping": {"source": src_doc or doc, "target": doc, "disposition": "created"},
                 "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:1]}
 
+    # ── Inventory balance (BAPI_GOODSMVT_CREATE, mvt 561 initial stock) ────────
+    def _stock_target(self):
+        """Discover a target (material, plant, storage location) that exists in stock master (MARD),
+        cached. Source materials rarely carry the target's plant/sloc views, so initial stock is
+        posted against a discovered target-ready material+plant+sloc (harmonized, recorded)."""
+        cache = getattr(self, "_stock_tgt_cache", None)
+        if cache is not None:
+            return cache
+        mat = plant = sloc = ""
+        try:
+            r = self.c.call("RFC_READ_TABLE", QUERY_TABLE="MARD", DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": "MATNR"}, {"FIELDNAME": "WERKS"},
+                                    {"FIELDNAME": "LGORT"}], ROWCOUNT=1)
+            if r.get("DATA"):
+                mat, plant, sloc = (c.strip() for c in (r["DATA"][0]["WA"].split("|") + ["", "", ""])[:3])
+        except Exception:
+            pass
+        self._stock_tgt_cache = (mat, plant, sloc)
+        return mat, plant, sloc
+
+    def _mm_posting_date(self) -> str:
+        """An MM posting date in an OPEN period. The appliance's MM current period often lags real
+        time; cached. Defaults to today and is corrected (parsed from the BAPI's 'periods YYYY/MM'
+        message) on the first failure."""
+        return getattr(self, "_mm_pdate", None) or datetime.date.today().strftime("%Y%m%d")
+
+    def create_inventory_balance(self, row: dict, commit: bool = True) -> dict:
+        """Post an initial stock balance (movement type 561) via BAPI_GOODSMVT_CREATE. Material is
+        harmonized to a discovered target-ready (material, plant, sloc); quantity from source MARD.LABST.
+        Self-heals the posting date if the target's MM period is closed (parses the open period from the
+        BAPI message and retries, cached). verify_key on the resulting material document (MKPF)."""
+        import re
+        src_mat = (row.get("MATNR") or "").strip()
+        qty = parse_sap_number(row.get("LABST"), 0)
+        if qty <= 0:
+            return {"status": "skipped", "messages": ["zero/again non-positive stock quantity"]}
+        tgt_mat, plant, sloc = self._stock_target()
+        if not tgt_mat or not plant or not sloc:
+            return {"status": "skipped", "messages": ["no target material/plant/storage-location discovered"]}
+        uom = (row.get("MEINS") or "EA").strip() or "EA"
+
+        def _post(pdate):
+            hdr = {"PSTNG_DATE": pdate, "DOC_DATE": pdate, "HEADER_TXT": f"M4H init stock {src_mat}"[:25]}
+            item = [{"MATERIAL": tgt_mat, "PLANT": plant, "STGE_LOC": sloc,
+                     "MOVE_TYPE": "561", "ENTRY_QNT": ("%.3f" % qty), "ENTRY_UOM": uom}]
+            return self.c.call("BAPI_GOODSMVT_CREATE", GOODSMVT_HEADER=hdr,
+                               GOODSMVT_CODE={"GM_CODE": "05"}, GOODSMVT_ITEM=item)
+
+        res = _post(self._mm_posting_date())
+        ret = self._ret(res)
+        # MM period closed -> parse the open period (YYYY/MM) and retry once on the 15th of it.
+        period_err = [m for m in ret if "period" in (m.get("MESSAGE") or "").lower()]
+        if period_err and not (res.get("MATERIALDOCUMENT") or "").strip():
+            self._rollback()
+            mt = re.search(r"(\d{4})/(\d{2})", period_err[0].get("MESSAGE") or "")
+            if mt:
+                self._mm_pdate = f"{mt.group(1)}{mt.group(2)}15"
+                res = _post(self._mm_pdate)
+                ret = self._ret(res)
+        doc = (res.get("MATERIALDOCUMENT") or "").strip()
+        year = (res.get("MATDOCUMENTYEAR") or "").strip()
+        if [m for m in ret if m.get("TYPE") in ("E", "A")] or not doc:
+            self._rollback()
+            return {"status": "failed", "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:3]}
+        if commit:
+            self._commit()
+        msgs = []
+        if tgt_mat != src_mat:
+            msgs.append(f"material {src_mat} harmonized to target {tgt_mat}/{plant}/{sloc}")
+        return {"status": "created", "matdoc": doc,
+                "verify_key": {"table": "MKPF", "key": {"MBLNR": doc, "MJAHR": year}},
+                "key_mapping": {"source": src_mat, "target": f"{tgt_mat}@{doc}", "disposition": "harmonized"},
+                "messages": msgs}
+
     # ── Batch (BAPI_BATCH_CREATE) — batch master under a material+plant ────────
     def _batch_target_mat(self):
         """Discover a (material, plant) on the target that is batch-managed (MARC.XCHPF='X'), cached.
