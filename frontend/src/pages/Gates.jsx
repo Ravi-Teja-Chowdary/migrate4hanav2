@@ -1,221 +1,108 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  Box, Typography, Paper, Chip, Button, Stack, Alert, CircularProgress,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-} from '@mui/material';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CancelIcon from '@mui/icons-material/Cancel';
-import RefreshIcon from '@mui/icons-material/Refresh';
-
-// Manual approval gates page for the lift-and-shift pipeline.
-// Polls /api/gates and lets approvers send_task_success / send_task_failure to
-// Step Functions via api_server endpoints.
-
-const POLL_INTERVAL_MS = 10000;
+import { useCallback, useState } from 'react';
+import { ShieldCheck, Check, X, Clock, UserCheck } from 'lucide-react';
+import { api } from '../lib/api';
+import { useApi } from '../lib/useApi';
+import { Card, PageHeader, Badge, Spinner, EmptyState, OfflineBanner, CommandBlock } from '../components/ui';
 
 export default function Gates() {
-  const [gates, setGates] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [actioning, setActioning] = useState(null);
-  const [rejectFor, setRejectFor] = useState(null);
-  const [rejectReason, setRejectReason] = useState('');
-  const [approver, setApprover] = useState(localStorage.getItem('m4h_approver') || '');
+  const { data, error, loading, reload } = useApi(useCallback(() => api.gates(), []), { pollMs: 8000 });
+  const [approver, setApprover] = useState(() => localStorage.getItem('m4h_approver') || '');
+  const [busyId, setBusyId] = useState(null);
+  const [actionErr, setActionErr] = useState(null);
 
-  const load = useCallback(async () => {
-    try {
-      const r = await fetch('/api/gates');
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const j = await r.json();
-      setGates(j.gates || []);
-      setError(null);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    const t = setInterval(load, POLL_INTERVAL_MS);
-    return () => clearInterval(t);
-  }, [load]);
-
-  useEffect(() => {
+  const decide = async (gateId, kind) => {
+    setBusyId(gateId + kind); setActionErr(null);
     localStorage.setItem('m4h_approver', approver);
-  }, [approver]);
-
-  const approve = async (gate) => {
-    setActioning(gate.gate_id);
     try {
-      const r = await fetch(`/api/gates/${encodeURIComponent(gate.gate_id)}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approver: approver || 'unknown' }),
-      });
-      if (!r.ok) throw new Error(`approve failed: HTTP ${r.status}`);
-      await load();
+      if (kind === 'approve') await api.approveGate(gateId, approver);
+      else await api.rejectGate(gateId, approver);
+      await reload();
     } catch (e) {
-      setError(e.message);
+      setActionErr(e.message);
     } finally {
-      setActioning(null);
+      setBusyId(null);
     }
   };
 
-  const reject = async () => {
-    if (!rejectFor) return;
-    setActioning(rejectFor.gate_id);
-    try {
-      const r = await fetch(`/api/gates/${encodeURIComponent(rejectFor.gate_id)}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approver: approver || 'unknown', reason: rejectReason }),
-      });
-      if (!r.ok) throw new Error(`reject failed: HTTP ${r.status}`);
-      setRejectFor(null);
-      setRejectReason('');
-      await load();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setActioning(null);
-    }
-  };
+  if (loading) return <div className="flex items-center gap-2 text-ink-400 text-sm py-20 justify-center"><Spinner /> Loading gates…</div>;
+  if (error) {
+    return (
+      <div className="space-y-7">
+        <PageHeader title="Approval" accentWord="Gates" subtitle="Human GO/NO-GO checkpoints in the pipeline." />
+        <OfflineBanner onRetry={reload} />
+      </div>
+    );
+  }
 
-  const pending = gates.filter((g) => g.status === 'pending' || !g.status);
-  const decided = gates.filter((g) => g.status && g.status !== 'pending');
+  const gates = data?.gates || [];
 
   return (
-    <Box sx={{ p: 4, maxWidth: 1200, mx: 'auto' }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: '#0f172a' }}>
-            Manual Approval Gates
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#9ca3af', mt: 0.5 }}>
-            Lift-and-shift pipeline pauses here for human GO/NO-GO decisions.
-          </Typography>
-        </Box>
-        <Button startIcon={<RefreshIcon />} onClick={load} variant="outlined">
-          Refresh
-        </Button>
-      </Stack>
-
-      <TextField
-        label="Approver (your name / email)"
-        value={approver}
-        onChange={(e) => setApprover(e.target.value)}
-        size="small"
-        sx={{ mb: 3, width: 360 }}
-        helperText="Saved locally; recorded with each decision."
+    <div className="space-y-7">
+      <PageHeader
+        title="Approval" accentWord="Gates"
+        subtitle={`The pipeline pauses here for human decisions${data?.source ? ` · source: ${data.source}` : ''}.`}
+        actions={
+          <div className="flex items-center gap-2 rounded-xl bg-white border border-line px-3 py-2 shadow-soft">
+            <UserCheck size={15} className="text-ink-400" />
+            <input
+              value={approver} onChange={(e) => setApprover(e.target.value)}
+              placeholder="Approver name / email"
+              className="focusable text-[13px] text-ink-900 bg-transparent outline-none w-48 placeholder:text-ink-300"
+            />
+          </div>
+        }
       />
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {loading && <CircularProgress />}
-
-      <Typography variant="h6" sx={{ mt: 2, mb: 1, color: '#0f172a' }}>
-        Pending ({pending.length})
-      </Typography>
-      {pending.length === 0 && !loading && (
-        <Alert severity="info">No pending gates.</Alert>
-      )}
-      <Stack spacing={2}>
-        {pending.map((g) => (
-          <Paper key={g.gate_id} sx={{ p: 2.5, bgcolor: 'rgba(15, 23, 42,0.04)' }}>
-            <Stack direction="row" alignItems="flex-start" spacing={2}>
-              <Box sx={{ flex: 1 }}>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                  <Chip label={g.gate || 'GATE'} color="warning" size="small" />
-                  <Chip label={g.run_id || '—'} size="small" variant="outlined" />
-                  <Typography variant="caption" sx={{ color: '#9ca3af' }}>
-                    {g.created_at}
-                  </Typography>
-                </Stack>
-                <Typography variant="body2" sx={{ color: '#d1d5db', whiteSpace: 'pre-wrap' }}>
-                  {typeof g.input === 'string' ? g.input : JSON.stringify(g.input, null, 2)}
-                </Typography>
-              </Box>
-              <Stack spacing={1}>
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<CheckCircleIcon />}
-                  disabled={actioning === g.gate_id || !approver}
-                  onClick={() => approve(g)}
-                >
-                  Approve
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<CancelIcon />}
-                  disabled={actioning === g.gate_id || !approver}
-                  onClick={() => setRejectFor(g)}
-                >
-                  Reject
-                </Button>
-              </Stack>
-            </Stack>
-          </Paper>
-        ))}
-      </Stack>
-
-      {decided.length > 0 && (
-        <>
-          <Typography variant="h6" sx={{ mt: 4, mb: 1, color: '#0f172a' }}>
-            Recent Decisions
-          </Typography>
-          <Stack spacing={1}>
-            {decided.slice(0, 20).map((g) => (
-              <Paper key={g.gate_id} sx={{ p: 1.5, bgcolor: 'rgba(15, 23, 42,0.02)' }}>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Chip
-                    label={g.status}
-                    color={g.status === 'approved' ? 'success' : 'error'}
-                    size="small"
-                  />
-                  <Typography variant="body2" sx={{ color: '#d1d5db' }}>
-                    {g.gate} · {g.run_id}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#9ca3af', ml: 'auto' }}>
-                    {g.decided_by} @ {g.decided_at}
-                  </Typography>
-                </Stack>
-              </Paper>
-            ))}
-          </Stack>
-        </>
+      {actionErr && (
+        <Card className="p-3 border-rose-200/60"><p className="text-xs text-rose-600">{actionErr}</p></Card>
       )}
 
-      <Dialog open={!!rejectFor} onClose={() => setRejectFor(null)} fullWidth maxWidth="sm">
-        <DialogTitle>Reject gate: {rejectFor?.gate}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            Rejection fails the Step Functions execution. Provide a reason for the audit log.
-          </Typography>
-          <TextField
-            autoFocus
-            fullWidth
-            multiline
-            minRows={3}
-            label="Reason"
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
+      {gates.length === 0 ? (
+        <Card className="p-6">
+          <EmptyState
+            icon={ShieldCheck}
+            title="No pending gates"
+            hint="Gates appear when a run reaches a manual checkpoint (basis handover, pre-cutover, final go-live)."
+            action={<CommandBlock cmd="python run_local_lift_and_shift.py --run-id RUN-001" />}
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRejectFor(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color="error"
-            disabled={!rejectReason.trim() || actioning}
-            onClick={reject}
-          >
-            Confirm Reject
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {gates.map((g) => {
+            const id = g.gate_id;
+            return (
+              <Card key={id} hover className="p-5">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-50 flex items-center justify-center shrink-0">
+                    <Clock size={18} className="text-amber-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[15px] font-semibold text-ink-900 truncate">{(g.gate || 'gate').replace(/_/g, ' ')}</h3>
+                      <Badge tone="warn">pending</Badge>
+                    </div>
+                    <p className="text-xs text-ink-400 mt-0.5 font-mono">{g.run_id}{g.created_at ? ` · ${new Date(g.created_at).toLocaleString()}` : ''}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => decide(id, 'reject')} disabled={!!busyId}
+                      className="focusable inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-50 text-rose-600 text-[13px] font-semibold hover:bg-rose-100 transition disabled:opacity-50"
+                    >
+                      {busyId === id + 'reject' ? <Spinner size={13} className="text-rose-500" /> : <X size={14} />} Reject
+                    </button>
+                    <button
+                      onClick={() => decide(id, 'approve')} disabled={!!busyId}
+                      className="focusable inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 text-white text-[13px] font-semibold hover:bg-emerald-600 transition disabled:opacity-50"
+                    >
+                      {busyId === id + 'approve' ? <Spinner size={13} className="text-white" /> : <Check size={14} />} Approve
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

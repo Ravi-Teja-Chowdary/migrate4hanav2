@@ -1,229 +1,146 @@
+import { useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import {
-  Code, Database, Settings, Shield, Plug, Search,
-  PlayCircle, Upload, HardDrive, Wrench, UserCheck, Zap, CheckCircle2,
-  Activity, Clock, Building2, ArrowRight, BarChart2, TrendingDown,
-  ClipboardCheck, ShieldCheck, ListChecks, ShieldAlert, DollarSign,
-  TestTube2, Rocket,
+  Rocket, TerminalSquare, Server, FileText, ShieldCheck, Activity,
+  GitBranch, KanbanSquare, ArrowRight, Wifi, Gauge,
 } from 'lucide-react';
-import MetricCard from '../components/MetricCard';
-import StageCard from '../components/StageCard';
-import ProjectTracker from '../components/ProjectTracker';
-import { STAGES, PHASES, PHASE_COLORS, SAMPLE_RUN, getStageStatus } from '../data/sampleData';
+import { api } from '../lib/api';
+import { useApi } from '../lib/useApi';
+import { Card, PageHeader, Stat, Badge, ProgressBar, OfflineBanner, CommandBlock, Spinner, ACCENT } from '../components/ui';
 
-const ICONS = {
-  Search, Code, Database, Settings, Shield, Plug, PlayCircle, Upload, HardDrive, Wrench, UserCheck, Zap, CheckCircle2,
-  ClipboardCheck, ShieldCheck, ListChecks, ShieldAlert, DollarSign, TestTube2, Rocket,
-};
-
-const PHASE_GRADIENT = {
-  blue: 'from-blue-500/30 to-blue-500/5',
-  purple: 'from-purple-500/30 to-purple-500/5',
-  amber: 'from-amber-500/30 to-amber-500/5',
-  cyan: 'from-cyan-500/30 to-cyan-500/5',
-  green: 'from-green-500/30 to-green-500/5',
-};
-
-const PHASE_DOT = {
-  blue: 'bg-blue-500',
-  purple: 'bg-purple-500',
-  amber: 'bg-amber-500',
-  cyan: 'bg-cyan-500',
-  green: 'bg-green-500',
-};
-
-const PHASE_LINE = {
-  blue: 'from-blue-500/30',
-  purple: 'from-purple-500/30',
-  amber: 'from-amber-500/30',
-  cyan: 'from-cyan-500/30',
-  green: 'from-green-500/30',
-};
+function QuickLink({ to, icon: Icon, title, desc, accent = 'indigo' }) {
+  const a = ACCENT[accent] || ACCENT.indigo;
+  return (
+    <Link to={to} className="focusable block">
+      <Card hover className="p-5 h-full">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-2xl ${a.bg} flex items-center justify-center`}>
+            <Icon size={18} className={a.text} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-ink-900">{title}</p>
+            <p className="text-xs text-ink-400 truncate">{desc}</p>
+          </div>
+          <ArrowRight size={16} className="ml-auto text-ink-300" />
+        </div>
+      </Card>
+    </Link>
+  );
+}
 
 export default function Dashboard() {
-  const run = SAMPLE_RUN;
-  const disc = run.results.discovery.summary;
-  const code = run.results.code_analysis;
-  const data = run.results.data_assessment.results;
-  const sc = run.results.validation_scorecard.scorecard;
-  const navigate = useNavigate();
+  const health = useApi(useCallback(() => api.health(), []), { pollMs: 10000 });
+  const ecc = useApi(useCallback(() => api.eccStatus(), []));
+  const status = useApi(useCallback(() => api.status(), []), { pollMs: 5000 });
+  const gates = useApi(useCallback(() => api.gates(), []), { pollMs: 10000 });
+  const runs = useApi(useCallback(() => api.runs(), []));
+  const spine = useApi(useCallback(() => api.spineProgress(), []), { pollMs: 6000 });
+
+  const online = !!health.data;
+  const checking = health.loading;
+
+  const runStatus = status.data?.status || 'idle';
+  const pendingGates = gates.data?.gates?.length ?? 0;
+  const runCount = Array.isArray(runs.data) ? runs.data.length : 0;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <motion.h1
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-3xl font-bold text-slate-900"
-          >
-            Migration <span className="gradient-text">Dashboard</span>
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="text-sm text-slate-400 mt-1 flex items-center gap-2"
-          >
-            <Building2 size={14} />
-            {run.company}
-          </motion.p>
-        </div>
-
-        <motion.button
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-          onClick={() => navigate('/pipeline')}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent-blue/10 text-accent-blue text-sm font-medium
-                     hover:bg-accent-blue/20 transition-all duration-300 border border-accent-blue/20 hover:border-accent-blue/40"
-        >
-          <PlayCircle size={16} />
-          Run Pipeline
-          <ArrowRight size={14} />
-        </motion.button>
-      </div>
-
-      {/* Project Tracker — start/end boards, progress pipeline, kanban */}
-      <ProjectTracker />
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard label="Custom Programs" value={disc.total_programs} icon={Code} color="#3b82f6" delay={0} />
-        <MetricCard label="Finance Records" value={data.finance_lines} icon={Database} color="#10b981" delay={0.05} />
-        <MetricCard label="Business Partners" value={data.bp_created} icon={UserCheck} color="#8b5cf6" delay={0.1} />
-        <MetricCard
-          label="GO-LIVE Score"
-          value={sc.score}
-          sub={`Grade ${sc.grade} · ${sc.recommendation}`}
-          icon={CheckCircle2}
-          color="#10b981"
-          delay={0.15}
-        />
-      </div>
-
-      {/* Additional metrics row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <MetricCard label="Code Issues" value={code.total_issues} sub={`${code.critical_issues} critical`} icon={Code} color="#ef4444" delay={0.1} />
-        <MetricCard label="Auto-Fixed" value={code.auto_remediated} sub={`${code.fix_rate}% fix rate`} icon={Wrench} color="#10b981" delay={0.12} />
-        <MetricCard label="PFCG Roles" value={disc.total_roles} sub={`${disc.total_users} users`} icon={Shield} color="#8b5cf6" delay={0.14} />
-        <MetricCard label="RFC Destinations" value={disc.rfc_destinations} icon={Plug} color="#ef4444" delay={0.16} />
-        <MetricCard label="RFC Calls" value={run.rfc_calls} sub={`${run.duration}s total`} icon={Activity} color="#06b6d4" delay={0.18} />
-      </div>
-
-      {/* SAP Activate Compliance Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="glass rounded-2xl p-4 relative overflow-hidden"
-      >
-        <div className="absolute inset-0 bg-gradient-to-r from-accent-blue/5 via-accent-purple/5 to-accent-green/5" />
-        <div className="relative flex items-center gap-4 flex-wrap">
+    <div className="space-y-7">
+      <PageHeader
+        title="Welcome to" accentWord="Migrate4HANA"
+        subtitle="A support-clean ECC → S/4HANA migration spine. Everything here runs against the live backend — no mock data."
+        actions={
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-accent-blue/10 flex items-center justify-center">
-              <ShieldCheck size={16} className="text-accent-blue" />
+            <Link to="/commands" className="focusable inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 text-ink-700 text-[13px] font-semibold hover:bg-slate-100 transition">
+              <TerminalSquare size={15} /> Commands
+            </Link>
+            <Link to="/pipeline" className="focusable btn-primary inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold">
+              <Rocket size={15} /> Run Pipeline
+            </Link>
+          </div>
+        }
+      />
+
+      {checking ? (
+        <div className="flex items-center gap-2 text-ink-400 text-sm py-6"><Spinner /> Checking backend…</div>
+      ) : !online ? (
+        <>
+          <OfflineBanner onRetry={health.reload} />
+          <Card className="p-6">
+            <p className="text-[13px] font-semibold text-ink-700 mb-3">Start everything in three commands</p>
+            <div className="space-y-2">
+              <CommandBlock cmd="python api_server.py" />
+              <CommandBlock cmd="cd frontend && npm run dev" />
+              <CommandBlock cmd="python pipeline_spine_master.py" />
             </div>
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">SAP Activate Compliance</span>
+          </Card>
+        </>
+      ) : (
+        <>
+          {/* live stat tiles */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Stat label="Backend" value="Online" sub={`v${health.data.version} · ${health.data.stages} stages`} icon={Wifi} accent="emerald" />
+            <Stat label="Source ECC" value={ecc.data?.live_ready ? 'Live-ready' : ecc.data?.has_connection ? 'Saved' : 'Not set'} sub={ecc.data?.has_password ? 'session active' : 'no live session'} icon={Server} accent="indigo" />
+            <Stat label="Runs on disk" value={runCount} sub="completed reports" icon={FileText} accent="violet" />
+            <Stat label="Pending gates" value={pendingGates} sub="awaiting decision" icon={ShieldCheck} accent={pendingGates ? 'amber' : 'slate'} />
           </div>
-          <div className="h-6 w-px bg-slate-100 hidden md:block" />
-          <div className="flex items-center gap-3 flex-wrap text-[11px] font-medium text-slate-500">
-            <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> Maintenance Planner</span>
-            <span className="text-slate-400">|</span>
-            <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> Readiness Check</span>
-            <span className="text-slate-400">|</span>
-            <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> SI-Check</span>
-            <span className="text-slate-400">|</span>
-            <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> SUM/DMO</span>
-            <span className="text-slate-400">|</span>
-            <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> FINS Monitor</span>
-          </div>
-        </div>
-      </motion.div>
 
-      {/* Process Mining Insights */}
-      <div className="flex items-center gap-4 mt-8">
-        <h2 className="text-lg font-semibold text-slate-700 shrink-0 flex items-center gap-2">
-          <BarChart2 size={18} className="text-accent-blue" /> Process Mining Insights
-        </h2>
-        <div className="h-px flex-1 bg-gradient-to-r from-accent-blue/30 to-transparent" />
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard label="Active T-Codes" value={disc.active_tcodes || 142} sub="Last 6 months (ST03N)" icon={Activity} color="#f59e0b" delay={0.2} />
-        <MetricCard label="Unused Z-Programs" value={disc.unused_zprograms || 312} sub="Candidates for Deletion" icon={TrendingDown} color="#ef4444" delay={0.22} />
-        <MetricCard label="Custom Tables Accessed" value={disc.active_ztables || 89} sub="High Priority for HANA" icon={Database} color="#8b5cf6" delay={0.24} />
-        <MetricCard label="Fiori Replacements" value={disc.fiori_mapped || 85} sub="Standard Apps Found" icon={Zap} color="#10b981" delay={0.26} />
-      </div>
-
-      {/* 5-Phase Stage Layout */}
-      {PHASES.map((phase, phaseIdx) => {
-        const phaseStages = STAGES.filter((s) => s.phaseNumber === phase.id);
-        return (
-          <div key={phase.id}>
-            {/* Phase separator */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${PHASE_DOT[phase.color] || 'bg-slate-100'}`} />
-                <h2 className="text-lg font-semibold text-slate-700 shrink-0">{phase.name}</h2>
-                <span className="text-xs text-slate-400 font-medium">{phase.subtitle}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-400 font-mono">
-                  {phaseStages.length} stages
-                </span>
+          {/* current run + spine */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Activity size={16} className="text-indigo-600" />
+                  <h3 className="text-[14px] font-semibold text-ink-900">Current Run</h3>
+                </div>
+                <Badge tone={runStatus === 'running' ? 'running' : runStatus === 'completed' ? 'ok' : runStatus === 'failed' ? 'failed' : 'pending'}>
+                  {runStatus === 'running' && <Spinner size={11} />} {runStatus}
+                </Badge>
               </div>
-              <div className={`h-px flex-1 bg-gradient-to-r ${PHASE_LINE[phase.color] || 'from-slate-200'} to-transparent`} />
-            </div>
+              {status.data?.run_id ? (
+                <p className="text-xs font-mono text-ink-400">{status.data.run_id}{status.data.mode ? ` · ${status.data.mode}` : ''}</p>
+              ) : (
+                <p className="text-sm text-ink-400">No active run. Start one from the Pipeline page.</p>
+              )}
+              <Link to="/pipeline" className="focusable inline-flex items-center gap-1.5 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 mt-4">
+                Open pipeline <ArrowRight size={14} />
+              </Link>
+            </Card>
 
-            {/* Phase Stages */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4 mb-8">
-              {phaseStages.map((stage, i) => (
-                <StageCard
-                  key={stage.key}
-                  stage={{ ...stage, icon: ICONS[stage.icon] }}
-                  status={getStageStatus(run, stage.key)}
-                  delay={phaseIdx * 0.05 + i * 0.03}
-                />
-              ))}
-            </div>
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Gauge size={16} className="text-violet-600" />
+                  <h3 className="text-[14px] font-semibold text-ink-900">Master Spine</h3>
+                </div>
+                {spine.data ? <Badge tone="ok">live</Badge> : <Badge tone="pending">no run</Badge>}
+              </div>
+              {spine.data ? (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-ink-500">{spine.data.connectivity?.source?.host} → {spine.data.connectivity?.target?.host}</span>
+                    <span className="text-xs font-mono text-ink-400">{spine.data.percent_complete ?? 0}%</span>
+                  </div>
+                  <ProgressBar value={spine.data.percent_complete || 0} accent="violet" />
+                </>
+              ) : (
+                <p className="text-sm text-ink-400">Run <span className="font-mono text-ink-600">pipeline_spine_master.py</span> to populate live spine progress.</p>
+              )}
+              <Link to="/tracker" className="focusable inline-flex items-center gap-1.5 text-[13px] font-semibold text-violet-600 hover:text-violet-700 mt-4">
+                Open tracker <ArrowRight size={14} />
+              </Link>
+            </Card>
           </div>
-        );
-      })}
 
-      {/* Quick scorecard banner */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        onClick={() => navigate('/scorecard')}
-        className="glass glass-hover rounded-2xl p-6 cursor-pointer relative overflow-hidden"
-      >
-        <div className="absolute inset-0 bg-gradient-to-r from-accent-green/5 via-transparent to-accent-blue/5" />
-        <div className="relative flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 rounded-2xl bg-accent-green/10 flex items-center justify-center">
-              <span className="text-3xl font-bold text-accent-green">{sc.grade}</span>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">{sc.recommendation}</h3>
-              <p className="text-sm text-slate-400">
-                {sc.total_passed}/{sc.total_checks} checks passed · Score: {sc.score}
-              </p>
-            </div>
+          {/* quick links */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <QuickLink to="/tracker" icon={KanbanSquare} title="Project Tracker" desc="Live stage board" accent="violet" />
+            <QuickLink to="/pipeline" icon={GitBranch} title="Pipeline" desc="28 stages + engines" accent="sky" />
+            <QuickLink to="/connections" icon={Server} title="Connections" desc="ECC + S/4HANA" accent="indigo" />
+            <QuickLink to="/runs" icon={FileText} title="Reports" desc="Run history + PDF" accent="emerald" />
           </div>
-          <ArrowRight size={20} className="text-slate-400 group-hover:text-slate-500 transition-colors" />
-        </div>
-      </motion.div>
-
-      {/* Run info */}
-      <div className="flex items-center justify-center gap-6 text-[11px] text-slate-400 font-mono">
-        <span className="flex items-center gap-1.5"><Clock size={11} /> {run.timestamp}</span>
-        <span>·</span>
-        <span>Run: {run.id}</span>
-        <span>·</span>
-        <span>{run.rfc_calls.toLocaleString()} RFC calls</span>
-      </div>
+        </>
+      )}
     </div>
   );
 }

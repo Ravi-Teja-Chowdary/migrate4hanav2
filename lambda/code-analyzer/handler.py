@@ -279,7 +279,7 @@ def analyze_program(program_name, source_code):
     return issues
 
 
-def auto_remediate_with_ast_engine(source_code):
+def auto_remediate_with_ast_engine(source_code, program_name=""):
     """
     Apply AST-based structural fixes via the AST Engine.
 
@@ -298,16 +298,58 @@ def auto_remediate_with_ast_engine(source_code):
         if isinstance(result, dict):
             fixed_ast_code = result.get("transformed_code", source_code)
             engine_changes = result.get("changes", [])
+            parse_errors = result.get("parse_errors") or []
             changes = engine_changes if engine_changes else (
                 [{"rule_id": "AST-GEN", "description": "Structurally updated via ABAP AST Engine."}]
                 if fixed_ast_code != source_code else []
             )
         else:
             fixed_ast_code = result
+            parse_errors = []
             changes = [{"rule_id": "AST-GEN", "description": "Structurally updated via ABAP AST Engine."}]
+        # SmartShift-class expertise (embedded in this stage): if the deterministic
+        # parser left fragments it could not resolve, escalate ONLY those to the AI
+        # fail-safe (localized fix + mock-ATC governance gate). Deterministic-first.
+        if parse_errors:
+            fixed_ast_code, fb = _ai_failsafe_remediate(fixed_ast_code, program_name, parse_errors)
+            changes = (changes or []) + fb
         return fixed_ast_code, changes
     except Exception as e:
-        logger.error(f"AST Remediation failed. {e}")
+        # The deterministic parser crashed on a pathological program — never give
+        # up silently; route the whole program through the AI fail-safe.
+        logger.error(f"AST Remediation crashed ({e}); invoking SmartShift AI fail-safe.")
+        fixed, fb = _ai_failsafe_remediate(source_code, program_name, [f"{type(e).__name__}: {e}"])
+        return fixed, fb
+
+
+def _ai_failsafe_remediate(source_code, program_name, errors):
+    """SmartShift-class last-mile fallback embedded in the code-analyzer stage.
+
+    Routes the offending program through llm_fallback_router.FallbackRouter:
+    localized LLM fix (Bedrock when configured) → mock-ATC gate → transport or
+    quarantine. Never raises — an offline/dead LLM yields a quarantine outcome,
+    not a pipeline halt. Returns (code, [change_records]).
+    """
+    try:
+        from llm_fallback_router import FallbackRouter
+    except Exception as e:  # module not importable in this context
+        logger.warning(f"AI fail-safe unavailable: {e}")
+        return source_code, []
+    try:
+        import tempfile
+        out_dir = os.environ.get("M4H_REMEDIATION_DIR") or os.path.join(
+            tempfile.gettempdir(), "m4h-remediation")
+        res = FallbackRouter().remediate(source_code, program_name or "ZPROG", out_dir=out_dir)
+        return res.transformed_code, [{
+            "rule_id": "AI-FAILSAFE",
+            "description": (f"SmartShift AI fail-safe (path={res.path}, "
+                            f"ai_fixes={res.ai_fixes}); ATC={res.atc.get('verdict')}; "
+                            f"governance={res.governance}"),
+            "governance": res.governance,
+            "atc": res.atc.get("verdict"),
+        }]
+    except Exception as e:
+        logger.warning(f"AI fail-safe errored: {e}")
         return source_code, []
 
 
@@ -658,7 +700,7 @@ def lambda_handler(event, context):
                     do_ast = remediate_all or any(i["auto_fixable"] for i in issues)
                     fixed = False
                     if do_ast:
-                        fixed_source, changes = auto_remediate_with_ast_engine(source)
+                        fixed_source, changes = auto_remediate_with_ast_engine(source, prog["name"])
                         if changes:
                             remediated_count += 1
                             # Save remediated source (sanitize name for namespaced/odd programs)

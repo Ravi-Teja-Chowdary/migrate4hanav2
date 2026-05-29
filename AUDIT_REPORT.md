@@ -228,3 +228,27 @@ Natuvion. **Classification: bucket "G — built + unit/self-test green, integrat
 remediation layer (mock ATC) — the real-ATC + `code-deployer` wiring is still open. #1 and #3 are
 unchanged. **No item in the original "FINAL VERDICT" is downgraded or closed by this addendum** — these
 are new components to be live-validated under the same per-stage definition-of-done (live run + evidence).
+
+## ADDENDUM 2026-05-29 (later) — engines now INTEGRATED into stages; UI rebuilt real-data
+
+Per direction ("put the competitors' expertise *inside* our own stages, not as separate layers"), the
+three engines were wired into the stage handler that owns each field, and the UI was rebuilt. The
+standalone-module status in the addendum above is **superseded** for these three.
+
+| Engine | Now embedded in stage (file) | Wiring | Verified (offline, local-AWS shim) |
+|---|---|---|---|
+| **SmartShift** AI fail-safe | `lambda/code-analyzer/handler.py` → `auto_remediate_with_ast_engine` (+ `_ai_failsafe_remediate`) | deterministic AST first; on a parser **crash OR residual parse_errors** → `llm_fallback_router.FallbackRouter` (localized fix + mock-ATC gate). Deterministic path unchanged. | functional test: deterministic remediate ok; AI fail-safe reachable (`AI-FAILSAFE` change emitted) |
+| **Syniti** data spine | `lambda/data-hygiene/handler.py` (was a **pass-through stub**) | runs `DataSpineOrchestrator` over entity-tree data → FK integrity + self-heal + SHA-256 ledger; honest `objects_processed:0` when no tree data | functional test: `data_spine` mode, **1 self-healed, 1 orphan quarantined**, FK status reported |
+| **Natuvion** carve-out | `lambda/data-migrator/handler.py` → `_carve_out_programs` (batch extract summary) | generates org/time-filtered, cursor-streamed, dependency-aware carve-out ABAP for carve-eligible tables in the run; gated (`M4H_CARVE_OUT`/`event.carve_out`); deploy stays behind `M4H_CARVE_DEPLOY` | functional test: **2 programs** (OpenAR→BSID, OpenPO→EKKO) with `bukrs=1710 gjahr=2024` |
+
+All three pass `py_compile`; the proven deterministic paths are untouched (additive, guarded). **Still
+pending (unchanged):** live validation on the real ECC→S/4 pair at volume; real SAP ATC (gate is a mock);
+real-Bedrock fix-rate; carve-out in-system deploy at volume.
+
+**UI rebuilt (real-data, zero mock):** the prior mock-driven pages + `sampleData.js` were deleted and
+replaced with a fresh fluidic light-theme React app (`frontend/src/lib/{api,useApi,commands,stages}.js`,
+`components/{Shell,ui}.jsx`, `pages/{Dashboard,ProjectTracker,Connections,Pipeline,Gates,Runs,CommandCenter}.jsx`).
+Every page reads the live FastAPI backend with honest offline/empty states; a **Project Tracker** shows
+Start/End boards + progress + a Completed/In-Progress/Queued kanban over the real 28 stages, each tagged
+with its embedded engine; a **Command Center** exposes every CLI action. Verified: `npm run build` clean
+(~346 KB), dev server serves all routes; **pixel/UX review not done in-session** (no browser screenshot).

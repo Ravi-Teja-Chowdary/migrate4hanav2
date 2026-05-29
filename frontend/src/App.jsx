@@ -1,28 +1,24 @@
 import { Routes, Route } from 'react-router-dom';
-import Layout from './components/Layout';
+import Shell from './components/Shell';
 import Dashboard from './pages/Dashboard';
 import Connections from './pages/Connections';
 import Pipeline from './pages/Pipeline';
-import LiftAndShift from './pages/LiftAndShift';
+import ProjectTracker from './pages/ProjectTracker';
 import Gates from './pages/Gates';
-import Telemetry from './pages/Telemetry';
-import Scorecard from './pages/Scorecard';
-import StageDetail from './pages/StageDetail';
-import Report from './pages/Report';
+import Runs from './pages/Runs';
+import CommandCenter from './pages/CommandCenter';
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Layout />}>
+      <Route path="/" element={<Shell />}>
         <Route index element={<Dashboard />} />
         <Route path="connections" element={<Connections />} />
+        <Route path="tracker" element={<ProjectTracker />} />
         <Route path="pipeline" element={<Pipeline />} />
-        <Route path="lift-and-shift" element={<LiftAndShift />} />
         <Route path="gates" element={<Gates />} />
-        <Route path="telemetry" element={<Telemetry />} />
-        <Route path="scorecard" element={<Scorecard />} />
-        <Route path="report" element={<Report />} />
-        <Route path="stage/:stageKey" element={<StageDetail />} />
+        <Route path="runs" element={<Runs />} />
+        <Route path="commands" element={<CommandCenter />} />
       </Route>
     </Routes>
   );

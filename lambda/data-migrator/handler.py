@@ -620,6 +620,63 @@ def _process_one_object(conn, run_id: str, node: dict, loader=None, cdc_watermar
     return result
 
 
+def _carve_out_programs(run_id, results, event):
+    """Natuvion-class selective carve-out, embedded in the extraction stage.
+
+    For each extracted object whose source table is carve-eligible, generate an
+    optimized in-system extraction program: company-code (BUKRS) + fiscal-year
+    (GJAHR) pushed into the WHERE, OPEN CURSOR + PACKAGE SIZE streaming, and
+    dependency-aware header co-extraction (line items -> BKPF). Generation is
+    deterministic + side-effect-free; in-system DEPLOY stays gated behind
+    M4H_CARVE_DEPLOY + a live connection (not done here).
+
+    Off by default; enabled by event["carve_out"] or M4H_CARVE_OUT=1.
+    """
+    spec = event.get("carve_out") or {}
+    if not (spec or os.environ.get("M4H_CARVE_OUT", "0") == "1"):
+        return None
+    try:
+        agent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "agent"))
+        if agent_dir not in sys.path:
+            sys.path.insert(0, agent_dir)
+        from in_system_agent_generator import InSystemAgentGenerator
+    except Exception as e:
+        return {"enabled": True, "error": f"carve-out generator unavailable: {e}", "programs": []}
+
+    gen = InSystemAgentGenerator()
+    bukrs = spec.get("bukrs") or os.environ.get("M4H_CARVE_BUKRS", "")
+    gjahr = spec.get("gjahr") or os.environ.get("M4H_CARVE_GJAHR", "")
+    try:
+        pkg = int(spec.get("package_size") or os.environ.get("M4H_CARVE_PKG", "50000"))
+    except (TypeError, ValueError):
+        pkg = 50000
+    programs, errors, seen = [], [], set()
+    for r in results:
+        obj = r.get("object")
+        table = ((DEFAULT_OBJECT_TABLES.get(obj) or {}).get("table") or "").upper()
+        if not table or table in seen or table not in gen.registry:
+            continue
+        seen.add(table)
+        try:
+            g = gen.generate(table, bukrs=bukrs, gjahr=gjahr, package_size=pkg)
+            artifact = None
+            try:
+                key = f"runs/{run_id}/data-migrator/carve-out/{g['program']}.abap"
+                S3.put_object(Bucket=STAGING_BUCKET, Key=key,
+                              Body=g["source"].encode(), ContentType="text/plain")
+                artifact = f"s3://{STAGING_BUCKET}/{key}"
+            except Exception:
+                pass
+            programs.append({"object": obj, "table": table, "program": g["program"],
+                             "meta": g["meta"], "artifact": artifact})
+        except Exception as e:
+            errors.append({"object": obj, "table": table, "error": str(e)})
+    return {"enabled": True, "engine": "Natuvion-class selective carve-out",
+            "filters": {"bukrs": bukrs or "*", "gjahr": gjahr or "*", "package_size": pkg},
+            "deploy_gated": os.environ.get("M4H_CARVE_DEPLOY", "0") == "1",
+            "program_count": len(programs), "programs": programs, "errors": errors}
+
+
 def lambda_handler(event, context):
     run_id = event.get("run_id", f"run-{int(time.time())}")
     mode = event.get("mode", "generate_templates")
@@ -756,6 +813,7 @@ def lambda_handler(event, context):
                    "support_compliance": compliance.audit(results) if compliance else None,
                    "key_mapping": key_map_info,
                    "dead_letter": dead_letter_info,
+                   "carve_out": _carve_out_programs(run_id, results, event),
                    "results": results}
         S3.put_object(Bucket=STAGING_BUCKET,
                       Key=f"runs/{run_id}/data-migrator/summary.json",
