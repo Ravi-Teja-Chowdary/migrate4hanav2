@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
 import StageCard from '../components/StageCard';
+import ProjectTracker from '../components/ProjectTracker';
 import { STAGES, PHASES, PHASE_COLORS, SAMPLE_RUN, getStageStatus } from '../data/sampleData';
 
 const ICONS = {
@@ -56,7 +57,7 @@ export default function Dashboard() {
           <motion.h1
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="text-3xl font-bold text-white"
+            className="text-3xl font-bold text-slate-900"
           >
             Migration <span className="gradient-text">Dashboard</span>
           </motion.h1>
@@ -64,7 +65,7 @@ export default function Dashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.1 }}
-            className="text-sm text-white/40 mt-1 flex items-center gap-2"
+            className="text-sm text-slate-400 mt-1 flex items-center gap-2"
           >
             <Building2 size={14} />
             {run.company}
@@ -84,6 +85,9 @@ export default function Dashboard() {
           <ArrowRight size={14} />
         </motion.button>
       </div>
+
+      {/* Project Tracker — start/end boards, progress pipeline, kanban */}
+      <ProjectTracker />
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -122,18 +126,18 @@ export default function Dashboard() {
             <div className="w-8 h-8 rounded-lg bg-accent-blue/10 flex items-center justify-center">
               <ShieldCheck size={16} className="text-accent-blue" />
             </div>
-            <span className="text-xs font-semibold text-white/70 uppercase tracking-wider">SAP Activate Compliance</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">SAP Activate Compliance</span>
           </div>
-          <div className="h-6 w-px bg-white/10 hidden md:block" />
-          <div className="flex items-center gap-3 flex-wrap text-[11px] font-medium text-white/50">
+          <div className="h-6 w-px bg-slate-100 hidden md:block" />
+          <div className="flex items-center gap-3 flex-wrap text-[11px] font-medium text-slate-500">
             <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> Maintenance Planner</span>
-            <span className="text-white/15">|</span>
+            <span className="text-slate-400">|</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> Readiness Check</span>
-            <span className="text-white/15">|</span>
+            <span className="text-slate-400">|</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> SI-Check</span>
-            <span className="text-white/15">|</span>
+            <span className="text-slate-400">|</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> SUM/DMO</span>
-            <span className="text-white/15">|</span>
+            <span className="text-slate-400">|</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-accent-green" /> FINS Monitor</span>
           </div>
         </div>
@@ -141,7 +145,7 @@ export default function Dashboard() {
 
       {/* Process Mining Insights */}
       <div className="flex items-center gap-4 mt-8">
-        <h2 className="text-lg font-semibold text-white/80 shrink-0 flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-slate-700 shrink-0 flex items-center gap-2">
           <BarChart2 size={18} className="text-accent-blue" /> Process Mining Insights
         </h2>
         <div className="h-px flex-1 bg-gradient-to-r from-accent-blue/30 to-transparent" />
@@ -162,14 +166,14 @@ export default function Dashboard() {
             {/* Phase separator */}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${PHASE_DOT[phase.color] || 'bg-white/30'}`} />
-                <h2 className="text-lg font-semibold text-white/80 shrink-0">{phase.name}</h2>
-                <span className="text-xs text-white/30 font-medium">{phase.subtitle}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/30 font-mono">
+                <div className={`w-2 h-2 rounded-full ${PHASE_DOT[phase.color] || 'bg-slate-100'}`} />
+                <h2 className="text-lg font-semibold text-slate-700 shrink-0">{phase.name}</h2>
+                <span className="text-xs text-slate-400 font-medium">{phase.subtitle}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-400 font-mono">
                   {phaseStages.length} stages
                 </span>
               </div>
-              <div className={`h-px flex-1 bg-gradient-to-r ${PHASE_LINE[phase.color] || 'from-white/10'} to-transparent`} />
+              <div className={`h-px flex-1 bg-gradient-to-r ${PHASE_LINE[phase.color] || 'from-slate-200'} to-transparent`} />
             </div>
 
             {/* Phase Stages */}
@@ -202,18 +206,18 @@ export default function Dashboard() {
               <span className="text-3xl font-bold text-accent-green">{sc.grade}</span>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">{sc.recommendation}</h3>
-              <p className="text-sm text-white/40">
+              <h3 className="text-lg font-semibold text-slate-900">{sc.recommendation}</h3>
+              <p className="text-sm text-slate-400">
                 {sc.total_passed}/{sc.total_checks} checks passed · Score: {sc.score}
               </p>
             </div>
           </div>
-          <ArrowRight size={20} className="text-white/20 group-hover:text-white/50 transition-colors" />
+          <ArrowRight size={20} className="text-slate-400 group-hover:text-slate-500 transition-colors" />
         </div>
       </motion.div>
 
       {/* Run info */}
-      <div className="flex items-center justify-center gap-6 text-[11px] text-white/20 font-mono">
+      <div className="flex items-center justify-center gap-6 text-[11px] text-slate-400 font-mono">
         <span className="flex items-center gap-1.5"><Clock size={11} /> {run.timestamp}</span>
         <span>·</span>
         <span>Run: {run.id}</span>

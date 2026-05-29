@@ -24,7 +24,7 @@ function SidebarLink({ to, label, icon: Icon }) {
         `group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300
         ${isActive
           ? 'bg-accent-blue/10 text-accent-blue shadow-lg shadow-accent-blue/5'
-          : 'text-white/50 hover:text-white/80 hover:bg-white/[0.03]'
+          : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
         }`
       }
     >
@@ -44,7 +44,7 @@ export default function Layout() {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 border-r border-white/[0.06] bg-navy-800/50 flex flex-col">
+      <aside className="w-64 shrink-0 border-r border-slate-200 bg-white flex flex-col">
         {/* Logo */}
         <div className="p-6 pb-4">
           <div className="flex items-center gap-3">
@@ -53,7 +53,7 @@ export default function Layout() {
             </div>
             <div>
               <h1 className="text-base font-bold gradient-text">Migrate4HANA</h1>
-              <p className="text-[10px] text-white/30 font-mono tracking-widest uppercase">ECC Assessment</p>
+              <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase">ECC Assessment</p>
             </div>
           </div>
         </div>
@@ -66,13 +66,13 @@ export default function Layout() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/[0.04]">
+        <div className="p-4 border-t border-slate-200">
           <div className="glass rounded-xl p-3">
             <div className="flex items-center gap-2 mb-2">
               <div className="pulse-dot bg-accent-green" />
-              <span className="text-xs text-white/50">System Ready</span>
+              <span className="text-xs text-slate-500">System Ready</span>
             </div>
-            <p className="text-[10px] text-white/30 font-mono">v2.0 · 17-Stage Pipeline</p>
+            <p className="text-[10px] text-slate-400 font-mono">v2.0 · 17-Stage Pipeline</p>
           </div>
         </div>
       </aside>

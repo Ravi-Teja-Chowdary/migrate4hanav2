@@ -15,9 +15,9 @@ const ICONS = {
 
 function DataRow({ label, value, color }) {
   return (
-    <div className="flex items-center justify-between py-2.5 border-b border-white/[0.03] last:border-0">
-      <span className="text-sm text-white/50">{label}</span>
-      <span className="text-sm font-semibold" style={{ color: color || '#fff' }}>
+    <div className="flex items-center justify-between py-2.5 border-b border-slate-200 last:border-0">
+      <span className="text-sm text-slate-500">{label}</span>
+      <span className="text-sm font-semibold" style={{ color: color || '#0f172a' }}>
         {typeof value === 'number' ? value.toLocaleString() : String(value)}
       </span>
     </div>
@@ -32,7 +32,7 @@ function Section({ title, children, delay = 0 }) {
       transition={{ delay, duration: 0.4 }}
       className="glass rounded-2xl p-6"
     >
-      <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-4">{title}</h3>
+      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">{title}</h3>
       {children}
     </motion.div>
   );
@@ -103,7 +103,7 @@ function ReadinessCheckDetail({ data }) {
         <DataRow label="Medium Impact" value={data.custom_code_impact.medium} color="#f59e0b" />
         <DataRow label="Low Impact" value={data.custom_code_impact.low} color="#10b981" />
         {(() => { const total = data.custom_code_impact.high + data.custom_code_impact.medium + data.custom_code_impact.low; return (
-        <div className="mt-3 h-3 rounded-full bg-white/5 overflow-hidden flex">
+        <div className="mt-3 h-3 rounded-full bg-slate-50 overflow-hidden flex">
           <div className="h-full bg-red-500" style={{ width: `${total > 0 ? (data.custom_code_impact.high / total) * 100 : 0}%` }} />
           <div className="h-full bg-amber-500" style={{ width: `${total > 0 ? (data.custom_code_impact.medium / total) * 100 : 0}%` }} />
           <div className="h-full bg-green-500" style={{ width: `${total > 0 ? (data.custom_code_impact.low / total) * 100 : 0}%` }} />
@@ -179,7 +179,7 @@ function CodeAnalysisDetail({ data }) {
       </div>
       {data.fixes_by_level && (
         <div className="mt-4">
-          <h4 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">Fix Engine Breakdown</h4>
+          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Fix Engine Breakdown</h4>
           {Object.entries(data.fixes_by_level).map(([key, val]) => (
             <DataRow key={key} label={key.replace(/_/g, ' ')} value={val} />
           ))}
@@ -233,7 +233,7 @@ function ConfigAssessmentDetail({ data }) {
         <DataRow label="Checklist Items" value={data.checklist_items} />
         <div className="mt-3 space-y-2">
           {['Universal Journal ledgers', 'Business Partner setup', 'Fiori Launchpad', 'GST / E-Invoice config', 'TDS sections', 'Output Management', 'COPA in Universal Journal', 'Fiori spaces and pages', 'BP grouping for India'].map((item, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs text-white/40">
+            <div key={i} className="flex items-center gap-2 text-xs text-slate-400">
               <CheckCircle2 size={12} className="text-accent-green" />
               {item}
             </div>
@@ -244,13 +244,13 @@ function ConfigAssessmentDetail({ data }) {
         <DataRow label="Total RFC Destinations" value={data.rfc_total} />
         <DataRow label="Auto-Migratable" value={data.automated} color="#10b981" />
         <DataRow label="Manual Review" value={data.manual} color="#f59e0b" />
-        <div className="mt-3 h-2 rounded-full bg-white/5 overflow-hidden">
+        <div className="mt-3 h-2 rounded-full bg-slate-50 overflow-hidden">
           <div
             className="h-full rounded-full bg-accent-green"
             style={{ width: `${(data.automated / data.rfc_total) * 100}%` }}
           />
         </div>
-        <p className="text-[10px] text-white/25 mt-1">
+        <p className="text-[10px] text-slate-400 mt-1">
           {Math.round((data.automated / data.rfc_total) * 100)}% automation rate
         </p>
       </Section>
@@ -293,8 +293,8 @@ function SumDmoDetail({ data }) {
         <div className="space-y-2">
           {Array.from({ length: data.total_phases }, (_, i) => (
             <div key={i} className="flex items-center gap-3 py-1.5">
-              <CheckCircle2 size={14} className={i < data.phases_completed ? 'text-accent-green' : 'text-white/10'} />
-              <span className={`text-xs ${i < data.phases_completed ? 'text-white/60' : 'text-white/20'}`}>
+              <CheckCircle2 size={14} className={i < data.phases_completed ? 'text-accent-green' : 'text-slate-400'} />
+              <span className={`text-xs ${i < data.phases_completed ? 'text-slate-500' : 'text-slate-400'}`}>
                 SUM Phase {i + 1}
               </span>
               {i < data.phases_completed && (
@@ -311,7 +311,7 @@ function SumDmoDetail({ data }) {
           <Shield size={14} className="text-accent-blue mt-0.5 shrink-0" />
           <div>
             <p className="text-xs font-semibold text-accent-blue">SAP-Supported Conversion</p>
-            <p className="text-[11px] text-white/40 mt-1 leading-relaxed">
+            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
               Database migration performed by SAP SUM/DMO — SAP-supported conversion. Post-migration SAP support is retained.
             </p>
           </div>
@@ -354,7 +354,7 @@ function FinanceMigrationDetail({ data }) {
       <Section title="Table Conversions" delay={0.15}>
         <div className="space-y-2">
           {(data.tables_converted || []).map((t, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs text-white/50">
+            <div key={i} className="flex items-center gap-2 text-xs text-slate-500">
               <CheckCircle2 size={12} className="text-accent-green" />
               <span className="font-mono">{t}</span>
             </div>
@@ -363,7 +363,7 @@ function FinanceMigrationDetail({ data }) {
       </Section>
       <Section title="Reconciliation" delay={0.2}>
         <div className="flex items-center justify-between py-4">
-          <span className="text-sm text-white/50">Reconciliation Variance</span>
+          <span className="text-sm text-slate-500">Reconciliation Variance</span>
           <span
             className="text-2xl font-bold font-mono"
             style={{ color: data.reconciliation_variance === '0.00' ? '#10b981' : '#ef4444' }}
@@ -433,9 +433,9 @@ function BusinessProcessTestDetail({ data }) {
     <div className="space-y-6">
       <Section title="Test Results" delay={0.1}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          <div className="p-3 rounded-xl bg-white/[0.02] text-center">
-            <p className="text-2xl font-bold text-white">{data.test_scenarios}</p>
-            <p className="text-[10px] text-white/30 mt-1">Total Scenarios</p>
+          <div className="p-3 rounded-xl bg-slate-50 text-center">
+            <p className="text-2xl font-bold text-slate-900">{data.test_scenarios}</p>
+            <p className="text-[10px] text-slate-400 mt-1">Total Scenarios</p>
           </div>
           <div className="p-3 rounded-xl bg-accent-green/5 text-center">
             <p className="text-2xl font-bold text-accent-green">{data.passed}</p>
@@ -454,7 +454,7 @@ function BusinessProcessTestDetail({ data }) {
       <Section title="Validated Business Processes" delay={0.15}>
         <div className="space-y-2">
           {(data.processes_validated || []).map((p, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs text-white/50">
+            <div key={i} className="flex items-center gap-2 text-xs text-slate-500">
               <CheckCircle2 size={12} className="text-accent-green" />
               <span className="font-medium">{p}</span>
             </div>
@@ -554,7 +554,7 @@ export default function StageDetail() {
 
   if (!stage || !data) {
     return (
-      <div className="p-8 text-center text-white/40">
+      <div className="p-8 text-center text-slate-400">
         <p>Stage not found.</p>
         <button onClick={() => navigate('/')} className="mt-4 text-accent-blue hover:underline text-sm">
           Back to Dashboard
@@ -569,7 +569,7 @@ export default function StageDetail() {
       <div className="flex items-center gap-4">
         <button
           onClick={() => navigate('/')}
-          className="w-9 h-9 rounded-xl glass flex items-center justify-center text-white/40 hover:text-white/70 transition-colors"
+          className="w-9 h-9 rounded-xl glass flex items-center justify-center text-slate-400 hover:text-slate-500 transition-colors"
         >
           <ArrowLeft size={16} />
         </button>
@@ -584,11 +584,11 @@ export default function StageDetail() {
             <motion.h1
               initial={{ opacity: 0, x: -16 }}
               animate={{ opacity: 1, x: 0 }}
-              className="text-2xl font-bold text-white"
+              className="text-2xl font-bold text-slate-900"
             >
               Stage {stage.id}: {stage.name}
             </motion.h1>
-            <p className="text-xs text-white/30 uppercase tracking-wider">{stage.phase} · Phase {stage.phaseNumber}</p>
+            <p className="text-xs text-slate-400 uppercase tracking-wider">{stage.phase} · Phase {stage.phaseNumber}</p>
           </div>
         </div>
       </div>
@@ -609,7 +609,7 @@ export default function StageDetail() {
       {/* Detail content */}
       {Renderer ? <Renderer data={data} /> : (
         <Section title="Raw Data">
-          <pre className="text-xs font-mono text-white/40 whitespace-pre-wrap">
+          <pre className="text-xs font-mono text-slate-400 whitespace-pre-wrap">
             {JSON.stringify(data, null, 2)}
           </pre>
         </Section>

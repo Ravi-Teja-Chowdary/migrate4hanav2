@@ -43,8 +43,8 @@ function StageNode({ stage, status, isCurrent, elapsed, isLast }) {
         <motion.div
           className="w-10 h-10 rounded-xl flex items-center justify-center relative"
           style={{
-            backgroundColor: isCompleted ? `${stage.color}20` : isRunning ? `${stage.color}15` : 'rgba(255,255,255,0.03)',
-            border: isRunning ? `2px solid ${stage.color}` : '1px solid rgba(255,255,255,0.05)',
+            backgroundColor: isCompleted ? `${stage.color}20` : isRunning ? `${stage.color}15` : 'rgba(15, 23, 42,0.03)',
+            border: isRunning ? `2px solid ${stage.color}` : '1px solid rgba(15, 23, 42,0.05)',
           }}
           animate={isRunning ? { boxShadow: [`0 0 0px ${stage.color}00`, `0 0 20px ${stage.color}40`, `0 0 0px ${stage.color}00`] } : {}}
           transition={isRunning ? { duration: 2, repeat: Infinity } : {}}
@@ -56,14 +56,14 @@ function StageNode({ stage, status, isCurrent, elapsed, isLast }) {
               <Clock size={18} style={{ color: stage.color }} />
             </motion.div>
           ) : (
-            <Icon size={16} className="text-white/20" />
+            <Icon size={16} className="text-slate-400" />
           )}
         </motion.div>
         {!isLast && (
           <div className="w-px flex-1 min-h-[16px]" style={{
             background: isCompleted
               ? `linear-gradient(180deg, ${stage.color}50, ${stage.color}20)`
-              : 'rgba(255,255,255,0.05)',
+              : 'rgba(15, 23, 42,0.05)',
           }} />
         )}
       </div>
@@ -71,14 +71,14 @@ function StageNode({ stage, status, isCurrent, elapsed, isLast }) {
       {/* Content */}
       <div className={`flex-1 pb-4 ${isPending ? 'opacity-30' : ''}`}>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-white/30">Stage {stage.id}</span>
+          <span className="text-xs font-mono text-slate-400">Stage {stage.id}</span>
           {stage.key === 'pre_conversion_gate' && (
             <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent-amber/10 text-accent-amber font-medium">
               GATE
             </span>
           )}
         </div>
-        <h3 className={`text-sm font-medium mt-0.5 ${isRunning ? 'text-white' : isCompleted ? 'text-white/80' : 'text-white/40'}`}>
+        <h3 className={`text-sm font-medium mt-0.5 ${isRunning ? 'text-slate-900' : isCompleted ? 'text-slate-700' : 'text-slate-400'}`}>
           {stage.name}
         </h3>
         {isRunning && (
@@ -87,7 +87,7 @@ function StageNode({ stage, status, isCurrent, elapsed, isLast }) {
             animate={{ opacity: 1, height: 'auto' }}
             className="mt-2"
           >
-            <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+            <div className="h-1 rounded-full bg-slate-50 overflow-hidden">
               <motion.div
                 className="h-full rounded-full"
                 style={{ background: `linear-gradient(90deg, ${stage.color}, ${stage.color}80)` }}
@@ -95,11 +95,11 @@ function StageNode({ stage, status, isCurrent, elapsed, isLast }) {
                 transition={{ duration: durations[stage.key] || 0.5, ease: 'easeInOut' }}
               />
             </div>
-            <p className="text-[10px] text-white/30 mt-1 font-mono">Processing...</p>
+            <p className="text-[10px] text-slate-400 mt-1 font-mono">Processing...</p>
           </motion.div>
         )}
         {isCompleted && elapsed != null && (
-          <p className="text-[10px] text-white/25 mt-0.5 font-mono">{elapsed.toFixed(1)}s</p>
+          <p className="text-[10px] text-slate-400 mt-0.5 font-mono">{elapsed.toFixed(1)}s</p>
         )}
       </div>
     </motion.div>
@@ -234,11 +234,11 @@ export default function Pipeline() {
           <motion.h1
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="text-3xl font-bold text-white"
+            className="text-3xl font-bold text-slate-900"
           >
             Migration <span className="gradient-text">Pipeline</span>
           </motion.h1>
-          <p className="text-sm text-white/40 mt-1">SAP Activate assessment — live ECC data extraction & analysis</p>
+          <p className="text-sm text-slate-400 mt-1">SAP Activate assessment — live ECC data extraction & analysis</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -258,9 +258,9 @@ export default function Pipeline() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.015 }}
                 onClick={triggerEccFull}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-blue/20 to-accent-green/20
-                           text-white text-sm font-bold hover:from-accent-blue/30 hover:to-accent-green/30
-                           transition-all duration-300 border border-accent-cyan/20 animate-pulse-glow"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-accent-blue
+                           text-white text-sm font-bold shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-blue-600
+                           transition-all duration-300 animate-pulse-glow"
               >
                 <Rocket size={15} /> Run Full Assessment
               </motion.button>
@@ -278,8 +278,8 @@ export default function Pipeline() {
           {pipelineState === 'completed' && (
             <button
               onClick={resetPipeline}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 text-white/60 text-sm font-medium
-                         hover:bg-white/10 transition-all border border-white/10"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 text-slate-500 text-sm font-medium
+                         hover:bg-slate-100 transition-all border border-slate-200"
             >
               <RotateCcw size={14} /> Reset
             </button>
@@ -307,7 +307,7 @@ export default function Pipeline() {
         >
           <div className="flex items-center gap-2">
             <div className="pulse-dot bg-accent-cyan" />
-            <span className="text-white/50">{modeLabel[apiMode]}</span>
+            <span className="text-slate-500">{modeLabel[apiMode]}</span>
           </div>
         </motion.div>
       )}
@@ -315,10 +315,10 @@ export default function Pipeline() {
       {/* Progress bar */}
       <div className="glass rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-white/40">Overall Progress</span>
-          <span className="text-xs font-mono text-white/50">{completedCount}/{totalStages} stages</span>
+          <span className="text-xs text-slate-400">Overall Progress</span>
+          <span className="text-xs font-mono text-slate-500">{completedCount}/{totalStages} stages</span>
         </div>
-        <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+        <div className="h-2 rounded-full bg-slate-50 overflow-hidden">
           <motion.div
             className="h-full rounded-full bg-gradient-to-r from-accent-blue via-accent-cyan to-accent-green"
             animate={{ width: `${(completedCount / totalStages) * 100}%` }}
@@ -338,10 +338,10 @@ export default function Pipeline() {
             {/* Phase container */}
             <div className={`glass rounded-2xl p-6 ${isOutOfScope ? 'opacity-20' : ''}`}>
               <div className="flex items-center gap-3 mb-6">
-                <div className={`w-2 h-2 rounded-full ${PHASE_DOT_COLORS[phase.color] || 'bg-white/30'}`} />
-                <h2 className="text-sm font-semibold text-white/70 uppercase tracking-wider">{phase.name}</h2>
-                <span className="text-[10px] text-white/25 font-medium">{phase.subtitle}</span>
-                <div className="h-px flex-1 bg-white/5" />
+                <div className={`w-2 h-2 rounded-full ${PHASE_DOT_COLORS[phase.color] || 'bg-slate-100'}`} />
+                <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{phase.name}</h2>
+                <span className="text-[10px] text-slate-400 font-medium">{phase.subtitle}</span>
+                <div className="h-px flex-1 bg-slate-50" />
                 {/* Phase status badge */}
                 {(() => {
                   const allDone = phaseStages.every(s => stageStatuses[s.key] === 'completed');
@@ -357,7 +357,7 @@ export default function Pipeline() {
                     </span>
                   );
                   if (isOutOfScope) return (
-                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 text-white/30 font-semibold">
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-400 font-semibold">
                       NOT IN SCOPE
                     </span>
                   );
@@ -382,7 +382,7 @@ export default function Pipeline() {
       {/* Embedded Live Log Stream */}
       {(pipelineState === 'running' || pipelineState === 'completed') && (
         <div className="glass rounded-2xl p-6">
-          <h2 className="text-sm font-semibold text-white/70 uppercase tracking-wider mb-4">Live Log Stream</h2>
+          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Live Log Stream</h2>
           <LogViewer />
         </div>
       )}
@@ -406,10 +406,10 @@ export default function Pipeline() {
               >
                 <CheckCircle2 size={32} className="text-accent-green" />
               </motion.div>
-              <h3 className="text-xl font-bold text-white">
+              <h3 className="text-xl font-bold text-slate-900">
                 {apiMode === 'assess' ? 'Assessment Complete' : 'Full ECC Assessment Complete'}
               </h3>
-              <p className="text-sm text-white/40 mt-1">
+              <p className="text-sm text-slate-400 mt-1">
                 {apiMode === 'assess'
                   ? 'Phases 1-2 finished. Review results on the Scorecard and Report pages.'
                   : 'Full ECC assessment finished. Review results on the Scorecard and Report pages.'}
@@ -420,8 +420,8 @@ export default function Pipeline() {
                     const url = await getAuthUrl('/api/runs/latest/pdf');
                     window.open(url, '_blank');
                   }}
-                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-green/20 to-accent-cyan/20
-                             text-white text-sm font-bold border border-accent-green/30 hover:from-accent-green/30 hover:to-accent-cyan/30
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-accent-green to-accent-cyan
+                             text-white text-sm font-bold shadow-lg shadow-accent-green/25 hover:from-green-600 hover:to-cyan-600
                              transition-all duration-300 animate-pulse-glow"
                 >
                   <Download size={15} /> Download Report

@@ -380,11 +380,11 @@ export default function Telemetry() {
           <motion.h1
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="text-3xl font-bold text-white"
+            className="text-3xl font-bold text-slate-900"
           >
             Live <span className="gradient-text">Telemetry</span>
           </motion.h1>
-          <p className="text-sm text-white/40 mt-1">Real-time pipeline progress — auto-connects to API, WebSocket, or mock</p>
+          <p className="text-sm text-slate-400 mt-1">Real-time pipeline progress — auto-connects to API, WebSocket, or mock</p>
         </div>
         <div className="flex items-center gap-2">
           <span className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full glass ${
@@ -405,7 +405,7 @@ export default function Telemetry() {
       {/* Stats bar */}
       <div className="grid grid-cols-5 gap-3">
         {[
-          { label: 'Total Events', value: stats.total, color: 'text-white/70', bg: 'bg-white/5' },
+          { label: 'Total Events', value: stats.total, color: 'text-slate-500', bg: 'bg-slate-50' },
           { label: 'Errors', value: stats.errors, color: 'text-red-400', bg: 'bg-red-500/10' },
           { label: 'Warnings', value: stats.warnings, color: 'text-amber-400', bg: 'bg-amber-500/10' },
           { label: 'In Progress', value: stats.inProgress, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
@@ -415,10 +415,10 @@ export default function Telemetry() {
             key={stat.label}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`glass rounded-xl p-3 text-center ${stat.bg} border border-white/5`}
+            className={`glass rounded-xl p-3 text-center ${stat.bg} border border-slate-200`}
           >
             <div className={`text-2xl font-bold font-mono ${stat.color}`}>{stat.value}</div>
-            <div className="text-[10px] text-white/30 mt-0.5">{stat.label}</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">{stat.label}</div>
           </motion.div>
         ))}
       </div>
@@ -427,17 +427,17 @@ export default function Telemetry() {
       <div className="glass rounded-xl p-3 flex items-center gap-3">
         {/* Search */}
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search events... (stage, action, status, details)"
-            className="w-full pl-9 pr-8 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white/80
-                       placeholder:text-white/20 focus:outline-none focus:border-accent-blue/40 focus:bg-white/[0.07] transition-all"
+            className="w-full pl-9 pr-8 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700
+                       placeholder:text-slate-400 focus:outline-none focus:border-accent-blue/40 focus:bg-slate-100 transition-all"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-500">
               <X size={14} />
             </button>
           )}
@@ -449,7 +449,7 @@ export default function Telemetry() {
           className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
             showFilters || activeFilters > 0
               ? 'bg-accent-blue/10 text-accent-blue border-accent-blue/20'
-              : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10'
+              : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
           }`}
         >
           <Filter size={13} />
@@ -466,19 +466,19 @@ export default function Telemetry() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="appearance-none pl-7 pr-6 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-white/60
+            className="appearance-none pl-7 pr-6 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500
                        focus:outline-none focus:border-accent-blue/40 cursor-pointer"
           >
             <option value="time_desc">Newest First</option>
             <option value="time_asc">Oldest First</option>
             <option value="priority">Priority (Errors First)</option>
           </select>
-          <ArrowUpDown size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+          <ArrowUpDown size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
 
         {/* Divider */}
-        <div className="w-px h-6 bg-white/10" />
+        <div className="w-px h-6 bg-slate-100" />
 
         {/* Pause/Resume */}
         <button
@@ -493,7 +493,7 @@ export default function Telemetry() {
         {/* Clear */}
         <button
           onClick={() => setLogs([])}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 text-white/40 text-xs border border-white/10 hover:bg-white/10 transition-all"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-50 text-slate-400 text-xs border border-slate-200 hover:bg-slate-100 transition-all"
         >
           <Trash2 size={12} /> Clear
         </button>
@@ -527,11 +527,11 @@ export default function Telemetry() {
             <div className="glass rounded-xl p-4 flex items-center gap-6">
               {/* Status filter */}
               <div className="flex items-center gap-2">
-                <label className="text-[10px] text-white/30 uppercase tracking-wider font-medium">Status</label>
+                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Status</label>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="appearance-none px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white/60 focus:outline-none cursor-pointer"
+                  className="appearance-none px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500 focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">All</option>
                   <option value="ERROR">Errors</option>
@@ -543,11 +543,11 @@ export default function Telemetry() {
 
               {/* Phase filter */}
               <div className="flex items-center gap-2">
-                <label className="text-[10px] text-white/30 uppercase tracking-wider font-medium">Phase</label>
+                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Phase</label>
                 <select
                   value={phaseFilter}
                   onChange={(e) => setPhaseFilter(e.target.value)}
-                  className="appearance-none px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white/60 focus:outline-none cursor-pointer"
+                  className="appearance-none px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500 focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">All Phases</option>
                   {PHASES.map(p => (
@@ -558,11 +558,11 @@ export default function Telemetry() {
 
               {/* Stage filter */}
               <div className="flex items-center gap-2">
-                <label className="text-[10px] text-white/30 uppercase tracking-wider font-medium">Stage</label>
+                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Stage</label>
                 <select
                   value={stageFilter}
                   onChange={(e) => setStageFilter(e.target.value)}
-                  className="appearance-none px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white/60 focus:outline-none cursor-pointer max-w-[200px]"
+                  className="appearance-none px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500 focus:outline-none cursor-pointer max-w-[200px]"
                 >
                   <option value="ALL">All Stages</option>
                   {uniqueStages.map(s => (
@@ -586,7 +586,7 @@ export default function Telemetry() {
       </AnimatePresence>
 
       {/* Results count */}
-      <div className="flex items-center justify-between text-xs text-white/30">
+      <div className="flex items-center justify-between text-xs text-slate-400">
         <span>
           Showing {filteredLogs.length} of {logs.length} events
           {activeFilters > 0 && <span className="text-accent-blue ml-1">({activeFilters} filter{activeFilters > 1 ? 's' : ''} active)</span>}
@@ -599,7 +599,7 @@ export default function Telemetry() {
       {/* Log table */}
       <div className="bg-gray-900/80 border border-gray-700/50 rounded-xl overflow-hidden shadow-2xl">
         {/* Table header */}
-        <div className="grid grid-cols-[140px_160px_90px_1fr_80px] gap-3 px-4 py-2.5 bg-white/[0.03] border-b border-white/5 text-[10px] text-white/30 uppercase tracking-wider font-semibold">
+        <div className="grid grid-cols-[140px_160px_90px_1fr_80px] gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
           <span>Timestamp</span>
           <span>Stage</span>
           <span>Status</span>
@@ -610,12 +610,12 @@ export default function Telemetry() {
         {/* Log entries */}
         <div className="overflow-y-auto max-h-[calc(100vh-480px)] min-h-[300px]">
           {filteredLogs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-white/20">
+            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
               {logs.length === 0 ? (
                 <>
                   <Activity size={32} className="mb-3 opacity-30" />
                   <span className="text-sm">Waiting for telemetry events...</span>
-                  <span className="text-xs mt-1 text-white/10">Events appear here as the pipeline executes</span>
+                  <span className="text-xs mt-1 text-slate-400">Events appear here as the pipeline executes</span>
                 </>
               ) : (
                 <>
@@ -637,11 +637,11 @@ export default function Telemetry() {
               return (
                 <div
                   key={log.id}
-                  className={`grid grid-cols-[140px_160px_90px_1fr_80px] gap-3 px-4 py-2 border-b border-white/[0.03]
-                    hover:bg-white/[0.03] transition-colors text-sm ${log.status === 'ERROR' ? 'bg-red-500/[0.03]' : ''}`}
+                  className={`grid grid-cols-[140px_160px_90px_1fr_80px] gap-3 px-4 py-2 border-b border-slate-200
+                    hover:bg-slate-50 transition-colors text-sm ${log.status === 'ERROR' ? 'bg-red-500/[0.03]' : ''}`}
                 >
                   {/* Timestamp */}
-                  <span className="text-white/30 font-mono text-xs self-center">
+                  <span className="text-slate-400 font-mono text-xs self-center">
                     {log.timestamp.split('T')[1]?.slice(0, 12) || log.timestamp}
                   </span>
 
@@ -657,13 +657,13 @@ export default function Telemetry() {
                   </span>
 
                   {/* Action */}
-                  <span className="text-white/60 text-xs self-center truncate" title={`${log.action}${log.payload ? ': ' + log.payload : ''}`}>
+                  <span className="text-slate-500 text-xs self-center truncate" title={`${log.action}${log.payload ? ': ' + log.payload : ''}`}>
                     {log.action}
-                    {log.payload && <span className="text-white/20 ml-1">{log.payload.length > 80 ? log.payload.slice(0, 80) + '...' : log.payload}</span>}
+                    {log.payload && <span className="text-slate-400 ml-1">{log.payload.length > 80 ? log.payload.slice(0, 80) + '...' : log.payload}</span>}
                   </span>
 
                   {/* Duration */}
-                  <span className="text-white/20 font-mono text-xs text-right self-center">
+                  <span className="text-slate-400 font-mono text-xs text-right self-center">
                     {log.duration_ms != null ? `${(log.duration_ms / 1000).toFixed(1)}s` : '—'}
                   </span>
                 </div>

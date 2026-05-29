@@ -1021,6 +1021,34 @@ async def reject_gate(gate_id: str, request: Request):
 async def pipeline_status():
     return _active_run
 
+@app.get("/api/spine/progress", dependencies=[Depends(require_auth)])
+async def spine_progress(run_id: str = "latest"):
+    """Live progress for the master-spine orchestrator (pipeline_spine_master).
+
+    Reads the most recent run's progress.json (connectivity boards + per-stage
+    return codes) written under local-staging/spine-runs/. 404 if no run yet.
+    """
+    root = os.path.join(PROJECT_DIR, "local-staging", "spine-runs")
+    if not os.path.isdir(root):
+        raise HTTPException(status_code=404, detail="No spine runs found")
+    if run_id and run_id != "latest":
+        candidate = os.path.join(root, run_id, "progress.json")
+        runs = [candidate] if os.path.isfile(candidate) else []
+    else:
+        runs = []
+        for name in os.listdir(root):
+            pf = os.path.join(root, name, "progress.json")
+            if os.path.isfile(pf):
+                runs.append(pf)
+        runs.sort(key=os.path.getmtime, reverse=True)
+    if not runs:
+        raise HTTPException(status_code=404, detail="No spine progress available")
+    try:
+        with open(runs[0], "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, json.JSONDecodeError) as e:
+        raise HTTPException(status_code=500, detail=f"progress unreadable: {e}")
+
 @app.get("/api/progress", dependencies=[Depends(require_auth)])
 async def pipeline_progress(since: int = 0):
     """Return real-time progress steps. Use ?since=N to get only steps after index N."""

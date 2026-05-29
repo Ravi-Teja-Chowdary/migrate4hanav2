@@ -113,7 +113,7 @@ const LogViewer = ({ runId }) => {
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 font-mono text-sm text-green-400 mt-6 shadow-xl h-96 flex flex-col">
       <div className="flex justify-between items-center border-b border-gray-700 pb-2 mb-3">
-        <h3 className="text-white font-semibold flex items-center gap-2">
+        <h3 className="text-slate-900 font-semibold flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${
               connectionStatus === 'connected' ? 'bg-green-500 animate-pulse' :
               connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :

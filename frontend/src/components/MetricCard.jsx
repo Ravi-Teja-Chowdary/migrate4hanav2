@@ -23,11 +23,11 @@ export default function MetricCard({ label, value, sub, icon: Icon, color = '#3b
         </div>
       </div>
 
-      <div className="text-2xl font-bold text-white tracking-tight counter-animate">
+      <div className="text-2xl font-bold text-slate-900 tracking-tight counter-animate">
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
-      <div className="text-xs text-white/40 mt-1">{label}</div>
-      {sub && <div className="text-[10px] text-white/25 mt-0.5 font-mono">{sub}</div>}
+      <div className="text-xs text-slate-400 mt-1">{label}</div>
+      {sub && <div className="text-[10px] text-slate-400 mt-0.5 font-mono">{sub}</div>}
     </motion.div>
   );
 }

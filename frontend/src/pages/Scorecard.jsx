@@ -41,7 +41,7 @@ function ScoreGauge({ score, grade }) {
     <div className="relative w-48 h-48 mx-auto">
       <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
         {/* Background circle */}
-        <circle cx="60" cy="60" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+        <circle cx="60" cy="60" r={radius} fill="none" stroke="rgba(15, 23, 42,0.05)" strokeWidth="8" />
         {/* Score arc */}
         <motion.circle
           cx="60" cy="60" r={radius}
@@ -79,7 +79,7 @@ function ScoreGauge({ score, grade }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1 }}
-          className="text-sm text-white/50 font-mono"
+          className="text-sm text-slate-500 font-mono"
         >
           {score}
         </motion.span>
@@ -112,7 +112,7 @@ export default function Scorecard() {
       <div className="flex items-center gap-4">
         <button
           onClick={() => navigate('/')}
-          className="w-9 h-9 rounded-xl glass flex items-center justify-center text-white/40 hover:text-white/70 transition-colors"
+          className="w-9 h-9 rounded-xl glass flex items-center justify-center text-slate-400 hover:text-slate-500 transition-colors"
         >
           <ArrowLeft size={16} />
         </button>
@@ -120,11 +120,11 @@ export default function Scorecard() {
           <motion.h1
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="text-3xl font-bold text-white"
+            className="text-3xl font-bold text-slate-900"
           >
             GO-LIVE <span className="gradient-text">Scorecard</span>
           </motion.h1>
-          <p className="text-sm text-white/40 mt-0.5">End-to-end migration validation results — {sc.total_checks} checks across {categories.length} dimensions</p>
+          <p className="text-sm text-slate-400 mt-0.5">End-to-end migration validation results — {sc.total_checks} checks across {categories.length} dimensions</p>
         </div>
       </div>
 
@@ -163,11 +163,11 @@ export default function Scorecard() {
           transition={{ delay: 0.2 }}
           className="glass rounded-2xl p-6 space-y-4"
         >
-          <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Validation Summary</h3>
+          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Validation Summary</h3>
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02]">
-              <span className="text-sm text-white/50">Total Checks</span>
-              <span className="text-lg font-bold text-white">{sc.total_checks}</span>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
+              <span className="text-sm text-slate-500">Total Checks</span>
+              <span className="text-lg font-bold text-slate-900">{sc.total_checks}</span>
             </div>
             <div className="flex items-center justify-between p-3 rounded-xl bg-accent-green/5">
               <span className="text-sm text-accent-green/70 flex items-center gap-2">
@@ -205,7 +205,7 @@ export default function Scorecard() {
           transition={{ delay: 0.3 }}
           className="glass rounded-2xl p-6"
         >
-          <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-4">By Category</h3>
+          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">By Category</h3>
           <div className="space-y-3">
             {categories.map((cat, i) => {
               const CatIcon = CATEGORY_ICONS[cat.key] || CheckCircle2;
@@ -217,16 +217,16 @@ export default function Scorecard() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.4 + i * 0.08 }}
-                  className="p-3 rounded-xl bg-white/[0.02]"
+                  className="p-3 rounded-xl bg-slate-50"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-white/60 flex items-center gap-2">
-                      <CatIcon size={14} className="text-white/30" />
+                    <span className="text-sm text-slate-500 flex items-center gap-2">
+                      <CatIcon size={14} className="text-slate-400" />
                       {cat.name}
                     </span>
-                    <span className="text-xs font-mono text-white/40">{cat.passed}/{cat.checked}</span>
+                    <span className="text-xs font-mono text-slate-400">{cat.passed}/{cat.checked}</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-slate-50 overflow-hidden">
                     <motion.div
                       className="h-full rounded-full"
                       style={{ background: pct === 100 ? '#10b981' : pct > 80 ? '#f59e0b' : '#ef4444' }}
@@ -249,18 +249,19 @@ export default function Scorecard() {
         transition={{ delay: 0.5 }}
         className="glass rounded-2xl p-6"
       >
-        <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-4">Checks by Category</h3>
+        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Checks by Category</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={categories} barGap={8}>
-            <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 12 }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="name" tick={{ fill: 'rgba(15, 23, 42,0.3)', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: 'rgba(15, 23, 42,0.3)', fontSize: 12 }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{
-                backgroundColor: '#0f1424',
-                border: '1px solid rgba(255,255,255,0.1)',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
                 borderRadius: '12px',
                 fontSize: '12px',
-                color: '#fff',
+                color: '#0f172a',
+                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
               }}
             />
             <Bar dataKey="passed" fill="#10b981" radius={[6, 6, 0, 0]} name="Passed" />

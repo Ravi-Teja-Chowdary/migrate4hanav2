@@ -10,7 +10,7 @@ import { apiFetch, getAuthUrl } from '../api';
 
 function ConnectionCard({ title, subtitle, icon: Icon, color, status, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
-  const statusColor = { connected: '#10b981', mock: '#f59e0b', error: '#ef4444', saved: '#3b82f6' }[status] || '#ffffff20';
+  const statusColor = { connected: '#10b981', mock: '#f59e0b', error: '#ef4444', saved: '#3b82f6' }[status] || '#94a3b8';
   const statusLabel = { connected: 'Connected', mock: 'Mock Mode', error: 'Error', saved: 'Saved' }[status] || 'Not Configured';
 
   return (
@@ -21,22 +21,22 @@ function ConnectionCard({ title, subtitle, icon: Icon, color, status, children, 
     >
       <button
         onClick={() => setOpen(!open)}
-        className="w-full px-6 py-5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors"
+        className="w-full px-6 py-5 flex items-center gap-4 hover:bg-slate-50 transition-colors"
       >
         <div className="w-12 h-12 rounded-xl flex items-center justify-center"
           style={{ backgroundColor: `${color}15` }}>
           <Icon size={22} style={{ color }} />
         </div>
         <div className="flex-1 text-left">
-          <h3 className="text-sm font-semibold text-white">{title}</h3>
-          <p className="text-xs text-white/30 mt-0.5">{subtitle}</p>
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
             <span className="text-[11px] font-medium" style={{ color: statusColor }}>{statusLabel}</span>
           </div>
-          {open ? <ChevronUp size={16} className="text-white/30" /> : <ChevronDown size={16} className="text-white/30" />}
+          {open ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
         </div>
       </button>
       <AnimatePresence>
@@ -48,7 +48,7 @@ function ConnectionCard({ title, subtitle, icon: Icon, color, status, children, 
             transition={{ duration: 0.25 }}
             className="overflow-hidden"
           >
-            <div className="px-6 pb-6 pt-2 border-t border-white/[0.04]">
+            <div className="px-6 pb-6 pt-2 border-t border-slate-200">
               {children}
             </div>
           </motion.div>
@@ -64,7 +64,7 @@ function Field({ label, value, onChange, type = 'text', placeholder, required, h
 
   return (
     <div>
-      <label className="block text-xs text-white/40 mb-1.5">
+      <label className="block text-xs text-slate-400 mb-1.5">
         {label} {required && <span className="text-accent-red">*</span>}
       </label>
       <div className="relative">
@@ -73,21 +73,21 @@ function Field({ label, value, onChange, type = 'text', placeholder, required, h
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white
-                     placeholder-white/20 focus:outline-none focus:border-accent-blue/40 focus:bg-white/[0.06]
+          className="w-full px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-900
+                     placeholder-white/20 focus:outline-none focus:border-accent-blue/40 focus:bg-slate-100
                      transition-all"
         />
         {isPassword && (
           <button
             type="button"
             onClick={() => setShow(!show)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/40"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-400"
           >
             {show ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>
         )}
       </div>
-      {helpText && <p className="text-[10px] text-white/20 mt-1">{helpText}</p>}
+      {helpText && <p className="text-[10px] text-slate-400 mt-1">{helpText}</p>}
     </div>
   );
 }
@@ -111,7 +111,7 @@ function StatusMessage({ result }) {
           {result.message}
         </p>
         {result.system_id && (
-          <p className="text-[10px] text-white/30 mt-1">
+          <p className="text-[10px] text-slate-400 mt-1">
             System: {result.system_id} | Release: {result.sap_release || '—'}
           </p>
         )}
@@ -147,9 +147,9 @@ function ProgressPanel({ steps, status, runId, pdfGenerated }) {
       animate={{ opacity: 1, y: 0 }}
       className="glass rounded-2xl overflow-hidden"
     >
-      <div className="px-6 py-4 border-b border-white/[0.04] flex items-center gap-3">
+      <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-3">
         <Activity size={16} className="text-accent-cyan" />
-        <h3 className="text-sm font-semibold text-white/80">Real-Time Progress</h3>
+        <h3 className="text-sm font-semibold text-slate-700">Real-Time Progress</h3>
         <div className="ml-auto flex items-center gap-2">
           {status === 'running' && (
             <span className="flex items-center gap-1.5 text-xs text-accent-cyan">
@@ -171,21 +171,21 @@ function ProgressPanel({ steps, status, runId, pdfGenerated }) {
       </div>
       <div className="max-h-80 overflow-y-auto p-4 space-y-1 font-mono text-xs">
         {steps.length === 0 ? (
-          <div className="text-white/20 text-center py-8">Waiting for progress updates...</div>
+          <div className="text-slate-400 text-center py-8">Waiting for progress updates...</div>
         ) : (
           steps.map((step, i) => {
             const Icon = STATUS_ICONS[step.status] || Clock;
-            const color = STATUS_COLORS[step.status] || 'text-white/40';
+            const color = STATUS_COLORS[step.status] || 'text-slate-400';
             return (
-              <div key={step.event_id || i} className="flex items-start gap-3 py-1.5 border-b border-white/[0.02] last:border-0">
-                <span className="text-white/20 shrink-0 w-16 text-right">
+              <div key={step.event_id || i} className="flex items-start gap-3 py-1.5 border-b border-slate-200 last:border-0">
+                <span className="text-slate-400 shrink-0 w-16 text-right">
                   {step.timestamp?.split('T')[1]?.slice(0, 8) || ''}
                 </span>
                 <Icon size={12} className={`${color} mt-0.5 shrink-0`} />
                 <span className={`${color} w-20 shrink-0 font-semibold uppercase text-[10px]`}>{step.status}</span>
-                <span className="text-white/60 flex-1">{step.action}</span>
+                <span className="text-slate-500 flex-1">{step.action}</span>
                 {step.duration_ms != null && (
-                  <span className="text-white/20 shrink-0">{(step.duration_ms / 1000).toFixed(1)}s</span>
+                  <span className="text-slate-400 shrink-0">{(step.duration_ms / 1000).toFixed(1)}s</span>
                 )}
               </div>
             );
@@ -249,7 +249,7 @@ function LiftAndShiftTargetCard() {
     >
       <div className="space-y-5">
         <div>
-          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">Target S/4HANA RFC (read-only / monitoring)</h4>
+          <h4 className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Target S/4HANA RFC (read-only / monitoring)</h4>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Application Server" value={v.target_ashost} onChange={set('target_ashost')} placeholder="s4.company.com" />
             <Field label="System Number" value={v.target_sysnr} onChange={set('target_sysnr')} placeholder="00" />
@@ -260,7 +260,7 @@ function LiftAndShiftTargetCard() {
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">Migration Cockpit (OData)</h4>
+          <h4 className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Migration Cockpit (OData)</h4>
           <div className="grid grid-cols-2 gap-4">
             <Field label="MC OData Base URL" value={v.mc_base_url} onChange={set('mc_base_url')} placeholder="https://s4.company.com/sap/opu/odata/sap/" />
             <Field label="MC User" value={v.mc_user} onChange={set('mc_user')} placeholder="MC_OPERATOR" />
@@ -268,14 +268,14 @@ function LiftAndShiftTargetCard() {
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">LTMOM (custom-object lane)</h4>
+          <h4 className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">LTMOM (custom-object lane)</h4>
           <div className="grid grid-cols-2 gap-4">
             <Field label="LTMOM User" value={v.ltmom_user} onChange={set('ltmom_user')} placeholder="LTMOM_OPERATOR" helpText="User with /LTB/* authorisations" />
           </div>
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">IDoc Inbound</h4>
+          <h4 className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">IDoc Inbound</h4>
           <div className="grid grid-cols-2 gap-4">
             <Field label="IDoc XML Endpoint" value={v.idoc_endpoint} onChange={set('idoc_endpoint')} placeholder="https://s4.company.com/sap/bc/idoc_xml" />
             <Field label="Partner Number" value={v.idoc_partner} onChange={set('idoc_partner')} placeholder="LSMIGRATE" />
@@ -284,7 +284,7 @@ function LiftAndShiftTargetCard() {
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">CTS+ Transport Host</h4>
+          <h4 className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">CTS+ Transport Host</h4>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Transport Host EC2 Instance ID" value={v.transport_host_instance_id} onChange={set('transport_host_instance_id')} placeholder="i-0123456789abcdef0" helpText="Instance hosting /usr/sap/trans (driven via SSM)" />
             <Field label="CTS+ Secret Name" value={v.cts_token_name} onChange={set('cts_token_name')} placeholder="migrate4hana/prod/cts-token" helpText="Name of secret in AWS Secrets Manager" />
@@ -464,10 +464,10 @@ export default function Connections() {
     <div className="p-8 max-w-3xl mx-auto space-y-6">
       <div>
         <motion.h1 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-          className="text-3xl font-bold text-white">
+          className="text-3xl font-bold text-slate-900">
           SAP ECC <span className="gradient-text">Connection</span>
         </motion.h1>
-        <p className="text-sm text-white/40 mt-1">Configure your SAP ECC source system for live assessment</p>
+        <p className="text-sm text-slate-400 mt-1">Configure your SAP ECC source system for live assessment</p>
       </div>
 
       {/* Info Banner */}
@@ -479,12 +479,12 @@ export default function Connections() {
       >
         <Shield size={16} className="text-accent-blue mt-0.5 shrink-0" />
         <div>
-          <p className="text-xs text-white/50">
-            <b className="text-white/70">How it works:</b> Enter your SAP ECC connection details below.
+          <p className="text-xs text-slate-500">
+            <b className="text-slate-500">How it works:</b> Enter your SAP ECC connection details below.
             The tool connects via <b>RFC protocol</b> (PyRFC) to read your ECC system for migration assessment.
             Passwords are never stored on disk — they are only held in memory during the session.
           </p>
-          <p className="text-[10px] text-white/25 mt-1">
+          <p className="text-[10px] text-slate-400 mt-1">
             <b>Important:</b> Test the connection before running the pipeline. The password is passed securely to the pipeline process.
           </p>
         </div>
@@ -564,16 +564,16 @@ export default function Connections() {
               <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-accent-blue/20 to-accent-green/20 flex items-center justify-center mb-4">
                 <Rocket size={28} className="text-accent-cyan" />
               </div>
-              <h3 className="text-lg font-bold text-white">ECC System Connected</h3>
-              <p className="text-xs text-white/40 mt-1 max-w-md mx-auto">
+              <h3 className="text-lg font-bold text-slate-900">ECC System Connected</h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
                 Your SAP ECC system is ready. Click below to extract all data, run the full conversion analysis,
                 and generate a comprehensive PDF report — all in one step.
               </p>
               <button
                 onClick={startRunAndReport}
-                className="mt-5 inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gradient-to-r from-accent-blue/20 to-accent-green/20
-                           text-white text-sm font-bold hover:from-accent-blue/30 hover:to-accent-green/30
-                           transition-all duration-300 border border-accent-cyan/20 animate-pulse-glow shadow-lg shadow-accent-cyan/10"
+                className="mt-5 inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gradient-to-r from-accent-blue to-indigo-500
+                           text-white text-sm font-bold hover:from-blue-600 hover:to-indigo-600
+                           transition-all duration-300 animate-pulse-glow shadow-lg shadow-indigo-500/25"
               >
                 <Rocket size={16} /> Run Conversion & Generate PDF Report
               </button>
@@ -603,7 +603,7 @@ export default function Connections() {
           >
             <XCircle size={14} className="text-accent-red shrink-0" />
             <p className="text-xs text-accent-red flex-1">{runError}</p>
-            <button onClick={resetRun} className="text-xs text-white/40 hover:text-white/60 px-2 py-1 rounded-lg bg-white/5">
+            <button onClick={resetRun} className="text-xs text-slate-400 hover:text-slate-500 px-2 py-1 rounded-lg bg-slate-50">
               Dismiss
             </button>
           </motion.div>
@@ -629,8 +629,8 @@ export default function Connections() {
               >
                 <CheckCircle2 size={32} className="text-accent-green" />
               </motion.div>
-              <h3 className="text-xl font-bold text-white">Conversion Complete!</h3>
-              <p className="text-sm text-white/40 mt-1">
+              <h3 className="text-xl font-bold text-slate-900">Conversion Complete!</h3>
+              <p className="text-sm text-slate-400 mt-1">
                 All ECC data has been extracted, converted, and analyzed successfully.
               </p>
               <div className="flex items-center justify-center gap-3 mt-5">
@@ -639,16 +639,16 @@ export default function Connections() {
                     const url = pdfUrl || await getAuthUrl(`/api/runs/${runId || 'latest'}/pdf`);
                     window.open(url, '_blank');
                   }}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-accent-green/20 to-accent-cyan/20
-                             text-white text-sm font-bold hover:from-accent-green/30 hover:to-accent-cyan/30
-                             transition-all duration-300 border border-accent-green/30 animate-pulse-glow shadow-lg shadow-accent-green/10"
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-accent-green to-accent-cyan
+                             text-white text-sm font-bold hover:from-green-600 hover:to-cyan-600
+                             transition-all duration-300 animate-pulse-glow shadow-lg shadow-accent-green/25"
                 >
                   <Download size={16} /> Download PDF Report
                 </button>
                 <button
                   onClick={resetRun}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 text-white/60 text-sm font-medium
-                             hover:bg-white/10 transition-all border border-white/10"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 text-slate-500 text-sm font-medium
+                             hover:bg-slate-100 transition-all border border-slate-200"
                 >
                   Run Again
                 </button>
@@ -666,7 +666,7 @@ export default function Connections() {
           transition={{ delay: 0.3 }}
           className="glass rounded-2xl p-6"
         >
-          <h3 className="text-sm font-semibold text-white/70 mb-4">What happens next?</h3>
+          <h3 className="text-sm font-semibold text-slate-500 mb-4">What happens next?</h3>
           <div className="space-y-3">
             {[
               { step: '1', text: 'Configure & test your ECC connection above', icon: Server, color: '#3b82f6' },
@@ -679,7 +679,7 @@ export default function Connections() {
                   style={{ backgroundColor: `${s.color}15`, color: s.color }}>
                   {s.step}
                 </div>
-                <p className="text-xs text-white/50">{s.text}</p>
+                <p className="text-xs text-slate-500">{s.text}</p>
               </div>
             ))}
           </div>

@@ -90,7 +90,7 @@ export default function Gates() {
     <Box sx={{ p: 4, maxWidth: 1200, mx: 'auto' }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: '#fff' }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#0f172a' }}>
             Manual Approval Gates
           </Typography>
           <Typography variant="body2" sx={{ color: '#9ca3af', mt: 0.5 }}>
@@ -114,7 +114,7 @@ export default function Gates() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {loading && <CircularProgress />}
 
-      <Typography variant="h6" sx={{ mt: 2, mb: 1, color: '#fff' }}>
+      <Typography variant="h6" sx={{ mt: 2, mb: 1, color: '#0f172a' }}>
         Pending ({pending.length})
       </Typography>
       {pending.length === 0 && !loading && (
@@ -122,7 +122,7 @@ export default function Gates() {
       )}
       <Stack spacing={2}>
         {pending.map((g) => (
-          <Paper key={g.gate_id} sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.04)' }}>
+          <Paper key={g.gate_id} sx={{ p: 2.5, bgcolor: 'rgba(15, 23, 42,0.04)' }}>
             <Stack direction="row" alignItems="flex-start" spacing={2}>
               <Box sx={{ flex: 1 }}>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
@@ -163,12 +163,12 @@ export default function Gates() {
 
       {decided.length > 0 && (
         <>
-          <Typography variant="h6" sx={{ mt: 4, mb: 1, color: '#fff' }}>
+          <Typography variant="h6" sx={{ mt: 4, mb: 1, color: '#0f172a' }}>
             Recent Decisions
           </Typography>
           <Stack spacing={1}>
             {decided.slice(0, 20).map((g) => (
-              <Paper key={g.gate_id} sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.02)' }}>
+              <Paper key={g.gate_id} sx={{ p: 1.5, bgcolor: 'rgba(15, 23, 42,0.02)' }}>
                 <Stack direction="row" spacing={2} alignItems="center">
                   <Chip
                     label={g.status}

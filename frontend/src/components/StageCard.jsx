@@ -5,7 +5,7 @@ import { CheckCircle2, Clock, AlertTriangle, XCircle } from 'lucide-react';
 const STATUS_CONFIG = {
   completed: { icon: CheckCircle2, color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', label: 'Completed' },
   running: { icon: Clock, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', label: 'Running' },
-  pending: { icon: Clock, color: 'rgba(255,255,255,0.2)', bg: 'rgba(255,255,255,0.03)', label: 'Pending' },
+  pending: { icon: Clock, color: 'rgba(15, 23, 42,0.2)', bg: 'rgba(15, 23, 42,0.03)', label: 'Pending' },
   warning: { icon: AlertTriangle, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', label: 'Warning' },
   failed: { icon: XCircle, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', label: 'Failed' },
 };
@@ -39,9 +39,9 @@ export default function StageCard({ stage, status = 'pending', delay = 0, compac
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-white/90 truncate">{stage.name}</div>
+          <div className="text-sm font-medium text-slate-700 truncate">{stage.name}</div>
           {!compact && (
-            <div className="text-[10px] text-white/30 uppercase tracking-wider mt-0.5">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">
               {stage.phase} phase
             </div>
           )}
