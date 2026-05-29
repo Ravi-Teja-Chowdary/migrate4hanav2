@@ -1049,6 +1049,54 @@ async def spine_progress(run_id: str = "latest"):
     except (OSError, json.JSONDecodeError) as e:
         raise HTTPException(status_code=500, detail=f"progress unreadable: {e}")
 
+
+def _gate_controller():
+    """Lazily build the spine GateController (lives in lambda/utils)."""
+    try:
+        utils_dir = os.path.join(PROJECT_DIR, "lambda", "utils")
+        if utils_dir not in sys.path:
+            sys.path.insert(0, utils_dir)
+        from governance import GateController
+        return GateController()
+    except Exception:
+        return None
+
+
+@app.get("/api/spine/gates", dependencies=[Depends(require_auth)])
+async def spine_gates():
+    """List pending human-approval gates for the master spine (Pillar 3)."""
+    gc = _gate_controller()
+    if gc is None:
+        return {"gates": [], "error": "governance module unavailable"}
+    # never expose the HMAC signature in a list response
+    return {"gates": [{k: v for k, v in g.items() if k != "signature"}
+                      for g in gc.list_pending()]}
+
+
+@app.post("/api/spine/approve", dependencies=[Depends(require_auth)])
+async def spine_approve(request: Request):
+    """Signed resume webhook (Pillar 3). Body: {gate_id, signature, decided_by,
+    action?: approve|reject}. The HMAC signature is the cutover fence — only a
+    holder of the run's gate secret can pass it; the pipeline stays frozen otherwise."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON body")
+    gate_id = body.get("gate_id")
+    signature = body.get("signature")
+    decided_by = body.get("decided_by", "")
+    action = str(body.get("action", "approve")).lower()
+    if not gate_id or not signature:
+        raise HTTPException(status_code=400, detail="gate_id and signature are required")
+    gc = _gate_controller()
+    if gc is None:
+        raise HTTPException(status_code=503, detail="governance module unavailable")
+    res = (gc.reject(gate_id, signature, decided_by) if action == "reject"
+           else gc.approve(gate_id, signature, decided_by))
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error", "gate decision failed"))
+    return res
+
 @app.get("/api/progress", dependencies=[Depends(require_auth)])
 async def pipeline_progress(since: int = 0):
     """Return real-time progress steps. Use ?since=N to get only steps after index N."""

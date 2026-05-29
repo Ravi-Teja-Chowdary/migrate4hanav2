@@ -46,7 +46,8 @@ from typing import Any, Callable, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent
 # Make the sibling layer modules importable regardless of cwd.
-for p in (REPO_ROOT, REPO_ROOT / "agent", REPO_ROOT / "lambda" / "code-analyzer"):
+for p in (REPO_ROOT, REPO_ROOT / "agent", REPO_ROOT / "lambda" / "code-analyzer",
+          REPO_ROOT / "lambda" / "utils"):
     sp = str(p)
     if sp not in sys.path:
         sys.path.insert(0, sp)
@@ -268,7 +269,14 @@ class PipelineSpineMaster:
         gen = InSystemAgentGenerator()
         carve = payload["scope"].get("carve_out", [])
         conn = payload.get("_live_source_conn")          # set only in live runs
-        programs, errors = [], []
+        # Pillar 1 — elastic compute dispatcher: a carve-out whose scope exceeds the
+        # row threshold is routed to Fargate (auto-scaled memory) instead of Lambda.
+        try:
+            from scaling import ComputeDispatcher
+            dispatcher = ComputeDispatcher()
+        except Exception:
+            dispatcher = None
+        programs, errors, fargate_routed = [], [], 0
         out_dir = run_dir / "carveout"
         out_dir.mkdir(parents=True, exist_ok=True)
         for spec in carve:
@@ -282,6 +290,11 @@ class PipelineSpineMaster:
                     g["source"], encoding="utf-8")
                 rec = {"table": spec["table"], "program": g["program"],
                        "meta": g["meta"], "deployed": False}
+                if dispatcher is not None:
+                    decision = dispatcher.decide(spec["table"], int(spec.get("est_rows", 0) or 0))
+                    rec["compute"] = decision.to_dict()
+                    if decision.target == "fargate":
+                        fargate_routed += 1
                 if conn is not None:               # live carve-out, paced by throttle
                     with throttle.slot():
                         res = gen.deploy_and_run(conn, spec["table"],
@@ -294,7 +307,7 @@ class PipelineSpineMaster:
                 errors.append({"table": spec.get("table"), "error": str(e)})
         rc = 0 if not errors else 2
         return rc, {"rc": rc, "programs": programs, "errors": errors,
-                    "carved_tables": len(programs)}
+                    "carved_tables": len(programs), "fargate_routed": fargate_routed}
 
     def _phase_syniti(self, payload, run_dir, throttle, p1) -> tuple[int, dict]:
         """Cleanse, self-heal, ledger the extracted entity trees."""

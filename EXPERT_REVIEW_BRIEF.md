@@ -295,8 +295,13 @@ additive, guarded changes (proven deterministic paths untouched; all files `py_c
 | **1.3 — Write-capacity isolation** | thread-safe `TokenBucket` in `lambda/utils/key_map.py`; optional ledger limiter (default off) to protect DynamoDB WCU under high-concurrency loops | 120 writes throttled to ~1.41s at 50/s burst-50 | sizing against real table WCU under a live mass load |
 | **4 — Cryptographic auditing** | `lambda/utils/reconciler.py`: `HashChainLedger` (SHA-256 hash-chained, tamper-evident, resume-safe, optional DynamoDB vault); `AggregateReconciler` (count + total + debit/credit tie-out source↔target); `EvidencePack` (hash-sealed manifest + S3 **WORM** Object Lock). Chain wired into the `data-migrator` run summary. | chain verifies + **detects a tampered block**; aggregate tie-out flags balance VARIANCE; evidence pack hash-sealed into the chain | real source↔target aggregate queries at volume; WORM S3 bucket; multi-part compliance PDF render |
 
-**Pillars NOT yet built (infra-heavy, code+Terraform pending validation against a live AWS account):**
-**1.1/1.2** dynamic Fargate compute dispatcher (>threshold rows → ECS) + chunked OData `$top/$skiptoken`
-paging; **3** Step Functions `TaskToken` human-approval gates after ASSESS/DATA-PREP/VALIDATE + SNS alert
-payloads + a signed `/api/spine/approve` resume webhook. These move TRL forward only once exercised on
-real infrastructure — treat as designed, not delivered.
+**Pillars 1.1/1.2 & 3 — code modules built + verified offline; AWS infra pending.**
+`lambda/utils/scaling.py` — `ComputeDispatcher` (routes a unit of work to Fargate with an auto-scaled
+memory tier when est-rows exceed a threshold, else inline/Lambda) + `ODataPager` (streams large entity
+sets via `$top`/`$skiptoken`); the dispatcher decision is wired into the spine's carve-out phase
+(`fargate_routed` count in the result). `lambda/utils/governance.py` — `GateController` (HMAC-signed,
+file-backed, cross-process, no-double-pass) + schema-validated SNS alert payloads; a signed
+**`/api/spine/approve`** (+ `/api/spine/gates`) webhook is live in the API. All ship with green self-tests.
+**What remains is live AWS**: the ECS Fargate task definition + `run_task` execution, the Step Functions
+`TaskToken` wait-states after ASSESS/DATA-PREP/VALIDATE, the SNS topic, and the Terraform to provision
+them — written/owed but not certifiable in this environment. Treat as built-and-unit-tested, not live-delivered.

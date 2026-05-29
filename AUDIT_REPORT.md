@@ -270,6 +270,12 @@ Expert-guided production-readiness work; additive + guarded (proven paths untouc
   Chain wired into the `data-migrator` run summary. Self-test: chain verifies + detects tampering;
   tie-out flags variance; evidence sealed into chain.
 
-**Not yet built (infra-dependent — code+Terraform to be validated on a live AWS account):** Pillar 1.1/1.2
-(Fargate compute dispatcher >threshold rows + chunked OData `$top/$skiptoken`); Pillar 3 (Step Functions
-`TaskToken` gates after ASSESS/DATA-PREP/VALIDATE + SNS payloads + signed `/api/spine/approve` webhook).
+**Pillars 1.1/1.2 & 3 — code modules built + verified offline (infra pending):**
+- `lambda/utils/scaling.py`: `ComputeDispatcher` (>threshold rows → Fargate memory tier, else inline;
+  ECS `run_task` infra-gated) + `ODataPager` (`$top`/`$skiptoken` server-side paging). Self-test green;
+  dispatcher decision wired into `pipeline_spine_master` carve-out phase.
+- `lambda/utils/governance.py`: `GateController` (HMAC-signed, file-backed, cross-process gates,
+  no-double-pass) + schema-validated SNS alert payloads. Self-test green. Signed **`/api/spine/approve`**
+  + `/api/spine/gates` endpoints added to `api_server.py`.
+- **Still owed (live AWS to certify):** ECS Fargate task def + `run_task`; Step Functions `TaskToken`
+  wait-states after ASSESS/DATA-PREP/VALIDATE; SNS topic; Terraform modules for all of the above.
