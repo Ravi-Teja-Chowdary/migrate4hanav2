@@ -4,7 +4,13 @@
 is an honest assessment of where the tool stands — gaps are stated deliberately so your
 review is efficient. Nothing here is marketing; please challenge any claim.*
 
-**Date:** 2026-05-28 · **Branch reviewed:** `aws-lift-and-shift` · **Build status:** working prototype on a live system pair.
+**Date:** 2026-05-29 · **Branch reviewed:** `aws-lift-and-shift` · **Build status:** working prototype on a live system pair.
+
+> **2026-05-29 update:** four new "competitive-parity" layers and a light-themed Project Tracker UI were
+> added (commit `0e7b7e0`). They are **self-tested deterministically but NOT yet integrated into the
+> live ECC→S/4 loop** — see **§10** for exactly what each does and its maturity, and **§11** for an
+> honest head-to-head read vs SmartShift / Syniti / Natuvion. Read §10–11 as "newly built, integration
+> + live-proof pending," not as additions to the §4 live-proven evidence.
 
 ---
 
@@ -212,3 +218,52 @@ reconciliation, cutover) is real and unusual. It is **not yet** a faithful, full
 complete, volume-proven, pilot-validated migration product — and the largest remaining work (the
 transformation/mapping layer and faithful dependent-key migration) is exactly the part real projects
 spend the most on. We're seeking your read on whether the spine is worth building the rest around.
+
+---
+
+## 10. Competitive-parity layers added 2026-05-29 (built + self-tested; live integration pending)
+
+These were added to give the tool an explicit answer to "how do you compare to SmartShift / Syniti /
+Natuvion in their core areas." **Honest status up front:** each module is **standard-library, runs its
+own self-test green, and is architecturally production-shaped — but none is yet wired into the live
+`unified_loader` spine of §3–4, none has touched the live ECC/S4 pair, and the AI + 10M-scale paths
+have not been exercised against real Bedrock / real volume.** They are credible engineering, at roughly
+**TRL 4 (component validated in isolation)**, sitting beside a **TRL ~6** live spine.
+
+| Layer | File | What it does (deterministically) | Verified | NOT yet |
+|---|---|---|---|---|
+| **Natuvion — selective carve-out** | `agent/in_system_agent_generator.py` | Generates parameterized in-system ABAP: org (`BUKRS`) + time (`GJAHR`) pushed into the `WHERE`; `OPEN CURSOR … FETCH … PACKAGE SIZE` streaming (anti-`TSV_TNEW_PAGE_ALLOC_FAILED`); dependency-aware header co-extract (line table → `BKPF`); ABAP-injection-safe identifier validation. Deploys via the proven `RPY_PROGRAM_INSERT`+`RZL_SUBMIT` agent. | ABAP emitted + validated; injection guard tested | Run live at volume; multi-table carve graph; client/CoCode split |
+| **Syniti — data spine** | `data_spine_orchestrator.py` | Entity-tree FK integrity (`BUT000/BUT020/BUT100`; orphans quarantined); deterministic self-heal of org attributes (PRCTR/BUKRS/…) against target reference data (remap → default); append-only **SHA-256 idempotency ledger** with `reused_from_ledger` score + instant resume. Zero runtime AI. | Self-test: orphan quarantined, 3 PRCTRs healed, resume run 100 % reused | A general value-mapping/rules engine; DQ rule library; live wiring |
+| **SmartShift — AI fail-safe** | `lambda/code-analyzer/llm_fallback_router.py` | Wraps the real 6,400-line AST engine in a strict try/catch; on a parser crash/parse-error it localises the offending block (lines + exact error), builds a compact **Bedrock** fix-only prompt, splices + re-validates, then routes through a **mock-ATC** governance gate → PASS = transport `.data/.cofile`, FAIL = quarantine. LLM is injectable. | Self-test: deterministic→transport, AI-fallback→fixed→transport, no-AI→quarantine | Real Bedrock call; **real ATC** (the gate is a mock); wiring to `code-deployer`'s human-approval gate |
+| **Master orchestrator** | `pipeline_spine_master.py` | Sequences Natuvion→Syniti→SmartShift→Governance; `RFCThrottle` (bounded concurrency + paced interval = anti-DoS on the SAP gateway); identical local/cloud state-machine payload; writes live `progress.json` for the UI; per-phase return codes. | Self-test: 4-phase run rc=0, GO verdict, progress emitted | Drive the *live* loaders (today runs on fixtures); Step Functions parity test |
+| **Stress generator** | `scripts/stress_test_generator.py` | 100× Lambda fan-out, Faker+deterministic SAP rows → S3 Parquet; 1 % chaos injection (bad dates / orphan FK / dup keys) to exercise the assessor + ledger. Added a `lambda_handler`; fixed two real bugs (FieldSpec hint, local Parquet path). | Local self-test: workers write Parquet, ~1 % chaos | The actual 10M-row AWS run (user-executed, guided) |
+| **UI — Project Tracker** | `frontend/` (light theme) + `/api/spine/progress` | Fluidic light theme (`#F8FAFC`, slate/indigo); Start/End connectivity boards (ECC→S/4 RISE), progress pipeline, kanban (Completed / In-Progress + spinner & RC / Queued); polls the orchestrator's live progress. | `npm run build` clean; dev server serves all modules | Pixel/UX review; live data binding under a real run |
+
+**For your review:** the §6 limitations still stand. §10 narrows two of them on paper — §6.3 (a *first* deterministic self-heal/FK layer exists, though not a general mapping engine) and the §4 governance gap (an ATC-style gate now exists, though mock) — but **none of §10 changes the live-proven evidence in §4.** Please judge these as design, not delivery.
+
+---
+
+## 11. Honest head-to-head: are we competitive with SmartShift / Syniti / Natuvion?
+
+Short answer: **competitive in *architecture and orchestration*; not yet competitive in *depth, content,
+and proof* in any of the three vendors' core specialities.** Per area:
+
+| Their speciality | Where we stand | Verdict | To become competitive |
+|---|---|---|---|
+| **SmartShift — automated custom-code remediation at scale** | Real 6,400-line AST engine + 4-level fixers + deterministic-first/AI-fallback wrapper + governance gate. | **Partial.** Engine is real and the architecture is sound; our *ruleset breadth, automation %, regression/equivalence testing, and scale proof* are far below SmartShift's mature platform. | Real ATC integration; an automated before/after **equivalence-test** harness; expand the simplification ruleset; prove auto-fix % on a large real custom-code base; CI over the fixer. |
+| **Syniti — data quality, mapping, governance, reconciliation** | Strong **reconciliation** (existence+value, hard verdict) + cross-run **idempotency ledger** (now SHA-256) + new **FK-integrity + deterministic self-heal**. | **Partial.** Our reconciliation/idempotency are genuinely strong and unusual; we lack Syniti's **value-mapping/rules engine, DQ scorecards & cleansing library, and business-user mapping/governance UI**. | Build the general mapping/rules layer (§6.3); a DQ rule library + scorecard; a mapping UI; data-owner workflow/sign-off. |
+| **Natuvion — selective data transition / carve-outs / consolidation** | New carve-out ABAP generator (org+time filters, dependency-aware, streamed) on the supported in-system agent; greenfield/SDT lane positioning. | **Gap→Partial.** We can *generate* a governed carve-out; we have **not** proven it at volume, nor built company-code/client split or system-consolidation harmonization content. | Live carve-out at volume; selective company-code/time-slice split; harmonization rules for consolidation; faithful dependent-key migration (§6.1). |
+
+**Where we already beat the field for our lane:** the **trust spine** — auto-discovery + existence/value
+reconciliation with a hard GO/NO-GO + cross-run idempotency + dead-letter + support-clean attestation —
+is more automated and more auditable out-of-the-box than the stock Migration Cockpit, and is a credible
+differentiator none of the three give you for free in exactly this shape.
+
+**The blunt bottom line for a reviewer:** today this is **one strong, support-clean, live-proven
+orchestration+reconciliation spine (25 objects)** plus **five newly-built, self-tested-but-not-yet-live
+components** that *sketch* parity with the three vendors. To be genuinely competitive with any one of
+them in their home turf, the priorities are (1) the **mapping/transformation + DQ layer** (closes the
+Syniti gap and §6.3), (2) **ATC + equivalence-testing + scale** for the code fixer (closes the SmartShift
+gap), (3) **live, volume-proven carve-out + consolidation content** (closes the Natuvion gap), and (4)
+**a customer pilot on a second, customer-shaped landscape** (§6.7). The architecture to hang all of this
+on now exists; the depth, content, and proof do not yet.

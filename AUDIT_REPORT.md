@@ -207,3 +207,24 @@ to production-grade are **three and specific**, not "go build it":
    the data spine got (or a local execution harness for the transport/config chain).
 
 → Proceeding to fixes in the priority order in "Production-grade plan" above.
+
+## ADDENDUM 2026-05-29 — competitive-parity layers (commit 0e7b7e0): built + self-tested, NOT yet live-integrated
+
+Five new modules + a light-theme UI were added to give explicit parity-targets vs SmartShift / Syniti /
+Natuvion. **Classification: bucket "G — built + unit/self-test green, integration & live-proof pending"**
+(roughly TRL 4, beside the TRL ~6 live spine). None has touched the live ECC/S4 pair; none is wired into
+`unified_loader`; the AI and 10M-scale paths are unexercised against real Bedrock / real volume.
+
+| Module | Self-test evidence (re-runnable) | Honest status / what it is NOT |
+|---|---|---|
+| `data_spine_orchestrator.py` (Syniti layer) | `python data_spine_orchestrator.py` → orphan `BUT020` quarantined, **3 PRCTRs self-healed** (remap+default), resume run **8/8 reused, 0 written** (`reused_score 1.0`). FK integrity + SHA-256 append-only ledger. | A *new, self-contained* engine — **not** the live `lambda/utils` data spine, and **not** a general value-mapping/rules engine (the §6.3 gap remains). Not yet called by `unified_loader`. |
+| `lambda/code-analyzer/llm_fallback_router.py` (SmartShift layer) | `python llm_fallback_router.py` → clean→deterministic→**ATC PASS→transport**; broken→**AI fail-safe→fixed→PASS→transport**; no-AI→**quarantine**. Wraps the real `process_abap_file`. | Directly addresses **plan item #2's follow-on** (an ATC-run gate) — **but the ATC here is a deterministic *mock***, not a real SAP ATC, and it is **not yet wired to `code-deployer`'s** human-approval gate. Bedrock call path not run against real Bedrock. |
+| `pipeline_spine_master.py` (master orchestrator) | `python pipeline_spine_master.py` → 4-phase run **rc=0**, verdict **GO**, `RFCThrottle` stats, writes `local-staging/spine-runs/<id>/progress.json`. | Runs on **fixtures**, not the live loaders; a *parallel* orchestrator to `run_local_lift_and_shift.py`, sharing the state-machine-payload idea (local/cloud parity) but not yet a Step-Functions-verified path. |
+| `agent/in_system_agent_generator.py` (Natuvion carve-out) | `python agent/in_system_agent_generator.py` prints a generated, org/time-filtered, cursor-streamed, header-co-extracting ABAP report; identifier injection guard. | Generates + (with a live conn) deploys via the proven in-system agent — **carve-out at volume is unproven**; no client/CoCode-split or consolidation content. |
+| `scripts/stress_test_generator.py` | `python scripts/stress_test_generator.py` → 5 workers write Parquet locally, ~1 % chaos injected. Added `lambda_handler`; **fixed 2 real bugs** (FieldSpec `hint`, local Parquet dir path). | The **10M-row AWS run is user-executed (guided), not yet done.** Needs a Lambda layer with faker+pyarrow, S3 bucket, IAM. |
+| `frontend/` light theme + `ProjectTracker.jsx` + `api_server.py:/api/spine/progress` | `npm run build` clean; dev server serves every module (HTTP 200). Start/End boards + progress pipeline + kanban (spinner + RC). | Verified **compile + serve only** — no pixel/UX review here (no browser screenshot in this env). Light-theme conversion across 12 files + new endpoint. |
+
+**Net effect on the three named gaps:** #2 (ABAP governance) now has a *runtime* ATC-style gate at the
+remediation layer (mock ATC) — the real-ATC + `code-deployer` wiring is still open. #1 and #3 are
+unchanged. **No item in the original "FINAL VERDICT" is downgraded or closed by this addendum** — these
+are new components to be live-validated under the same per-stage definition-of-done (live run + evidence).
