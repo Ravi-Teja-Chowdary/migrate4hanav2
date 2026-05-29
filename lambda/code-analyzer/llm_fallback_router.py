@@ -49,6 +49,12 @@ except Exception:  # pragma: no cover - exercised only when path is wrong
     # ("lambda" is a Python keyword so the package can't be imported by name.)
     process_abap_file = None  # type: ignore
 
+# Reversible masking — surrogates leave the process to Bedrock; originals restored on return.
+try:
+    from pseudonymize import Pseudonymizer
+except Exception:
+    Pseudonymizer = None  # type: ignore
+
 BEDROCK_MODEL_ID = os.environ.get(
     "BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
 MAX_FALLBACK_RETRIES = int(os.environ.get("M4H_FALLBACK_RETRIES", "2"))
@@ -301,6 +307,7 @@ class RemediationResult:
     parse_errors_before: int = 0
     parse_errors_after: int = 0
     offending_blocks: list = field(default_factory=list)
+    pseudonymize: list = field(default_factory=list)   # per-block mask counts (audit)
     atc: dict = field(default_factory=dict)
     governance: str = ""            # "transported" | "quarantined"
     artifacts: dict = field(default_factory=dict)
@@ -365,11 +372,12 @@ class FallbackRouter:
         # ── Step 2-4: AI fail-safe loop for unresolved fragments ────────────
         if crashed or parse_errors:
             result.path = "ai_fallback"
-            transformed, ai_fixes, blocks, errors_after = self._fix_with_ai(
+            transformed, ai_fixes, blocks, errors_after, mask_reports = self._fix_with_ai(
                 transformed if not crashed else current, parse_errors, object_name)
             result.transformed_code = transformed
             result.ai_fixes = ai_fixes
             result.offending_blocks = [b.to_dict() for b in blocks]
+            result.pseudonymize = mask_reports
             result.parse_errors_after = errors_after
         else:
             result.parse_errors_after = 0
@@ -394,11 +402,16 @@ class FallbackRouter:
     # -- internal -------------------------------------------------------------
     def _fix_with_ai(self, source: str, parse_errors: list[str],
                      object_name: str):
-        """Localised, bounded-retry AI repair. Returns
-        (fixed_source, ai_fix_count, offending_blocks, residual_error_count)."""
+        """Localised, bounded-retry AI repair with **reversible masking** around
+        the Bedrock call: sensitive tokens (emails / IPs / URLs / passwords / any
+        caller-supplied literals) are pseudonymized before the prompt leaves the
+        process, and restored byte-for-byte in the returned fix. Bedrock only
+        ever sees surrogates. Returns (fixed_source, ai_fix_count,
+        offending_blocks, residual_error_count, mask_reports)."""
         blocks: list[OffendingBlock] = []
         fixed = source
         ai_fixes = 0
+        mask_reports: list = []
 
         # de-duplicate errors by their localised line so we fix each spot once
         seen_lines: set = set()
@@ -410,13 +423,30 @@ class FallbackRouter:
             seen_lines.add(key)
             blocks.append(block)
 
-            prompt = build_fix_prompt(block, object_name)
+            # ── mask the snippet for Bedrock; keep the mapping for restore ──
+            ps = Pseudonymizer() if Pseudonymizer is not None else None
+            if ps is not None:
+                masked_snippet = ps.mask(block.snippet)
+                masked_block = OffendingBlock(
+                    error=block.error, line=block.line,
+                    start_line=block.start_line, end_line=block.end_line,
+                    snippet=masked_snippet)
+            else:
+                masked_block = block
+
+            prompt = build_fix_prompt(masked_block, object_name)
             raw = None
             for _ in range(max(1, self.max_retries)):
                 raw = self.llm(prompt)
                 if raw:
                     break
-            patched = extract_abap(raw) if raw else ""
+            patched_masked = extract_abap(raw) if raw else ""
+            # ── restore originals in the returned remediation ──
+            patched = ps.unmask(patched_masked) if (ps and patched_masked) else patched_masked
+
+            if ps is not None:
+                mask_reports.append({"line": block.line, **ps.report.to_dict()})
+
             if patched and patched.strip() and "M4H_SYNTAX_ERROR" not in patched:
                 fixed = self._splice(fixed, block, patched)
                 ai_fixes += 1
@@ -426,7 +456,7 @@ class FallbackRouter:
 
         # confirm with the deterministic engine (the loop's verification step)
         residual = self._count_parse_errors(fixed)
-        return fixed, ai_fixes, blocks, residual
+        return fixed, ai_fixes, blocks, residual, mask_reports
 
     @staticmethod
     def _splice(source: str, block: OffendingBlock, replacement: str) -> str:

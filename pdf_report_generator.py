@@ -1,5 +1,5 @@
 """
-Migrate4HANA â€” PDF Report Generator
+Migrate4HANA -- PDF Report Generator
 =====================================
 Generates a professional client-deliverable PDF from the
 post-migration report JSON.
@@ -31,6 +31,56 @@ PURPLE = colors.HexColor("#8b5cf6")
 GRAY = colors.HexColor("#64748b")
 LIGHT_GRAY = colors.HexColor("#f1f5f9")
 WHITE = colors.white
+
+
+# ── Unicode safety net ──────────────────────────────────────────────────────
+# ReportLab's default Helvetica is Latin-1 only -- em-dashes, arrows, smart
+# quotes, box-drawing chars, accented letters, and other Unicode characters in
+# the report JSON render as missing glyphs (the "not a single word
+# understandable" symptom). _safe() folds the common problem chars to readable
+# ASCII before anything reaches the PDF; _safe_data() walks the JSON recursively.
+_UNICODE_FALLBACK = {
+    "—": "--",  "–": "-",
+    "‘": "'",   "’": "'",
+    "“": '"',   "”": '"',
+    "•": "*",   "·": "*",
+    "…": "...",
+    "→": "->",  "←": "<-",
+    "↑": "^",   "↓": "v",
+    "─": "-",   "━": "-",
+    "│": "|",   "┃": "|",
+    " ": " ",
+    "✅": "[OK]", "✓": "[OK]", "✔": "[OK]",
+    "❌": "[X]",  "✗": "[X]",
+    "⚠": "[!]",
+}
+
+
+def _safe(s):
+    """Return ``s`` with Unicode chars Helvetica cannot render mapped to ASCII.
+    Non-string inputs pass through unchanged; any remaining non-Latin-1 char is
+    transliterated to '?' so rendering can never fail mid-page."""
+    if s is None or not isinstance(s, str) or not s:
+        return s
+    for bad, good in _UNICODE_FALLBACK.items():
+        if bad in s:
+            s = s.replace(bad, good)
+    try:
+        s.encode("latin-1")
+        return s
+    except UnicodeEncodeError:
+        return s.encode("ascii", errors="replace").decode("ascii")
+
+
+def _safe_data(obj):
+    """Recursively walk a JSON-like structure and _safe() every string."""
+    if isinstance(obj, str):
+        return _safe(obj)
+    if isinstance(obj, list):
+        return [_safe_data(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _safe_data(v) for k, v in obj.items()}
+    return obj
 
 
 def _styles():
@@ -125,8 +175,8 @@ def generate_pdf(report_data, output_path):
     Generate a professional PDF from a post-migration report dict.
 
     Args:
-        report_data: dict â€” the post_migration_report section
-        output_path: str â€” where to save the PDF
+        report_data: dict -- the post_migration_report section
+        output_path: str -- where to save the PDF
     """
     # Hard-delete stale cache files to prevent reading previous run data
     import os as _os
@@ -141,6 +191,11 @@ def generate_pdf(report_data, output_path):
                 except OSError:
                     pass
 
+    # Sanitize every string in the report so Helvetica can render it cleanly
+    # (em-dashes, arrows, smart quotes, accents, box-drawing in source data
+    # would otherwise show as missing-glyph squares).
+    report_data = _safe_data(report_data)
+
     ss = _styles()
     doc = SimpleDocTemplate(
         output_path, pagesize=A4,
@@ -151,7 +206,7 @@ def generate_pdf(report_data, output_path):
     story = []
     page_w = A4[0] - 40 * mm  # usable width
 
-    # â”€â”€â”€ COVER PAGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- COVER PAGE ---------------------------------------------
     story.append(Spacer(1, 40 * mm))
 
     es = report_data.get("executive_summary", {})
@@ -160,20 +215,20 @@ def generate_pdf(report_data, output_path):
     story.append(Paragraph("Post-Migration Report", ss["CoverTitle"]))
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(
-        f"SAP ECC â†’ S/4HANA System Conversion", ss["CoverSub"]
+        f"SAP ECC -> S/4HANA System Conversion", ss["CoverSub"]
     ))
     story.append(Spacer(1, 10 * mm))
     story.append(HRFlowable(width="40%", thickness=2, color=BLUE))
     story.append(Spacer(1, 10 * mm))
 
     cover_data = [
-        ["Client", es.get("client", "â€”")],
-        ["Source System", es.get("source_system", "â€”")],
-        ["Target System", es.get("target_system", "â€”")],
-        ["Migration Approach", es.get("migration_approach", "â€”")],
-        ["Status", es.get("overall_status", "â€”")],
-        ["Generated", meta.get("generated", "â€”")],
-        ["Classification", meta.get("classification", "â€”")],
+        ["Client", es.get("client", "--")],
+        ["Source System", es.get("source_system", "--")],
+        ["Target System", es.get("target_system", "--")],
+        ["Migration Approach", es.get("migration_approach", "--")],
+        ["Status", es.get("overall_status", "--")],
+        ["Generated", meta.get("generated", "--")],
+        ["Classification", meta.get("classification", "--")],
     ]
     cover_table = Table(cover_data, colWidths=[page_w * 0.35, page_w * 0.65])
     cover_table.setStyle(TableStyle([
@@ -189,9 +244,9 @@ def generate_pdf(report_data, output_path):
     story.append(Spacer(1, 20 * mm))
 
     gls = report_data.get("go_live_scorecard", {})
-    grade = gls.get("grade", "â€”")
-    score = gls.get("score", "â€”")
-    rec = es.get("recommendation", "â€”")
+    grade = gls.get("grade", "--")
+    score = gls.get("score", "--")
+    rec = es.get("recommendation", "--")
 
     grade_color = {"A": GREEN, "B": AMBER, "C": colors.HexColor("#f97316"), "D": RED}.get(grade, BLUE)
     story.append(Paragraph(
@@ -199,35 +254,35 @@ def generate_pdf(report_data, output_path):
         ParagraphStyle("tmp", alignment=TA_CENTER, fontSize=36, leading=42)
     ))
     story.append(Paragraph(
-        f'<font color="{GRAY.hexval()}" size="12">{score} â€” {rec}</font>',
+        f'<font color="{GRAY.hexval()}" size="12">{score} -- {rec}</font>',
         ParagraphStyle("tmp2", alignment=TA_CENTER, fontSize=12, leading=16, spaceAfter=4)
     ))
 
     story.append(PageBreak())
 
-    # â”€â”€â”€ 1. EXECUTIVE SUMMARY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 1. EXECUTIVE SUMMARY ----------------------------------
     story.append(Paragraph("1. Executive Summary", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=BLUE))
     story.append(Spacer(1, 4 * mm))
 
     ssa = report_data.get("source_system_assessment", {})
     summary_bullets = [
-        f"<b>Client:</b> {es.get('client', 'â€”')}",
-        f"<b>Source:</b> {es.get('source_system', 'â€”')} â€” {ssa.get('total_custom_programs', 0)} custom programs, "
+        f"<b>Client:</b> {es.get('client', '--')}",
+        f"<b>Source:</b> {es.get('source_system', '--')} -- {ssa.get('total_custom_programs', 0)} custom programs, "
         f"{ssa.get('total_custom_tables', 0)} tables, {ssa.get('function_modules', 0)} function modules",
-        f"<b>Target:</b> {es.get('target_system', 'â€”')}",
-        f"<b>Approach:</b> {es.get('migration_approach', 'â€”')}",
+        f"<b>Target:</b> {es.get('target_system', '--')}",
+        f"<b>Approach:</b> {es.get('migration_approach', '--')}",
         f"<b>Org Scope:</b> {ssa.get('company_codes', 0)} company codes, "
         f"{ssa.get('plants', 0)} plants, {ssa.get('sales_organizations', 0)} sales orgs",
         f"<b>Users:</b> {ssa.get('total_users', 0):,} across {ssa.get('total_roles', 0)} roles",
         f"<b>Blocking Issues:</b> {ssa.get('blocking_issues_identified', 0)} identified and addressed",
     ]
     for b in summary_bullets:
-        story.append(Paragraph(f"â€¢ {b}", ss["MBullet"]))
+        story.append(Paragraph(f"* {b}", ss["MBullet"]))
 
     story.append(Spacer(1, 6 * mm))
 
-    # â”€â”€â”€ 2. CODE REMEDIATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 2. CODE REMEDIATION -----------------------------------
     story.append(Paragraph("2. Code Remediation", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=CYAN))
     story.append(Spacer(1, 4 * mm))
@@ -272,7 +327,7 @@ def generate_pdf(report_data, output_path):
     # Key transformations
     story.append(Paragraph("Key Transformations", ss["SubH"]))
     for t in cr.get("key_transformations", []):
-        story.append(Paragraph(f"â€¢ {t}", ss["MBullet"]))
+        story.append(Paragraph(f"* {t}", ss["MBullet"]))
 
     # Manual review
     manual = cr_sum.get("remaining_manual_review", 0)
@@ -280,11 +335,11 @@ def generate_pdf(report_data, output_path):
         story.append(Spacer(1, 3 * mm))
         story.append(Paragraph(f"<b>Manual Review Required:</b> {manual} items", ss["Body"]))
         for item in cr.get("manual_review_items", []):
-            story.append(Paragraph(f"  â€” {item}", ss["MBullet"]))
+            story.append(Paragraph(f"  -- {item}", ss["MBullet"]))
 
     story.append(PageBreak())
 
-    # â”€â”€â”€ 3. DATA MIGRATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 3. DATA MIGRATION -------------------------------------
     story.append(Paragraph("3. Data Migration", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=GREEN))
     story.append(Spacer(1, 4 * mm))
@@ -294,27 +349,27 @@ def generate_pdf(report_data, output_path):
     bp = dm.get("business_partner_conversion") or {}
     ct = dm.get("custom_tables") or {}
 
-    story.append(Paragraph("Financial Data (BKPF/BSEG â†’ ACDOCA)", ss["SubH"]))
+    story.append(Paragraph("Financial Data (BKPF/BSEG -> ACDOCA)", ss["SubH"]))
     fin_data = [
         ["Metric", "Value"],
         ["Source Documents (BKPF)", f"{fin.get('source_documents_bkpf', 0):,}"],
         ["Source Line Items (BSEG)", f"{fin.get('source_line_items_bseg', 0):,}"],
         ["Target ACDOCA Records", f"{fin.get('target_acdoca_records', 0):,}"],
-        ["Reconciliation", fin.get("reconciliation", "â€”")],
+        ["Reconciliation", fin.get("reconciliation", "--")],
     ]
     ft = Table(fin_data, colWidths=[page_w * 0.55, page_w * 0.45])
     ft.setStyle(_table_style_base())
     story.append(ft)
     story.append(Spacer(1, 4 * mm))
 
-    story.append(Paragraph("Business Partner Conversion (KNA1/LFA1 â†’ BUT000)", ss["SubH"]))
+    story.append(Paragraph("Business Partner Conversion (KNA1/LFA1 -> BUT000)", ss["SubH"]))
     bp_data = [
         ["Metric", "Value"],
         ["Customers Migrated", f"{bp.get('customers_migrated', 0):,}"],
         ["Vendors Migrated", f"{bp.get('vendors_migrated', 0):,}"],
         ["Business Partners Created", f"{bp.get('business_partners_created', 0):,}"],
         ["Duplicates Merged", str(bp.get("duplicates_merged", 0))],
-        ["CVI Synchronization", bp.get("cvi_synchronization", "â€”")],
+        ["CVI Synchronization", bp.get("cvi_synchronization", "--")],
     ]
     bpt = Table(bp_data, colWidths=[page_w * 0.55, page_w * 0.45])
     bpt.setStyle(_table_style_base())
@@ -323,14 +378,14 @@ def generate_pdf(report_data, output_path):
 
     story.append(Paragraph("Custom Tables", ss["SubH"]))
     story.append(Paragraph(
-        f"â€¢ {ct.get('tables_migrated', 0)} tables migrated, "
+        f"* {ct.get('tables_migrated', 0)} tables migrated, "
         f"{ct.get('total_rows_transferred', 0):,} total rows transferred",
         ss["MBullet"]
     ))
 
     story.append(Spacer(1, 6 * mm))
 
-    # â”€â”€â”€ 4. CONFIGURATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 4. CONFIGURATION --------------------------------------
     story.append(Paragraph("4. Configuration", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=AMBER))
     story.append(Spacer(1, 4 * mm))
@@ -363,11 +418,11 @@ def generate_pdf(report_data, output_path):
         f"E-Invoice Configured: {'Yes' if india.get('einvoice_configured') else 'No'}",
     ]
     for b in india_bullets:
-        story.append(Paragraph(f"â€¢ {b}", ss["MBullet"]))
+        story.append(Paragraph(f"* {b}", ss["MBullet"]))
 
     story.append(PageBreak())
 
-    # â”€â”€â”€ 5. ROLES & AUTHORIZATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 5. ROLES & AUTHORIZATIONS -----------------------------
     story.append(Paragraph("5. Roles & Authorizations", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=PURPLE))
     story.append(Spacer(1, 4 * mm))
@@ -386,13 +441,13 @@ def generate_pdf(report_data, output_path):
     story.append(rt)
     story.append(Spacer(1, 4 * mm))
 
-    story.append(Paragraph("Key T-code â†’ Fiori Mappings", ss["SubH"]))
+    story.append(Paragraph("Key T-code -> Fiori Mappings", ss["SubH"]))
     for m in ra.get("key_mappings", []):
-        story.append(Paragraph(f"â€¢ {m}", ss["MBullet"]))
+        story.append(Paragraph(f"* {m}", ss["MBullet"]))
 
     story.append(Spacer(1, 6 * mm))
 
-    # â”€â”€â”€ 6. INTEGRATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 6. INTEGRATIONS ---------------------------------------
     story.append(Paragraph("6. Integrations", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=RED))
     story.append(Spacer(1, 4 * mm))
@@ -403,7 +458,7 @@ def generate_pdf(report_data, output_path):
         ["RFC Destinations Total", str(integ.get("rfc_destinations_total", 0))],
         ["Auto-Migrated", str(integ.get("auto_migrated", 0))],
         ["Manual Review Needed", str(integ.get("manual_review_needed", 0))],
-        ["Automation Rate", integ.get("automation_rate", "â€”")],
+        ["Automation Rate", integ.get("automation_rate", "--")],
     ]
     it = Table(integ_data, colWidths=[page_w * 0.55, page_w * 0.45])
     it.setStyle(_table_style_base())
@@ -412,17 +467,17 @@ def generate_pdf(report_data, output_path):
 
     story.append(Paragraph("Critical India Integrations", ss["SubH"]))
     for ci in integ.get("critical_integrations", []):
-        story.append(Paragraph(f"â€¢ {ci}", ss["MBullet"]))
+        story.append(Paragraph(f"* {ci}", ss["MBullet"]))
 
     story.append(PageBreak())
 
-    # â”€â”€â”€ 7. GO-LIVE SCORECARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 7. GO-LIVE SCORECARD ----------------------------------
     story.append(Paragraph("7. GO-LIVE Scorecard", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=GREEN))
     story.append(Spacer(1, 4 * mm))
 
     story.append(Paragraph(
-        f'<font color="{grade_color.hexval()}" size="24"><b>Grade {grade} â€” {score}</b></font>',
+        f'<font color="{grade_color.hexval()}" size="24"><b>Grade {grade} -- {score}</b></font>',
         ParagraphStyle("grade_inline", alignment=TA_CENTER, fontSize=24, leading=30, spaceAfter=8)
     ))
 
@@ -445,13 +500,13 @@ def generate_pdf(report_data, output_path):
 
     story.append(Spacer(1, 6 * mm))
 
-    # â”€â”€â”€ 8. RISK ASSESSMENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 8. RISK ASSESSMENT ------------------------------------
     story.append(Paragraph("8. Risk Assessment", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=AMBER))
     story.append(Spacer(1, 4 * mm))
 
     risk = report_data.get("risk_assessment", {})
-    overall = risk.get("overall_risk", "â€”")
+    overall = risk.get("overall_risk", "--")
     oc = _severity_color(overall)
     story.append(Paragraph(
         f'Overall Risk: <font color="{oc.hexval()}"><b>{overall}</b></font>', ss["Body"]
@@ -462,7 +517,7 @@ def generate_pdf(report_data, output_path):
         sc = _severity_color(r.get("severity", ""))
         story.append(Paragraph(
             f'<font color="{sc.hexval()}"><b>[{r.get("severity", "")}]</b></font> '
-            f'<b>{r.get("area", "")}</b> â€” {r.get("description", "")}',
+            f'<b>{r.get("area", "")}</b> -- {r.get("description", "")}',
             ss["Body"]
         ))
         story.append(Paragraph(
@@ -473,11 +528,11 @@ def generate_pdf(report_data, output_path):
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Recommendations", ss["SubH"]))
     for rec in risk.get("recommendations", []):
-        story.append(Paragraph(f"â€¢ {rec}", ss["MBullet"]))
+        story.append(Paragraph(f"* {rec}", ss["MBullet"]))
 
     story.append(PageBreak())
 
-    # â”€â”€â”€ 9. POST GO-LIVE ROADMAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 9. POST GO-LIVE ROADMAP -------------------------------
     story.append(Paragraph("9. Post Go-Live Roadmap", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=PURPLE))
     story.append(Spacer(1, 4 * mm))
@@ -485,12 +540,12 @@ def generate_pdf(report_data, output_path):
     for phase in report_data.get("post_golive_roadmap", []):
         story.append(Paragraph(f'<b>{phase.get("phase", "")}</b>', ss["SubH"]))
         for act in phase.get("activities", []):
-            story.append(Paragraph(f"â€¢ {act}", ss["MBullet"]))
+            story.append(Paragraph(f"* {act}", ss["MBullet"]))
         story.append(Spacer(1, 3 * mm))
 
     story.append(Spacer(1, 6 * mm))
 
-    # â”€â”€â”€ 10. TECHNICAL METRICS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- 10. TECHNICAL METRICS ---------------------------------
     story.append(Paragraph("10. Technical Metrics", ss["SectionH"]))
     story.append(HRFlowable(width="100%", thickness=1, color=GRAY))
     story.append(Spacer(1, 4 * mm))
@@ -501,18 +556,18 @@ def generate_pdf(report_data, output_path):
         ["RFC Calls Executed", f"{tm.get('rfc_calls_executed', 0):,}"],
         ["Pipeline Duration", f"{tm.get('pipeline_duration_seconds', 0)}s"],
         ["Programs Deployed", str(tm.get("programs_deployed", 0))],
-        ["Transport Request", tm.get("transport_request", "â€”")],
+        ["Transport Request", tm.get("transport_request", "--")],
     ]
     tmt = Table(tm_data, colWidths=[page_w * 0.55, page_w * 0.45])
     tmt.setStyle(_table_style_base())
     story.append(tmt)
 
-    # â”€â”€â”€ FOOTER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --- FOOTER -------------------------------------------------
     story.append(Spacer(1, 20 * mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e2e8f0")))
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(
-        f"Generated by Migrate4HANA v2.0 â€” {meta.get('generated', datetime.now().isoformat())}",
+        f"Generated by Migrate4HANA v2.0 -- {meta.get('generated', datetime.now().isoformat())}",
         ss["Small"]
     ))
     story.append(Paragraph(meta.get("classification", "CONFIDENTIAL"), ss["Small"]))
