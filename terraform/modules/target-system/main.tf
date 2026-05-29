@@ -22,10 +22,22 @@
 variable "name_prefix"        { type = string }
 variable "vpc_id"             { type = string }
 variable "private_subnets"    { type = list(string) }
-variable "build_sid"          { type = string  default = "BLD" }
-variable "target_sid"         { type = string  default = "S4H" }
-variable "tags"               { type = map(string)  default = {} }
-variable "staging_bucket_arn" { type = string  description = "ARN of migrate4hana staging S3 bucket; runner needs read access" }
+variable "build_sid" {
+  type    = string
+  default = "BLD"
+}
+variable "target_sid" {
+  type    = string
+  default = "S4H"
+}
+variable "tags" {
+  type    = map(string)
+  default = {}
+}
+variable "staging_bucket_arn" {
+  type        = string
+  description = "ARN of migrate4hana staging S3 bucket; runner needs read access"
+}
 
 ###############################################################################
 # IAM role for SAP hosts - SSM + S3 staging

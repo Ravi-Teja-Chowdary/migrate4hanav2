@@ -83,7 +83,9 @@ module "lambda" {
   telemetry_ws_connections_table = module.websocket_telemetry.connections_table_name
   telemetry_broadcast_policy_arn = module.websocket_telemetry.telemetry_broadcast_policy_arn
 
-  entity_resolution_workflow_arn = module.entity_resolution.matching_workflow_arn
+  # Entity Resolution module excluded from the default stack (needs aws provider
+  # >= 5.21 with registry access). BP dedup falls back to the deterministic engine.
+  entity_resolution_workflow_arn = ""
 
   bedrock_model_id     = var.bedrock_model_id
   ast_change_threshold = var.ast_change_threshold
@@ -366,47 +368,11 @@ module "step_functions" {
 }
 
 # ─────────────────────────────────────────────
-# Secrets Manager — DMS Database Credentials
+# DMS REMOVED (2026-05-29): AWS DMS does not support a "saphana" engine, and
+# raw DB-level replication of the SAP database would violate the support-clean,
+# application-layer-only posture (released BAPIs / OData / Migration Cockpit).
+# All data movement flows through the API/MC lanes — not DMS.
 # ─────────────────────────────────────────────
-resource "aws_secretsmanager_secret" "ecc_db_password" {
-  name        = "migrate4hana/${var.environment}/ecc-db-password"
-  description = "ECC source database password for DMS replication"
-  tags        = { Component = "DMS" }
-}
-
-resource "aws_secretsmanager_secret" "s4_db_password" {
-  name        = "migrate4hana/${var.environment}/s4-db-password"
-  description = "S/4HANA target database password for DMS replication"
-  tags        = { Component = "DMS" }
-}
-
-data "aws_secretsmanager_secret_version" "ecc_db_password" {
-  secret_id = aws_secretsmanager_secret.ecc_db_password.id
-}
-
-data "aws_secretsmanager_secret_version" "s4_db_password" {
-  secret_id = aws_secretsmanager_secret.s4_db_password.id
-}
-
-# ─────────────────────────────────────────────
-# DMS — Database Migration Service (production-grade)
-# ─────────────────────────────────────────────
-module "dms" {
-  source             = "../../modules/dms"
-  private_subnet_ids = module.vpc.private_subnet_ids
-  availability_zone  = var.availability_zones[0]
-  security_group_id  = module.vpc.default_security_group_id
-  ecc_db_host        = var.ecc_db_host
-  ecc_db_port        = var.ecc_db_port
-  ecc_db_name        = var.ecc_db_name
-  ecc_db_user        = var.ecc_db_user
-  ecc_db_password    = jsondecode(data.aws_secretsmanager_secret_version.ecc_db_password.secret_string)["password"]
-  s4_db_host         = var.s4_db_host
-  s4_db_port         = var.s4_db_port
-  s4_db_name         = var.s4_db_name
-  s4_db_user         = var.s4_db_user
-  s4_db_password     = jsondecode(data.aws_secretsmanager_secret_version.s4_db_password.secret_string)["password"]
-}
 
 # ─────────────────────────────────────────────
 # CloudWatch — Monitoring & Alerts
@@ -456,13 +422,12 @@ module "vpc_endpoints" {
 
 
 # ─────────────────────────────────────────────
-# Entity Resolution — ML-powered BP Deduplication
+# Entity Resolution — ML-powered BP Deduplication (OPTIONAL)
+# Excluded from the default stack: requires aws provider >= 5.21 with registry
+# access for aws_entityresolution_* resources. Re-enable by restoring this module
+# block + wiring module.entity_resolution.matching_workflow_arn into the lambda
+# module once the provider is available. Deterministic BP dedup runs regardless.
 # ─────────────────────────────────────────────
-module "entity_resolution" {
-  source      = "../../modules/entity-resolution"
-  environment = var.environment
-  region      = var.aws_region
-}
 
 # ─────────────────────────────────────────────
 # WebSocket Telemetry — Real-time pipeline streaming

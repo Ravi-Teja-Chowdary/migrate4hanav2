@@ -64,6 +64,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
     id     = "archive-audit-logs"
     status = "Enabled"
 
+    filter {}   # apply to all objects (required by aws provider v5)
+
     transition {
       days          = 90
       storage_class = "STANDARD_IA"

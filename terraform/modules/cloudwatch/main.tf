@@ -26,7 +26,10 @@ resource "aws_cloudwatch_dashboard" "migration" {
     widgets = [
       {
         type   = "metric"
-        x      = 0; y = 0; width = 12; height = 6
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
         properties = {
           title   = "Lambda Invocations by Stage"
           metrics = [for k, v in var.lambda_arns : [
@@ -40,7 +43,10 @@ resource "aws_cloudwatch_dashboard" "migration" {
       },
       {
         type   = "metric"
-        x      = 12; y = 0; width = 12; height = 6
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
         properties = {
           title   = "Lambda Errors by Stage"
           metrics = [for k, v in var.lambda_arns : [
@@ -54,7 +60,10 @@ resource "aws_cloudwatch_dashboard" "migration" {
       },
       {
         type   = "metric"
-        x      = 0; y = 6; width = 12; height = 6
+        x      = 0
+        y      = 6
+        width  = 12
+        height = 6
         properties = {
           title   = "Lambda Duration by Stage"
           metrics = [for k, v in var.lambda_arns : [
@@ -68,7 +77,10 @@ resource "aws_cloudwatch_dashboard" "migration" {
       },
       {
         type   = "metric"
-        x      = 12; y = 6; width = 12; height = 6
+        x      = 12
+        y      = 6
+        width  = 12
+        height = 6
         properties = {
           title = "Step Functions Executions"
           metrics = [
