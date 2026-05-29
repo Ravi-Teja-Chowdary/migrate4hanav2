@@ -1,21 +1,53 @@
 # Migrate4HANA — Prerequisites Before First `terraform apply`
 
 `terraform init && terraform apply` on this stack stands up the entire AWS platform on
-its own. But two pieces **cannot be created by Terraform or any other tool** — they're
-either licensed (SAP) or built from your codebase (a container image). This document
-gives you the **exact commands** to produce each one, the first time, in 15–30 minutes.
+its own. Two pieces are produced outside Terraform — but for **testing** the platform
+end-to-end, you can use the **SAP NW RFC SDK already committed in this repo** under
+`nwrfcsdk-linux/`, so you don't need an SAP S-User to start. The container image still
+needs to be built + pushed once.
 
-| Prerequisite | Why Terraform can't make it | How long |
+| Prerequisite | Fast path (testing) | Production-grade path |
 |---|---|---|
-| **SAP NW RFC SDK pyrfc Lambda layer** | SDK is licensed; only downloadable with an SAP S-User | ~15 min |
-| **Fargate worker container image** | Built from this repo + the SDK, then pushed to your ECR | ~10 min |
+| **pyrfc Lambda layer** | use the in-repo `nwrfcsdk-linux/` — one command — §1 | download fresh SDK with S-User — §3 |
+| **Fargate worker image** | build + push from this repo — §2 | same — §2 |
 
-Everything else is created by `terraform apply`. Both of these only need to be done
-**once per AWS account** (or whenever you upgrade the SDK / change the worker code).
+> **Reality check on the in-repo SDK.** It's the real SAP NW RFC SDK 7.50 Linux x86_64
+> binaries. For a **testing / non-production** account it's fine; for a customer-facing
+> production run, switch to your own SAP-Support-portal-downloaded SDK (§3) so the
+> license trail is unambiguous. Either way the layer build is the same shape.
 
 ---
 
-## 1. SAP NW RFC SDK — download
+## 1. Fast path — build the pyrfc layer from the in-repo SDK
+
+The repository already contains `nwrfcsdk-linux/lib/*.so` (libsapnwrfc, libsapucum,
+ICU libraries). The build script bundles those with a manylinux pyrfc wheel from PyPI
+into `layer-build/pyrfc-layer.zip`, and **Terraform auto-detects + publishes it on
+the next `terraform apply`** — no manual `pyrfc_layer_arn` tfvar required for testing.
+
+```bash
+# from the repo root
+python layer-build/build_pyrfc_layer.py
+# -> layer-build/pyrfc-layer.zip  (~15 MB)
+
+cd terraform/environments/prod
+terraform apply
+# Terraform sees the zip, publishes it as aws_lambda_layer_version.pyrfc,
+# and every SAP-touching Lambda gets it as their `layers` automatically.
+```
+
+That's it. Pin a specific pyrfc version with `M4H_PYRFC_VERSION=3.3.1
+python layer-build/build_pyrfc_layer.py` if you need it. Re-run the script + apply
+whenever you want a fresh wheel.
+
+**What this avoids vs. the production path:** no SAP S-User, no Docker, no manual
+`aws lambda publish-layer-version`. The local Python on your machine only has to be
+≥3.7 (we use it purely to drive `pip download` — the wheel itself is cp311 manylinux
+to match the Lambda runtime).
+
+---
+
+## 3. Production-grade — download a fresh SDK from SAP (skip if you ran §1)
 
 ### What you need
 - An **SAP S-User** (your company's SAP support account on `support.sap.com`).
@@ -41,7 +73,7 @@ Everything else is created by `terraform apply`. Both of these only need to be d
 
 ---
 
-## 2. Build & publish the **pyrfc Lambda layer**
+## 4. Production-grade — build & publish the layer with Docker (skip if you ran §1)
 
 This is what `pyrfc_layer_arn` in your `terraform.tfvars` will point to. Most of the
 Lambda stages import `pyrfc` at startup; without the layer, they cold-start, fail
@@ -130,7 +162,7 @@ is wired correctly.
 
 ---
 
-## 3. Build & push the **Fargate worker image**
+## 2. Build & push the **Fargate worker image** (required for heavy stages)
 
 This is the container that the `ComputeDispatcher` (Pillar 1.1) launches whenever an
 object's row estimate exceeds the Fargate threshold (default 20,000 rows). The image
@@ -197,15 +229,17 @@ CloudWatch Logs under `/ecs/migrate4hana-worker` should show the entrypoint runn
 
 ---
 
-## 4. Drop both into `terraform.tfvars` and apply
+## 5. Drop everything into `terraform.tfvars` and apply
 
-After both prerequisites are done once, your `terraform.tfvars` looks like this and
+After §1 (or §3-§4) + §2 are done once, your `terraform.tfvars` looks like this and
 **every subsequent `terraform apply` is one command**:
 
 ```hcl
-aws_region      = "us-east-1"
-alert_email     = "migrations@yourcorp.com"
-pyrfc_layer_arn = "arn:aws:lambda:us-east-1:<acct>:layer:pyrfc:1"
+aws_region  = "us-east-1"
+alert_email = "migrations@yourcorp.com"
+# Fast path (§1): layer auto-published from layer-build/pyrfc-layer.zip — no tfvar needed.
+# Production-grade path (§3-§4): uncomment and set the ARN from `publish-layer-version`.
+# pyrfc_layer_arn = "arn:aws:lambda:us-east-1:<acct>:layer:pyrfc:1"
 # Fargate image is read from the ECR repo this stack creates;
 # `terraform apply` after `docker push` is all that's needed.
 ```
@@ -218,11 +252,12 @@ re-wires it instantly.
 
 ---
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Lambda: `Unable to import module: pyrfc` | layer not attached or arch mismatch | re-publish layer with `--compatible-architectures x86_64`; confirm `pyrfc_layer_arn` is set + re-apply |
+| `terraform apply` doesn't publish a Lambda layer | `layer-build/pyrfc-layer.zip` is missing | re-run `python layer-build/build_pyrfc_layer.py` from the repo root and re-apply |
+| Lambda: `Unable to import module: pyrfc` | layer not attached or arch mismatch | confirm the zip exists (fast path) OR re-publish with `--compatible-architectures x86_64` and set `pyrfc_layer_arn` (production path); re-apply |
 | Lambda: `libsapnwrfc.so: cannot open shared object file` | SDK `.so` not on the loader path | layer zip must include `lib/` at the top (Lambda mounts it as `/opt/lib`, which is on `LD_LIBRARY_PATH` automatically) — re-run the build script |
 | Fargate: `exec format error` | image built for arm64, Fargate task is amd64 | rebuild with `docker build --platform linux/amd64 ...` |
 | `docker push` → `denied: requested access to the resource is denied` | not logged into ECR or wrong region | re-run the `aws ecr get-login-password ... \| docker login ...` step with the correct `--region` |

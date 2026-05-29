@@ -64,6 +64,30 @@ module "s3_staging" {
 }
 
 # ─────────────────────────────────────────────
+# pyrfc Lambda layer — auto-built from the in-repo SAP NW RFC SDK
+# Build the zip once via `python layer-build/build_pyrfc_layer.py` (uses
+# nwrfcsdk-linux/lib/* + the manylinux pyrfc wheel from PyPI). Terraform
+# detects the file and publishes it; if absent, no layer is attached.
+# ─────────────────────────────────────────────
+locals {
+  pyrfc_layer_zip    = "${path.module}/../../../layer-build/pyrfc-layer.zip"
+  pyrfc_layer_exists = fileexists(local.pyrfc_layer_zip)
+  pyrfc_layer_arn = (local.pyrfc_layer_exists
+    ? aws_lambda_layer_version.pyrfc[0].arn
+    : var.pyrfc_layer_arn)
+}
+
+resource "aws_lambda_layer_version" "pyrfc" {
+  count                    = local.pyrfc_layer_exists ? 1 : 0
+  layer_name               = "migrate4hana-pyrfc-${var.environment}"
+  description              = "SAP NW RFC SDK 7.50 + pyrfc (auto-published from in-repo nwrfcsdk-linux/)"
+  filename                 = local.pyrfc_layer_zip
+  source_code_hash         = local.pyrfc_layer_exists ? filebase64sha256(local.pyrfc_layer_zip) : null
+  compatible_runtimes      = ["python3.11"]
+  compatible_architectures = ["x86_64"]
+}
+
+# ─────────────────────────────────────────────
 # Lambda — Migration engine functions (prod memory)
 # ─────────────────────────────────────────────
 module "lambda" {
@@ -120,7 +144,7 @@ module "lambda" {
       timeout     = 600
       memory      = 2048
       source_dir  = "${path.root}/../../../lambda/maintenance-planner"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     readiness-check = {
       description = "Stage 3: SAP Readiness Check"
@@ -129,7 +153,7 @@ module "lambda" {
       timeout     = 900
       memory      = 3008
       source_dir  = "${path.root}/../../../lambda/readiness-check"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     simplification-check = {
       description = "Stage 4: Simplification Item Check"
@@ -138,7 +162,7 @@ module "lambda" {
       timeout     = 600
       memory      = 2048
       source_dir  = "${path.root}/../../../lambda/simplification-check"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     # NOTE: code-analyzer removed — now runs on ECS Fargate (Stage 5)
 
@@ -149,7 +173,7 @@ module "lambda" {
       timeout     = 900
       memory      = 3008
       source_dir  = "${path.root}/../../../lambda/data-migrator"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     config-replicator = {
       description = "Stage 8: Assess SPRO config, roles & integrations"
@@ -158,7 +182,7 @@ module "lambda" {
       timeout     = 600
       memory      = 2048
       source_dir  = "${path.root}/../../../lambda/config-replicator"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     role-migrator = {
       description = "Phase 2: Role assessment for migration planning"
@@ -167,7 +191,7 @@ module "lambda" {
       timeout     = 600
       memory      = 2048
       source_dir  = "${path.root}/../../../lambda/role-migrator"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     integration-mapper = {
       description = "Phase 2: Integration mapping & rewiring assessment"
@@ -176,7 +200,7 @@ module "lambda" {
       timeout     = 300
       memory      = 1024
       source_dir  = "${path.root}/../../../lambda/integration-mapper"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     cutover-orchestrator = {
       description = "Stage 9: Pre-conversion cutover gate & checkpoint"
@@ -185,7 +209,7 @@ module "lambda" {
       timeout     = 300
       memory      = 1024
       source_dir  = "${path.root}/../../../lambda/cutover-orchestrator"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     sum-orchestrator = {
       description = "Stage 10: SUM/DMO Orchestration & Monitoring"
@@ -194,7 +218,7 @@ module "lambda" {
       timeout     = 900
       memory      = 3008
       source_dir  = "${path.root}/../../../lambda/sum-orchestrator"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     code-deployer = {
       description = "Stage 11: Deploy fixed ABAP to S/4HANA"
@@ -203,7 +227,7 @@ module "lambda" {
       timeout     = 900
       memory      = 3008
       source_dir  = "${path.root}/../../../lambda/code-deployer"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     # NOTE: data-loader removed — now runs on ECS Fargate (Stage 12 & 12A)
 
@@ -214,7 +238,7 @@ module "lambda" {
       timeout     = 600
       memory      = 2048
       source_dir  = "${path.root}/../../../lambda/config-applier"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     role-provisioner = {
       description = "Stage 14: Create roles & user assignments"
@@ -223,7 +247,7 @@ module "lambda" {
       timeout     = 600
       memory      = 2048
       source_dir  = "${path.root}/../../../lambda/role-provisioner"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     integration-activator = {
       description = "Stage 15: Activate RFC/IDoc integrations"
@@ -232,7 +256,7 @@ module "lambda" {
       timeout     = 600
       memory      = 2048
       source_dir  = "${path.root}/../../../lambda/integration-activator"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     migration-validator = {
       description = "Stage 16: Validate & generate GO-LIVE scorecard"
@@ -241,7 +265,7 @@ module "lambda" {
       timeout     = 900
       memory      = 3008
       source_dir  = "${path.root}/../../../lambda/migration-validator"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     bedrock-llm-router = {
       description = "Routes standard AST syntax to Amazon Bedrock (Anthropic/Titan)"
@@ -259,7 +283,7 @@ module "lambda" {
       timeout     = 600
       memory      = 2048
       source_dir  = "${path.root}/../../../lambda/rollback-manager"
-      layers      = [var.pyrfc_layer_arn]
+      layers      = [local.pyrfc_layer_arn]
     }
     data-hygiene = {
       description = "Master Data Cleansing and Business Partner Deduplication"
@@ -293,16 +317,16 @@ module "lambda" {
     object-router                  = { description = "LS: object lane router", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 1024, source_dir = "${path.root}/../../../lambda/object-router", layers = [] }
     sizing-advisor                 = { description = "LS: target sizing advisor", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/sizing-advisor", layers = [] }
     target-provisioner             = { description = "LS: greenfield S/4 stand-up", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/target-provisioner", layers = [] }
-    basis-validator                = { description = "LS: target readiness gate", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/basis-validator", layers = [var.pyrfc_layer_arn] }
+    basis-validator                = { description = "LS: target readiness gate", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/basis-validator", layers = [local.pyrfc_layer_arn] }
     bc-set-builder                 = { description = "LS: BC Set builder", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/bc-set-builder", layers = [] }
     transport-artifact-builder     = { description = "LS: stage CTS+ artifacts", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 1024, source_dir = "${path.root}/../../../lambda/transport-artifact-builder", layers = [] }
     transport-file-placer          = { description = "LS: place tp files via SSM", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 512, source_dir = "${path.root}/../../../lambda/transport-file-placer", layers = [] }
-    transport-import-executor      = { description = "LS: invoke tp import via SSM", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/transport-import-executor", layers = [var.pyrfc_layer_arn] }
-    transport-import-verifier      = { description = "LS: verify transport return", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/transport-import-verifier", layers = [var.pyrfc_layer_arn] }
+    transport-import-executor      = { description = "LS: invoke tp import via SSM", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/transport-import-executor", layers = [local.pyrfc_layer_arn] }
+    transport-import-verifier      = { description = "LS: verify transport return", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 300, memory = 512, source_dir = "${path.root}/../../../lambda/transport-import-verifier", layers = [local.pyrfc_layer_arn] }
     migration-cockpit-orchestrator = { description = "LS: drive Migration Cockpit", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/migration-cockpit-orchestrator", layers = [] }
-    ltmom-orchestrator             = { description = "LS: LTMOM project + monitor", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/ltmom-orchestrator", layers = [var.pyrfc_layer_arn] }
-    idoc-orchestrator              = { description = "LS: IDoc XML inbound + WE02", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/idoc-orchestrator", layers = [var.pyrfc_layer_arn] }
-    delta-extractor                = { description = "LS: cutover delta capture", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/delta-extractor", layers = [var.pyrfc_layer_arn] }
+    ltmom-orchestrator             = { description = "LS: LTMOM project + monitor", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/ltmom-orchestrator", layers = [local.pyrfc_layer_arn] }
+    idoc-orchestrator              = { description = "LS: IDoc XML inbound + WE02", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/idoc-orchestrator", layers = [local.pyrfc_layer_arn] }
+    delta-extractor                = { description = "LS: cutover delta capture", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 900, memory = 1024, source_dir = "${path.root}/../../../lambda/delta-extractor", layers = [local.pyrfc_layer_arn] }
     manual-gate                    = { description = "LS: persist SFN task tokens", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 60, memory = 256, source_dir = "${path.root}/../../../lambda/manual-gate", layers = [] }
     evidence-collector             = { description = "Wave 7: hash-chained event ledger", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 120, memory = 1024, source_dir = "${path.root}/../../../lambda/evidence-collector", layers = [], architectures = ["arm64"] }
     reconciliation-engine          = { description = "Wave 8: count/key/balance/hash recon", handler = "handler.lambda_handler", runtime = "python3.11", timeout = 600, memory = 2048, source_dir = "${path.root}/../../../lambda/reconciliation-engine", layers = [], architectures = ["arm64"] }
