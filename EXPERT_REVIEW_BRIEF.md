@@ -281,3 +281,22 @@ embedded in their respective stages and verified offline** — SmartShift-class 
 (closes the SmartShift gap), (3) **live, volume-proven carve-out + consolidation content** (closes the
 Natuvion gap), and (4) **a customer pilot on a second, customer-shaped landscape** (§6.7). The
 architecture and the in-stage wiring now exist; the depth, content, and live-at-scale proof do not yet.
+
+---
+
+## 12. Production-hardening pillars (2026-05-29, cont.) — built + verified offline
+
+On expert guidance toward a PROD-ready engine, three of four hardening pillars were implemented as
+additive, guarded changes (proven deterministic paths untouched; all files `py_compile`-clean):
+
+| Pillar | Implementation | Verified (offline self-test) | Still pending |
+|---|---|---|---|
+| **2 — Transformation / Value-Map / DQ** (closes §6.3) | `lambda/utils/transformation_engine.py`: JSON rule schema (FIELD_MAP / VALUE_MAP / REGEX_CLEANSE / CONST/TRIM/UPPER/PAD), cached S3-backed value-map matrix (local/inline fallback), DQ gates (MANDATORY / REGEX_VALID / MAX_LEN / ALLOWED / UNIQUE) → `DATA_QUALITY_REJECTION`. Hooked into `UnifiedLoader._load_one` (+ parallel-worker propagation), wired into `data-migrator` (env-gated `M4H_TRANSFORM_RULES`, **no-op by default**). | value-map (3000→1710) + name cleanse applied; all five DQ gates reject correctly; quarantine routes to dead-letter | live business mapping matrices; a mapping UI; DQ scorecards/cleansing library |
+| **1.3 — Write-capacity isolation** | thread-safe `TokenBucket` in `lambda/utils/key_map.py`; optional ledger limiter (default off) to protect DynamoDB WCU under high-concurrency loops | 120 writes throttled to ~1.41s at 50/s burst-50 | sizing against real table WCU under a live mass load |
+| **4 — Cryptographic auditing** | `lambda/utils/reconciler.py`: `HashChainLedger` (SHA-256 hash-chained, tamper-evident, resume-safe, optional DynamoDB vault); `AggregateReconciler` (count + total + debit/credit tie-out source↔target); `EvidencePack` (hash-sealed manifest + S3 **WORM** Object Lock). Chain wired into the `data-migrator` run summary. | chain verifies + **detects a tampered block**; aggregate tie-out flags balance VARIANCE; evidence pack hash-sealed into the chain | real source↔target aggregate queries at volume; WORM S3 bucket; multi-part compliance PDF render |
+
+**Pillars NOT yet built (infra-heavy, code+Terraform pending validation against a live AWS account):**
+**1.1/1.2** dynamic Fargate compute dispatcher (>threshold rows → ECS) + chunked OData `$top/$skiptoken`
+paging; **3** Step Functions `TaskToken` human-approval gates after ASSESS/DATA-PREP/VALIDATE + SNS alert
+payloads + a signed `/api/spine/approve` resume webhook. These move TRL forward only once exercised on
+real infrastructure — treat as designed, not delivered.

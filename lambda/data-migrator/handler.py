@@ -717,6 +717,17 @@ def lambda_handler(event, context):
                                        sender=IDOC_SENDER,
                                        client=tsec.get("client", "100"),
                                        target_sid=tsec.get("sid", "S4H"))
+                # Enterprise transformation / value-mapping / DQ engine (Pillar 2).
+                # Active only when M4H_TRANSFORM_RULES is configured; else a no-op.
+                try:
+                    import transformation_engine as _txe
+                    loader.transformer = _txe.from_env()
+                    if loader.transformer is not None:
+                        log_stage_event(run_id, "data-migrator", "transform_engine_active",
+                                        {"rules": os.environ.get("M4H_TRANSFORM_RULES")})
+                except Exception as _te:
+                    log_stage_event(run_id, "data-migrator", "transform_engine_skipped",
+                                    {"reason": str(_te)[:160]})
                 # Live source->target registry, shared across the run so dependent
                 # objects (OpenPO -> Vendor) resolve refs; source conn for PO items.
                 loader.key_map = _load_ledger()   # cross-run ledger -> idempotent re-runs
@@ -815,6 +826,31 @@ def lambda_handler(event, context):
                    "dead_letter": dead_letter_info,
                    "carve_out": _carve_out_programs(run_id, results, event),
                    "results": results}
+        # Pillar 4 — cryptographic audit chain over this run's verifiable actions.
+        # Each block (data load, key-map, reconciliation, carve-out) is SHA-256
+        # hash-chained to the previous, giving auditors tamper-evident assurance.
+        try:
+            from reconciler import HashChainLedger
+            _chain = HashChainLedger(run_id=run_id)
+            _chain.append("data_load", {"object_count": len(results),
+                                        "created_in_s4": loaded_to_s4})
+            if key_map_info:
+                _chain.append("key_map", key_map_info.get("stats", {}))
+            if summary.get("reconciliation"):
+                _chain.append("reconciliation", summary["reconciliation"])
+            if summary.get("carve_out"):
+                _chain.append("carve_out",
+                              {"program_count": summary["carve_out"].get("program_count")})
+            summary["audit_chain"] = {"head_hash": _chain.head(),
+                                      "blocks": _chain.block_count(),
+                                      "verification": _chain.verify()}
+            S3.put_object(Bucket=STAGING_BUCKET,
+                          Key=f"runs/{run_id}/data-migrator/audit_chain.jsonl",
+                          Body=_chain.dump_jsonl().encode(),
+                          ContentType="application/x-ndjson")
+        except Exception as _ce:
+            summary["audit_chain"] = {"error": str(_ce)[:160]}
+
         S3.put_object(Bucket=STAGING_BUCKET,
                       Key=f"runs/{run_id}/data-migrator/summary.json",
                       Body=json.dumps(summary, default=str, indent=2).encode(),

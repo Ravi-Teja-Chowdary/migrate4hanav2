@@ -136,6 +136,7 @@ class UnifiedLoader:
         self.bp_org = dict(BP_TARGET_ORG)
         self.cc_org = {}           # CO master config (set from discovery by the handler)
         self.asset_org = {}        # fixed-asset config (set from discovery by the handler)
+        self.transformer = None    # enterprise transformation/value-map/DQ engine (None = no-op)
 
     def odata_ready(self) -> bool:
         """True if the OData BP service is available — gates transaction-ready partner
@@ -252,6 +253,7 @@ class UnifiedLoader:
         w.key_map = self.key_map
         w.po_org, w.fi_org, w.bp_org, w.cc_org = self.po_org, self.fi_org, self.bp_org, self.cc_org
         w.asset_org = self.asset_org
+        w.transformer = self.transformer   # shared (UNIQUE state is lock-guarded)
         if mech == ("bapi", "po") and self.source_conn_factory:
             w.source_conn = self.source_conn_factory()
         if mech == ("bapi", "bp") and self.odata_factory:
@@ -416,6 +418,17 @@ class UnifiedLoader:
         return result
 
     def _load_one(self, obj: str, mech: tuple, row: dict) -> dict:
+        # Enterprise transformation + value-mapping + data-quality gate (Pillar 2),
+        # applied to EVERY record before the BAPI/OData payload is compiled. No-op
+        # unless a handler attached a transformer. A critical DQ failure quarantines
+        # the record (status "failed" → dead-letter) as DATA_QUALITY_REJECTION,
+        # never reaching the target API.
+        if self.transformer is not None and self.transformer.has_rules(obj):
+            row, dq = self.transformer.apply(obj, row)
+            if dq is not None and not dq.passed:
+                return {"ok": False, "status": "failed",
+                        "msg": "DATA_QUALITY_REJECTION: " + ("; ".join(dq.reasons))[:140],
+                        "dq_rejection": dq.rejections}
         kind, sub = mech
         if kind == "bapi" and sub == "bp":
             src_key = (row.get("KUNNR") or row.get("LIFNR") or row.get("PARTNER") or "").strip()

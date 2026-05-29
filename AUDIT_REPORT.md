@@ -252,3 +252,24 @@ Every page reads the live FastAPI backend with honest offline/empty states; a **
 Start/End boards + progress + a Completed/In-Progress/Queued kanban over the real 28 stages, each tagged
 with its embedded engine; a **Command Center** exposes every CLI action. Verified: `npm run build` clean
 (~346 KB), dev server serves all routes; **pixel/UX review not done in-session** (no browser screenshot).
+
+## ADDENDUM 2026-05-29 (PROD-hardening) — Pillars 2, 1.3, 4 (built + verified offline)
+
+Expert-guided production-readiness work; additive + guarded (proven paths untouched; all `py_compile`-clean):
+
+- **Pillar 2 — transformation/value-map/DQ** (`lambda/utils/transformation_engine.py`): rule schema
+  (FIELD_MAP/VALUE_MAP/REGEX_CLEANSE/CONST/TRIM/UPPER/PAD) + S3-backed cached matrix + DQ gates
+  (MANDATORY/REGEX_VALID/MAX_LEN/ALLOWED/UNIQUE) → `DATA_QUALITY_REJECTION`. Integrated at
+  `UnifiedLoader._load_one` (+ worker propagation), wired into `data-migrator` (env-gated, no-op default).
+  Self-test green (value-map + cleanse + all DQ gates). **Closes the §6.3 mapping-layer gap in code.**
+- **Pillar 1.3 — write-capacity isolation** (`lambda/utils/key_map.py`): thread-safe `TokenBucket`;
+  optional ledger limiter (default off). Self-test: 120 writes throttled to ~1.41s.
+- **Pillar 4 — cryptographic auditing** (`lambda/utils/reconciler.py`): `HashChainLedger` (SHA-256
+  hash-chained, tamper-evident, resume-safe, optional DynamoDB vault), `AggregateReconciler`
+  (count/total/debit/credit tie-out), `EvidencePack` (hash-sealed manifest + S3 WORM Object Lock).
+  Chain wired into the `data-migrator` run summary. Self-test: chain verifies + detects tampering;
+  tie-out flags variance; evidence sealed into chain.
+
+**Not yet built (infra-dependent — code+Terraform to be validated on a live AWS account):** Pillar 1.1/1.2
+(Fargate compute dispatcher >threshold rows + chunked OData `$top/$skiptoken`); Pillar 3 (Step Functions
+`TaskToken` gates after ASSESS/DATA-PREP/VALIDATE + SNS payloads + signed `/api/spine/approve` webhook).
