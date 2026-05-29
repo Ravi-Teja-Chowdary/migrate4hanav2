@@ -283,6 +283,48 @@ data "archive_file" "lambda" {
   output_path = "${path.module}/dist/${each.key}.zip"
 }
 
+# ── PROD-hardening inputs (optional; default "" => the pillar stays a no-op) ──
+variable "transform_rules" {
+  type    = string
+  default = ""
+}
+variable "mapping_s3" {
+  type    = string
+  default = ""
+}
+variable "gate_sns_topic" {
+  type    = string
+  default = ""
+}
+variable "gate_secret_arn" {
+  type    = string
+  default = ""
+}
+variable "audit_ledger_table" {
+  type    = string
+  default = ""
+}
+variable "key_map_table" {
+  type    = string
+  default = ""
+}
+variable "fargate_cluster" {
+  type    = string
+  default = ""
+}
+variable "fargate_taskdef" {
+  type    = string
+  default = ""
+}
+variable "fargate_sgs" {
+  type    = string
+  default = ""
+}
+variable "fargate_row_threshold" {
+  type    = number
+  default = 20000
+}
+
 resource "aws_lambda_function" "migration" {
   for_each = var.lambda_functions
 
@@ -298,7 +340,7 @@ resource "aws_lambda_function" "migration" {
   source_code_hash = data.archive_file.lambda[each.key].output_base64sha256
 
   architectures = each.value.architectures
-  layers        = each.value.layers
+  layers        = compact(each.value.layers) # drop empty ARNs so apply is clean without the pyrfc layer
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -350,7 +392,22 @@ resource "aws_lambda_function" "migration" {
         LLM_MODE             = var.llm_mode
         OLLAMA_MODEL         = var.ollama_model
       },
-      var.ollama_url != "" ? { OLLAMA_URL = var.ollama_url } : {}
+      var.ollama_url != "" ? { OLLAMA_URL = var.ollama_url } : {},
+      {
+        # ── PROD-hardening pillars (Pillars 1/2/3/4). Empty => the pillar stays
+        #    a no-op, so existing behaviour is unchanged until these are populated.
+        M4H_TRANSFORM_RULES       = var.transform_rules
+        M4H_MAPPING_S3            = var.mapping_s3
+        M4H_GATE_SNS_TOPIC        = var.gate_sns_topic
+        M4H_GATE_SECRET_ARN       = var.gate_secret_arn
+        M4H_AUDIT_LEDGER_TABLE    = var.audit_ledger_table
+        M4H_KEYMAP_TABLE          = var.key_map_table
+        M4H_FARGATE_CLUSTER       = var.fargate_cluster
+        M4H_FARGATE_TASKDEF       = var.fargate_taskdef
+        M4H_FARGATE_SUBNETS       = join(",", var.private_subnet_ids)
+        M4H_FARGATE_SGS           = var.fargate_sgs
+        M4H_FARGATE_ROW_THRESHOLD = tostring(var.fargate_row_threshold)
+      }
     )
   }
 

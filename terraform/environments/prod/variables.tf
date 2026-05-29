@@ -53,7 +53,14 @@ variable "pyrfc_layer_arn" {
 }
 
 variable "alert_email" {
-  type = string
+  type    = string
+  default = "migrations@example.com" # override in terraform.tfvars to receive alerts
+}
+
+# Pillar 2 — path/URI to the transformation ruleset JSON (empty => engine stays no-op)
+variable "transform_rules" {
+  type    = string
+  default = ""
 }
 
 # ── GenAI ────────────────────────────────────
@@ -70,8 +77,8 @@ variable "ast_change_threshold" {
 # ── Air-gapped LLM (Ollama + Gemma2) ─────────
 variable "enable_airgapped_llm" {
   type        = bool
-  description = "Provision the on-prem Ollama EC2 for local LLM inference"
-  default     = true
+  description = "Provision the on-prem Ollama EC2 for local LLM inference (needs gpu_ami_id)"
+  default     = false # off by default so `apply` is clean without a GPU AMI; set true + gpu_ami_id to enable
 }
 variable "llm_mode" {
   type        = string

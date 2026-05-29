@@ -11,15 +11,19 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = ">= 2.4"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.4"
+    }
   }
 
-  backend "s3" {
-    bucket         = "migrate4hana-tfstate"
-    key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "migrate4hana-tflock"
-    encrypt        = true
-  }
+  # Local state by design: `terraform init && terraform apply` with no pre-existing
+  # backend bucket. For team/remote state, add an S3 backend block + bootstrap it
+  # (see DEPLOY.md §"Remote state, optional").
 }
 
 provider "aws" {
@@ -89,6 +93,17 @@ module "lambda" {
 
   bedrock_model_id     = var.bedrock_model_id
   ast_change_threshold = var.ast_change_threshold
+
+  # ── PROD-hardening pillars wired into every function (no-op when empty) ──
+  transform_rules    = var.transform_rules
+  mapping_s3         = "s3://${aws_s3_bucket.mapping.id}/mappings/matrix.json"
+  gate_sns_topic     = aws_sns_topic.spine_gates.arn
+  gate_secret_arn    = aws_secretsmanager_secret.gate_secret.arn
+  audit_ledger_table = aws_dynamodb_table.audit_ledger.name
+  key_map_table      = aws_dynamodb_table.key_map.name
+  fargate_cluster    = module.ecs.cluster_arn
+  fargate_taskdef    = module.ecs.task_definition_arn
+  fargate_sgs        = module.ecs.security_group_id
 
   # GenAI routing (cloud / local / dual) and Ollama endpoint wiring
   llm_mode     = var.llm_mode
@@ -523,6 +538,116 @@ resource "aws_dynamodb_table" "gates" {
     type = "S"
   }
   tags = { Component = "ManualGate", Pipeline = "lift-and-shift" }
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PROD-hardening resources (Pillars 2/3/4) — folded into the single root so the
+# whole platform is one `terraform apply`. See AUDIT_REPORT/EXPERT_REVIEW_BRIEF.
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Pillar 4 — DynamoDB audit hash-chain vault (HashChainLedger)
+resource "aws_dynamodb_table" "audit_ledger" {
+  name         = "migrate4hana-audit-ledger-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "run_id"
+  range_key    = "seq"
+  attribute {
+    name = "run_id"
+    type = "S"
+  }
+  attribute {
+    name = "seq"
+    type = "N"
+  }
+  point_in_time_recovery { enabled = true }
+  server_side_encryption { enabled = true }
+  tags = { Component = "CryptoAudit", Pillar = "4" }
+}
+
+# Pillar 4 / ledger — cross-run key-map DynamoDB table
+resource "aws_dynamodb_table" "key_map" {
+  name         = "migrate4hana-key-map-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "object"
+  range_key    = "source_key"
+  attribute {
+    name = "object"
+    type = "S"
+  }
+  attribute {
+    name = "source_key"
+    type = "S"
+  }
+  point_in_time_recovery { enabled = true }
+  server_side_encryption { enabled = true }
+  tags = { Component = "KeyMapLedger", Pillar = "4" }
+}
+
+# Pillar 3 — governance gate HMAC secret
+resource "random_password" "gate_secret" {
+  length  = 48
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "gate_secret" {
+  name        = "migrate4hana/${var.environment}/gate-secret"
+  description = "HMAC secret for spine approval gates (M4H_GATE_SECRET)"
+  tags        = { Component = "Governance", Pillar = "3" }
+}
+
+resource "aws_secretsmanager_secret_version" "gate_secret" {
+  secret_id     = aws_secretsmanager_secret.gate_secret.id
+  secret_string = random_password.gate_secret.result
+}
+
+# Pillar 3 — governance gate SNS topic + email subscription
+resource "aws_sns_topic" "spine_gates" {
+  name              = "migrate4hana-spine-gates-${var.environment}"
+  kms_master_key_id = "alias/aws/sns"
+  tags              = { Component = "Governance", Pillar = "3" }
+}
+
+resource "aws_sns_topic_subscription" "spine_gates_email" {
+  topic_arn = aws_sns_topic.spine_gates.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+# Pillar 2 — value-map matrix bucket (business users upload the mapping JSON)
+resource "aws_s3_bucket" "mapping" {
+  bucket = "migrate4hana-mapping-${var.environment}-${data.aws_caller_identity.current.account_id}"
+  tags   = { Component = "Transformation", Pillar = "2" }
+}
+
+resource "aws_s3_bucket_versioning" "mapping" {
+  bucket = aws_s3_bucket.mapping.id
+  versioning_configuration { status = "Enabled" }
+}
+
+resource "aws_s3_bucket_public_access_block" "mapping" {
+  bucket                  = aws_s3_bucket.mapping.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+data "aws_caller_identity" "current" {}
+
+output "audit_ledger_table" {
+  value = aws_dynamodb_table.audit_ledger.name
+}
+
+output "gate_sns_topic_arn" {
+  value = aws_sns_topic.spine_gates.arn
+}
+
+output "gate_secret_arn" {
+  value = aws_secretsmanager_secret.gate_secret.arn
+}
+
+output "mapping_bucket" {
+  value = aws_s3_bucket.mapping.id
 }
 
 output "lift_and_shift_state_machine_arn" {
