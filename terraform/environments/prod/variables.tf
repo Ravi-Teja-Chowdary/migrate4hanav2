@@ -82,8 +82,8 @@ variable "enable_airgapped_llm" {
 }
 variable "llm_mode" {
   type        = string
-  description = "GenAI routing mode: cloud, local, or dual"
-  default     = "dual"
+  description = "GenAI routing mode: cloud, local, or dual. PINNED to 'cloud' (Bedrock-only) for the end-to-end pipeline test; local/dual will be re-enabled once the cloud loop is certified."
+  default     = "cloud"
 }
 variable "ollama_model" {
   type        = string

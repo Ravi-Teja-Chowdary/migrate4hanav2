@@ -1,23 +1,20 @@
 """
 genai_router.py — GenAI Dispatch Router for Migrate4HANA
 =========================================================
-Routes ABAP code analysis requests to the optimal GenAI backend:
+**Bedrock-only mode (2026-05-30).** For the end-to-end pipeline certification we
+intentionally route the AI escalation through **AWS Bedrock only** — the local
+Ollama path is dormant and will be re-enabled once the cloud loop is signed off.
 
-  1. AST Engine       (local, zero-latency, deterministic)
-  2. Ollama (local)   (on-prem air-gapped LLM — for sensitive/PII workloads)
-  3. AWS Bedrock      (cloud, Claude via PrivateLink — zero internet egress)
+Pipeline:
+  1. AST Engine (local, deterministic) — always runs first.
+  2. If AST produces fewer changes than ``AST_CHANGE_THRESHOLD``, escalate to
+     **Bedrock** (Claude via PrivateLink) for semantic analysis.
+  3. ``LLM_MODE`` / ``sensitivity`` are accepted for forward compatibility but
+     currently ignored — selection is hard-pinned to Bedrock.
+  4. All payloads are PII-scrubbed via ``data_scrubber`` before dispatch.
 
-Routing Logic:
-  - Always run the AST engine first (structural, deterministic transforms).
-  - If AST produces fewer changes than the threshold, escalate to an LLM backend
-    for deeper semantic analysis.
-  - Backend selection is controlled by LLM_MODE + optional `sensitivity` flag:
-      LLM_MODE=cloud  (default)  -> Bedrock only
-      LLM_MODE=local             -> Ollama only
-      LLM_MODE=dual              -> Ollama when sensitivity=="high", else Bedrock
-  - If the chosen backend fails, the other backend is tried as a fallback
-    (where available); if both fail, the AST-only result is returned.
-  - All payloads are PII-scrubbed via data_scrubber before GenAI dispatch.
+When the local-LLM path is re-introduced, restore the original ``_select_backends``
+logic + the ``invoke_ollama`` import + the ``ollama`` branch in ``_dispatch``.
 """
 
 import json
@@ -32,7 +29,7 @@ logger.setLevel(logging.INFO)
 # Lazy imports — these modules live in the same Lambda package
 from data_scrubber import mask_payload_for_infosec
 from abap_ast_engine import process_abap_file
-from ollama_genai_engine import invoke_ollama
+# from ollama_genai_engine import invoke_ollama  # disabled — Bedrock-only mode
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 BEDROCK_MODEL_ID = os.environ.get(
@@ -121,33 +118,21 @@ def route_analysis(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _select_backends(sensitivity: str) -> (str, Optional[str]):
-    """
-    Choose (primary, fallback) backend identifiers based on LLM_MODE and
-    caller-supplied sensitivity.
+    """Bedrock-only mode: ignore LLM_MODE/sensitivity and route to Bedrock.
 
-    Returns:
-      primary  : "ollama" or "bedrock"
-      fallback : the other backend, or None if no fallback is allowed
+    The Ollama/local-LLM branch will be restored after the end-to-end pipeline
+    test signs off the cloud loop. See module docstring for re-enablement notes.
     """
-    mode = LLM_MODE
-    if mode == "local":
-        return "ollama", None
-    if mode == "dual":
-        if sensitivity == "high":
-            return "ollama", "bedrock"
-        return "bedrock", "ollama"
-    # Default: cloud-only. No local fallback for plain "cloud" mode.
     return "bedrock", None
 
 
 def _dispatch(backend: str, prompt: str) -> Optional[Dict[str, Any]]:
-    """Dispatch to the named backend, catching all exceptions."""
+    """Dispatch to the named backend, catching all exceptions. Bedrock-only mode
+    refuses any non-Bedrock backend rather than silently falling through."""
     try:
-        if backend == "ollama":
-            return invoke_ollama(prompt)
         if backend == "bedrock":
             return _invoke_bedrock(prompt)
-        logger.warning(f"Unknown LLM backend '{backend}'")
+        logger.warning(f"Backend '{backend}' disabled in Bedrock-only mode")
         return None
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Backend '{backend}' raised unexpectedly: {e}")
