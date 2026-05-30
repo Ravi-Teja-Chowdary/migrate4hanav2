@@ -25,20 +25,25 @@ ICU libraries). The build script bundles those with a manylinux pyrfc wheel from
 into `layer-build/pyrfc-layer.zip`, and **Terraform auto-detects + publishes it on
 the next `terraform apply`** — no manual `pyrfc_layer_arn` tfvar required for testing.
 
-```bash
-# from the repo root
-python layer-build/build_pyrfc_layer.py
-# -> layer-build/pyrfc-layer.zip  (~15 MB)
+```powershell
+# from the repo root (PowerShell)
+python layer-build\build_pyrfc_layer.py
+# -> layer-build\pyrfc-layer.zip  (~15 MB)
 
-cd terraform/environments/prod
+cd terraform\environments\prod
 terraform apply
 # Terraform sees the zip, publishes it as aws_lambda_layer_version.pyrfc,
 # and every SAP-touching Lambda gets it as their `layers` automatically.
 ```
 
-That's it. Pin a specific pyrfc version with `M4H_PYRFC_VERSION=3.3.1
-python layer-build/build_pyrfc_layer.py` if you need it. Re-run the script + apply
-whenever you want a fresh wheel.
+That's it. Pin a specific pyrfc version when needed:
+
+```powershell
+$env:M4H_PYRFC_VERSION = "3.3.1"
+python layer-build\build_pyrfc_layer.py
+```
+
+Re-run the script + apply whenever you want a fresh wheel.
 
 **What this avoids vs. the production path:** no SAP S-User, no Docker, no manual
 `aws lambda publish-layer-version`. The local Python on your machine only has to be
@@ -81,62 +86,35 @@ Lambda stages import `pyrfc` at startup; without the layer, they cold-start, fai
 
 ### One-shot build (runs in Docker so the wheel + .so match the Lambda runtime)
 
-Save as `layer-build/build_pyrfc_layer.sh` and run from the `layer-build/` directory
-that contains the SAP SDK zip:
+Use the committed PowerShell builder. Drop your SAP-downloaded `nwrfc750P_*.zip`
+into `layer-build/`, then:
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-SDK_ZIP=$(ls nwrfc750P_*.zip | head -1)
-[ -n "$SDK_ZIP" ] || { echo "no nwrfc750P_*.zip in $(pwd)"; exit 1; }
-
-# Build the layer inside Amazon Linux 2023 so the compiled wheel matches Lambda
-docker run --rm -v "$(pwd):/work" -w /work \
-  public.ecr.aws/amazonlinux/amazonlinux:2023 bash -c '
-    set -e
-    dnf -y -q install python3.11 python3.11-pip python3.11-devel gcc gcc-c++ make unzip
-    rm -rf build && mkdir -p build/python build/lib
-
-    # 1. extract the SAP SDK
-    unzip -q -o '"$SDK_ZIP"' -d /opt/sap
-    if [ -d /opt/sap/nwrfcsdk ]; then cp -r /opt/sap/nwrfcsdk/* /opt/sap/; fi
-
-    # 2. install pyrfc + its runtime deps, compiled against the SDK headers
-    export SAPNWRFC_HOME=/opt/sap
-    export LD_LIBRARY_PATH=/opt/sap/lib:$LD_LIBRARY_PATH
-    python3.11 -m pip install --quiet --target build/python pyrfc
-
-    # 3. the .so libs must live under the layer'\''s /opt/lib at runtime
-    cp -r /opt/sap/lib/* build/lib/
-
-    # 4. zip the layer (preserves layer/ -> /opt/ layout when Lambda mounts it)
-    cd build && zip -qr ../pyrfc-layer.zip python lib
-  '
-echo "built: $(pwd)/pyrfc-layer.zip ($(du -h pyrfc-layer.zip | cut -f1))"
+```powershell
+cd layer-build
+# (one-time, if execution policy blocks unsigned scripts)
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+.\build_pyrfc_layer.ps1
 ```
 
-Make it executable and run it:
-
-```bash
-chmod +x layer-build/build_pyrfc_layer.sh
-( cd layer-build && ./build_pyrfc_layer.sh )
-```
-
-You should end up with `layer-build/pyrfc-layer.zip` (~10–15 MB).
+You should end up with `layer-build\pyrfc-layer.zip` (~10–15 MB). The script
+mounts the cwd into an `amazonlinux:2023` container, installs python3.11 +
+the build tooling, extracts the SDK, `pip install`s pyrfc against it, copies
+the SDK `.so` files into the layer's `lib/`, and zips it. See
+`layer-build\build_pyrfc_layer.ps1` for the full source.
 
 ### Publish to AWS
 
-```bash
-REGION=us-east-1
-LAYER_ARN=$(aws lambda publish-layer-version \
-  --region $REGION \
-  --layer-name pyrfc \
-  --description "SAP NW RFC SDK 7.50 + pyrfc for python3.11" \
-  --zip-file fileb://layer-build/pyrfc-layer.zip \
-  --compatible-runtimes python3.11 \
-  --compatible-architectures x86_64 \
-  --query LayerVersionArn --output text)
-echo "$LAYER_ARN"
+```powershell
+$REGION = "us-east-1"
+$LAYER_ARN = aws lambda publish-layer-version `
+  --region $REGION `
+  --layer-name pyrfc `
+  --description "SAP NW RFC SDK 7.50 + pyrfc for python3.11" `
+  --zip-file fileb://layer-build/pyrfc-layer.zip `
+  --compatible-runtimes python3.11 `
+  --compatible-architectures x86_64 `
+  --query LayerVersionArn --output text
+$LAYER_ARN
 ```
 
 Add the printed ARN to `terraform.tfvars` so every Lambda picks it up:
@@ -152,9 +130,10 @@ Then `terraform apply` again — the previously-empty `layers = []` becomes
 
 Test from a Lambda you've deployed:
 
-```bash
-aws lambda invoke --function-name migrate4hana-readiness-check-prod \
-  --payload '{"mode":"healthcheck"}' /tmp/out.json && cat /tmp/out.json
+```powershell
+aws lambda invoke --function-name migrate4hana-readiness-check-prod `
+  --payload '{\"mode\":\"healthcheck\"}' $env:TEMP\out.json
+Get-Content $env:TEMP\out.json
 ```
 
 If the response is no longer `"errorMessage": "Unable to import module..."`, the layer
@@ -172,57 +151,56 @@ so any stage that doesn't fit in a Lambda's 15-min / 10 GB envelope runs here in
 `ecs/Dockerfile` already exists in the repo (multi-stage Amazon Linux 2023 build). It
 expects the SAP SDK zip at `ecs/nwrfc750P_*.zip`.
 
-### Build (from the repo root)
+### Build (from the repo root, PowerShell)
 
-```bash
-# Build context MUST be the repo root so the Dockerfile can copy lambda/ into the image
-docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .
+```powershell
+# Build context MUST be the repo root so the Dockerfile can copy lambda\ into the image
+docker build -f ecs\Dockerfile -t migrate4hana-worker:latest .
 ```
 
 ### Push to ECR
 
 The Terraform stack creates the ECR repository on first apply; grab its URL from outputs.
 
-```bash
-cd terraform/environments/prod
-REPO=$(terraform output -raw ecr_repository_url)        # e.g. <acct>.dkr.ecr.us-east-1.amazonaws.com/migrate4hana/worker
-REGION=us-east-1
+```powershell
+cd terraform\environments\prod
+$REPO     = terraform output -raw ecr_repository_url   # e.g. <acct>.dkr.ecr.us-east-1.amazonaws.com/migrate4hana/worker
+$REGION   = "us-east-1"
+$Registry = $REPO.Substring(0, $REPO.LastIndexOf('/'))  # strip "/migrate4hana/worker" -> registry host
 
 # log Docker into the ECR registry
-aws ecr get-login-password --region $REGION | \
-  docker login --username AWS --password-stdin "${REPO%/*}"
+aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $Registry
 
 # tag + push
-docker tag  migrate4hana-worker:latest "$REPO:latest"
-docker push "$REPO:latest"
+docker tag  migrate4hana-worker:latest "${REPO}:latest"
+docker push "${REPO}:latest"
 ```
 
-> **Apple Silicon (M1/M2) warning:** Docker defaults to `linux/arm64` on Macs. Fargate
-> here is `linux/amd64`. Always add `--platform linux/amd64` to **both** the `build` and
-> `push` commands — otherwise the task starts but fails with `exec format error`.
-> Example: `docker build --platform linux/amd64 -f ecs/Dockerfile -t migrate4hana-worker:latest .`
+> **Apple Silicon (M1/M2) note:** Mac users only. Docker on Apple Silicon defaults to
+> `linux/arm64` and Fargate here is `linux/amd64`; add `--platform linux/amd64` to
+> the `build` command. Windows + Intel Macs already build `linux/amd64` by default.
 
 ### Re-apply so the task definition pins to your image digest (optional but recommended)
 
-```bash
-cd terraform/environments/prod
+```powershell
+cd terraform\environments\prod
 terraform apply
 ```
 
 ### Verify
 
-```bash
+```powershell
 # task definition is registered and the image points at your push
-aws ecs describe-task-definition --task-definition $(terraform output -raw ecs_task_definition_family) \
+$TaskFamily = terraform output -raw ecs_task_definition_family
+aws ecs describe-task-definition --task-definition $TaskFamily `
   --query 'taskDefinition.containerDefinitions[0].image'
 
-# fire a one-off test run
-aws ecs run-task \
-  --cluster $(terraform output -raw ecs_cluster_arn | awk -F/ '{print $NF}') \
-  --launch-type FARGATE \
-  --task-definition $(terraform output -raw ecs_task_definition_family) \
-  --network-configuration "awsvpcConfiguration={subnets=[<subnet-id>],securityGroups=[<sg-id>],assignPublicIp=DISABLED}" \
-  --overrides '{"containerOverrides":[{"name":"migrate4hana","environment":[{"name":"M4H_TASK_PAYLOAD","value":"{\"stage\":\"healthcheck\"}"}]}]}'
+# fire a one-off test run (fill in <subnet-id> + <sg-id> from your stack outputs)
+$Cluster = (terraform output -raw ecs_cluster_arn).Split('/')[-1]
+$Net     = 'awsvpcConfiguration={subnets=[<subnet-id>],securityGroups=[<sg-id>],assignPublicIp=DISABLED}'
+$Over    = '{"containerOverrides":[{"name":"migrate4hana","environment":[{"name":"M4H_TASK_PAYLOAD","value":"{\"stage\":\"healthcheck\"}"}]}]}'
+aws ecs run-task --cluster $Cluster --launch-type FARGATE `
+  --task-definition $TaskFamily --network-configuration $Net --overrides $Over
 ```
 
 CloudWatch Logs under `/ecs/migrate4hana-worker` should show the entrypoint running.
@@ -260,8 +238,14 @@ re-wires it instantly.
 | Lambda: `Unable to import module: pyrfc` | layer not attached or arch mismatch | confirm the zip exists (fast path) OR re-publish with `--compatible-architectures x86_64` and set `pyrfc_layer_arn` (production path); re-apply |
 | Lambda: `libsapnwrfc.so: cannot open shared object file` | SDK `.so` not on the loader path | layer zip must include `lib/` at the top (Lambda mounts it as `/opt/lib`, which is on `LD_LIBRARY_PATH` automatically) — re-run the build script |
 | Fargate: `exec format error` | image built for arm64, Fargate task is amd64 | rebuild with `docker build --platform linux/amd64 ...` |
-| `docker push` → `denied: requested access to the resource is denied` | not logged into ECR or wrong region | re-run the `aws ecr get-login-password ... \| docker login ...` step with the correct `--region` |
+| `docker push` -> `denied: requested access to the resource is denied` | not logged into ECR or wrong region | re-run the `aws ecr get-login-password ... \| docker login ...` step with the correct `--region` |
+| PowerShell: `.\build_pyrfc_layer.ps1 : cannot be loaded because running scripts is disabled` | execution policy | one-shot: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force` then re-run; or `powershell -ExecutionPolicy Bypass -File .\build_pyrfc_layer.ps1` |
 | `terraform apply` says ECR repo already has an image but the task still fails | task def caches the previous digest | force redeploy: `aws ecs update-service ... --force-new-deployment` (n/a here since we use `run-task`, but for any service version of this) — or re-`apply` after the push |
 | SAP-side: `RFC error PARTNER NOT REACHED` / `WSAETIMEDOUT` | network path / IPs / hosts file — *not* a prereq problem | see `~/.claude/.../memory/connectivity-quirks.md` — the most-burned-on connectivity gotcha |
 
-That's it. Once §1 and §2 are done once, **every future deploy is `cd terraform/environments/prod && terraform apply`**.
+That's it. Once §1 and §2 are done once, **every future deploy is**:
+
+```powershell
+cd terraform\environments\prod
+terraform apply
+```

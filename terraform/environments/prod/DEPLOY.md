@@ -4,8 +4,8 @@ This is the **single root** for the whole platform. One `terraform init` / `appl
 entire AWS stack up; one `terraform destroy` tears it down. Local state by default — no
 pre-existing backend bucket, no bootstrap.
 
-```bash
-cd terraform/environments/prod
+```powershell
+cd terraform\environments\prod
 terraform init
 terraform apply        # everything up
 # ... use it ...
@@ -32,7 +32,7 @@ hash-chain DDB vault, key-map DDB, value-map matrix bucket — all wired into th
 | SAP NW RFC SDK Lambda layer | `pyrfc_layer_arn=""` (layer omitted via `compact()`) | build+publish the licensed SDK layer, set `pyrfc_layer_arn` |
 | Fargate worker **image** | ECR repo created empty | build+push your image, then heavy stages run |
 | Air-gapped LLM (GPU EC2) | `enable_airgapped_llm=false` | set `true` + `gpu_ami_id` |
-| Entity Resolution (ML BP dedup) | module excluded (needs provider ≥5.21) | restore module block when provider available |
+| Entity Resolution (ML BP dedup) | **enabled** (aws provider pinned to >= 5.40) | already wired into `data-hygiene` for BP dedup boost |
 | DMS | removed (off-architecture for SAP) | n/a — data moves via BAPI/OData/MC only |
 | Email alerts | `alert_email=migrations@example.com` | set your address in `terraform.tfvars` |
 
@@ -51,25 +51,32 @@ enable_airgapped_llm = false
 transform_rules      = "s3://migrate4hana-mapping-prod-<acct>/rules/transform_rules.json"
 ```
 
-## After apply — make the SAP-RFC + Fargate paths live
-```bash
+## After apply — make the SAP-RFC + Fargate paths live (PowerShell)
+```powershell
 # 1. push the Fargate worker image to the ECR repo this stack created
-ECR=$(terraform output -raw ecr_repository_url)
-aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR%/*}"
-docker build -t "$ECR:latest" ../../.. && docker push "$ECR:latest"
+$ECR = terraform output -raw ecr_repository_url           # e.g. <acct>.dkr.ecr.us-east-1.amazonaws.com/migrate4hana/worker
+$Registry = $ECR.Substring(0, $ECR.LastIndexOf('/'))      # strip "/migrate4hana/worker" -> registry host
+aws ecr get-login-password | docker login --username AWS --password-stdin $Registry
+docker build -f ..\..\..\ecs\Dockerfile -t "${ECR}:latest" ..\..\..
+docker push "${ECR}:latest"
 
 # 2. put real SAP creds into the secrets the stack created
-aws secretsmanager put-secret-value \
-  --secret-id migrate4hana/prod/sap-credentials \
-  --secret-string '{"ashost":"...","sysnr":"00","client":"100","user":"...","passwd":"..."}'
+$EccPwd = Read-Host -AsSecureString "ECC password"        # read securely; not echoed
+$ptr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($EccPwd)
+$pwd = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+$json = @{ ashost = "..."; sysnr = "00"; client = "100"; user = "..."; passwd = $pwd } | ConvertTo-Json -Compress
+aws secretsmanager put-secret-value `
+  --secret-id migrate4hana/prod/sap-credentials `
+  --secret-string $json
 
 # 3. upload the value-map matrix (Pillar 2)
-aws s3 cp company_code_map.json "s3://$(terraform output -raw mapping_bucket)/mappings/matrix.json"
+$Mapping = terraform output -raw mapping_bucket
+aws s3 cp company_code_map.json "s3://$Mapping/mappings/matrix.json"
 
 # 4. confirm the gate-alert email subscription (AWS sends a click-to-confirm link)
 
 # 5. start a run
-eval "$(terraform output -raw start_migration_command)"
+Invoke-Expression (terraform output -raw start_migration_command)
 ```
 
 ## Governance gates (Pillar 3) — Step Functions wiring

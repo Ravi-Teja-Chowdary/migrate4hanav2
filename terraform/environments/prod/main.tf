@@ -8,8 +8,10 @@ terraform {
 
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+      source = "hashicorp/aws"
+      # >= 5.40 gives us aws_entityresolution_* (added in 5.21) plus the latest
+      # bug fixes, while staying inside the 5.x major. Bump up as needed.
+      version = ">= 5.40, < 6.0"
     }
     archive = {
       source  = "hashicorp/archive"
@@ -111,9 +113,7 @@ module "lambda" {
   telemetry_ws_connections_table = module.websocket_telemetry.connections_table_name
   telemetry_broadcast_policy_arn = module.websocket_telemetry.telemetry_broadcast_policy_arn
 
-  # Entity Resolution module excluded from the default stack (needs aws provider
-  # >= 5.21 with registry access). BP dedup falls back to the deterministic engine.
-  entity_resolution_workflow_arn = ""
+  entity_resolution_workflow_arn = module.entity_resolution.matching_workflow_arn
 
   bedrock_model_id     = var.bedrock_model_id
   ast_change_threshold = var.ast_change_threshold
@@ -461,12 +461,15 @@ module "vpc_endpoints" {
 
 
 # ─────────────────────────────────────────────
-# Entity Resolution — ML-powered BP Deduplication (OPTIONAL)
-# Excluded from the default stack: requires aws provider >= 5.21 with registry
-# access for aws_entityresolution_* resources. Re-enable by restoring this module
-# block + wiring module.entity_resolution.matching_workflow_arn into the lambda
-# module once the provider is available. Deterministic BP dedup runs regardless.
+# Entity Resolution — ML-powered Business Partner deduplication
+# Requires aws provider >= 5.21 (pinned to >= 5.40 above). Deterministic BP
+# dedup also runs alongside; this gives the ML accuracy boost on top.
 # ─────────────────────────────────────────────
+module "entity_resolution" {
+  source      = "../../modules/entity-resolution"
+  environment = var.environment
+  region      = var.aws_region
+}
 
 # ─────────────────────────────────────────────
 # WebSocket Telemetry — Real-time pipeline streaming
