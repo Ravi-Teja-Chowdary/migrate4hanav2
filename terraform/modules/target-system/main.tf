@@ -22,6 +22,13 @@
 variable "name_prefix"        { type = string }
 variable "vpc_id"             { type = string }
 variable "private_subnets"    { type = list(string) }
+# Static-known subnet count (must come from a deterministic root input, not
+# from `length(var.private_subnets)` — that's apply-time unknown when subnets
+# are created by an upstream module in the same plan).
+variable "subnet_count" {
+  type        = number
+  description = "Static number of private subnets (root passes length(var.availability_zones))."
+}
 variable "build_sid" {
   type    = string
   default = "BLD"
@@ -138,9 +145,9 @@ resource "aws_efs_file_system" "trans" {
 }
 
 resource "aws_efs_mount_target" "trans" {
-  for_each        = toset(var.private_subnets)
+  count           = var.subnet_count
   file_system_id  = aws_efs_file_system.trans.id
-  subnet_id       = each.value
+  subnet_id       = var.private_subnets[count.index]
   security_groups = [aws_security_group.app.id]
 }
 

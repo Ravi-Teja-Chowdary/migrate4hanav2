@@ -113,7 +113,11 @@ module "lambda" {
   telemetry_ws_connections_table = module.websocket_telemetry.connections_table_name
   telemetry_broadcast_policy_arn = module.websocket_telemetry.telemetry_broadcast_policy_arn
 
-  entity_resolution_workflow_arn = module.entity_resolution.matching_workflow_arn
+  # Entity Resolution module excluded: aws_entityresolution_* resources are NOT
+  # in the hashicorp/aws provider (verified against v5.100.0). The service is
+  # only available via the hashicorp/awscc provider (Cloud Control / CloudFormation
+  # backed). Deterministic BP dedup runs alongside this regardless.
+  entity_resolution_workflow_arn = ""
 
   bedrock_model_id     = var.bedrock_model_id
   ast_change_threshold = var.ast_change_threshold
@@ -137,15 +141,8 @@ module "lambda" {
   lambda_functions = {
     # NOTE: discovery-engine removed — now runs on ECS Fargate (Stage 1)
 
-    maintenance-planner = {
-      description = "Stage 2: SAP Maintenance Planner Validation"
-      handler     = "handler.lambda_handler"
-      runtime     = "python3.11"
-      timeout     = 600
-      memory      = 2048
-      source_dir  = "${path.root}/../../../lambda/maintenance-planner"
-      layers      = [local.pyrfc_layer_arn]
-    }
+    # NOTE: maintenance-planner not in repo — Stage 2 is handled in-pipeline via
+    # the SAP Maintenance Planner web UI (manual gate) rather than a Lambda.
     readiness-check = {
       description = "Stage 3: SAP Readiness Check"
       handler     = "handler.lambda_handler"
@@ -211,15 +208,9 @@ module "lambda" {
       source_dir  = "${path.root}/../../../lambda/cutover-orchestrator"
       layers      = [local.pyrfc_layer_arn]
     }
-    sum-orchestrator = {
-      description = "Stage 10: SUM/DMO Orchestration & Monitoring"
-      handler     = "handler.lambda_handler"
-      runtime     = "python3.11"
-      timeout     = 900
-      memory      = 3008
-      source_dir  = "${path.root}/../../../lambda/sum-orchestrator"
-      layers      = [local.pyrfc_layer_arn]
-    }
+    # NOTE: sum-orchestrator not in repo — SUM/DMO is SAP-proprietary and runs
+    # outside our pipeline (handed off to SAP Basis); the cutover-orchestrator
+    # handles the pre-conversion gate and resume-after-SUM checkpoints.
     code-deployer = {
       description = "Stage 11: Deploy fixed ABAP to S/4HANA"
       handler     = "handler.lambda_handler"
@@ -461,15 +452,12 @@ module "vpc_endpoints" {
 
 
 # ─────────────────────────────────────────────
-# Entity Resolution — ML-powered Business Partner deduplication
-# Requires aws provider >= 5.21 (pinned to >= 5.40 above). Deterministic BP
-# dedup also runs alongside; this gives the ML accuracy boost on top.
+# Entity Resolution — ML-powered BP dedup (NOT IN hashicorp/aws PROVIDER)
+# Verified against aws v5.100.0: aws_entityresolution_* resources are not
+# shipped. To re-enable, switch the entity-resolution module to use the
+# hashicorp/awscc provider (Cloud Control), or manage the workflow via CLI.
+# Deterministic BP dedup runs in the data-hygiene stage regardless.
 # ─────────────────────────────────────────────
-module "entity_resolution" {
-  source      = "../../modules/entity-resolution"
-  environment = var.environment
-  region      = var.aws_region
-}
 
 # ─────────────────────────────────────────────
 # WebSocket Telemetry — Real-time pipeline streaming
@@ -552,6 +540,7 @@ module "target_system" {
   name_prefix        = "migrate4hana-${var.environment}"
   vpc_id             = module.vpc.vpc_id
   private_subnets    = module.vpc.private_subnet_ids
+  subnet_count       = length(var.availability_zones) # statically known (default 3)
   staging_bucket_arn = module.s3_staging.bucket_arn
   tags               = { Component = "TargetSystem", Pipeline = "lift-and-shift" }
 }

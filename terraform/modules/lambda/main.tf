@@ -268,9 +268,17 @@ resource "aws_iam_role_policy" "lambda_sns_publish" {
   })
 }
 
-# Attach WebSocket telemetry broadcast policy (conditional)
+# Attach WebSocket telemetry broadcast policy (gated by a deterministic bool so
+# `terraform plan` can resolve the count without waiting on the websocket-telemetry
+# module's apply-time outputs).
+variable "enable_telemetry_broadcast" {
+  type        = bool
+  default     = true
+  description = "Attach the WebSocket telemetry broadcast policy to the Lambda role."
+}
+
 resource "aws_iam_role_policy_attachment" "telemetry_broadcast" {
-  count      = var.telemetry_broadcast_policy_arn != "" ? 1 : 0
+  count      = var.enable_telemetry_broadcast ? 1 : 0
   role       = aws_iam_role.lambda.name
   policy_arn = var.telemetry_broadcast_policy_arn
 }

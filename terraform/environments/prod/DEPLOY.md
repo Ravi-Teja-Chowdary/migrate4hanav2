@@ -32,7 +32,7 @@ hash-chain DDB vault, key-map DDB, value-map matrix bucket — all wired into th
 | SAP NW RFC SDK Lambda layer | `pyrfc_layer_arn=""` (layer omitted via `compact()`) | build+publish the licensed SDK layer, set `pyrfc_layer_arn` |
 | Fargate worker **image** | ECR repo created empty | build+push your image, then heavy stages run |
 | Air-gapped LLM (GPU EC2) | `enable_airgapped_llm=false` | set `true` + `gpu_ami_id` |
-| Entity Resolution (ML BP dedup) | **enabled** (aws provider pinned to >= 5.40) | already wired into `data-hygiene` for BP dedup boost |
+| Entity Resolution (ML BP dedup) | excluded — `aws_entityresolution_*` not in hashicorp/aws (verified v5.100.0) | switch module to hashicorp/awscc provider, or manage via CLI |
 | DMS | removed (off-architecture for SAP) | n/a — data moves via BAPI/OData/MC only |
 | Email alerts | `alert_email=migrations@example.com` | set your address in `terraform.tfvars` |
 
