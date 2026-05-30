@@ -106,8 +106,11 @@ module "lambda" {
   # Wave 6/7/8 — evidence ledger plumbing
   events_table_name          = module.evidence_ledger.events_table_name
   recon_tolerance_table_name = module.evidence_ledger.recon_tolerance_table_name
-  evidence_bucket_name       = module.evidence_ledger.evidence_bucket_name
-  kms_key_arn                = module.evidence_ledger.kms_key_arn
+  # Tool-facing evidence bucket (no Object Lock; explicit fixed name per
+  # 2026-05-30 directive). Both Wave-7 S3_EVIDENCE_BUCKET and our pillar-4
+  # M4H_EVIDENCE_BUCKET resolve to this same bucket.
+  evidence_bucket_name = aws_s3_bucket.evidence_app.id
+  kms_key_arn          = module.evidence_ledger.kms_key_arn
 
   telemetry_ws_endpoint          = module.websocket_telemetry.management_endpoint
   telemetry_ws_connections_table = module.websocket_telemetry.connections_table_name
@@ -129,6 +132,7 @@ module "lambda" {
   gate_secret_arn    = aws_secretsmanager_secret.gate_secret.arn
   audit_ledger_table = aws_dynamodb_table.audit_ledger.name
   key_map_table      = aws_dynamodb_table.key_map.name
+  evidence_bucket    = aws_s3_bucket.evidence_app.id   # exposed to code as M4H_EVIDENCE_BUCKET
   fargate_cluster    = module.ecs.cluster_arn
   fargate_taskdef    = module.ecs.task_definition_arn
   fargate_sgs        = module.ecs.security_group_id
@@ -627,6 +631,42 @@ resource "aws_sns_topic_subscription" "spine_gates_email" {
   topic_arn = aws_sns_topic.spine_gates.arn
   protocol  = "email"
   endpoint  = var.alert_email
+}
+
+# Tool-facing evidence bucket — explicit, fixed name per 2026-05-30 directive.
+# No Object Lock, versioning + encryption + public-access block on. This is the
+# bucket the application writes evidence packs to (M4H_EVIDENCE_BUCKET +
+# S3_EVIDENCE_BUCKET both point here). The evidence-ledger module's bucket
+# remains for KMS-encrypted artifacts but is no longer the tool's target.
+resource "aws_s3_bucket" "evidence_app" {
+  bucket        = "migrate4hana-evidence-bucket"
+  force_destroy = true # allow `terraform destroy` to empty non-WORM objects
+  tags = {
+    Component   = "EvidenceBucket"
+    Environment = var.environment
+    Purpose     = "tool-facing evidence pack target"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "evidence_app" {
+  bucket = aws_s3_bucket.evidence_app.id
+  versioning_configuration { status = "Enabled" }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "evidence_app" {
+  bucket = aws_s3_bucket.evidence_app.id
+  rule {
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "evidence_app" {
+  bucket                  = aws_s3_bucket.evidence_app.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 # Pillar 2 — value-map matrix bucket (business users upload the mapping JSON)

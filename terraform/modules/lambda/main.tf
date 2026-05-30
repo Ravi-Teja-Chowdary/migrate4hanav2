@@ -316,6 +316,11 @@ variable "key_map_table" {
   type    = string
   default = ""
 }
+variable "evidence_bucket" {
+  type        = string
+  default     = ""
+  description = "Tool-facing evidence bucket (M4H_EVIDENCE_BUCKET). Falls back to evidence_bucket_name if empty."
+}
 variable "fargate_cluster" {
   type    = string
   default = ""
@@ -410,6 +415,7 @@ resource "aws_lambda_function" "migration" {
         M4H_GATE_SECRET_ARN       = var.gate_secret_arn
         M4H_AUDIT_LEDGER_TABLE    = var.audit_ledger_table
         M4H_KEYMAP_TABLE          = var.key_map_table
+        M4H_EVIDENCE_BUCKET       = var.evidence_bucket != "" ? var.evidence_bucket : var.evidence_bucket_name
         M4H_FARGATE_CLUSTER       = var.fargate_cluster
         M4H_FARGATE_TASKDEF       = var.fargate_taskdef
         M4H_FARGATE_SUBNETS       = join(",", var.private_subnet_ids)

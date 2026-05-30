@@ -61,10 +61,13 @@ resource "aws_kms_alias" "m4h" {
   target_key_id = aws_kms_key.m4h.key_id
 }
 
-# ── Wave 7 — Evidence Bucket (Object Lock COMPLIANCE) ────────
+# ── Wave 7 — Evidence Bucket (NO Object Lock — destroyable) ────────
+# Per 2026-05-30 directive: WORM Object Lock removed so `terraform destroy`
+# can clean up cleanly during testing. To re-impose immutability later, set
+# `object_lock_enabled = true` AT bucket creation (cannot be turned on
+# after the fact) and restore the aws_s3_bucket_object_lock_configuration.
 resource "aws_s3_bucket" "evidence" {
-  bucket              = local.evidence_bucket
-  object_lock_enabled = true
+  bucket = local.evidence_bucket
 
   tags = {
     Component   = "EvidenceLedger"
@@ -78,17 +81,6 @@ resource "aws_s3_bucket_versioning" "evidence" {
   versioning_configuration {
     status = "Enabled"
   }
-}
-
-resource "aws_s3_bucket_object_lock_configuration" "evidence" {
-  bucket = aws_s3_bucket.evidence.id
-  rule {
-    default_retention {
-      mode = "COMPLIANCE"
-      days = var.retention_years * 365
-    }
-  }
-  depends_on = [aws_s3_bucket_versioning.evidence]
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "evidence" {
@@ -223,7 +215,7 @@ output "kms_key_arn" {
 
 output "evidence_bucket_name" {
   value       = aws_s3_bucket.evidence.id
-  description = "S3 bucket for hash-chained evidence (Object Lock COMPLIANCE)"
+  description = "S3 bucket for hash-chained evidence (no Object Lock — destroyable for testing)"
 }
 
 output "events_table_name" {
