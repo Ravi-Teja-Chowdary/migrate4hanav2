@@ -1,30 +1,27 @@
 """
-Build the pyrfc Lambda layer from the SAP NW RFC SDK already in this repo.
+Build the pyrfc Lambda layer using the prebuilt wheel from SAP's GitHub Releases
++ the SDK .so files already in this repo. Cross-platform, no Docker required.
 
-What this produces:  layer-build/pyrfc-layer.zip
-  ├── lib/        ← the .so files from nwrfcsdk-linux/lib (Lambda mounts as /opt/lib)
-  └── python/     ← the pyrfc wheel extracted (Lambda mounts as /opt/python)
+Why GitHub and not PyPI: SAP's PyPI release for v3.3.1 only ships macOS-arm64 +
+Windows wheels (no Linux). The GitHub release at
+https://github.com/SAP/PyRFC/releases ships the Linux x86_64 wheels we need for
+Lambda (Amazon Linux 2 / 2023 runtime). Both wheels are byte-identical to what
+`pip install pyrfc` would produce on the matching platform.
 
-How it's used:  terraform/environments/prod/main.tf detects this file's presence and
-publishes it as an aws_lambda_layer_version on `terraform apply` — no manual
-`pyrfc_layer_arn` tfvar needed for testing.
+Produces:  layer-build/pyrfc-layer.zip
+  ├── lib/     ← libsapnwrfc.so + libsapucum.so + ICU libs from nwrfcsdk-linux/
+  └── python/  ← pyrfc package contents from the cp311 linux_x86_64 wheel
 
-Run it once:   python layer-build/build_pyrfc_layer.py
-Re-run when you change SDK files or want a fresh pyrfc wheel.
-
-Requirements:
-  * Python 3.7+ on the host (pip is used purely to *download* the cp311
-    manylinux wheel — your local Python version does not matter).
-  * Internet access for the one-time pip download of pyrfc from PyPI.
-  * The repo's nwrfcsdk-linux/lib directory must exist (already committed).
+Pin a specific version with:  M4H_PYRFC_VERSION=3.3.1 python build_pyrfc_layer.py
+Defaults to 3.3.1 (the version with a known-good cp311 linux wheel on GitHub).
 """
-from __future__ import print_function
+from __future__ import annotations
 
-import glob
+import io
 import os
 import shutil
-import subprocess
 import sys
+import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -32,70 +29,59 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 SDK_LIB = REPO / "nwrfcsdk-linux" / "lib"
 BUILD = HERE / "build"
-WHEELS = BUILD / "wheels"
 OUT = HERE / "pyrfc-layer.zip"
 
-# Lambda target: must match the runtime in the lambda module
-TARGET_PYTHON = "3.11"
-TARGET_PLATFORM = "manylinux2014_x86_64"
-PYRFC_VERSION = os.environ.get("M4H_PYRFC_VERSION", "")  # empty -> latest
+PYRFC_VERSION = os.environ.get("M4H_PYRFC_VERSION", "3.3.1")
+PY_TAG = "cp311"
+PLATFORM_TAG = "linux_x86_64"
+WHEEL_NAME = f"pyrfc-{PYRFC_VERSION}-{PY_TAG}-{PY_TAG}-{PLATFORM_TAG}.whl"
+WHEEL_URL = f"https://github.com/SAP/PyRFC/releases/download/v{PYRFC_VERSION}/{WHEEL_NAME}"
+
+
+def fetch(url: str) -> bytes:
+    """Download a file with a clear progress message (some networks are slow)."""
+    print(f"  GET {url}")
+    with urllib.request.urlopen(url) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"HTTP {resp.status} from {url}")
+        return resp.read()
 
 
 def main() -> int:
-    if not SDK_LIB.exists():
-        print(f"ERROR: SAP SDK lib not found at {SDK_LIB}", file=sys.stderr)
+    if not SDK_LIB.exists() or not any(SDK_LIB.iterdir()):
+        print(f"ERROR: SAP SDK lib not found / empty at {SDK_LIB}", file=sys.stderr)
         print("       Expected `nwrfcsdk-linux/lib/*.so` from the repo.", file=sys.stderr)
         return 1
-    so_files = sorted(SDK_LIB.iterdir())
-    if not so_files:
-        print(f"ERROR: {SDK_LIB} is empty", file=sys.stderr)
-        return 1
 
-    # ── 1. clean staging ──────────────────────────────────────────────────
+    # ── 1. clean staging ────────────────────────────────────────────────
     if BUILD.exists():
         shutil.rmtree(BUILD)
     (BUILD / "python").mkdir(parents=True)
     (BUILD / "lib").mkdir(parents=True)
-    WHEELS.mkdir(parents=True)
 
-    # ── 2. copy the SDK .so files into lib/ ───────────────────────────────
-    for f in so_files:
-        if f.is_file():
-            shutil.copy(str(f), str(BUILD / "lib" / f.name))
-    print("[1/3] copied {} SDK files into lib/".format(
-        len(list((BUILD / "lib").iterdir()))))
+    # ── 2. copy SDK .so files into lib/ ─────────────────────────────────
+    sdk_files = [f for f in SDK_LIB.iterdir() if f.is_file()]
+    for f in sdk_files:
+        shutil.copy(str(f), str(BUILD / "lib" / f.name))
+    print(f"[1/3] copied {len(sdk_files)} SDK files into lib/")
 
-    # ── 3. download the cp311 manylinux pyrfc wheel from PyPI ─────────────
-    spec = "pyrfc" + ("==" + PYRFC_VERSION if PYRFC_VERSION else "")
-    cmd = [sys.executable, "-m", "pip", "download",
-           "--platform", TARGET_PLATFORM,
-           "--python-version", TARGET_PYTHON,
-           "--implementation", "cp",
-           "--only-binary=:all:",
-           "--no-deps",
-           "-d", str(WHEELS),
-           spec]
-    print("[2/3] downloading pyrfc wheel:")
-    print("      " + " ".join(cmd))
+    # ── 3. download the prebuilt wheel from SAP's GitHub release ────────
+    print(f"[2/3] fetching pyrfc wheel for {PY_TAG}/{PLATFORM_TAG} (v{PYRFC_VERSION})")
     try:
-        subprocess.check_call(cmd)
-    except subprocess.CalledProcessError as e:
-        print("\nERROR: pip download failed.", file=sys.stderr)
-        print("  If pyrfc has no cp311 manylinux wheel on PyPI for your", file=sys.stderr)
-        print("  pip version, either upgrade pip (`python -m pip install -U pip`)", file=sys.stderr)
-        print("  or set M4H_PYRFC_VERSION env to a known-good version.", file=sys.stderr)
-        return e.returncode
-
-    wheels = glob.glob(str(WHEELS / "*.whl"))
-    if not wheels:
-        print("ERROR: no .whl downloaded", file=sys.stderr)
+        wheel_bytes = fetch(WHEEL_URL)
+    except Exception as e:
+        print(f"\nERROR: download failed: {e}", file=sys.stderr)
+        print("  If 3.3.1 was yanked, set M4H_PYRFC_VERSION to a release listed at", file=sys.stderr)
+        print("  https://github.com/SAP/PyRFC/releases (look for a *-cp311-cp311-linux_x86_64.whl asset).", file=sys.stderr)
         return 1
-    for whl in wheels:
-        with zipfile.ZipFile(whl) as zf:
-            zf.extractall(str(BUILD / "python"))
-        print("      extracted " + os.path.basename(whl))
+    print(f"      got {len(wheel_bytes):,} bytes")
 
-    # ── 4. zip layer ─────────────────────────────────────────────────────
+    # The wheel is a plain zip — extract its contents straight into build/python/
+    # (skipping the dist-info metadata is optional; we keep it for traceability)
+    with zipfile.ZipFile(io.BytesIO(wheel_bytes)) as wh:
+        wh.extractall(str(BUILD / "python"))
+
+    # ── 4. zip the layer (python/ + lib/ at root, Lambda mounts as /opt/) ─
     if OUT.exists():
         OUT.unlink()
     with zipfile.ZipFile(str(OUT), "w", zipfile.ZIP_DEFLATED) as zf:
@@ -105,10 +91,11 @@ def main() -> int:
                 if p.is_file():
                     zf.write(str(p), str(p.relative_to(BUILD)))
     size_mb = OUT.stat().st_size / 1024.0 / 1024.0
-    print("[3/3] built {} ({:.1f} MB)".format(OUT, size_mb))
+    print(f"[3/3] built {OUT} ({size_mb:.1f} MB)")
+
     print("\nNext step:")
-    print("  cd terraform/environments/prod && terraform apply")
-    print("Terraform will detect the zip and publish it as a Lambda layer automatically.")
+    print("  cd terraform\\environments\\prod")
+    print("  terraform apply    # Terraform detects the zip and publishes the layer")
     return 0
 
 

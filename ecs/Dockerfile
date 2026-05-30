@@ -23,8 +23,7 @@
 # ── Stage 1: Build PyRFC + SAP NW RFC SDK ────
 FROM public.ecr.aws/amazonlinux/amazonlinux:2023 AS builder
 
-RUN dnf install -y python3.11 python3.11-pip python3.11-devel \
-    gcc gcc-c++ make unzip && \
+RUN dnf install -y python3.11 python3.11-pip unzip tar gzip && \
     dnf clean all
 
 # Copy and extract SAP NW RFC SDK (from ecs/ directory in build context)
@@ -38,14 +37,21 @@ RUN cd /tmp && unzip -o nwrfc750P_*.zip -d /opt/sap/ && \
 ENV SAPNWRFC_HOME=/opt/sap
 ENV LD_LIBRARY_PATH=/opt/sap/lib:$LD_LIBRARY_PATH
 
-# Install Python dependencies
-RUN python3.11 -m pip install --target /opt/python \
-    pyrfc boto3
+# Install Python dependencies. pyrfc is fetched from SAP's GitHub release (the
+# PyPI release has no Linux wheel — only macOS-arm64 + Windows); the wheel is
+# precompiled cp311 linux_x86_64, no compilation needed.
+ARG PYRFC_VERSION=3.3.1
+# pip is strict about PEP-427 wheel filenames, so we keep the original whl name.
+RUN WHL="pyrfc-${PYRFC_VERSION}-cp311-cp311-linux_x86_64.whl" && \
+    curl -fsSL "https://github.com/SAP/PyRFC/releases/download/v${PYRFC_VERSION}/${WHL}" -o "/tmp/${WHL}" && \
+    python3.11 -m pip install --no-cache-dir --target /opt/python "/tmp/${WHL}" boto3 && \
+    rm -f "/tmp/${WHL}" && \
+    test -d /opt/python/pyrfc && echo "pyrfc installed OK"
 
 # ── Stage 2: Slim runtime image ─────────────
 FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 
-RUN dnf install -y python3.11 && dnf clean all
+RUN dnf install -y python3.11 shadow-utils && dnf clean all
 
 # SAP NW RFC SDK shared libraries
 COPY --from=builder /opt/sap/lib /opt/sap/lib
