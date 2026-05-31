@@ -1,0 +1,5 @@
+# Generated artefacts — regenerable, don't commit
+fixtures/
+abap-suite/
+results/
+*.log

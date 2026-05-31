@@ -72,6 +72,15 @@ COPY --chown=1000:1000 lambda/ /app/lambda/
 # Copy the unified entrypoint
 COPY --chown=1000:1000 ecs/entrypoint.py /app/entrypoint.py
 
+# Copy the battletest harness so the Fargate task can run the standalone
+# proof-run mode (entrypoint.py:run_battletest_mode). Only the .py files;
+# the gitignored fixtures/abap-suite/results dirs are NOT in the image.
+COPY --chown=1000:1000 tests/battletest/*.py /app/battletest/
+
+# Install faker for the synthetic data generator (optional dep; generator
+# falls back to deterministic names without it but quality is lower).
+RUN python3.11 -m pip install --no-cache-dir --target /opt/python faker
+
 # Non-root user for security
 RUN useradd -r -u 1000 -s /bin/false appuser
 USER appuser
