@@ -60,6 +60,7 @@ param(
     [switch]$IncludeCodeRemediation,
     [string]$Region = "us-east-1",
     [string]$Environment = "prod",
+    [string]$Bucket = "",        # override if auto-discovery doesn't find the right bucket
     [int]$PollIntervalSeconds = 30,
     [int]$TimeoutMinutes = 90
 )
@@ -86,15 +87,32 @@ Write-Host "  AWS account: $account (user: $($identity.Arn))"
 
 $cluster = "migrate4hana-$Environment"
 $taskDef = "migrate4hana-$Environment-worker"
-$bucket  = aws cloudformation describe-stack-resources `
-    --stack-name "migrate4hana-staging-$Environment" `
-    --query "StackResources[?LogicalResourceId=='Bucket'].PhysicalResourceId" `
-    --output text 2>$null
 
-# CloudFormation isn't actually used (we use Terraform). Resolve the staging
-# bucket name via the Terraform convention instead.
+# Resolve the staging bucket name. Order:
+#   0. -Bucket param (manual override)
+#   1. `terraform output s3_staging_bucket` from the env directory (authoritative)
+#   2. Fallback: discover from S3 by name pattern
+$bucket = if ($Bucket) { $Bucket } else { $null }
+$tfEnvDir = Join-Path $repoRoot "terraform\environments\$Environment"
+if (-not $bucket -and (Test-Path $tfEnvDir)) {
+    Push-Location $tfEnvDir
+    try {
+        $tfOut = terraform output -raw s3_staging_bucket 2>$null
+        if ($LASTEXITCODE -eq 0 -and $tfOut -and $tfOut -notmatch "No outputs found") {
+            $bucket = $tfOut.Trim()
+        }
+    } catch {}
+    Pop-Location
+}
 if (-not $bucket) {
-    $bucket = "migrate4hana-staging-$Environment-$account"
+    # Discover by name pattern (handles both naming conventions: with + without account suffix)
+    $candidates = aws s3api list-buckets --query "Buckets[?starts_with(Name, 'migrate4hana-staging-$Environment')].Name" --output text 2>$null
+    if ($candidates) {
+        $bucket = ($candidates -split "\s+" | Where-Object { $_ })[0]
+    }
+}
+if (-not $bucket) {
+    Fail "Could not resolve staging bucket. Tried -Bucket override, terraform output, and s3api list-buckets. Pass -Bucket manually."
 }
 Write-Host "  Cluster:        $cluster"
 Write-Host "  Task def:       $taskDef"
