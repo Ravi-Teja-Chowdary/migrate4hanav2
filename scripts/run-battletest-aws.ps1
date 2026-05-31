@@ -86,7 +86,9 @@ $account  = $identity.Account
 Write-Host "  AWS account: $account (user: $($identity.Arn))"
 
 $cluster = "migrate4hana-$Environment"
-$taskDef = "migrate4hana-$Environment-worker"
+$taskDefFamily = "migrate4hana-heavy-$Environment"
+$containerName = "migration-worker"
+$ecrUri = "$account.dkr.ecr.$Region.amazonaws.com/migrate4hana/worker:latest"
 
 # Resolve the staging bucket name. Order:
 #   0. -Bucket param (manual override)
@@ -115,7 +117,9 @@ if (-not $bucket) {
     Fail "Could not resolve staging bucket. Tried -Bucket override, terraform output, and s3api list-buckets. Pass -Bucket manually."
 }
 Write-Host "  Cluster:        $cluster"
-Write-Host "  Task def:       $taskDef"
+Write-Host "  Task def family:$taskDefFamily"
+Write-Host "  Container name: $containerName"
+Write-Host "  ECR image:      $ecrUri"
 Write-Host "  Staging bucket: s3://$bucket"
 
 # Verify the cluster exists
@@ -130,13 +134,24 @@ Write-Host "  Cluster status: $clusterStatus"
 aws s3api head-bucket --bucket $bucket 2>$null
 if ($LASTEXITCODE -ne 0) { Fail "S3 bucket s3://$bucket not reachable. Did terraform apply complete?" }
 
-# Verify the task definition is registered
-$taskDefArn = aws ecs describe-task-definition --task-definition $taskDef `
-    --region $Region --query "taskDefinition.taskDefinitionArn" --output text 2>$null
-if (-not $taskDefArn -or $taskDefArn -eq "None") {
-    Fail "Task definition '$taskDef' not registered. Did terraform apply complete?"
+# Verify the base task definition exists (terraform creates a stub pointing at
+# alpine:latest as a placeholder; we register a new revision below with the
+# real ECR image).
+$baseTaskDef = aws ecs describe-task-definition --task-definition $taskDefFamily `
+    --region $Region --output json 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Fail "Task definition family '$taskDefFamily' not registered. Did terraform apply complete?"
 }
-Write-Host "  Task def ARN:   $taskDefArn"
+$baseTaskDefObj = $baseTaskDef | ConvertFrom-Json
+Write-Host "  Base task def:  $($baseTaskDefObj.taskDefinition.taskDefinitionArn)"
+
+# Verify the ECR image exists (you ran push-fargate-image.ps1 first, right?)
+aws ecr describe-images --repository-name migrate4hana/worker `
+    --image-ids "imageTag=latest" --region $Region --output text *> $null
+if ($LASTEXITCODE -ne 0) {
+    Fail "ECR image $ecrUri not found. Run .\scripts\push-fargate-image.ps1 first."
+}
+Write-Host "  ECR image OK"
 
 # ── Step 1: Generate fixtures locally ────────────────────────────────────────
 Write-Step "Step 1/5 — Generate synthetic SAP-shaped fixtures (scale=$Scale) locally"
@@ -180,8 +195,42 @@ $sg = aws ec2 describe-security-groups --region $Region `
 if (-not $sg -or $sg -eq "None") { Fail "ECS security group not found" }
 Write-Host "  Security group: $sg"
 
-# ── Step 4: Trigger Fargate task ─────────────────────────────────────────────
-Write-Step "Step 4/5 — Launch Fargate battletest task"
+# ── Step 4a: Register a new task definition revision pointing at the real ECR image
+Write-Step "Step 4a/6 — Register a fresh task definition revision pointing at the ECR image"
+
+# Pull the existing task def (terraform stub or previous revision), swap the
+# image field to the real ECR URI, register as a new revision.
+$baseDef = $baseTaskDefObj.taskDefinition
+$container = $baseDef.containerDefinitions[0]
+$container.image = $ecrUri
+
+# Build the register-task-definition payload (only the writable fields)
+$registerPayload = @{
+    family                  = $baseDef.family
+    networkMode             = $baseDef.networkMode
+    cpu                     = $baseDef.cpu
+    memory                  = $baseDef.memory
+    requiresCompatibilities = @($baseDef.requiresCompatibilities)
+    executionRoleArn        = $baseDef.executionRoleArn
+    taskRoleArn             = $baseDef.taskRoleArn
+    containerDefinitions    = $baseDef.containerDefinitions
+}
+
+$registerJsonPath = Join-Path $env:TEMP "battletest-taskdef-$([guid]::NewGuid()).json"
+$registerPayload | ConvertTo-Json -Depth 20 | Set-Content -Path $registerJsonPath -Encoding utf8
+
+$registered = aws ecs register-task-definition --region $Region `
+    --cli-input-json "file://$registerJsonPath" --output json | ConvertFrom-Json
+Remove-Item -Path $registerJsonPath -Force -ErrorAction SilentlyContinue
+
+if (-not $registered.taskDefinition.taskDefinitionArn) {
+    Fail "register-task-definition failed - see error above"
+}
+$activeTaskDefArn = $registered.taskDefinition.taskDefinitionArn
+Write-Host "  Registered: $activeTaskDefArn"
+
+# ── Step 4b: Trigger Fargate task ────────────────────────────────────────────
+Write-Step "Step 4b/6 — Launch Fargate battletest task"
 
 $envOverrides = @(
     @{ name = "M4H_MODE";                            value = "battletest" }
@@ -196,7 +245,7 @@ $envOverrides = @(
 $overridesJson = @{
     containerOverrides = @(
         @{
-            name        = "worker"
+            name        = $containerName
             environment = $envOverrides
         }
     )
@@ -210,7 +259,7 @@ $networkJson = @{
     }
 } | ConvertTo-Json -Depth 5 -Compress
 
-$runResp = aws ecs run-task --cluster $cluster --task-definition $taskDef `
+$runResp = aws ecs run-task --cluster $cluster --task-definition $activeTaskDefArn `
     --launch-type FARGATE --count 1 `
     --region $Region `
     --network-configuration $networkJson `
@@ -244,9 +293,9 @@ while ((Get-Date) -lt $deadline) {
         Write-Host "  Stopped: exitCode=$exitCode reason=$reason"
         if ($exitCode -ne 0) {
             Write-Host "  Last 50 lines of CloudWatch log:"
-            $logGroup = "/ecs/migrate4hana-$Environment-worker"
+            $logGroup = "/ecs/migrate4hana-$Environment"
             $taskId = $taskArn.Split("/")[-1]
-            $logStream = "migrate4hana-worker/worker/$taskId"
+            $logStream = "migration/$containerName/$taskId"
             aws logs get-log-events --log-group-name $logGroup --log-stream-name $logStream `
                 --region $Region --limit 50 --output text --query "events[].message" 2>$null
             Fail "Fargate task exited with code $exitCode"
