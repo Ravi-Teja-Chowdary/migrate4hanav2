@@ -265,6 +265,7 @@ $envOverrides = @(
     @{ name = "M4H_BATTLETEST_SCALE";                value = $Scale }
     @{ name = "M4H_BATTLETEST_S3_BUCKET";            value = $bucket }
     @{ name = "M4H_BATTLETEST_S3_FIXTURES_PREFIX";   value = $s3FixPrefix }
+    @{ name = "M4H_BATTLETEST_S3_ABAP_PREFIX";       value = "battletest/abap-suite/" }
     @{ name = "M4H_BATTLETEST_S3_RESULTS_PREFIX";    value = "battletest/results/" }
     @{ name = "M4H_BATTLETEST_THREADS";              value = "$Threads" }
     @{ name = "M4H_BATTLETEST_CODE_REM";             value = $(if ($IncludeCodeRemediation) {"1"} else {"0"}) }

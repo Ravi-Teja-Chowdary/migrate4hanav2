@@ -95,6 +95,8 @@ def run_battletest_mode():
                                 f"battletest/scale-{scale}/")
     res_prefix = os.environ.get("M4H_BATTLETEST_S3_RESULTS_PREFIX",
                                 "battletest/results/")
+    abap_prefix = os.environ.get("M4H_BATTLETEST_S3_ABAP_PREFIX",
+                                 "battletest/abap-suite/")
     threads = int(os.environ.get("M4H_BATTLETEST_THREADS", "16"))
     include_cr = os.environ.get("M4H_BATTLETEST_CODE_REM", "1") == "1"
 
@@ -128,14 +130,24 @@ def run_battletest_mode():
     logger.info("Downloaded %d fixture files", fix_count)
 
     if include_cr:
-        cr_prefix = fix_prefix.rstrip("/") + "/../abap-suite/"
-        logger.info("Downloading ABAP suite from s3://%s/%s ...", bucket, cr_prefix)
-        for page in paginator.paginate(Bucket=bucket, Prefix=cr_prefix):
+        # NB: use the explicit abap_prefix env var, NOT a relative "/../" path
+        # off fix_prefix. S3 keys are flat strings; "/.." is literal, not
+        # resolved. Previous bug: cr_prefix="battletest/scale-large/../abap-suite/"
+        # matched zero objects so code remediation silently skipped.
+        logger.info("Downloading ABAP suite from s3://%s/%s ...", bucket, abap_prefix)
+        abap_count = 0
+        for page in paginator.paginate(Bucket=bucket, Prefix=abap_prefix):
             for obj in (page.get("Contents") or []):
                 key = obj["Key"]
                 name = key.rsplit("/", 1)[-1]
                 local = abap_dir / name
                 s3.download_file(bucket, key, str(local))
+                abap_count += 1
+        logger.info("Downloaded %d ABAP suite files", abap_count)
+        if abap_count == 0:
+            logger.warning("ABAP suite is empty at s3://%s/%s - "
+                           "code remediation will be skipped",
+                           bucket, abap_prefix)
 
     # Stage 2: run the orchestrator
     sys.path.insert(0, "/app/battletest")
