@@ -465,7 +465,8 @@ class EvidencePack:
 
     def build_manifest(self, *, system_config=None, data_quality=None,
                        api_responses=None, balance_tieouts=None,
-                       reconciliation=None, captured_spools=None) -> dict:
+                       reconciliation=None, captured_spools=None,
+                       ltmc_pending=None) -> dict:
         # captured_spools: list of spool_capture.CapturedSpool.to_dict(). Each
         # entry is sealed into the chain BEFORE the manifest is hashed so the
         # chain bears witness that the SAP-standard spool binary came out of
@@ -481,6 +482,30 @@ class EvidencePack:
                     "byte_length": s.get("byte_length"),
                     "captured_at": s.get("captured_at"),
                 })
+
+        # Cutover precedence verdict (Gemini follow-up #5). The rule:
+        #
+        #   SAP-standard system reports (FAGLB03, MB5B, FBL1N, FBL5N) take
+        #   PRECEDENCE over the tool's internal reconciliation ledger. The
+        #   cutover gate is NO_GO if any of these are true:
+        #     (a) a balance tie-out shows variance > 0 (source vs target),
+        #     (b) any LTMC handoff is still pending import,
+        #     (c) no captured spool was produced for the financial close
+        #         objects (auditors require at least FAGLB03 + MB5B).
+        #
+        # The tool's hash-chained ledger cannot OVERRIDE this verdict to GO;
+        # it can only confirm it. This is the explicit governance rule
+        # auditors will look for.
+        cutover_verdict = _compute_cutover_verdict(
+            balance_tieouts=balance_tieouts or [],
+            captured_spools=spools,
+            ltmc_pending=ltmc_pending or {},
+            reconciliation=reconciliation or {})
+        if self.chain is not None and cutover_verdict.get("verdict") == "NO_GO":
+            # Seal the NO_GO into the chain so the chain itself records that
+            # the gate refused the cutover - this becomes evidence in itself.
+            self.chain.append("cutover_no_go", cutover_verdict)
+
         manifest = {
             "run_id": self.run_id,
             "generated": _now_iso(),
@@ -491,6 +516,8 @@ class EvidencePack:
             "balance_tie_outs": balance_tieouts or [],
             "reconciliation": reconciliation or {},
             "captured_spools": spools,
+            "ltmc_pending": ltmc_pending or {},
+            "cutover_verdict": cutover_verdict,
             "audit_chain": {
                 "head_hash": self.chain.head() if self.chain else None,
                 "verification": self.chain.verify() if self.chain else None,
@@ -502,6 +529,64 @@ class EvidencePack:
             self.chain.append("evidence_pack", {"manifest_sha256": manifest["manifest_sha256"]})
             manifest["sealed_block_hash"] = self.chain.head()
         return manifest
+
+
+# Required for the auditor close. If a spool with this code is missing, the
+# verdict is NO_GO regardless of the tool's internal reconciliation status.
+_REQUIRED_CLOSE_SPOOLS = {"FAGLB03", "MB5B"}
+
+
+def _compute_cutover_verdict(*, balance_tieouts, captured_spools,
+                              ltmc_pending, reconciliation) -> dict:
+    """Return {verdict: GO|NO_GO|GO_WITH_WARNINGS, reasons: [...], ...}.
+
+    The precedence rule (Gemini follow-up #5) is enforced here: SAP-standard
+    spool reports OUTRANK the tool's reconciliation ledger. The tool ledger
+    can confirm a GO but never override a NO_GO.
+    """
+    reasons = []
+    # (a) Balance tie-out variance is a hard NO_GO
+    for t in balance_tieouts:
+        if not t:
+            continue
+        if (t.get("variance") or 0) != 0 or (t.get("status") or "").upper() in ("VARIANCE", "NO_MATCH", "FAIL"):
+            reasons.append({"rule": "balance_tieout_variance",
+                            "ledger": t.get("ledger"),
+                            "detail": t})
+    # (b) Pending LTMC imports = hard NO_GO
+    pending_count = (ltmc_pending or {}).get("pending_count") or 0
+    if pending_count > 0:
+        reasons.append({"rule": "ltmc_pending_imports",
+                        "count": pending_count,
+                        "detail": "LTMC staging files written but not yet imported "
+                                  "in the Migration Cockpit - cutover cannot proceed"})
+    # (c) Missing required close spools
+    captured_codes = {s.get("report_code") for s in (captured_spools or [])}
+    missing = sorted(_REQUIRED_CLOSE_SPOOLS - captured_codes)
+    if missing:
+        reasons.append({"rule": "missing_required_close_spools",
+                        "missing": missing,
+                        "detail": "Auditor close requires SAP-standard balance/inventory "
+                                  "reports; their absence makes the cutover unsignable"})
+
+    if reasons:
+        return {"verdict": "NO_GO", "reasons": reasons,
+                "precedence_rule": "SAP-standard spool reports outrank tool ledger; "
+                                   "tool ledger cannot override a NO_GO"}
+
+    # All hard rules pass. Soft warnings (recon discrepancies that ARE
+    # tolerated, or tool-reported variances) become GO_WITH_WARNINGS.
+    soft_warnings = []
+    rv = (reconciliation or {}).get("verdict", "").upper()
+    if rv in ("DISCREPANCY", "PARTIAL"):
+        soft_warnings.append({
+            "rule": "tool_recon_discrepancy",
+            "detail": "Tool's internal reconciliation reports discrepancy "
+                      "but no SAP-standard report blocks the gate. Review."})
+    return {"verdict": "GO" if not soft_warnings else "GO_WITH_WARNINGS",
+            "reasons": soft_warnings,
+            "precedence_rule": "SAP-standard spool reports outrank tool ledger; "
+                               "tool ledger cannot override a NO_GO"}
 
     def write(self, manifest: dict, out_dir: str | os.PathLike | None = None,
               s3_bucket: str | None = None, s3_key: str | None = None,

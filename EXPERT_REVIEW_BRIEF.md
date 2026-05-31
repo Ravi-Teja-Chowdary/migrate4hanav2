@@ -43,6 +43,11 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 >   Syniti phase, cluster-aware preflight gates every `RFC_READ_TABLE`, and code-delta runs daily
 >   via EventBridge. See **§14.5** for the call-site map and what's still owed (mostly
 >   landscape-specific content, not engineering).
+> - **Edge-case + governance hardening** (second peer-review pass): CVI two-phase load for
+>   intercompany cycle hazards, exponential backoff on the SAP-side throttle, LTMC handoffs
+>   sealed into the hash chain, and an explicit `cutover_verdict` precedence rule that says
+>   "SAP-standard spool reports outrank the tool ledger; the tool can confirm a GO but cannot
+>   override a NO_GO." See **§14.6**.
 
 ---
 
@@ -518,3 +523,35 @@ honest residue.
 - `WorkloadThrottle` now constructed in the spine's Natuvion phase when a live target conn is available, instead of being only the ComputeDispatcher's optional arg.
 - `code-delta-scheduler` handler degrades gracefully when the pyrfc layer is missing: `status=skipped` with a remediation hint, no ImportError noise in CloudWatch.
 - All `terraform validate` clean; all changed Python files `py_compile`-clean.
+
+---
+
+## 14.6. Edge-case + governance hardening (2026-05-31, second peer-review pass)
+
+A second pass of the same peer SAP-expert review raised four narrower concerns
+after the §14.5 wiring landed. All four are addressed below. None were blocking
+the POC; they sharpen behaviour at the edges and lock in governance rules an
+auditor will check.
+
+| # | Concern | Resolution | Verified |
+|---|---|---|---|
+| 1 | **CVI / KeyResolver cycle hazard** — `KNA1.LIFNR` ↔ `LFA1.KUNNR` cross-references in intercompany master data can lock the loader in a resolution loop. | New `cvi_mapper.unify_with_xrefs()` returns a **TwoPhasePlan**: phase 1 creates BP stubs without cross-references, phase 2 attaches them in a single update pass. Each cross-ref is resolved **one hop deep** so a mutual reference doesn't recurse. Cycles between BPs are detected and reported (not errors — they're legitimate intercompany pairs). Wired into data-migrator handler in place of the original `unify()` call. | self-test: 4 mappings, 1 cycle detected (`KNA1:100001` ↔ `LFA1:200001`), 1 unresolved out-of-batch xref correctly surfaced, idempotent on re-run |
+| 2 | **Throttle cost during long target congestion** — fixed `wait_seconds` could turn into tight-loop polling and burn compute. | `WorkloadThrottle` now applies **exponential backoff** on consecutive non-GREEN probes: YELLOW base 2s, RED base 10s, doubles per consecutive miss, capped at 60s. A single GREEN probe **resets the streak** so recovery is fast. The throttle gates BEFORE `ecs.run_task` so the wait burns Lambda runtime (bounded), not Fargate; intra-task usage now also degrades cleanly. | self-test: RED probes wait 10→20→40s, then GREEN resets, next RED returns to 10s base |
+| 3 | **BAPI / LTMC reconciliation precision** — when a record's BAPI succeeds but its CI/J_1B fields go to LTMC staging, the hash chain previously sealed only the BAPI half. A tampered or never-imported staging file was invisible to the chain. | data-migrator handler now collects every `ltmc_handoff` from `_load_one` results, persists them at `runs/<id>/ltmc_handoffs.json`, surfaces `ltmc_pending` in the run summary (with the explicit gate note "cutover must NOT proceed until each pending handoff is confirmed imported"), and **seals one `ltmc_pending` block per handoff into the HashChainLedger** so any tamper is detectable. | covered end-to-end by the cutover-verdict test below (LTMC pending → NO_GO) |
+| 4 | **No explicit "SAP report > tool ledger" precedence rule** — auditors need a stated governance rule, not just per-stage results. | New `EvidencePack.cutover_verdict` field with a hard-coded precedence rule. The verdict is **NO_GO** if: any balance tie-out shows variance > 0, OR any LTMC handoff is pending import, OR a required close spool (FAGLB03, MB5B) is missing. The tool's hash-chained ledger **can confirm a GO but cannot override a NO_GO** — this rule is documented inline in `_compute_cutover_verdict()` and echoed in the manifest's `precedence_rule` field. A NO_GO is also sealed as its own block in the chain so the refusal itself becomes evidence. | self-test: 5 cases pass — clean GO; missing-spool NO_GO; LTMC-pending NO_GO; variance NO_GO **even when tool reconciliation says RECONCILED**; tool-discrepancy → GO_WITH_WARNINGS (not blocked) |
+
+### Two items intentionally NOT addressed this round (per prior user directive)
+
+- **Branch rename** `aws-lift-and-shift` → `sdt-orchestration` — cosmetic; user opted to defer until after the POC ships.
+- **LLM compliance toggle** (Anthropic public API → in-VPC Bedrock / SageMaker) — POC-acceptable per user decision 2026-05-30; the runtime client (`anthropic_client.invoke_claude`) already takes a model id, so swapping the *endpoint* once Bedrock access is granted is one URL/header change in that module — no architectural rework needed.
+
+### Where the brief now stands
+
+Three review passes (2026-05-29, 2026-05-30, 2026-05-31) have walked the
+critique into the code. Every structural and edge-case concern that can be
+addressed without a live ECC/S4 pair is now closed. The remaining honest
+residue is **landscape-specific content** (BAPI catalogs per release, cluster
+table catalog per ECC release, CVI fuzzy-match rules per locale, DAG additions
+per industry, NRIV / TH_WPINFO thresholds per landscape) and **live-volume
+verification** — both of which benefit from a customer engagement and a real
+system pair, not more engineering.

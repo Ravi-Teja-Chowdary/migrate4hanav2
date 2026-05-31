@@ -848,17 +848,19 @@ def lambda_handler(event, context):
                         for r in results for d in (r.get("load") or {}).get("dead_letter", [])]
 
         # CVI conflicts (Gemini gap #1) - appended into dead_letters here so they
-        # ride the same dead-letter S3 artifact below.
+        # ride the same dead-letter S3 artifact below. Uses unify_with_xrefs to
+        # detect intercompany cycles (KNA1.LIFNR <-> LFA1.KUNNR) and produce a
+        # two-phase load plan: phase 1 creates BP stubs, phase 2 attaches xrefs.
         cvi_info = None
         try:
-            from cvi_mapper import unify as _cvi_unify, detect_overlap as _cvi_overlap
+            from cvi_mapper import unify_with_xrefs, detect_overlap as _cvi_overlap
             kna1_rows = next((((r.get("extract") or {}).get("rows") or [])
                               for r in results if r.get("object") == "Customer"), [])
             lfa1_rows = next((((r.get("extract") or {}).get("rows") or [])
                               for r in results if r.get("object") == "Vendor"), [])
             if kna1_rows and lfa1_rows:
                 overlap_keys = _cvi_overlap(kna1_rows, lfa1_rows)
-                mappings, conflicts = _cvi_unify(kna1_rows, lfa1_rows)
+                mappings, conflicts, plan = unify_with_xrefs(kna1_rows, lfa1_rows)
                 cvi_info = {
                     "overlap_partner_numbers": overlap_keys[:50],
                     "overlap_count": len(overlap_keys),
@@ -866,6 +868,7 @@ def lambda_handler(event, context):
                     "unique_bps": len({m.target_bp_id for m in mappings.values()}),
                     "merged_customer_vendor": sum(1 for m in mappings.values() if m.merged),
                     "conflicts_requiring_review": len(conflicts),
+                    "two_phase_plan": plan.to_dict(),
                 }
                 cvi_key = f"runs/{run_id}/data-migrator/cvi_map.json"
                 S3.put_object(
@@ -873,6 +876,7 @@ def lambda_handler(event, context):
                     Body=json.dumps({
                         "mappings": {k: v.to_dict() for k, v in mappings.items()},
                         "conflicts": [c.to_dict() for c in conflicts],
+                        "two_phase_plan": plan.to_dict(),
                     }, indent=2).encode(),
                     ContentType="application/json")
                 cvi_info["artifact"] = f"s3://{STAGING_BUCKET}/{cvi_key}"
@@ -900,6 +904,39 @@ def lambda_handler(event, context):
                                 "artifact": f"s3://{STAGING_BUCKET}/{dkey}",
                                 "reprocess": "idempotent re-run reloads these; loaded records are skipped"}
 
+        # LTMC handoffs (Gemini follow-up #4). When bapi_coverage routes a
+        # record to LTMC staging (BAPI lacks the field), the load result
+        # carries an ltmc_handoff dict. Collect them ALL here so we can:
+        #   - report the pending-LTMC-import count in the run summary
+        #   - seal an "ltmc_pending" block into the hash chain so any tamper
+        #     of the staging file is detectable
+        ltmc_handoffs = []
+        for r in results:
+            for item in (r.get("load") or {}).get("ltmc_handoffs") or []:
+                ltmc_handoffs.append({"object": r.get("object"), **item})
+            # Also catch single-handoff style returned from _load_one:
+            for record_load in (r.get("load") or {}).get("records") or []:
+                handoff = record_load.get("ltmc_handoff")
+                if handoff:
+                    ltmc_handoffs.append({"object": r.get("object"), **handoff})
+
+        ltmc_pending_info = None
+        if ltmc_handoffs:
+            ltmc_key = f"runs/{run_id}/data-migrator/ltmc_handoffs.json"
+            S3.put_object(
+                Bucket=STAGING_BUCKET, Key=ltmc_key,
+                Body=json.dumps(ltmc_handoffs, indent=2).encode(),
+                ContentType="application/json")
+            ltmc_pending_info = {
+                "pending_count": len(ltmc_handoffs),
+                "objects_with_pending": sorted({h["object"] for h in ltmc_handoffs}),
+                "artifact": f"s3://{STAGING_BUCKET}/{ltmc_key}",
+                "note": "Gate: cutover must NOT proceed until each pending "
+                        "LTMC handoff is confirmed imported in the Migration "
+                        "Cockpit and reconciled. See EvidencePack.cutover_verdict.",
+            }
+            log_stage_event(run_id, "data-migrator", "ltmc_pending", ltmc_pending_info)
+
         # Write batch summary so downstream validator can read it
         loaded_to_s4 = sum((r.get("load", {}) or {}).get("created_in_s4", 0) for r in results)
         recon_reports = [r["reconciliation"] for r in results
@@ -925,6 +962,7 @@ def lambda_handler(event, context):
                    "key_mapping": key_map_info,
                    "dead_letter": dead_letter_info,
                    "cvi": cvi_info,
+                   "ltmc_pending": ltmc_pending_info,
                    "carve_out": _carve_out_programs(run_id, results, event),
                    "results": results}
         # Pillar 4 — cryptographic audit chain over this run's verifiable actions.
@@ -937,6 +975,17 @@ def lambda_handler(event, context):
                                         "created_in_s4": loaded_to_s4})
             if key_map_info:
                 _chain.append("key_map", key_map_info.get("stats", {}))
+            # Seal one block per LTMC handoff so the chain bears witness to
+            # the staging file. cutover_verdict reads this to enforce
+            # "no GO until LTMC imports confirmed."
+            for handoff in (ltmc_handoffs or []):
+                _chain.append("ltmc_pending", {
+                    "object": handoff.get("object"),
+                    "csv_path": handoff.get("csv_path"),
+                    "records": handoff.get("records"),
+                    "delta_fields": handoff.get("delta_fields"),
+                    "status": "PENDING_LTMC_IMPORT",
+                })
             if summary.get("reconciliation"):
                 _chain.append("reconciliation", summary["reconciliation"])
             if summary.get("carve_out"):

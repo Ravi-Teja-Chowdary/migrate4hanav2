@@ -182,11 +182,26 @@ class WorkloadThrottle:
                  rfc_callable: Optional[Callable[[str, Dict], Dict]],
                  requested_batch: int = 200,
                  nr_object: Optional[str] = None,
-                 min_batch: int = 10):
+                 min_batch: int = 10,
+                 backoff_base_yellow_s: float = 2.0,
+                 backoff_base_red_s: float = 10.0,
+                 backoff_max_s: float = 60.0):
         self.rfc = rfc_callable
         self.requested_batch = max(min_batch, requested_batch)
         self.min_batch = min_batch
         self.nr_object = nr_object
+        # Exponential-backoff config (Gemini follow-up #3). Consecutive non-
+        # GREEN probes double the wait up to the cap; a single GREEN resets
+        # the streak. Prevents tight-loop polling cost while keeping fast
+        # recovery once the target landscape frees up.
+        self._yellow_base = backoff_base_yellow_s
+        self._red_base = backoff_base_red_s
+        self._wait_cap = backoff_max_s
+        self._consecutive_non_green = 0   # streak counter
+
+    def _backoff_wait(self, base: float) -> float:
+        # streak=0: base; streak=1: 2x; streak=2: 4x; ... capped at _wait_cap
+        return min(self._wait_cap, base * (2 ** self._consecutive_non_green))
 
     def decide(self) -> ThrottleDecision:
         if self.rfc is None:
@@ -202,21 +217,28 @@ class WorkloadThrottle:
         # RED wins over everything else - WP exhaustion means even tiny batches
         # will queue. Pause entirely until the next probe shows recovery.
         if probe.verdict == "RED":
+            wait = self._backoff_wait(self._red_base)
+            self._consecutive_non_green += 1
             return ThrottleDecision(verdict="RED",
                                     recommended_batch=0,
-                                    wait_seconds=10.0,
+                                    wait_seconds=wait,
                                     probe=probe, nr_locked=nr_locked)
         if probe.verdict == "GREEN" and not nr_locked:
+            # Recovery resets the backoff streak so the next non-GREEN starts
+            # fresh at the base wait, not whatever the prior streak built up to.
+            self._consecutive_non_green = 0
             return ThrottleDecision(verdict="GREEN",
                                     recommended_batch=self.requested_batch,
                                     wait_seconds=0.0,
                                     probe=probe, nr_locked=False)
         if probe.verdict == "YELLOW" or nr_locked:
-            # Halve the batch, wait a couple of seconds
+            # Halve the batch, wait with exponential backoff
             half = max(self.min_batch, self.requested_batch // 2)
+            wait = self._backoff_wait(self._yellow_base)
+            self._consecutive_non_green += 1
             return ThrottleDecision(verdict="YELLOW",
                                     recommended_batch=half,
-                                    wait_seconds=2.0,
+                                    wait_seconds=wait,
                                     probe=probe, nr_locked=nr_locked)
         # unknown -> proceed cautiously at min_batch
         return ThrottleDecision(verdict="unknown",

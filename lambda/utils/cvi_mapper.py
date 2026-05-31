@@ -69,6 +69,12 @@ class CviMapping:
     source_kna1: Optional[str] = None
     source_lfa1: Optional[str] = None
     merged: bool = False     # True if both customer + vendor folded into one BP
+    # Cross-references resolved in phase 2 (LIFNR-on-customer, KUNNR-on-vendor,
+    # KNRZE / LIFRG / etc.). Each entry: {"field": "LIFNR", "target_bp": "BP..."}.
+    # Empty list when the source had no cross-refs.
+    cross_refs: List[dict] = field(default_factory=list)
+    # Two-phase load hint: phase 1 creates the stub, phase 2 attaches xrefs.
+    load_phase: int = 1
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -245,6 +251,141 @@ def unify(kna1: List[dict],
                                 "lfa1_tax_ids": sorted(v_taxids)}))
 
     return mappings, conflicts
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Cross-reference resolution with cycle protection (Gemini follow-up #2)
+# ─────────────────────────────────────────────────────────────────────────────
+# ECC master records carry cross-references between customer and vendor sides
+# of the same legal entity. The two most common fields:
+#
+#   KNA1.LIFNR  - the vendor counterpart of this customer (intercompany)
+#   LFA1.KUNNR  - the customer counterpart of this vendor (intercompany)
+#
+# Plus several less common ones (KNRZE on KNA1; LIFRG / VBUND chains). When
+# two intercompany partners point at each other, naive lookup creates an
+# infinite resolution loop. We solve this with a two-phase load:
+#
+#   Phase 1 - create every BP as a stub WITHOUT the cross-ref fields populated
+#             (the unify() pass above already produced these mappings).
+#   Phase 2 - walk every KNA1/LFA1 row, look up its xref legacy key in the
+#             phase-1 mapping, and record a `cross_refs` entry on the source
+#             mapping. The xref resolution is one hop deep by design - if A
+#             refs B and B refs A, both mappings record their direct xref,
+#             but neither chases the other (no recursion, no cycle).
+#
+# Caller flow in the live loader:
+#   maps, confs, plan = unify_with_xrefs(kna1, lfa1)
+#   for m in plan.phase_1: bapi_bp_create(stub_for(m))    # no LIFNR/KUNNR fields
+#   for m in plan.phase_2: bapi_bp_update(m, m.cross_refs) # attach xrefs
+
+# Fields we treat as cross-refs between the two tables. Listed by table.
+_XREF_FIELDS = {
+    "KNA1": [("LIFNR", "Vendor"), ("KNRZE", "Customer")],   # LIFNR=vendor counterpart
+    "LFA1": [("KUNNR", "Customer"), ("LIFRG", "Vendor")],    # KUNNR=customer counterpart
+}
+
+
+@dataclass
+class TwoPhasePlan:
+    phase_1: List[CviMapping] = field(default_factory=list)  # stub create
+    phase_2: List[CviMapping] = field(default_factory=list)  # xref attach
+    unresolved_xrefs: List[dict] = field(default_factory=list)
+    cycles_detected: List[Tuple[str, str]] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "phase_1_count": len(self.phase_1),
+            "phase_2_count": len(self.phase_2),
+            "unresolved_xrefs": self.unresolved_xrefs,
+            "cycles_detected": [list(c) for c in self.cycles_detected],
+        }
+
+
+def unify_with_xrefs(kna1: List[dict],
+                     lfa1: List[dict],
+                     *,
+                     bp_prefix: str = "BP") -> Tuple[Dict[str, CviMapping],
+                                                     List[CviConflict],
+                                                     TwoPhasePlan]:
+    """unify() + cross-reference resolution.
+
+    Returns the same (mappings, conflicts) tuple as unify(), plus a TwoPhasePlan
+    that tells the loader which BPs need a follow-up update pass to attach the
+    KNA1.LIFNR / LFA1.KUNNR references. Cycles are detected and reported - they
+    are NOT errors (intercompany pairs legitimately point at each other), but
+    the loader must execute the two phases in order.
+    """
+    mappings, conflicts = unify(kna1, lfa1, bp_prefix=bp_prefix)
+    plan = TwoPhasePlan()
+
+    # Build quick lookup tables: legacy_key -> mapping
+    by_kunnr: Dict[str, CviMapping] = {}
+    by_lifnr: Dict[str, CviMapping] = {}
+    for k, m in mappings.items():
+        if k.startswith("KNA1:") and m.source_kna1:
+            by_kunnr[m.source_kna1] = m
+        if k.startswith("LFA1:") and m.source_lfa1:
+            by_lifnr[m.source_lfa1] = m
+
+    # Walk every source row and resolve xref fields one hop deep
+    for table, rows, lookup in (("KNA1", kna1, by_kunnr), ("LFA1", lfa1, by_lifnr)):
+        key_field = "KUNNR" if table == "KNA1" else "LIFNR"
+        for r in rows:
+            src_key = str(r.get(key_field, "")).lstrip("0")
+            if not src_key:
+                continue
+            mapping_key = f"{table}:{src_key}"
+            m = mappings.get(mapping_key)
+            if m is None:
+                continue
+            for xref_field, role in _XREF_FIELDS.get(table, []):
+                xref_val = str(r.get(xref_field, "")).lstrip("0")
+                if not xref_val or xref_val == src_key:
+                    continue
+                # Resolve to the partner BP - look in the opposite-side index
+                partner_lookup = by_lifnr if role == "Vendor" else by_kunnr
+                partner = partner_lookup.get(xref_val)
+                if partner is None:
+                    plan.unresolved_xrefs.append({
+                        "source_table": table,
+                        "source_key": src_key,
+                        "xref_field": xref_field,
+                        "xref_value": xref_val,
+                        "reason": f"{role} {xref_val} not in this batch's extract",
+                    })
+                    continue
+                # Same BP both sides? That's the CVI-merged case, no xref needed
+                if partner.target_bp_id == m.target_bp_id:
+                    continue
+                m.cross_refs.append({
+                    "field": xref_field,
+                    "target_bp": partner.target_bp_id,
+                    "partner_legacy_key": xref_val,
+                })
+                # Cycle detection: did partner also xref back at us?
+                # (One-hop, so we just check the partner's already-resolved list.)
+                if any(x.get("target_bp") == m.target_bp_id
+                       for x in partner.cross_refs):
+                    pair = tuple(sorted([m.target_bp_id, partner.target_bp_id]))
+                    if pair not in plan.cycles_detected:
+                        plan.cycles_detected.append(pair)
+
+    # Partition into phase 1 (stub-only) and phase 2 (has xrefs to attach)
+    for m in mappings.values():
+        if m.cross_refs:
+            m.load_phase = 2
+            plan.phase_2.append(m)
+        else:
+            plan.phase_1.append(m)
+    if plan.cycles_detected:
+        logger.info("CVI: %d intercompany cycle(s) detected - two-phase load "
+                    "required: %s", len(plan.cycles_detected),
+                    plan.cycles_detected[:3])
+    if plan.unresolved_xrefs:
+        logger.warning("CVI: %d cross-reference(s) point at partners outside "
+                       "this extract - will be unresolved", len(plan.unresolved_xrefs))
+    return mappings, conflicts, plan
 
 
 def serialize_map(mappings: Dict[str, CviMapping],
