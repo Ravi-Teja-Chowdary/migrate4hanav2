@@ -31,6 +31,12 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 >   during the inner-loop test cycle. Re-enable for real prod by setting `object_lock_enabled = true`
 >   at bucket creation (cannot toggle on later) and restoring `aws_s3_bucket_object_lock_configuration`.
 >   Inline comments in `evidence-ledger/main.tf:64-68` document the exact change.
+> - **Eight SAP-functional-depth gaps closed in code** (driven by a peer SAP-expert review): CVI
+>   unification, target-side TH_WPINFO/NRIV throttle, BAPI field-coverage → LTMC fallback,
+>   FAGLB03/MB5B spool capture, dual-maintenance code-delta engine, cross-field DQ, cluster-table
+>   aware extraction, DAG dependency resolver + KeyResolver. All seven new modules + one
+>   transformation_engine extension ship with green self-tests. See **§14** for the full inventory,
+>   what's verified, and what's still owed for production-completeness.
 
 ---
 
@@ -409,3 +415,68 @@ To keep the brief honest:
   function). They currently resolve to the `manual-gate` fallback ARN, so the state machine
   validates and starts but those specific tasks no-op. Each needs its own handler before
   end-to-end execution against a real source/target.
+
+---
+
+## 14. SAP-functional-depth gap closures (2026-05-31, peer-review driven)
+
+A peer SAP-expert review (Gemini, Big-4-class peer read) flagged the **SAP
+functional depth** as the primary vulnerability vs the engineering layer. Eight
+gaps were buildable in code without a live system; this section is the
+inventory. Each ships with a working module and a green self-test; production-
+completeness (volume / breadth / customer-specific content) is honestly noted.
+
+| # | Gap (Gemini's framing)                                  | Module + entry point                          | Verified self-test                                                                                       | Still owed for production |
+|---|---------------------------------------------------------|----------------------------------------------|----------------------------------------------------------------------------------------------------------|---------------------------|
+| 1 | **CVI** — KNA1/LFA1 overlapping number ranges + duplicate addresses | `lambda/utils/cvi_mapper.py`<br>`unify(kna1, lfa1)` | overlap detection (1 #), intra-table duplicates, exact-fingerprint fold into one BP with both roles, near-duplicate conflict quarantine (different tax IDs), deterministic round-trip | fuzzy / phonetic / edit-distance match; address harmonization across locales; per-company-code overrides |
+| 2 | **SAP-side backpressure** — TH_WPINFO + NRIV lock probe | `lambda/utils/sap_workload.py`<br>`WorkloadThrottle.decide()` | GREEN/YELLOW/RED classification; batch halved on YELLOW; full pause + 10s wait on RED; NRIV-lock causes back-off | landscape-specific thresholds tuned against real WP topology; integration into the Fargate fan-out caller |
+| 3 | **BAPI field-coverage trap** — extension fields (CI_/ZZ_), tax fields (J_1B*) | `lambda/utils/bapi_coverage.py`<br>`decide_load_path()` | clean record → BAPI; CI + tax field → BAPI_PLUS_LTMC_DELTA; >50% unsupported → LTMC_ONLY; LTMC staging CSV + control JSON emitted with `ltmc_load_mode = "Staging tables (Direct Transfer)"` recommendation | per-BAPI canonical field catalog (today supplied by caller); LTMC CSV column-name mapping to the actual MC migration object schema |
+| 4 | **FAGLB03 / MB5B spool capture** for the auditor evidence pack | `lambda/utils/spool_capture.py`<br>`SpoolCapture.capture(report_code, params)` | end-to-end: JOB_OPEN → JOB_SUBMIT → JOB_CLOSE → BP_JOB_STATUS_GET polling → RSPO_RETURN_ABAP_SPOOLJOB fetch; SHA-256 sealed; param-validation; unknown-report rejection; dry-run mode | wiring `CapturedSpool` into `HashChainLedger.append()` so the chain seals the spool hash; report catalog expansion (FBL3N, S_ALR_87012082, etc.); selection-variant support |
+| 5 | **Dual-maintenance / continuous code-sync engine** (SmartShift's actual moat) | `lambda/utils/code_delta.py`<br>`DeltaEngine.snapshot()` + `detect_delta()` + `plan_remediation()` | TADIR/REPOSRC snapshot of customer-namespace ABAP; ADDED/MODIFIED/DELETED verdicts vs baseline; remediation queue is append-only + idempotent (re-run = no-op) | optional deep source-hash on PROG via READ_REPORT (already supported, off by default); CHANGEDOCUMENT-style diff visualization; scheduler (CRON / EventBridge) for the snapshot loop |
+| 6 | **Multi-field cross-validation DQ** (Syniti-class beyond FK) | `lambda/utils/transformation_engine.py`<br>new `CROSS_FIELD_VALIDATE` rule type with `{when, expect}` predicates | conditional triggers (credit-limit ↔ payment terms), prefix matching (country ↔ tax jurisdiction), set membership (plant ↔ company code), construction-time schema validation | DQ scorecards over time (Syniti's true differentiator); business-user UI for rule authoring; library of common cross-field rules per object type |
+| 7 | **Cluster-table aware extraction** (RFBLG / KOCLU / EDI40 on non-HANA ECC) | `lambda/utils/cluster_table_awareness.py`<br>`preflight(table, where, on_hana)` | transparent table = GO at requested pkg; BSEG with header-keys = single-stage cluster read at PACKAGE SIZE=200; BSEG without header-keys = rewritten as 2-stage BKPF → BSEG plan; PCL1 with no WHERE = NO_GO (refuses to dump prod); HANA disables the penalty | extending catalog from current 13 entries to a fuller list; runtime DB-kind detection (today caller supplies `on_hana=True/False`) |
+| 8 | **DAG dependency resolver** (faithful dependent-key migration; closes §6.1) | `lambda/utils/dependency_dag.py`<br>`DependencyDAG.from_defaults()` + `ExecutionState` + `KeyResolver` | 28-node default DAG, cycle detection, topological sort, scope-subset pulls transitive deps, `next_ready()` correctly gates downstream objects, failure propagation lists downstream blocked, `KeyResolver.resolve_record()` translates legacy keys via cross-run keymap | actual integration with the data-migrator stage loop (today modules are standalone); per-customer DAG additions / removals |
+
+**What this changes vs the 2026-05-29 §6 limitations:**
+
+- §6.1 ("Harmonization is demo, not faithful migration") — **closed in design**:
+  `dependency_dag` + `KeyResolver` give the staged-load + cross-run key-translation pattern that
+  Gemini called for. Integration into the data-migrator stage loop is the next mechanical step.
+- §6.3 ("No general transformation / mapping engine") — already had `transformation_engine.py`;
+  the new `CROSS_FIELD_VALIDATE` lifts it from "field-level cleansing" to "Syniti-class
+  business-rule validation." The mapping UI for non-technical users is still pending.
+- §6.4 ("No data quality / pre-load cleansing") — `CROSS_FIELD_VALIDATE` is the substrate; DQ
+  scorecards over time + a cleansing rule library are still pending content work.
+- §6.6 ("Functional coverage depth — minimal field sets") — `bapi_coverage` now FORMALLY tracks
+  what the chosen BAPI cannot carry and routes the rest to LTMC instead of silently dropping it.
+
+### Honest caveats on §14
+
+- All eight modules are **framework-complete, content-light**. The DAG ships with a sensible
+  default for SAP greenfield projects; real customer migrations will need DAG edits. The
+  `bapi_coverage` module needs a per-BAPI field catalog (today supplied by the caller). The
+  `spool_capture` module needs each `CapturedSpool` actually wired into the existing
+  `HashChainLedger` invocation site - one-line change, not done yet to avoid touching the
+  reconciliation hot path without a test pair.
+- The Gemini-flagged "Anthropic-over-public-TLS compliance wall" and "WORM Object Lock
+  regression" are **deliberately not addressed in this iteration** - both are acceptable for a
+  POC on the user's client ECC→S4 setup and become production-blocking only at regulated-buyer
+  rollout. Re-isolating the LLM to a private endpoint and restoring Object Lock at bucket
+  creation are tracked but not in this commit.
+
+### Migration Cockpit positioning pivot
+
+The 2026-05-29 brief positioned Migrate4HANA largely as filling the gap MC leaves. In 2026 SAP
+shipped **Staging Tables for Direct Transfer (RFC)** in the Migration Cockpit, which closes part
+of the extraction gap we previously claimed. Our defensible value-prop is now sharper and
+narrower:
+
+- **What SAP MC Direct Transfer does well**: extraction via RFC, intermediate staging in HANA,
+  in-place data correction UI, native LTMC error handling.
+- **What we add that MC does not**: auto-discovery of target config; cross-run idempotent ledger
+  with hash-chained audit; aggregate value-reconciliation with hard GO/NO-GO verdict per object;
+  governed cutover gate with HMAC-signed approval webhook; selective carve-out ABAP generator;
+  CVI/DAG/BAPI-coverage/cluster-aware preflight that prevent failures MC discovers only after
+  load.
+
+The brief should **not** sell the extraction layer alone as a differentiator anymore.

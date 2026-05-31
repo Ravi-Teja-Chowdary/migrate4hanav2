@@ -58,7 +58,12 @@ DQ_REGEX_VALID = "REGEX_VALID"
 DQ_MAX_LEN = "MAX_LEN"
 DQ_ALLOWED = "ALLOWED"
 DQ_UNIQUE = "UNIQUE"
-_DQ_TYPES = {DQ_MANDATORY, DQ_REGEX_VALID, DQ_MAX_LEN, DQ_ALLOWED, DQ_UNIQUE}
+# CROSS_FIELD_VALIDATE - multi-field business-rule check (Syniti-class DQ).
+# Example uses: payment terms must match credit-limit tier; plant must belong
+# to the named company code; country must match tax-jurisdiction prefix.
+# See _eval_cross_field() for the supported expression mini-language.
+DQ_CROSS_FIELD = "CROSS_FIELD_VALIDATE"
+_DQ_TYPES = {DQ_MANDATORY, DQ_REGEX_VALID, DQ_MAX_LEN, DQ_ALLOWED, DQ_UNIQUE, DQ_CROSS_FIELD}
 
 REJECTION_STATUS = "DATA_QUALITY_REJECTION"
 
@@ -237,6 +242,9 @@ class TransformationEngine:
                         self._seen[key] = True
                 ok = not dup
                 msg = msg or f"duplicate record on {fields}"
+            elif rtype == DQ_CROSS_FIELD:
+                ok, eval_msg = self._eval_cross_field(rec, rule)
+                msg = msg or eval_msg
             else:
                 # unknown rule type — record as a soft reason, do not reject
                 reasons.append(f"unknown_dq_rule:{rtype}")
@@ -267,6 +275,85 @@ class TransformationEngine:
         if "S" in s:
             f |= re.DOTALL
         return f
+
+    # ── CROSS_FIELD_VALIDATE: multi-field business-rule check ────────────────
+    # The rule schema:
+    #   { "type": "CROSS_FIELD_VALIDATE",
+    #     "name": "payment_terms_within_credit_limit",
+    #     "when":   {"field": "CREDIT_LIMIT", "op": ">=", "value": 100000},
+    #     "expect": {"field": "ZTERM",        "op": "in", "value": ["NT30", "NT60"]} }
+    # If "when" is omitted, "expect" must hold unconditionally.
+    # Supported ops: ==, !=, >, >=, <, <=, in, not_in, prefix, suffix,
+    #                regex, equals_field (== another field), nonempty
+    _CMP_OPS = ("==", "!=", ">", ">=", "<", "<=")
+
+    @classmethod
+    def _eval_predicate(cls, rec: dict, pred: dict) -> bool:
+        """Evaluate one {field, op, value} predicate against the record."""
+        if not pred:
+            return True
+        fld = pred.get("field")
+        op = pred.get("op")
+        val = rec.get(fld) if fld else None
+        ref = pred.get("value")
+
+        if op == "nonempty":
+            return val is not None and str(val).strip() != ""
+        if op == "equals_field":
+            other = rec.get(ref)
+            return cls._norm(val) == cls._norm(other)
+        if op == "in":
+            ref_set = {cls._norm(x) for x in (ref or [])}
+            return cls._norm(val) in ref_set
+        if op == "not_in":
+            ref_set = {cls._norm(x) for x in (ref or [])}
+            return cls._norm(val) not in ref_set
+        if op == "prefix":
+            return cls._norm(val).startswith(cls._norm(ref))
+        if op == "suffix":
+            return cls._norm(val).endswith(cls._norm(ref))
+        if op == "regex":
+            if val is None:
+                return False
+            return bool(re.match(str(ref), str(val)))
+        if op in cls._CMP_OPS:
+            return cls._cmp(val, op, ref)
+        # unknown op -> treat as failure (caller will record reason)
+        return False
+
+    @staticmethod
+    def _cmp(left: Any, op: str, right: Any) -> bool:
+        # numeric compare when both sides parse as numbers; otherwise string
+        try:
+            l = float(left); r = float(right)
+        except (TypeError, ValueError):
+            l, r = (str(left or ""), str(right or ""))
+        if op == "==": return l == r
+        if op == "!=": return l != r
+        if op == ">":  return l > r
+        if op == ">=": return l >= r
+        if op == "<":  return l < r
+        if op == "<=": return l <= r
+        return False
+
+    def _eval_cross_field(self, rec: dict, rule: dict) -> tuple:
+        """Return (ok, message). ok=True when (not when) or (when AND expect)."""
+        when = rule.get("when") or {}
+        expect = rule.get("expect") or {}
+        if not expect:
+            return True, ""
+        gating = self._eval_predicate(rec, when) if when else True
+        if not gating:
+            return True, ""    # gate not triggered -> rule N/A for this record
+        passed = self._eval_predicate(rec, expect)
+        if passed:
+            return True, ""
+        name = rule.get("name") or "cross_field_rule"
+        when_str = (f"WHEN {when.get('field')} {when.get('op')} {when.get('value')!r}"
+                    if when else "ALWAYS")
+        expect_str = (f"EXPECT {expect.get('field')} {expect.get('op')} {expect.get('value')!r}, "
+                      f"got {rec.get(expect.get('field'))!r}")
+        return False, f"{name}: {when_str} :: {expect_str}"
 
     def _load_ruleset(self, ruleset: Optional[dict], path: Optional[str]) -> dict:
         if ruleset is not None:
@@ -327,6 +414,11 @@ class TransformationEngine:
                     raise RulesetError(f"{obj}: unknown dq rule type {dq.get('type')!r}")
                 if dq["type"] in (DQ_MANDATORY, DQ_REGEX_VALID, DQ_MAX_LEN, DQ_ALLOWED) and not dq.get("field"):
                     raise RulesetError(f"{obj}: {dq['type']} needs field")
+                if dq["type"] == DQ_CROSS_FIELD:
+                    if not dq.get("expect") or not isinstance(dq["expect"], dict) \
+                       or not dq["expect"].get("field") or not dq["expect"].get("op"):
+                        raise RulesetError(
+                            f"{obj}: CROSS_FIELD_VALIDATE needs expect={{field, op, [value]}}")
 
     def _precompile(self) -> None:
         for rules in self._object_rules.values():
