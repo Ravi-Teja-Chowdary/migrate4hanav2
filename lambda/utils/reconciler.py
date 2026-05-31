@@ -465,7 +465,22 @@ class EvidencePack:
 
     def build_manifest(self, *, system_config=None, data_quality=None,
                        api_responses=None, balance_tieouts=None,
-                       reconciliation=None) -> dict:
+                       reconciliation=None, captured_spools=None) -> dict:
+        # captured_spools: list of spool_capture.CapturedSpool.to_dict(). Each
+        # entry is sealed into the chain BEFORE the manifest is hashed so the
+        # chain bears witness that the SAP-standard spool binary came out of
+        # SAP unaltered (Gemini gap #4 / FAGLB03+MB5B Big-4 auditor objection).
+        spools = list(captured_spools or [])
+        if self.chain is not None:
+            for s in spools:
+                self.chain.append("captured_spool", {
+                    "report_code": s.get("report_code"),
+                    "abap_program": s.get("abap_program"),
+                    "spool_id": s.get("spool_id"),
+                    "sha256": s.get("sha256"),
+                    "byte_length": s.get("byte_length"),
+                    "captured_at": s.get("captured_at"),
+                })
         manifest = {
             "run_id": self.run_id,
             "generated": _now_iso(),
@@ -475,6 +490,7 @@ class EvidencePack:
             "target_api_responses": api_responses or [],
             "balance_tie_outs": balance_tieouts or [],
             "reconciliation": reconciliation or {},
+            "captured_spools": spools,
             "audit_chain": {
                 "head_hash": self.chain.head() if self.chain else None,
                 "verification": self.chain.verify() if self.chain else None,

@@ -20,6 +20,7 @@ import csv
 import io
 import json
 import os
+import re
 import sys
 import time
 
@@ -93,6 +94,26 @@ def _ecc(secret_id: str):
 
 
 def _read_table(conn, table: str, fields: list, where: str = "", max_rows: int = MAX_ROWS_PER_TEMPLATE) -> list:
+    # Cluster-table aware preflight (Gemini gap #7). Refuses NO_GO plans
+    # (e.g. PCL1/PCL2 with no WHERE) BEFORE making the RFC call that would
+    # otherwise dump the source ECC database. For BSEG/RFBLG/KOCLU it caps the
+    # row count and logs that we're touching a cluster table.
+    where_dict = _where_to_dict(where) if where else {}
+    on_hana = (os.environ.get("M4H_ECC_ON_HANA", "").lower() in ("1", "true", "yes"))
+    try:
+        from cluster_table_awareness import preflight, KIND_TRANSPARENT
+        plan = preflight(table, where=where_dict, fields=fields,
+                         requested_package_size=max_rows, on_hana=on_hana)
+        if plan.verdict == "NO_GO":
+            raise RuntimeError(
+                f"cluster_table_awareness refused extraction of {table}: "
+                f"{plan.warnings[0] if plan.warnings else 'unsafe extraction'}")
+        if plan.kind != KIND_TRANSPARENT and not on_hana:
+            # Honor the cap so a 5000-row BSEG fetch becomes 200 (memory-safe)
+            max_rows = min(max_rows, plan.recommended_package_size)
+    except ImportError:
+        pass    # module not on path -> proceed unprotected (legacy behaviour)
+
     opts = [{"TEXT": where}] if where else []
     fld = [{"FIELDNAME": f} for f in fields]
     # DELIMITER='|' so multi-field rows split cleanly (without it RFC_READ_TABLE
@@ -105,6 +126,19 @@ def _read_table(conn, table: str, fields: list, where: str = "", max_rows: int =
         parts = [p.strip() for p in r["WA"].split("|")]
         rows.append(dict(zip(cols, parts)))
     return rows, cols
+
+
+_WHERE_KEY_RE = re.compile(r"\b([A-Z][A-Z0-9_]{1,29})\s*=\s*'([^']*)'")
+
+def _where_to_dict(where_clause: str) -> dict:
+    """Best-effort extract of column=value pins from an OPTIONS WHERE string
+    (e.g. "BUKRS = '1010' AND GJAHR = '2026'"). Used only to feed
+    cluster_table_awareness.preflight()'s header-keys check; non-equality
+    predicates (BETWEEN, IN, LIKE) are ignored - the preflight then treats
+    those columns as not pinned."""
+    if not where_clause:
+        return {}
+    return dict(_WHERE_KEY_RE.findall(where_clause))
 
 
 def _target_connection():
@@ -728,6 +762,30 @@ def lambda_handler(event, context):
                 except Exception as _te:
                     log_stage_event(run_id, "data-migrator", "transform_engine_skipped",
                                     {"reason": str(_te)[:160]})
+
+                # BAPI field-coverage analysis (Gemini gap #3). Routes records
+                # carrying CI_/ZZ_/J_1B fields the BAPI cannot transport to an
+                # LTMC staging file instead of silently dropping them. Active
+                # only when M4H_BAPI_COVERAGE_DIR is configured.
+                _cov_dir = os.environ.get("M4H_BAPI_COVERAGE_DIR")
+                if _cov_dir:
+                    try:
+                        from bapi_coverage import LtmcStagingEmitter
+                        loader.bapi_coverage_emitter = LtmcStagingEmitter(_cov_dir)
+                        # Minimal hand-shaped catalog - extend per landscape
+                        loader.bapi_field_catalog = {
+                            "Customer": {"KUNNR", "NAME1", "STRAS", "ORT01", "PSTLZ",
+                                         "LAND1", "SPRAS", "STCEG", "STCD1", "TELF1"},
+                            "Vendor":   {"LIFNR", "NAME1", "STRAS", "ORT01", "PSTLZ",
+                                         "LAND1", "SPRAS", "STCEG", "STCD1", "TELF1"},
+                            "Material": {"MATNR", "MTART", "MEINS", "MAKTX", "MATKL"},
+                        }
+                        log_stage_event(run_id, "data-migrator",
+                                        "bapi_coverage_active", {"dir": _cov_dir})
+                    except Exception as _ce:
+                        log_stage_event(run_id, "data-migrator",
+                                        "bapi_coverage_skipped",
+                                        {"reason": str(_ce)[:160]})
                 # Live source->target registry, shared across the run so dependent
                 # objects (OpenPO -> Vendor) resolve refs; source conn for PO items.
                 loader.key_map = _load_ledger()   # cross-run ledger -> idempotent re-runs
@@ -790,6 +848,50 @@ def lambda_handler(event, context):
         # reprocessing (a subsequent idempotent re-run picks these up; successes are skipped).
         dead_letters = [{"object": r.get("object"), **d}
                         for r in results for d in (r.get("load") or {}).get("dead_letter", [])]
+
+        # CVI conflicts (Gemini gap #1) - appended into dead_letters here so they
+        # ride the same dead-letter S3 artifact below.
+        cvi_info = None
+        try:
+            from cvi_mapper import unify as _cvi_unify, detect_overlap as _cvi_overlap
+            kna1_rows = next((((r.get("extract") or {}).get("rows") or [])
+                              for r in results if r.get("object") == "Customer"), [])
+            lfa1_rows = next((((r.get("extract") or {}).get("rows") or [])
+                              for r in results if r.get("object") == "Vendor"), [])
+            if kna1_rows and lfa1_rows:
+                overlap_keys = _cvi_overlap(kna1_rows, lfa1_rows)
+                mappings, conflicts = _cvi_unify(kna1_rows, lfa1_rows)
+                cvi_info = {
+                    "overlap_partner_numbers": overlap_keys[:50],
+                    "overlap_count": len(overlap_keys),
+                    "legacy_keys_mapped": len(mappings),
+                    "unique_bps": len({m.target_bp_id for m in mappings.values()}),
+                    "merged_customer_vendor": sum(1 for m in mappings.values() if m.merged),
+                    "conflicts_requiring_review": len(conflicts),
+                }
+                cvi_key = f"runs/{run_id}/data-migrator/cvi_map.json"
+                S3.put_object(
+                    Bucket=STAGING_BUCKET, Key=cvi_key,
+                    Body=json.dumps({
+                        "mappings": {k: v.to_dict() for k, v in mappings.items()},
+                        "conflicts": [c.to_dict() for c in conflicts],
+                    }, indent=2).encode(),
+                    ContentType="application/json")
+                cvi_info["artifact"] = f"s3://{STAGING_BUCKET}/{cvi_key}"
+                log_stage_event(run_id, "data-migrator", "cvi_computed", cvi_info)
+                for c in conflicts:
+                    dead_letters.append({
+                        "object": "BusinessPartner",
+                        "reason": "CVI_CONFLICT",
+                        "kna1_id": c.legacy_kna1_id,
+                        "lfa1_id": c.legacy_lfa1_id,
+                        "msg": c.reason,
+                        "detail": c.detail,
+                    })
+        except Exception as _ce:
+            log_stage_event(run_id, "data-migrator", "cvi_skipped",
+                            {"reason": str(_ce)[:160]})
+
         dead_letter_info = None
         if dead_letters:
             dkey = f"runs/{run_id}/data-migrator/dead-letter/failed_records.json"
@@ -824,6 +926,7 @@ def lambda_handler(event, context):
                    "support_compliance": compliance.audit(results) if compliance else None,
                    "key_mapping": key_map_info,
                    "dead_letter": dead_letter_info,
+                   "cvi": cvi_info,
                    "carve_out": _carve_out_programs(run_id, results, event),
                    "results": results}
         # Pillar 4 — cryptographic audit chain over this run's verifiable actions.

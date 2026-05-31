@@ -137,6 +137,13 @@ class UnifiedLoader:
         self.cc_org = {}           # CO master config (set from discovery by the handler)
         self.asset_org = {}        # fixed-asset config (set from discovery by the handler)
         self.transformer = None    # enterprise transformation/value-map/DQ engine (None = no-op)
+        # BAPI field-coverage analysis (Pillar / Gemini gap #3). When attached,
+        # each record is checked against the chosen BAPI's known field set
+        # BEFORE the BAPI is called; records carrying CI_/ZZ_/J_1B fields the
+        # BAPI cannot transport are routed to an LTMC staging file. No-op when
+        # `bapi_coverage_emitter` is None, so existing flow is unchanged.
+        self.bapi_coverage_emitter = None       # bapi_coverage.LtmcStagingEmitter
+        self.bapi_field_catalog = {}            # {object_type: set(supported_fields)}
 
     def odata_ready(self) -> bool:
         """True if the OData BP service is available — gates transaction-ready partner
@@ -254,6 +261,8 @@ class UnifiedLoader:
         w.po_org, w.fi_org, w.bp_org, w.cc_org = self.po_org, self.fi_org, self.bp_org, self.cc_org
         w.asset_org = self.asset_org
         w.transformer = self.transformer   # shared (UNIQUE state is lock-guarded)
+        w.bapi_coverage_emitter = self.bapi_coverage_emitter
+        w.bapi_field_catalog = self.bapi_field_catalog
         if mech == ("bapi", "po") and self.source_conn_factory:
             w.source_conn = self.source_conn_factory()
         if mech == ("bapi", "bp") and self.odata_factory:
@@ -429,6 +438,40 @@ class UnifiedLoader:
                 return {"ok": False, "status": "failed",
                         "msg": "DATA_QUALITY_REJECTION: " + ("; ".join(dq.reasons))[:140],
                         "dq_rejection": dq.rejections}
+
+        # BAPI field-coverage check (Gemini gap #3). When the dispatcher has
+        # selected a BAPI and we have a catalog entry for that object's BAPI
+        # interface, screen the record for fields the BAPI cannot transport
+        # (CI_/ZZ_ extensions, J_1B* tax). LTMC_ONLY records are quarantined
+        # to the staging emitter and NOT sent to the BAPI. BAPI_PLUS_LTMC_DELTA
+        # records continue to the BAPI - the staging delta is written so the
+        # Migration Cockpit can pick up the extra fields after the BAPI load.
+        if self.bapi_coverage_emitter is not None and obj in self.bapi_field_catalog:
+            try:
+                from bapi_coverage import analyze_coverage, decide_load_path
+                kind_for_cov, sub_for_cov = mech
+                bapi_name = f"{kind_for_cov}:{sub_for_cov}"
+                cov = analyze_coverage([row], obj, bapi_name,
+                                       self.bapi_field_catalog[obj])
+                decision = decide_load_path(cov)
+                if decision.path == "LTMC_ONLY":
+                    handoff = self.bapi_coverage_emitter.emit(
+                        [row], obj, f"{obj.lower()}_ltmc",
+                        decision.ltmc_delta_fields, bapi_name, decision.reason)
+                    return {"ok": True, "status": "ltmc_staged",
+                            "msg": decision.reason,
+                            "ltmc_handoff": handoff.to_dict()}
+                if decision.path == "BAPI_PLUS_LTMC_DELTA":
+                    # Best-effort delta emit; do not fail the BAPI flow if it errors.
+                    try:
+                        self.bapi_coverage_emitter.emit(
+                            [row], obj, f"{obj.lower()}_delta",
+                            decision.ltmc_delta_fields, bapi_name, decision.reason)
+                    except Exception as _e:
+                        pass
+            except Exception:
+                pass   # coverage check must never block the load on its own bug
+
         kind, sub = mech
         if kind == "bapi" and sub == "bp":
             src_key = (row.get("KUNNR") or row.get("LIFNR") or row.get("PARTNER") or "").strip()

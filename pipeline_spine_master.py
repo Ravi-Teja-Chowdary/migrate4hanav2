@@ -319,22 +319,69 @@ class PipelineSpineMaster:
         spine = DataSpineOrchestrator(run_dir / "dataspine", reference=ref)
         fixtures = payload.get("fixtures", {}).get("trees", {})
         reports, errors = [], []
-        for obj in payload["scope"].get("entity_trees", []):
+
+        # DAG-ordered iteration (Gemini gap #8). Reorders the requested object
+        # types so masters (Material, GLAccount, CostCenter, BusinessPartner)
+        # complete before transactionals (SalesOrder, OpenAR/AP, etc). The
+        # `dag_state` block is added to the phase summary so downstream phases
+        # and operators can see the order + failure-propagation map.
+        requested = list(payload["scope"].get("entity_trees", []))
+        dag_state_block = None
+        try:
+            sys.path.insert(0, str(REPO_ROOT / "lambda" / "utils"))
+            from dependency_dag import (DependencyDAG, ExecutionState,
+                                        STATUS_DONE, STATUS_FAILED)
+            dag = DependencyDAG.from_defaults()
+            ordered = dag.topological_sort(scope=requested) if requested else []
+            # Keep only what was actually requested (transitive deps may be
+            # included even if the caller did not list them; we surface them
+            # but don't synthesise fixtures for them).
+            ordered = [o for o in ordered if o in requested]
+            dag_audit = []
+            state = ExecutionState(dag=dag).with_audit(
+                lambda obj, s, ts: dag_audit.append({"object": obj, "status": s, "ts": ts}))
+            objects_iter = ordered
+        except Exception as _e:
+            state = None
+            objects_iter = requested
+            dag_audit = []
+
+        for obj in objects_iter:
+            if state is not None:
+                state.mark(obj, "running")
             tables = fixtures.get(obj)
             if tables is None:
                 errors.append({"object": obj, "error": "no extracted tables "
                                "available (live carve-out read not wired / no fixture)"})
+                if state is not None:
+                    state.mark(obj, "failed")
                 continue
             try:
                 rep = spine.process_tree(obj, tables)
                 reports.append({k: v for k, v in rep.items() if k != "cleansed"})
+                if state is not None:
+                    state.mark(obj, "done")
             except Exception as e:  # noqa: BLE001
                 errors.append({"object": obj, "error": str(e)})
+                if state is not None:
+                    state.mark(obj, "failed")
+
+        if state is not None:
+            dag_state_block = {
+                "execution_order": objects_iter,
+                "status": dict(state.status),
+                "blocked_by_failures": state.downstream_blocked_by_failure(),
+                "transitions": dag_audit,
+            }
+
         rc = 0 if reports and not errors else (1 if errors and not reports else 0)
         healed = sum(r["counters"]["healed"] for r in reports)
         reused = sum(r["reused_from_ledger"] for r in reports)
-        return rc, {"rc": rc, "objects": reports, "errors": errors,
-                    "total_healed": healed, "total_reused_from_ledger": reused}
+        summary = {"rc": rc, "objects": reports, "errors": errors,
+                   "total_healed": healed, "total_reused_from_ledger": reused}
+        if dag_state_block is not None:
+            summary["dag_state"] = dag_state_block
+        return rc, summary
 
     def _phase_smartshift(self, payload, run_dir, throttle) -> tuple[int, dict]:
         """Remediate custom ABAP deterministically with AI fail-safe + ATC gate."""

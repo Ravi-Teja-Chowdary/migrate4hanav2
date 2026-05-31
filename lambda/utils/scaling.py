@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator, Optional
 
@@ -58,7 +59,8 @@ class ComputeDispatcher:
     def __init__(self, threshold: int = DEFAULT_ROW_THRESHOLD,
                  cluster: Optional[str] = None, task_def: Optional[str] = None,
                  container: Optional[str] = None, subnets: Optional[list] = None,
-                 security_groups: Optional[list] = None, region: Optional[str] = None):
+                 security_groups: Optional[list] = None, region: Optional[str] = None,
+                 workload_throttle: Optional[Any] = None):
         self.threshold = int(threshold)
         self.cluster = cluster or os.environ.get("M4H_FARGATE_CLUSTER")
         self.task_def = task_def or os.environ.get("M4H_FARGATE_TASKDEF")
@@ -67,6 +69,11 @@ class ComputeDispatcher:
         self.security_groups = security_groups or [
             g for g in os.environ.get("M4H_FARGATE_SGS", "").split(",") if g]
         self.region = region or os.environ.get("AWS_REGION", "us-east-1")
+        # Target-SAP-side throttle (Gemini gap #2 / sap_workload.WorkloadThrottle).
+        # When attached, dispatch() probes TH_WPINFO + NRIV-locks BEFORE launching
+        # the Fargate task and may wait / pause / proceed based on the verdict.
+        # None -> dispatch behaves exactly as before.
+        self.workload_throttle = workload_throttle
 
     # ── pure decision (unit-tested) ──────────────────────────────────────────
     def memory_for(self, est_rows: int) -> int:
@@ -103,6 +110,36 @@ class ComputeDispatcher:
         if not self.fargate_ready():
             decision.error = "fargate not configured (cluster/task_def/subnets) — caller must run inline"
             return decision
+
+        # Target-SAP-side gating BEFORE we burn Fargate time. Loops at most
+        # 5 times so a stuck-RED target eventually surfaces an error instead
+        # of looping forever inside dispatch().
+        if self.workload_throttle is not None:
+            for _attempt in range(5):
+                try:
+                    d = self.workload_throttle.decide()
+                except Exception as e:
+                    logger.warning("WorkloadThrottle.decide() raised %s - "
+                                   "proceeding without throttle this round", e)
+                    break
+                if d.verdict == "GREEN":
+                    break
+                if d.recommended_batch == 0:    # RED -> pause and re-probe
+                    if d.wait_seconds:
+                        time.sleep(d.wait_seconds)
+                    continue
+                # YELLOW -> wait then proceed (we still launch the task; the
+                # caller decides whether to honour the reduced batch size)
+                if d.wait_seconds:
+                    time.sleep(d.wait_seconds)
+                decision.error = (f"workload throttle returned {d.verdict}; "
+                                  f"recommended_batch={d.recommended_batch} "
+                                  f"nr_locked={d.nr_locked}")
+                break
+            else:
+                decision.error = "workload throttle stayed RED across 5 probes - aborting dispatch"
+                return decision
+
         try:
             import boto3
             ecs = boto3.client("ecs", region_name=self.region)

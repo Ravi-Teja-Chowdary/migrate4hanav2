@@ -286,6 +286,15 @@ module "lambda" {
       source_dir  = "${path.root}/../../../lambda/rollback-manager"
       layers      = [local.pyrfc_layer_arn]
     }
+    code-delta-scheduler = {
+      description = "Daily TADIR snapshot + delta detection (dual-maintenance code sync)"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 900
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/code-delta-scheduler"
+      layers      = [local.pyrfc_layer_arn]
+    }
     data-hygiene = {
       description = "Master Data Cleansing and Business Partner Deduplication"
       handler     = "handler.lambda_handler"
@@ -744,4 +753,31 @@ output "lift_and_shift_state_machine_arn" {
 
 output "gates_table_name" {
   value = aws_dynamodb_table.gates.name
+}
+
+# ─────────────────────────────────────────────
+# EventBridge schedule for the code-delta scheduler Lambda
+# (Gemini gap #5 - dual-maintenance / continuous code sync).
+# Fires once daily; the Lambda snapshots ECC custom-code, diffs against the
+# prior baseline, and enqueues remediation tasks for any ADDED/MODIFIED objects.
+# ─────────────────────────────────────────────
+resource "aws_cloudwatch_event_rule" "code_delta_daily" {
+  name                = "migrate4hana-code-delta-daily-${var.environment}"
+  description         = "Daily TADIR snapshot + code-delta detection"
+  schedule_expression = "cron(0 6 ? * MON-FRI *)"   # 06:00 UTC business days
+  tags = { Component = "DualMaintenance" }
+}
+
+resource "aws_cloudwatch_event_target" "code_delta_daily" {
+  rule      = aws_cloudwatch_event_rule.code_delta_daily.name
+  target_id = "code-delta-scheduler"
+  arn       = module.lambda.function_arns["code-delta-scheduler"]
+}
+
+resource "aws_lambda_permission" "code_delta_scheduler_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = "migrate4hana-code-delta-scheduler-${var.environment}"
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.code_delta_daily.arn
 }
