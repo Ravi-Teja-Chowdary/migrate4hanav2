@@ -37,6 +37,12 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 >   aware extraction, DAG dependency resolver + KeyResolver. All seven new modules + one
 >   transformation_engine extension ship with green self-tests. See **§14** for the full inventory,
 >   what's verified, and what's still owed for production-completeness.
+> - **All seven modules are now wired into the hot path** — not standalone. CVI runs in
+>   data-migrator, throttle gates ComputeDispatcher, BAPI coverage runs inside `_load_one` with a
+>   25-object field catalog, spool capture seals into the HashChainLedger, DAG orders the spine's
+>   Syniti phase, cluster-aware preflight gates every `RFC_READ_TABLE`, and code-delta runs daily
+>   via EventBridge. See **§14.5** for the call-site map and what's still owed (mostly
+>   landscape-specific content, not engineering).
 
 ---
 
@@ -480,3 +486,35 @@ narrower:
   load.
 
 The brief should **not** sell the extraction layer alone as a differentiator anymore.
+
+---
+
+## 14.5. Live-call-site wiring (2026-05-31, follow-up to §14)
+
+The §14 modules ship standalone. As of commits `62ada9a` + the follow-up below
+they are also **invoked from the hot path**, not sitting beside it. For each
+module: the actual file + function it fires from, its activation switch, and
+honest residue.
+
+| # | Module | Call site | Activation | Honest residue |
+|---|---|---|---|---|
+| 1 | `cvi_mapper.unify` | `lambda/data-migrator/handler.py:lambda_handler` — after the per-object extract loop, before the dead-letter S3 write | Always-on when both Customer (KNA1) and Vendor (LFA1) extracts are in the same batch. Conflicts auto-route to dead-letter with reason `CVI_CONFLICT`; full map persisted to `runs/<id>/cvi_map.json`. | Fuzzy matching, address harmonisation, per-company-code overrides — module supports the interface; content is not built. |
+| 2 | `sap_workload.WorkloadThrottle` | `lambda/utils/scaling.py:ComputeDispatcher.dispatch` — constructed in `pipeline_spine_master._phase_natuvion` when `payload["_live_target_conn"]` is set, passed in via constructor. | Only active in live runs (no fixture). 5-attempt RED→GREEN loop with halved-batch on YELLOW. | Landscape-specific GREEN/YELLOW/RED thresholds; integration with the *parallel-worker* loop inside `unified_loader` (today the throttle gates Fargate dispatch, not Lambda concurrency). |
+| 3 | `bapi_coverage` + `bapi_field_catalog` | `lambda/utils/unified_loader.py:_load_one` — after the DQ gate, before the BAPI call. Catalog now lives in `lambda/utils/bapi_field_catalog.py` covering **25 migration objects** with 6-50 fields each. | `M4H_BAPI_COVERAGE_DIR` env var. When set, the loader auto-imports `bapi_field_catalog.as_dict()`. Per-landscape overrides via `M4H_BAPI_FIELD_CATALOG_JSON`. | Per-BAPI field set comes from the curated baseline, not `DD_BAPI_PARAMETER_GET` — a real customer landscape should run the RFC introspection and merge via the env-override path. |
+| 4 | `spool_capture.SpoolCapture` | `lambda/utils/reconciler.py:EvidencePack.build_manifest` — new `captured_spools` kwarg. Each capture is sealed into the `HashChainLedger` *before* the manifest hash so the chain bears witness to the SAP-standard binary. | Caller-driven (the data-migrator handler does not auto-trigger spool capture yet — one or more captures must be passed explicitly into `EvidencePack`). | The orchestrating call (which decides *which* report to fire and when) is not yet in the handler — the building block is wired but a one-line `pack.build_manifest(captured_spools=[...])` from the data-migrator is the remaining step. |
+| 5 | `code_delta.DeltaEngine` | `lambda/code-delta-scheduler/handler.py` — new Lambda, scheduled by EventBridge `cron(0 6 ? * MON-FRI *)` (provisioned in `terraform/environments/prod/main.tf`). Snapshots TADIR/REPOSRC, mirrors to S3, diffs against the most recent prior baseline, enqueues remediation tasks. | Always-on once the stack applies (terraform validates clean). Layer dependency: handler detects a missing pyrfc layer and returns `status=skipped` with a remediation hint rather than dumping ImportError. | The code-analyzer Lambda doesn't yet *consume* the remediation queue automatically — today an operator triggers re-remediation manually from the queue. |
+| 6 | `cluster_table_awareness.preflight` | `lambda/data-migrator/handler.py:_read_table` — called before every `RFC_READ_TABLE`. | Always-on; `M4H_ECC_ON_HANA=1` disables the PACKAGE-SIZE cap. PCL1/PCL2 with no WHERE raises `RuntimeError` BEFORE the RFC fires. | Catalog ships 13 well-known pool/cluster tables; per-landscape additions go in `_CATALOG` (no env-override path yet — would be ~5 LOC to add). |
+| 7 | `dependency_dag.DependencyDAG` + `ExecutionState` | `pipeline_spine_master.py:_phase_syniti` — entity_trees list is topologically sorted before iteration; per-object status (running/done/failed) is tracked; `downstream_blocked_by_failure` map is included in the phase summary. | Always-on when the spine runs. | DAG is the curated 28-node default — real customer DAGs (especially industry-specific masters / inter-company dependencies) need a per-customer addendum file. Default is a starter, not a closed model. |
+
+### Where the brief now sits
+
+- **Engineering depth**: the gap-closure modules are not just present in `utils/` — they are **invoked from the hot path** during a real run. A reviewer can grep `from cvi_mapper`, `from bapi_coverage`, etc. and see the calls.
+- **SAP functional depth**: still the largest residue. The frameworks are in place; the *content* (BAPI field catalogs per release / SAP Note, cluster-table catalog per ECC release, DAG additions per industry, CVI fuzzy-match rules per locale) needs landscape-specific work that benefits from a customer engagement.
+- **Live verification**: every wiring above passes its unit / integration self-test. The next step is a live ECC/S4 dry-run to catch integration-shaped surprises (RFC timeout behaviour under throttle, real cluster-table memory patterns at volume, real TADIR snapshot size).
+
+### What changed since §14
+
+- `bapi_field_catalog.py` — new versioned module with 25 objects + env-override addendum, replacing the 3-object inline stub the data-migrator handler shipped initially.
+- `WorkloadThrottle` now constructed in the spine's Natuvion phase when a live target conn is available, instead of being only the ComputeDispatcher's optional arg.
+- `code-delta-scheduler` handler degrades gracefully when the pyrfc layer is missing: `status=skipped` with a remediation hint, no ImportError noise in CloudWatch.
+- All `terraform validate` clean; all changed Python files `py_compile`-clean.

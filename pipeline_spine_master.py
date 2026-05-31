@@ -269,11 +269,28 @@ class PipelineSpineMaster:
         gen = InSystemAgentGenerator()
         carve = payload["scope"].get("carve_out", [])
         conn = payload.get("_live_source_conn")          # set only in live runs
+        target_conn = payload.get("_live_target_conn")   # set only in live runs
+
+        # Target-side workload throttle (Gemini gap #2). Probes TH_WPINFO +
+        # NRIV-locks BEFORE the dispatcher hands work to Fargate. Only active
+        # when a live target connection is provided.
+        workload_throttle = None
+        if target_conn is not None:
+            try:
+                sys.path.insert(0, str(REPO_ROOT / "lambda" / "utils"))
+                from sap_workload import WorkloadThrottle
+                workload_throttle = WorkloadThrottle(
+                    rfc_callable=lambda fn, kwargs: target_conn.call(fn, **kwargs),
+                    requested_batch=int(payload.get("dispatcher_batch", 200)),
+                    nr_object=payload.get("nr_object"))
+            except Exception:
+                workload_throttle = None
+
         # Pillar 1 — elastic compute dispatcher: a carve-out whose scope exceeds the
         # row threshold is routed to Fargate (auto-scaled memory) instead of Lambda.
         try:
             from scaling import ComputeDispatcher
-            dispatcher = ComputeDispatcher()
+            dispatcher = ComputeDispatcher(workload_throttle=workload_throttle)
         except Exception:
             dispatcher = None
         programs, errors, fargate_routed = [], [], 0

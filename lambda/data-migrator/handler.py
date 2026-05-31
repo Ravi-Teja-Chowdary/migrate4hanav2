@@ -766,22 +766,20 @@ def lambda_handler(event, context):
                 # BAPI field-coverage analysis (Gemini gap #3). Routes records
                 # carrying CI_/ZZ_/J_1B fields the BAPI cannot transport to an
                 # LTMC staging file instead of silently dropping them. Active
-                # only when M4H_BAPI_COVERAGE_DIR is configured.
+                # only when M4H_BAPI_COVERAGE_DIR is configured. The field
+                # catalog ships from lambda/utils/bapi_field_catalog.py and
+                # can be widened per landscape via M4H_BAPI_FIELD_CATALOG_JSON.
                 _cov_dir = os.environ.get("M4H_BAPI_COVERAGE_DIR")
                 if _cov_dir:
                     try:
                         from bapi_coverage import LtmcStagingEmitter
+                        import bapi_field_catalog as _bfc
                         loader.bapi_coverage_emitter = LtmcStagingEmitter(_cov_dir)
-                        # Minimal hand-shaped catalog - extend per landscape
-                        loader.bapi_field_catalog = {
-                            "Customer": {"KUNNR", "NAME1", "STRAS", "ORT01", "PSTLZ",
-                                         "LAND1", "SPRAS", "STCEG", "STCD1", "TELF1"},
-                            "Vendor":   {"LIFNR", "NAME1", "STRAS", "ORT01", "PSTLZ",
-                                         "LAND1", "SPRAS", "STCEG", "STCD1", "TELF1"},
-                            "Material": {"MATNR", "MTART", "MEINS", "MAKTX", "MATKL"},
-                        }
+                        loader.bapi_field_catalog = _bfc.as_dict()
                         log_stage_event(run_id, "data-migrator",
-                                        "bapi_coverage_active", {"dir": _cov_dir})
+                                        "bapi_coverage_active",
+                                        {"dir": _cov_dir,
+                                         "objects_covered": len(loader.bapi_field_catalog)})
                     except Exception as _ce:
                         log_stage_event(run_id, "data-migrator",
                                         "bapi_coverage_skipped",

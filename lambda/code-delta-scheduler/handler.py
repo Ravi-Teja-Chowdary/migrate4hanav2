@@ -62,7 +62,14 @@ SECRET_ID = os.environ.get("ECC_SECRET_ID", "local:ecc")
 
 def _ecc():
     sec = json.loads(SECRETS.get_secret_value(SecretId=SECRET_ID)["SecretString"])
-    from pyrfc import Connection
+    try:
+        from pyrfc import Connection
+    except ImportError as e:
+        raise RuntimeError(
+            "pyrfc not importable - the migrate4hana-pyrfc layer is missing "
+            "from this Lambda. Build it with `python layer-build/build_pyrfc_layer.py` "
+            "(or the .ps1 equivalent), then re-run `terraform apply` so the layer "
+            "is published and attached to migrate4hana-code-delta-scheduler.") from e
     return Connection(
         ashost=sec["ashost"], sysnr=sec.get("sysnr", "00"),
         client=sec["client"], user=sec["user"],
@@ -146,7 +153,15 @@ def lambda_handler(event, context):
 
     try:
         conn = _ecc()
+    except RuntimeError as e:
+        # Layer missing - return SUCCESS-shaped skip so EventBridge doesn't
+        # accumulate failure metrics for a known-config issue. CloudWatch
+        # logs still record the reason.
+        logger.warning("code-delta-scheduler: skipped (%s)", e)
+        return {"status": "skipped", "run_id": run_id,
+                "reason": str(e), "remediation": "build + re-apply pyrfc layer"}
     except Exception as e:
+        logger.error("code-delta-scheduler: ECC connect failed: %s", e)
         return {"status": "error", "run_id": run_id,
                 "reason": f"ECC connect failed: {type(e).__name__}: {e}"}
 
