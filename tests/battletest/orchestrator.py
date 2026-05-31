@@ -235,8 +235,16 @@ def stage_transform_and_coverage(file_map: Dict[str, Path],
 
 
 def stage_load(accepted: Dict[str, List[dict]], target: MockSapTarget,
-               result: BattletestResult, threads: int = 16) -> List[dict]:
-    """Push every accepted record through the mock target. Threaded."""
+               result: BattletestResult, threads: int = 16,
+               chunk_size: int = 10000) -> List[dict]:
+    """Push every accepted record through the mock target. Threaded, chunked.
+
+    Processes records in chunks of `chunk_size` so peak memory stays bounded
+    regardless of total scale (5M records would otherwise hold 5M Future
+    objects + 5M result dicts at once -> can exceed Fargate's 16GB limit).
+    Returns the trimmed list of created keys (just object + id, not the
+    original record) for the hash chain step.
+    """
     m = StageMetrics(name="load")
     m.started_at = time.time()
     keys: List[dict] = []
@@ -245,7 +253,9 @@ def stage_load(accepted: Dict[str, List[dict]], target: MockSapTarget,
         try:
             resp = target.call(obj, rec)
             if resp.get("status") == "created":
-                return {"object": obj, "id": resp["id"], "rec": rec}
+                # Drop the original record from the result - we only need
+                # object+id downstream and 5M of these in memory is enough
+                return {"object": obj, "id": resp["id"]}
             return None
         except Exception as e:
             result.issues.append(Issue(
@@ -254,19 +264,23 @@ def stage_load(accepted: Dict[str, List[dict]], target: MockSapTarget,
                 reason=f"{type(e).__name__}: {str(e)[:120]}"))
             return None
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as ex:
-        futures = []
-        for obj, recs in accepted.items():
-            for rec in recs:
-                m.records_in += 1
-                futures.append(ex.submit(one, obj, rec))
-        for f in concurrent.futures.as_completed(futures):
-            r = f.result()
-            if r:
-                keys.append(r)
-                m.records_out += 1
-            else:
-                m.errors += 1
+    # Process per-object, chunking each object's record list
+    for obj, recs in accepted.items():
+        total = len(recs)
+        for chunk_start in range(0, total, chunk_size):
+            chunk = recs[chunk_start:chunk_start + chunk_size]
+            m.records_in += len(chunk)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as ex:
+                futures = [ex.submit(one, obj, rec) for rec in chunk]
+                for f in concurrent.futures.as_completed(futures):
+                    r = f.result()
+                    if r:
+                        keys.append(r)
+                        m.records_out += 1
+                    else:
+                        m.errors += 1
+            # Help GC reclaim the chunk's records + futures between batches
+            del chunk
     m.ended_at = time.time()
     result.stages.append(m)
     return keys

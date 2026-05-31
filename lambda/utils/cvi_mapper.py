@@ -239,16 +239,24 @@ def unify(kna1: List[dict],
         c_taxids.discard("")
         v_taxids.discard("")
         if c_taxids and v_taxids and not (c_taxids & v_taxids):
-            for c in cs:
-                for v in vs:
-                    conflicts.append(CviConflict(
-                        legacy_kna1_id=str(c["KUNNR"]).lstrip("0"),
-                        legacy_lfa1_id=str(v["LIFNR"]).lstrip("0"),
-                        reason="name+country match but tax IDs differ - manual review",
-                        detail={"name": c.get("NAME1"),
-                                "country": _norm_country(c.get("LAND1") or ""),
-                                "kna1_tax_ids": sorted(c_taxids),
-                                "lfa1_tax_ids": sorted(v_taxids)}))
+            # One conflict per (name, country) fingerprint group, not
+            # per N*M (customer, vendor) pair. Bug fix: at large scale
+            # with several near-duplicates per fingerprint the quadratic
+            # explosion produced 100K+ conflicts for 15K records.
+            sample_kna1_ids = sorted({str(c["KUNNR"]).lstrip("0") for c in cs})[:5]
+            sample_lfa1_ids = sorted({str(v["LIFNR"]).lstrip("0") for v in vs})[:5]
+            conflicts.append(CviConflict(
+                legacy_kna1_id=sample_kna1_ids[0] if sample_kna1_ids else None,
+                legacy_lfa1_id=sample_lfa1_ids[0] if sample_lfa1_ids else None,
+                reason="name+country match but tax IDs differ - manual review",
+                detail={"name": cs[0].get("NAME1") if cs else None,
+                        "country": _norm_country((cs[0] if cs else {}).get("LAND1") or ""),
+                        "kna1_tax_ids": sorted(c_taxids),
+                        "lfa1_tax_ids": sorted(v_taxids),
+                        "kna1_count": len(cs),
+                        "lfa1_count": len(vs),
+                        "sample_kna1_ids": sample_kna1_ids,
+                        "sample_lfa1_ids": sample_lfa1_ids}))
 
     return mappings, conflicts
 

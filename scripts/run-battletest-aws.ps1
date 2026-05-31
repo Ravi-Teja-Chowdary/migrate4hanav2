@@ -56,14 +56,25 @@
 param(
     [ValidateSet("tiny", "small", "medium", "large", "xlarge")]
     [string]$Scale = "small",
-    [int]$Threads = 16,
+    [int]$Threads = 0,           # 0 = auto-pick per scale
     [switch]$IncludeCodeRemediation,
     [string]$Region = "us-east-1",
     [string]$Environment = "prod",
     [string]$Bucket = "",        # override if auto-discovery doesn't find the right bucket
     [int]$PollIntervalSeconds = 30,
-    [int]$TimeoutMinutes = 90
+    [int]$TimeoutMinutes = 0     # 0 = auto-pick per scale
 )
+
+# Scale-aware defaults so 'large' has enough threads + timeout headroom
+$ScaleDefaults = @{
+    tiny    = @{ Threads =  8;  TimeoutMinutes =  10 }
+    small   = @{ Threads = 16;  TimeoutMinutes =  20 }
+    medium  = @{ Threads = 32;  TimeoutMinutes =  60 }
+    large   = @{ Threads = 64;  TimeoutMinutes = 180 }   # 5.5M records, ~2-3h
+    xlarge  = @{ Threads = 64;  TimeoutMinutes = 720 }   # overnight
+}
+if ($Threads -eq 0)        { $Threads        = $ScaleDefaults[$Scale].Threads }
+if ($TimeoutMinutes -eq 0) { $TimeoutMinutes = $ScaleDefaults[$Scale].TimeoutMinutes }
 
 $ErrorActionPreference = "Stop"
 $startedAt = Get-Date
@@ -121,6 +132,7 @@ Write-Host "  Task def family:$taskDefFamily"
 Write-Host "  Container name: $containerName"
 Write-Host "  ECR image:      $ecrUri"
 Write-Host "  Staging bucket: s3://$bucket"
+Write-Host "  Scale:          $Scale (threads=$Threads, timeout=${TimeoutMinutes}min)"
 
 # Verify the cluster exists
 $clusterStatus = aws ecs describe-clusters --clusters $cluster --region $Region `
