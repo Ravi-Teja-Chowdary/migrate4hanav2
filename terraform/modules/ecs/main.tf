@@ -45,6 +45,21 @@ variable "image_tag" {
   default     = "latest"
   description = "Docker image tag to deploy (set via CI/CD)"
 }
+variable "anthropic_secret_arn" {
+  type        = string
+  default     = ""
+  description = "Secrets Manager ARN holding the Anthropic API key. Empty disables the Claude direct-API path."
+}
+variable "anthropic_model_id" {
+  type        = string
+  default     = "claude-sonnet-4-6"
+  description = "Default Claude model for ABAP remediation via direct Anthropic API"
+}
+variable "anthropic_escalation_model" {
+  type        = string
+  default     = "claude-opus-4-7"
+  description = "Claude model used on retry"
+}
 
 # ── ECR Repository ───────────────────────────
 resource "aws_ecr_repository" "migration_worker" {
@@ -139,7 +154,7 @@ resource "aws_iam_role_policy" "ecs_task" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = var.secrets_arn
+        Resource = compact([var.secrets_arn, var.anthropic_secret_arn])
       },
       # DynamoDB — idempotency tracking + country rules
       {
@@ -228,6 +243,10 @@ resource "aws_ecs_task_definition" "migration_heavy" {
       { name = "AWS_DEFAULT_REGION", value = var.aws_region },
       { name = "LLM_MODE",          value = var.llm_mode },
       { name = "OLLAMA_MODEL",      value = var.ollama_model },
+      # Direct Anthropic API (when Bedrock model access is not granted)
+      { name = "M4H_ANTHROPIC_SECRET_ARN",    value = var.anthropic_secret_arn },
+      { name = "ANTHROPIC_MODEL_ID",          value = var.anthropic_model_id },
+      { name = "ANTHROPIC_ESCALATION_MODEL",  value = var.anthropic_escalation_model },
     ], var.ollama_url != "" ? [{ name = "OLLAMA_URL", value = var.ollama_url }] : [])
 
     logConfiguration = {

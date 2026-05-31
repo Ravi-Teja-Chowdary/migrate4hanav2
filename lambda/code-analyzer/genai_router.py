@@ -20,7 +20,6 @@ logic + the ``invoke_ollama`` import + the ``ollama`` branch in ``_dispatch``.
 import json
 import os
 import logging
-import boto3
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("genai_router")
@@ -32,9 +31,7 @@ from abap_ast_engine import process_abap_file
 # from ollama_genai_engine import invoke_ollama  # disabled — Bedrock-only mode
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-BEDROCK_MODEL_ID = os.environ.get(
-    "BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0"
-)
+ANTHROPIC_MODEL_ID = os.environ.get("ANTHROPIC_MODEL_ID", "claude-sonnet-4-6")
 AST_CHANGE_THRESHOLD = int(os.environ.get("AST_CHANGE_THRESHOLD", "3"))
 
 # Backend selection. Supported values: "cloud" (default), "local", "dual".
@@ -166,29 +163,17 @@ def _build_analysis_prompt(
 
 
 def _invoke_bedrock(prompt: str) -> Optional[Dict]:
-    """Invoke AWS Bedrock via PrivateLink (zero internet egress)."""
+    """Invoke Claude via the direct Anthropic API (Bedrock-equivalent path).
+    Name kept for backwards compatibility with the bedrock-only routing layer.
+    Egress is via NAT, not Bedrock PrivateLink."""
     try:
-        client = boto3.client(
-            "bedrock-runtime",
-            region_name=os.environ.get("AWS_REGION", "us-east-1"),
-        )
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": prompt}],
-        })
-        response = client.invoke_model(
-            modelId=BEDROCK_MODEL_ID,
-            body=body,
-            contentType="application/json",
-            accept="application/json",
-        )
-        response_body = json.loads(response["body"].read())
-        content = response_body.get("content", [{}])[0].get("text", "")
-
-        return _parse_genai_response(content, BEDROCK_MODEL_ID)
+        from anthropic_client import invoke_claude
+        text = invoke_claude(prompt, model=ANTHROPIC_MODEL_ID, max_tokens=4096)
+        if not text:
+            return None
+        return _parse_genai_response(text, ANTHROPIC_MODEL_ID)
     except Exception as e:
-        logger.warning(f"Bedrock invocation failed: {e}")
+        logger.warning(f"Anthropic invocation failed: {e}")
         return None
 
 

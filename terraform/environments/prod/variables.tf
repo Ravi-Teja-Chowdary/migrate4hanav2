@@ -69,6 +69,28 @@ variable "bedrock_model_id" {
   default = "anthropic.claude-3-sonnet-20240229-v1:0"
 }
 
+# Direct Anthropic API (replaces Bedrock when the AWS account does not have
+# model access). Set anthropic_api_key in terraform.tfvars - it is loaded into
+# Secrets Manager and read by the code-analyzer Lambda at runtime.
+variable "anthropic_api_key" {
+  type        = string
+  description = "Anthropic API key for Claude code remediation. Leave empty to skip seeding the secret (e.g. on initial apply); set later via `aws secretsmanager put-secret-value`."
+  default     = ""
+  sensitive   = true
+}
+
+variable "anthropic_model_id" {
+  type        = string
+  description = "Default Claude model for ABAP remediation. claude-sonnet-4-6 is the cheap/fast default; the router escalates to anthropic_escalation_model on retry."
+  default     = "claude-sonnet-4-6"
+}
+
+variable "anthropic_escalation_model" {
+  type        = string
+  description = "Claude model used on retry when the default model's fix fails the ATC gate. Defaults to the most capable available."
+  default     = "claude-opus-4-7"
+}
+
 variable "ast_change_threshold" {
   type    = number
   default = 3

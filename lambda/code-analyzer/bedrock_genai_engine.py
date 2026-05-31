@@ -1,49 +1,36 @@
 """
-bedrock_genai_engine.py — AWS Bedrock GenAI Engine for Migrate4HANA
-===================================================================
-Invokes Claude Opus 4.5 on AWS Bedrock to remediate ABAP code issues
-that the deterministic AST engine cannot handle (Dynpro calls, native SQL,
-SAPGui FMs, complex semantic patterns).
+bedrock_genai_engine.py - Claude GenAI Engine for Migrate4HANA
+===============================================================
+Invokes Claude (Sonnet 4.6 by default, Opus 4.7 on escalation) via the direct
+Anthropic API to remediate ABAP code issues the deterministic AST engine
+cannot handle (Dynpro calls, native SQL, SAPGui FMs, complex semantic patterns).
+
+Module name retained for callsite compatibility - the actual transport is
+api.anthropic.com over the Lambda's NAT egress (Bedrock access not required).
 
 Used as Phase 3 of Stage 5 in the local pipeline (run_local_pipeline.py).
 
 Requirements:
-    - boto3 installed
-    - AWS credentials configured via `aws configure`
-    - Bedrock model access enabled for Claude Opus 4.5 in your AWS region
+    - ANTHROPIC_API_KEY env var OR M4H_ANTHROPIC_SECRET_ARN pointing to a
+      Secrets Manager secret containing the key
 """
 
 import json
 import os
 import logging
-import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, List, Optional
 
-import boto3
-from botocore.exceptions import (
-    ClientError,
-    NoCredentialsError,
-    EndpointConnectionError,
-    BotoCoreError,
-)
+from anthropic_client import invoke_claude
 
 logger = logging.getLogger("bedrock_genai_engine")
 logger.setLevel(logging.INFO)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-# Claude Opus 4.5 via global cross-region inference profile.
-# Override via BEDROCK_MODEL_ID env var if using a custom inference profile ARN.
-BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-opus-4-5-v2-global")
-BEDROCK_REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+# Default model. Sonnet 4.6 is the production default for code remediation:
+# strong instruction-following on narrow tasks at ~5x lower cost than Opus.
+ANTHROPIC_MODEL_ID = os.environ.get("ANTHROPIC_MODEL_ID", "claude-sonnet-4-6")
 MAX_TOKENS = 8192
 MAX_SOURCE_CHARS = 60_000  # Truncate very large programs to stay within token limits
-MAX_RETRIES = 2
-RETRY_BACKOFF = 3  # seconds
-
-
-def _get_bedrock_client():
-    """Create Bedrock runtime client using default AWS credential chain."""
-    return boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
 
 
 def _build_remediation_prompt(
@@ -122,10 +109,9 @@ Respond with ONLY this JSON (no other text):
 
 
 def _invoke_bedrock(prompt: str) -> Optional[Dict]:
-    """Invoke AWS Bedrock with Claude via invoke_model (Messages API).
-    Uses array-format content blocks for compatibility with Claude Opus 4.6.
-    Returns parsed response dict or error dict with _error/_error_reason."""
-    last_error = "Unknown error"
+    """Invoke Claude via the direct Anthropic API (function name preserved for
+    callsite compatibility - the transport is api.anthropic.com, not Bedrock).
+    Returns parsed response dict, or an error dict with _error/_error_reason."""
     system_msg = (
         "You are an ABAP code remediation engine. You output ONLY valid JSON. "
         "Never include conversational text, greetings, or explanations outside "
@@ -133,88 +119,15 @@ def _invoke_bedrock(prompt: str) -> Optional[Dict]:
         "If you cannot produce a fix, return the JSON with an empty fixes array."
     )
 
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            client = _get_bedrock_client()
+    logger.info(f"Anthropic invoke (model={ANTHROPIC_MODEL_ID}, prompt_len={len(prompt)})")
+    text = invoke_claude(prompt, model=ANTHROPIC_MODEL_ID, system=system_msg,
+                         max_tokens=MAX_TOKENS, temperature=0.1)
 
-            # Use array-format content blocks (required by Claude Opus 4.6)
-            body = json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": MAX_TOKENS,
-                "system": [{"type": "text", "text": system_msg}],
-                "messages": [{
-                    "role": "user",
-                    "content": [{"type": "text", "text": prompt}],
-                }],
-                "temperature": 0.1,
-            })
-
-            logger.info(f"Bedrock invoke attempt {attempt}/{MAX_RETRIES} "
-                        f"(model={BEDROCK_MODEL_ID}, region={BEDROCK_REGION}, "
-                        f"prompt_len={len(prompt)})")
-
-            response = client.invoke_model(
-                modelId=BEDROCK_MODEL_ID,
-                body=body,
-                contentType="application/json",
-                accept="application/json",
-            )
-
-            response_body = json.loads(response["body"].read())
-            content_blocks = response_body.get("content", [])
-            text = ""
-            for block in content_blocks:
-                if block.get("type") == "text":
-                    text += block.get("text", "")
-
-            if not text.strip():
-                logger.warning("Bedrock returned empty content")
-                return {"_error": True, "_error_reason": "Empty response from Bedrock",
-                        "fixes": [], "recommendations": []}
-
-            usage = response_body.get("usage", {})
-            logger.info(f"Bedrock response: {len(text)} chars, "
-                        f"input_tokens={usage.get('input_tokens', '?')}, "
-                        f"output_tokens={usage.get('output_tokens', '?')}")
-
-            return _parse_response(text)
-
-        except NoCredentialsError:
-            logger.error("AWS credentials not configured. Run 'aws configure' first.")
-            return {"_error": True, "_error_reason": "AWS credentials not configured",
-                    "fixes": [], "recommendations": []}
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "")
-            error_msg = e.response.get("Error", {}).get("Message", str(e))
-            logger.error(f"Bedrock ClientError [{error_code}]: {error_msg}")
-            if error_code == "AccessDeniedException":
-                return {"_error": True, "_error_reason": f"Access denied for {BEDROCK_MODEL_ID}",
-                        "fixes": [], "recommendations": []}
-            elif error_code == "ThrottlingException" and attempt < MAX_RETRIES:
-                wait = RETRY_BACKOFF * attempt
-                logger.warning(f"Bedrock throttled, retrying in {wait}s...")
-                time.sleep(wait)
-                last_error = f"Throttled after {MAX_RETRIES} attempts"
-                continue
-            else:
-                return {"_error": True, "_error_reason": f"{error_code}: {error_msg}",
-                        "fixes": [], "recommendations": []}
-        except EndpointConnectionError:
-            logger.error(f"Cannot connect to Bedrock endpoint in {BEDROCK_REGION}. "
-                         f"Check region and network.")
-            return {"_error": True, "_error_reason": f"Cannot connect to Bedrock in {BEDROCK_REGION}",
-                    "fixes": [], "recommendations": []}
-        except (BotoCoreError, Exception) as e:
-            logger.error(f"Bedrock invocation failed: {e}")
-            last_error = str(e)
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_BACKOFF)
-                continue
-            return {"_error": True, "_error_reason": last_error,
-                    "fixes": [], "recommendations": []}
-
-    return {"_error": True, "_error_reason": last_error,
-            "fixes": [], "recommendations": []}
+    if not text:
+        return {"_error": True,
+                "_error_reason": "Anthropic API unavailable or returned empty",
+                "fixes": [], "recommendations": []}
+    return _parse_response(text)
 
 
 def _parse_response(content: str) -> Dict:
@@ -256,15 +169,18 @@ def _parse_response(content: str) -> Dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def check_bedrock_connectivity() -> bool:
-    """Quick check that Bedrock is reachable with current credentials."""
+    """Quick check that the Anthropic API key is loadable. Name preserved for
+    callsite compatibility."""
     try:
-        client = _get_bedrock_client()
-        # Lightweight call to verify credentials and endpoint
-        client.meta.service_model
-        logger.info(f"Bedrock client initialized (region={BEDROCK_REGION}, model={BEDROCK_MODEL_ID})")
-        return True
-    except (NoCredentialsError, EndpointConnectionError, BotoCoreError) as e:
-        logger.warning(f"Bedrock connectivity check failed: {e}")
+        from anthropic_client import _load_api_key
+        ok = bool(_load_api_key())
+        if ok:
+            logger.info(f"Anthropic API key loaded (model={ANTHROPIC_MODEL_ID})")
+        else:
+            logger.warning("Anthropic API key unavailable")
+        return ok
+    except Exception as e:
+        logger.warning(f"Anthropic connectivity check failed: {e}")
         return False
 
 

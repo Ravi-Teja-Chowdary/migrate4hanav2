@@ -8,16 +8,16 @@
 #   Place the SAP NW RFC SDK zip in the ecs/ directory before building:
 #     ecs/nwrfc750P_*.zip        (Linux x86_64, from SAP Support Portal)
 #
-# BUILD (from project root — build context must be the repo root):
-#   docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .
+# BUILD + PUSH (one command, after `terraform apply` creates the ECR repo):
+#   .\scripts\push-fargate-image.ps1
 #
-# PUSH (after ECR login):
-#   ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-#   REGION=us-east-1
-#   aws ecr get-login-password --region $REGION | \
-#       docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.$REGION.amazonaws.com
-#   docker tag  migrate4hana-worker:latest $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/migrate4hana/worker:latest
-#   docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/migrate4hana/worker:latest
+# The script handles pre-flight checks, ECR login, build (context = repo root),
+# tag, push, verify, and warns about any running Fargate tasks that would not
+# auto-pull the new image. See script header for parameters (-Tag, -Region,
+# -RepoName, -SkipBuild).
+#
+# Manual build, if needed (e.g., to inspect layers):
+#   docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .
 ###############################################################################
 
 # ── Stage 1: Build PyRFC + SAP NW RFC SDK ────

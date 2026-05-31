@@ -35,6 +35,21 @@ variable "bedrock_model_id" {
   default     = "anthropic.claude-3-sonnet-20240229-v1:0"
   description = "Bedrock foundation model ID for GenAI code analysis"
 }
+variable "anthropic_secret_arn" {
+  type        = string
+  default     = ""
+  description = "ARN of the Secrets Manager secret holding the Anthropic API key. Empty disables the Anthropic path (Lambdas then rely on Bedrock if configured)."
+}
+variable "anthropic_model_id" {
+  type        = string
+  default     = "claude-sonnet-4-6"
+  description = "Default Claude model for ABAP remediation via direct Anthropic API"
+}
+variable "anthropic_escalation_model" {
+  type        = string
+  default     = "claude-opus-4-7"
+  description = "Claude model used on retry when the default fix fails the ATC gate"
+}
 variable "ast_change_threshold" {
   type        = number
   default     = 3
@@ -137,7 +152,10 @@ resource "aws_iam_role_policy" "lambda" {
         Action = [
           "secretsmanager:GetSecretValue"
         ]
-        Resource = var.secrets_arn
+        Resource = compact([
+          var.secrets_arn,
+          var.anthropic_secret_arn,
+        ])
       },
       {
         Effect = "Allow"
@@ -400,10 +418,14 @@ resource "aws_lambda_function" "migration" {
         ENTITY_RESOLUTION_WORKFLOW_ARN = var.entity_resolution_workflow_arn
       } : {},
       {
-        BEDROCK_MODEL_ID     = var.bedrock_model_id
-        AST_CHANGE_THRESHOLD = tostring(var.ast_change_threshold)
-        LLM_MODE             = var.llm_mode
-        OLLAMA_MODEL         = var.ollama_model
+        BEDROCK_MODEL_ID            = var.bedrock_model_id
+        AST_CHANGE_THRESHOLD        = tostring(var.ast_change_threshold)
+        LLM_MODE                    = var.llm_mode
+        OLLAMA_MODEL                = var.ollama_model
+        # Direct Anthropic API (used when Bedrock model access is not granted)
+        M4H_ANTHROPIC_SECRET_ARN    = var.anthropic_secret_arn
+        ANTHROPIC_MODEL_ID          = var.anthropic_model_id
+        ANTHROPIC_ESCALATION_MODEL  = var.anthropic_escalation_model
       },
       var.ollama_url != "" ? { OLLAMA_URL = var.ollama_url } : {},
       {

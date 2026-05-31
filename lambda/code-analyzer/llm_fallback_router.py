@@ -55,8 +55,10 @@ try:
 except Exception:
     Pseudonymizer = None  # type: ignore
 
-BEDROCK_MODEL_ID = os.environ.get(
-    "BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+# Default Claude model for ABAP remediation. Sonnet 4.6 handles narrow
+# fragment-fix tasks at ~5x cheaper than Opus; the router escalates to
+# claude-opus-4-7 on retry (see anthropic_client.ESCALATION_MODEL).
+ANTHROPIC_MODEL_ID = os.environ.get("ANTHROPIC_MODEL_ID", "claude-sonnet-4-6")
 MAX_FALLBACK_RETRIES = int(os.environ.get("M4H_FALLBACK_RETRIES", "2"))
 ERROR_WINDOW = int(os.environ.get("M4H_ERROR_WINDOW", "6"))  # context lines each side
 
@@ -137,28 +139,20 @@ def extract_abap(text: str) -> str:
     return (m.group(1) if m else text).strip("\n")
 
 
-def invoke_bedrock(prompt: str, model_id: str = BEDROCK_MODEL_ID) -> Optional[str]:
-    """Invoke Amazon Bedrock (Claude) and return the raw text, or None on any
-    failure. Never raises — a dead LLM must not halt the pipeline."""
+def invoke_anthropic(prompt: str, model_id: str = ANTHROPIC_MODEL_ID) -> Optional[str]:
+    """Invoke Claude via the direct Anthropic API and return raw text, or None.
+    Never raises - a dead LLM must not halt the pipeline."""
     try:
-        import boto3
-        client = boto3.client(
-            "bedrock-runtime",
-            region_name=os.environ.get("AWS_REGION", "us-east-1"))
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 2048,
-            "temperature": 0,
-            "messages": [{"role": "user", "content": prompt}],
-        })
-        resp = client.invoke_model(
-            modelId=model_id, body=body,
-            contentType="application/json", accept="application/json")
-        payload = json.loads(resp["body"].read())
-        return payload.get("content", [{}])[0].get("text", "")
+        from anthropic_client import invoke_claude
+        return invoke_claude(prompt, model=model_id, max_tokens=2048, temperature=0.0)
     except Exception as e:  # noqa: BLE001
-        logger.warning("Bedrock invocation unavailable: %s", e)
+        logger.warning("Anthropic invocation unavailable: %s", e)
         return None
+
+
+# Backwards-compat alias - the router still references invoke_bedrock as the
+# default callable so external test harnesses keep working.
+invoke_bedrock = invoke_anthropic
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -323,8 +317,8 @@ class FallbackRouter:
     def __init__(self, llm_callable: Optional[Callable[[str], Optional[str]]] = None,
                  engine: Optional[Callable[..., dict]] = None,
                  max_retries: int = MAX_FALLBACK_RETRIES):
-        # llm_callable: prompt -> raw model text (or None). Defaults to Bedrock.
-        self.llm = llm_callable or invoke_bedrock
+        # llm_callable: prompt -> raw model text (or None). Defaults to Anthropic.
+        self.llm = llm_callable or invoke_anthropic
         self.engine = engine or process_abap_file
         self.max_retries = max_retries
 
@@ -436,8 +430,15 @@ class FallbackRouter:
 
             prompt = build_fix_prompt(masked_block, object_name)
             raw = None
-            for _ in range(max(1, self.max_retries)):
-                raw = self.llm(prompt)
+            # First attempt uses the configured default (Sonnet 4.6); on retry
+            # escalate to Opus 4.7 since the cheap path didn't produce a fix.
+            for attempt in range(max(1, self.max_retries)):
+                if attempt == 0 or self.llm is not invoke_anthropic:
+                    raw = self.llm(prompt)
+                else:
+                    raw = invoke_anthropic(
+                        prompt, model_id=os.environ.get(
+                            "ANTHROPIC_ESCALATION_MODEL", "claude-opus-4-7"))
                 if raw:
                     break
             patched_masked = extract_abap(raw) if raw else ""

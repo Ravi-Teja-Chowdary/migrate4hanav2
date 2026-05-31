@@ -995,33 +995,39 @@ output "state_machine_name" { value = aws_sfn_state_machine.migration_pipeline.n
 # ${XxxArn} is replaced with the corresponding entry from var.lambda_arns.
 # =============================================================================
 locals {
+  # Step Functions schema requires every Task's Resource to be a valid ARN at
+  # creation time. If a Lambda role hasn't been deployed yet, fall back to the
+  # manual-gate Lambda (always present) so the state machine validates. Replace
+  # the fallback with the real Lambda once it's deployed.
+  ls_fallback_arn = lookup(var.lambda_arns, "manual-gate", "")
+
   ls_arns = {
-    DiscoveryEngineArn               = lookup(var.lambda_arns, "discovery-engine", "")
-    SizingAdvisorArn                 = lookup(var.lambda_arns, "sizing-advisor", "")
-    ObjectRouterArn                  = lookup(var.lambda_arns, "object-router", "")
-    TargetProvisionerArn             = lookup(var.lambda_arns, "target-provisioner", "")
-    BasisValidatorArn                = lookup(var.lambda_arns, "basis-validator", "")
-    CodeAnalyzerArn                  = lookup(var.lambda_arns, "code-analyzer", "")
-    TransportArtifactBuilderArn      = lookup(var.lambda_arns, "transport-artifact-builder", "")
-    TransportFilePlacerArn           = lookup(var.lambda_arns, "transport-file-placer", "")
-    TransportImportExecutorArn       = lookup(var.lambda_arns, "transport-import-executor", "")
-    TransportImportVerifierArn       = lookup(var.lambda_arns, "transport-import-verifier", "")
-    ConfigReplicatorArn              = lookup(var.lambda_arns, "config-replicator", "")
-    BCSetBuilderArn                  = lookup(var.lambda_arns, "bc-set-builder", "")
-    DataMigratorArn                  = lookup(var.lambda_arns, "data-migrator", "")
-    DataHygieneArn                   = lookup(var.lambda_arns, "data-hygiene", "")
-    MigrationCockpitOrchestratorArn  = lookup(var.lambda_arns, "migration-cockpit-orchestrator", "")
-    LTMOMOrchestratorArn             = lookup(var.lambda_arns, "ltmom-orchestrator", "")
-    IDocOrchestratorArn              = lookup(var.lambda_arns, "idoc-orchestrator", "")
-    MigrationValidatorArn            = lookup(var.lambda_arns, "migration-validator", "")
-    TestGeneratorArn                 = lookup(var.lambda_arns, "test-generator", "")
-    MigrationCompletenessAnalyzerArn = lookup(var.lambda_arns, "migration-completeness-analyzer", "")
-    CutoverOrchestratorArn           = lookup(var.lambda_arns, "cutover-orchestrator", "")
-    DeltaExtractorArn                = lookup(var.lambda_arns, "delta-extractor", "")
-    IntegrationActivatorArn          = lookup(var.lambda_arns, "integration-activator", "")
-    PdfReportGeneratorArn            = lookup(var.lambda_arns, "pdf_report_generator", "")
-    RollbackManagerArn               = lookup(var.lambda_arns, "rollback-manager", "")
-    ManualGateLambdaArn              = lookup(var.lambda_arns, "manual-gate", "")
+    DiscoveryEngineArn               = lookup(var.lambda_arns, "discovery-engine", local.ls_fallback_arn)
+    SizingAdvisorArn                 = lookup(var.lambda_arns, "sizing-advisor", local.ls_fallback_arn)
+    ObjectRouterArn                  = lookup(var.lambda_arns, "object-router", local.ls_fallback_arn)
+    TargetProvisionerArn             = lookup(var.lambda_arns, "target-provisioner", local.ls_fallback_arn)
+    BasisValidatorArn                = lookup(var.lambda_arns, "basis-validator", local.ls_fallback_arn)
+    CodeAnalyzerArn                  = lookup(var.lambda_arns, "code-analyzer", local.ls_fallback_arn)
+    TransportArtifactBuilderArn      = lookup(var.lambda_arns, "transport-artifact-builder", local.ls_fallback_arn)
+    TransportFilePlacerArn           = lookup(var.lambda_arns, "transport-file-placer", local.ls_fallback_arn)
+    TransportImportExecutorArn       = lookup(var.lambda_arns, "transport-import-executor", local.ls_fallback_arn)
+    TransportImportVerifierArn       = lookup(var.lambda_arns, "transport-import-verifier", local.ls_fallback_arn)
+    ConfigReplicatorArn              = lookup(var.lambda_arns, "config-replicator", local.ls_fallback_arn)
+    BCSetBuilderArn                  = lookup(var.lambda_arns, "bc-set-builder", local.ls_fallback_arn)
+    DataMigratorArn                  = lookup(var.lambda_arns, "data-migrator", local.ls_fallback_arn)
+    DataHygieneArn                   = lookup(var.lambda_arns, "data-hygiene", local.ls_fallback_arn)
+    MigrationCockpitOrchestratorArn  = lookup(var.lambda_arns, "migration-cockpit-orchestrator", local.ls_fallback_arn)
+    LTMOMOrchestratorArn             = lookup(var.lambda_arns, "ltmom-orchestrator", local.ls_fallback_arn)
+    IDocOrchestratorArn              = lookup(var.lambda_arns, "idoc-orchestrator", local.ls_fallback_arn)
+    MigrationValidatorArn            = lookup(var.lambda_arns, "migration-validator", local.ls_fallback_arn)
+    TestGeneratorArn                 = lookup(var.lambda_arns, "test-generator", local.ls_fallback_arn)
+    MigrationCompletenessAnalyzerArn = lookup(var.lambda_arns, "migration-completeness-analyzer", local.ls_fallback_arn)
+    CutoverOrchestratorArn           = lookup(var.lambda_arns, "cutover-orchestrator", local.ls_fallback_arn)
+    DeltaExtractorArn                = lookup(var.lambda_arns, "delta-extractor", local.ls_fallback_arn)
+    IntegrationActivatorArn          = lookup(var.lambda_arns, "integration-activator", local.ls_fallback_arn)
+    PdfReportGeneratorArn            = lookup(var.lambda_arns, "pdf_report_generator", local.ls_fallback_arn)
+    RollbackManagerArn               = lookup(var.lambda_arns, "rollback-manager", local.ls_fallback_arn)
+    ManualGateLambdaArn              = lookup(var.lambda_arns, "manual-gate", local.ls_fallback_arn)
   }
 }
 

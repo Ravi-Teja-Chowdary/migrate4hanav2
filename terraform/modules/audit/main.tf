@@ -23,6 +23,10 @@ locals {
 resource "aws_s3_bucket" "audit_logs" {
   bucket = "migrate4hana-audit-logs-${var.environment}-${local.account_id}"
 
+  # Object Lock can only be turned ON at bucket creation. Required because the
+  # aws_s3_bucket_object_lock_configuration resource below sets GOVERNANCE mode.
+  object_lock_enabled = true
+
   tags = {
     Name        = "migrate4hana-audit-logs-${var.environment}"
     Component   = "Compliance"
@@ -83,7 +87,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
   }
 }
 
-# S3 Object Lock for WORM compliance (prevents deletion)
+# S3 Object Lock for WORM compliance (prevents deletion). Object Lock requires
+# versioning to be enabled FIRST — the explicit depends_on prevents the race
+# where Terraform applies the lock config before versioning lands.
 resource "aws_s3_bucket_object_lock_configuration" "audit_logs" {
   bucket = aws_s3_bucket.audit_logs.id
 
@@ -93,6 +99,8 @@ resource "aws_s3_bucket_object_lock_configuration" "audit_logs" {
       days = 2555
     }
   }
+
+  depends_on = [aws_s3_bucket_versioning.audit_logs]
 }
 
 # ─────────────────────────────────────────────
@@ -146,8 +154,11 @@ resource "aws_cloudtrail" "migration_audit" {
     include_management_events = true
 
     data_resource {
-      type   = "AWS::Lambda::Function"
-      values = ["arn:aws:lambda:${var.region}:${local.account_id}:function:migrate4hana-*"]
+      type = "AWS::Lambda::Function"
+      # CloudTrail Lambda data-events only accept either exact function ARNs or
+      # the bare prefix "arn:aws:lambda" (= all functions in the account). Wildcards
+      # in the function-name portion are rejected with InvalidEventSelectorsException.
+      values = ["arn:aws:lambda"]
     }
   }
 
@@ -165,7 +176,7 @@ resource "aws_cloudtrail" "migration_audit" {
   tags = {
     Name        = "migrate4hana-audit-${var.environment}"
     Component   = "Compliance"
-    Compliance  = "SOX,GxP"
+    Compliance  = "SOX-GxP"
     Environment = var.environment
   }
 }

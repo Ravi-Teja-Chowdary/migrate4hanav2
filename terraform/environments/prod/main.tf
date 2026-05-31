@@ -125,6 +125,13 @@ module "lambda" {
   bedrock_model_id     = var.bedrock_model_id
   ast_change_threshold = var.ast_change_threshold
 
+  # Direct Anthropic API path (replaces Bedrock when the AWS account does not
+  # have model access). The code-analyzer Lambda fetches the key at runtime
+  # from this Secrets Manager secret via M4H_ANTHROPIC_SECRET_ARN.
+  anthropic_secret_arn      = aws_secretsmanager_secret.anthropic_api_key.arn
+  anthropic_model_id        = var.anthropic_model_id
+  anthropic_escalation_model = var.anthropic_escalation_model
+
   # ── PROD-hardening pillars wired into every function (no-op when empty) ──
   transform_rules    = var.transform_rules
   mapping_s3         = "s3://${aws_s3_bucket.mapping.id}/mappings/matrix.json"
@@ -352,6 +359,10 @@ module "ecs" {
   llm_mode           = var.llm_mode
   ollama_model       = var.ollama_model
   ollama_url         = var.enable_airgapped_llm ? "http://${module.airgapped_llm[0].private_ip}:11434" : ""
+  # Direct Anthropic API path for heavy-compute stages on Fargate
+  anthropic_secret_arn       = aws_secretsmanager_secret.anthropic_api_key.arn
+  anthropic_model_id         = var.anthropic_model_id
+  anthropic_escalation_model = var.anthropic_escalation_model
 }
 
 # ─────────────────────────────────────────────
@@ -415,6 +426,7 @@ module "cloudwatch" {
   source = "../../modules/cloudwatch"
 
   environment       = var.environment
+  region            = var.aws_region
   lambda_arns       = module.lambda.function_arns
   state_machine_arn = module.step_functions.state_machine_arn
   alert_email       = var.alert_email
@@ -426,13 +438,34 @@ module "cloudwatch" {
 resource "aws_secretsmanager_secret" "sap_credentials" {
   name        = "migrate4hana/${var.environment}/sap-credentials"
   description = "SAP ECC RFC connection credentials"
-  tags        = { Component = "Security" }
+  # Purge immediately on destroy so the same name can be re-created without the
+  # 7-30 day "scheduled for deletion" lockout. Real prod runs should raise this.
+  recovery_window_in_days = 0
+  tags                    = { Component = "Security" }
 }
 
 resource "aws_secretsmanager_secret" "s4hana_credentials" {
-  name        = "migrate4hana/${var.environment}/s4hana-credentials"
-  description = "S/4HANA target system RFC connection credentials"
-  tags        = { Component = "Security" }
+  name                    = "migrate4hana/${var.environment}/s4hana-credentials"
+  description             = "S/4HANA target system RFC connection credentials"
+  recovery_window_in_days = 0
+  tags                    = { Component = "Security" }
+}
+
+# Anthropic API key - used by code-analyzer Lambda for Claude remediation in
+# accounts without Bedrock access. The secret resource is always created; the
+# value is only set when var.anthropic_api_key is non-empty (so an empty value
+# does not break the apply for users who haven't supplied a key yet).
+resource "aws_secretsmanager_secret" "anthropic_api_key" {
+  name                    = "migrate4hana/${var.environment}/anthropic-api-key"
+  description             = "Anthropic API key for Claude (Sonnet 4.6 / Opus 4.7) code remediation"
+  recovery_window_in_days = 0
+  tags                    = { Component = "Security", Purpose = "ClaudeAPI" }
+}
+
+resource "aws_secretsmanager_secret_version" "anthropic_api_key" {
+  count         = var.anthropic_api_key != "" ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.anthropic_api_key.id
+  secret_string = jsonencode({ api_key = var.anthropic_api_key })
 }
 
 # ─────────────────────────────────────────────
@@ -610,9 +643,10 @@ resource "random_password" "gate_secret" {
 }
 
 resource "aws_secretsmanager_secret" "gate_secret" {
-  name        = "migrate4hana/${var.environment}/gate-secret"
-  description = "HMAC secret for spine approval gates (M4H_GATE_SECRET)"
-  tags        = { Component = "Governance", Pillar = "3" }
+  name                    = "migrate4hana/${var.environment}/gate-secret"
+  description             = "HMAC secret for spine approval gates (M4H_GATE_SECRET)"
+  recovery_window_in_days = 0
+  tags                    = { Component = "Governance", Pillar = "3" }
 }
 
 resource "aws_secretsmanager_secret_version" "gate_secret" {

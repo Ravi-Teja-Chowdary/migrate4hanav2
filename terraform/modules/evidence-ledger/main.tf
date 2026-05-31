@@ -52,7 +52,7 @@ resource "aws_kms_key" "m4h" {
   tags = {
     Component   = "EvidenceLedger"
     Environment = var.environment
-    Compliance  = "SOX,GxP"
+    Compliance  = "SOX-GxP"
   }
 }
 
@@ -72,7 +72,7 @@ resource "aws_s3_bucket" "evidence" {
   tags = {
     Component   = "EvidenceLedger"
     Environment = var.environment
-    Compliance  = "SOX,GxP"
+    Compliance  = "SOX-GxP"
   }
 }
 

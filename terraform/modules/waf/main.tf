@@ -18,7 +18,7 @@ variable "rate_limit" {
 # ─────────────────────────────────────────────
 resource "aws_wafv2_web_acl" "main" {
   name        = "migrate4hana-waf-${var.environment}"
-  description = "Migrate4HANA API protection — rate limiting, common exploits, SQLi, XSS"
+  description = "Migrate4HANA API protection - rate limiting, common exploits, SQLi, XSS"
   scope       = "REGIONAL"
 
   default_action {
@@ -204,7 +204,7 @@ resource "aws_cloudwatch_metric_alarm" "waf_blocked_requests" {
   period              = 300
   statistic           = "Sum"
   threshold           = 100
-  alarm_description   = "WAF blocked > 100 requests in 5 min — possible attack"
+  alarm_description   = "WAF blocked > 100 requests in 5 min - possible attack"
 
   dimensions = {
     WebACL = aws_wafv2_web_acl.main.name

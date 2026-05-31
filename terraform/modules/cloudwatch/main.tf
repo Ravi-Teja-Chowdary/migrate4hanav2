@@ -6,6 +6,10 @@ variable "environment" { type = string }
 variable "lambda_arns" { type = map(string) }
 variable "state_machine_arn" { type = string }
 variable "alert_email" { type = string }
+variable "region" {
+  type    = string
+  default = "us-east-1"
+}
 
 # ── SNS Topic for alerts ─────────────────────
 resource "aws_sns_topic" "alerts" {
@@ -39,6 +43,7 @@ resource "aws_cloudwatch_dashboard" "migration" {
           period = 300
           stat   = "Sum"
           view   = "timeSeries"
+          region = var.region
         }
       },
       {
@@ -56,6 +61,7 @@ resource "aws_cloudwatch_dashboard" "migration" {
           period = 300
           stat   = "Sum"
           view   = "timeSeries"
+          region = var.region
         }
       },
       {
@@ -73,6 +79,7 @@ resource "aws_cloudwatch_dashboard" "migration" {
           period = 300
           stat   = "Average"
           view   = "timeSeries"
+          region = var.region
         }
       },
       {
@@ -91,6 +98,7 @@ resource "aws_cloudwatch_dashboard" "migration" {
           period = 300
           stat   = "Sum"
           view   = "timeSeries"
+          region = var.region
         }
       }
     ]
