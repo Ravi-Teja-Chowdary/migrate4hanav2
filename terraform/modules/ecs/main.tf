@@ -21,10 +21,6 @@ variable "private_subnet_ids" { type = list(string) }
 variable "secrets_arn" { type = string }
 variable "s3_staging_bucket" { type = string }
 variable "s3_staging_arn" { type = string }
-variable "bedrock_model_id" {
-  type    = string
-  default = "anthropic.claude-3-sonnet-20240229-v1:0"
-}
 variable "llm_mode" {
   type        = string
   default     = "cloud"
@@ -169,15 +165,9 @@ resource "aws_iam_role_policy" "ecs_task" {
         ]
         Resource = "arn:aws:dynamodb:${var.aws_region}:*:table/migrate4hana-*"
       },
-      # Bedrock — GenAI code analysis (Stage 5)
-      {
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream"
-        ]
-        Resource = "arn:aws:bedrock:*::foundation-model/*"
-      },
+      # NOTE: bedrock:InvokeModel removed - Stage 5 LLM remediation calls the
+      # direct Anthropic API (api.anthropic.com), not Bedrock. Restore this
+      # block if/when Bedrock model access is granted on this account.
       # S3 — staging bucket for migration data
       {
         Effect = "Allow"
@@ -239,11 +229,10 @@ resource "aws_ecs_task_definition" "migration_heavy" {
       { name = "S3_STAGING_BUCKET", value = var.s3_staging_bucket },
       { name = "SECRETS_ARN",       value = var.secrets_arn },
       { name = "ENVIRONMENT",       value = var.environment },
-      { name = "BEDROCK_MODEL_ID",  value = var.bedrock_model_id },
       { name = "AWS_DEFAULT_REGION", value = var.aws_region },
       { name = "LLM_MODE",          value = var.llm_mode },
       { name = "OLLAMA_MODEL",      value = var.ollama_model },
-      # Direct Anthropic API (when Bedrock model access is not granted)
+      # Direct Anthropic API (Bedrock is not used on this account)
       { name = "M4H_ANTHROPIC_SECRET_ARN",    value = var.anthropic_secret_arn },
       { name = "ANTHROPIC_MODEL_ID",          value = var.anthropic_model_id },
       { name = "ANTHROPIC_ESCALATION_MODEL",  value = var.anthropic_escalation_model },

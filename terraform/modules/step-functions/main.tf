@@ -397,13 +397,13 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
       # ── LLM Remediation: Bedrock (Anthropic Claude) ──
       InvokeBedrockLLM = {
         Type     = "Task"
-        Comment  = "Enterprise Scale Amazon Bedrock via PrivateLink"
+        Comment  = "LLM remediation via Claude (direct Anthropic API, NAT egress)"
         Resource = "arn:aws:states:::lambda:invoke"
         Parameters = {
-          FunctionName = lookup(var.lambda_arns, "bedrock-llm-router", "")
+          FunctionName = lookup(var.lambda_arns, "code-analyzer", "")
           Payload = {
             "stage"           = "llm-remediation"
-            "model"           = "bedrock-anthropic-claude"
+            "model"           = "anthropic-claude-sonnet-4-6"
             "metadata.$"      = "$.metadata"
             "code_analysis.$" = "$.code_analysis.Payload"
           }

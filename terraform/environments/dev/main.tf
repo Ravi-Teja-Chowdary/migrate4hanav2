@@ -90,8 +90,7 @@ module "lambda" {
   # Entity Resolution — ML-powered BP deduplication
   entity_resolution_workflow_arn = module.entity_resolution.matching_workflow_arn
 
-  # GenAI configuration — Bedrock
-  bedrock_model_id     = var.bedrock_model_id
+  # GenAI configuration - Anthropic API (Bedrock not in use; see prod/main.tf)
   ast_change_threshold = var.ast_change_threshold
 
   # GenAI routing (cloud / local / dual) and Ollama endpoint wiring
@@ -242,9 +241,9 @@ module "lambda" {
       layers      = [var.pyrfc_layer_arn]
     }
 
-    #  Advanced Automated & LLM Features 
-    bedrock-llm-router = {
-      description = "Routes standard AST syntax to Amazon Bedrock (Anthropic/Titan)"
+    #  Advanced Automated & LLM Features
+    code-analyzer = {
+      description = "ABAP code remediation: AST engine + Claude (Anthropic API) fail-safe"
       handler     = "handler.lambda_handler"
       runtime     = "python3.11"
       timeout     = 900
@@ -463,7 +462,6 @@ module "ecs" {
   secrets_arn        = aws_secretsmanager_secret.sap_credentials.arn
   s3_staging_bucket  = module.s3_staging.bucket_name
   s3_staging_arn     = module.s3_staging.bucket_arn
-  bedrock_model_id   = var.bedrock_model_id
   llm_mode           = var.llm_mode
   ollama_model       = var.ollama_model
   ollama_url         = var.enable_airgapped_llm ? "http://${module.airgapped_llm[0].private_ip}:11434" : ""

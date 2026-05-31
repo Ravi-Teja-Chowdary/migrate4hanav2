@@ -1,21 +1,9 @@
-resource "aws_vpc_endpoint" "bedrock_runtime" {
-  vpc_id              = var.vpc_id
-  service_name        = "com.amazonaws.${var.region}.bedrock-runtime"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = var.private_subnet_ids
-  security_group_ids  = [var.vpce_security_group_id]
-  private_dns_enabled = true
-
-  tags = {
-    Name = "Bedrock-PrivateLink"
-  }
-}
-
-resource "aws_vpc_endpoint" "bedrock_agent" {
-  vpc_id              = var.vpc_id
-  service_name        = "com.amazonaws.${var.region}.bedrock-agent-runtime"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = var.private_subnet_ids
-  security_group_ids  = [var.vpce_security_group_id]
-  private_dns_enabled = true
-}
+# Bedrock VPC PrivateLink endpoints removed - this stack uses the direct
+# Anthropic API (api.anthropic.com via NAT egress, key in Secrets Manager).
+#
+# To re-enable Bedrock later, restore the two interface endpoints:
+#   - com.amazonaws.<region>.bedrock-runtime
+#   - com.amazonaws.<region>.bedrock-agent-runtime
+# (~$7.30/mo each + data charges). The module's vpc_id /
+# private_subnet_ids / vpce_security_group_id variables are kept so callers
+# don't need to change when endpoints come back.

@@ -1,17 +1,20 @@
 """
-genai_router.py — GenAI Dispatch Router for Migrate4HANA
+genai_router.py - GenAI Dispatch Router for Migrate4HANA
 =========================================================
-**Bedrock-only mode (2026-05-30).** For the end-to-end pipeline certification we
-intentionally route the AI escalation through **AWS Bedrock only** — the local
-Ollama path is dormant and will be re-enabled once the cloud loop is signed off.
+Cloud LLM path: direct Anthropic API (api.anthropic.com over NAT egress, key
+in Secrets Manager). Bedrock is NOT used on this account - this account does
+not have Bedrock model access. The Ollama local-LLM branch is dormant.
 
 Pipeline:
-  1. AST Engine (local, deterministic) — always runs first.
+  1. AST Engine (local, deterministic) - always runs first.
   2. If AST produces fewer changes than ``AST_CHANGE_THRESHOLD``, escalate to
-     **Bedrock** (Claude via PrivateLink) for semantic analysis.
+     Claude via ``anthropic_client.invoke_claude``.
   3. ``LLM_MODE`` / ``sensitivity`` are accepted for forward compatibility but
-     currently ignored — selection is hard-pinned to Bedrock.
+     currently ignored - selection is hard-pinned to the Anthropic API.
   4. All payloads are PII-scrubbed via ``data_scrubber`` before dispatch.
+
+The internal ``_invoke_bedrock`` function name is preserved purely for
+callsite compatibility; the actual transport is the Anthropic API.
 
 When the local-LLM path is re-introduced, restore the original ``_select_backends``
 logic + the ``invoke_ollama`` import + the ``ollama`` branch in ``_dispatch``.
@@ -115,21 +118,22 @@ def route_analysis(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _select_backends(sensitivity: str) -> (str, Optional[str]):
-    """Bedrock-only mode: ignore LLM_MODE/sensitivity and route to Bedrock.
+    """Anthropic-API-only mode: ignore LLM_MODE/sensitivity and route to Claude.
 
-    The Ollama/local-LLM branch will be restored after the end-to-end pipeline
-    test signs off the cloud loop. See module docstring for re-enablement notes.
+    The Ollama/local-LLM branch will be restored when the on-prem GPU path is
+    productionised. See module docstring for re-enablement notes.
     """
-    return "bedrock", None
+    return "anthropic", None
 
 
 def _dispatch(backend: str, prompt: str) -> Optional[Dict[str, Any]]:
-    """Dispatch to the named backend, catching all exceptions. Bedrock-only mode
-    refuses any non-Bedrock backend rather than silently falling through."""
+    """Dispatch to the named backend, catching all exceptions. The "bedrock"
+    alias is accepted for backwards compatibility but routes to the Anthropic
+    API just like the canonical "anthropic" name."""
     try:
-        if backend == "bedrock":
+        if backend in ("anthropic", "bedrock"):
             return _invoke_bedrock(prompt)
-        logger.warning(f"Backend '{backend}' disabled in Bedrock-only mode")
+        logger.warning(f"Backend '{backend}' disabled (Anthropic-API-only mode)")
         return None
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Backend '{backend}' raised unexpectedly: {e}")

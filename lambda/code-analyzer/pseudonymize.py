@@ -1,12 +1,13 @@
 """
-pseudonymize.py — Reversible sensitive-token masking for Bedrock round-trips
+pseudonymize.py - Reversible sensitive-token masking for Claude round-trips
 ==============================================================================
-The AI fail-safe sends an ABAP fragment to Amazon Bedrock for a localized syntax
-fix. Even though Bedrock-via-PrivateLink keeps the payload inside AWS, we still
-must not let raw passwords, customer hostnames, employee emails, or IPs leave the
-process unmasked — corporate InfoSec policies require that the model **sees only
-surrogates**, the model preserves them verbatim in its fix, and the post-processor
-substitutes the originals back. That is exactly what this module does.
+The AI fail-safe sends an ABAP fragment to Claude (via the Anthropic API) for
+a localized syntax fix. Because the payload now leaves AWS over the public
+internet, we must not let raw passwords, customer hostnames, employee emails,
+or IPs leave the process unmasked - corporate InfoSec policies require that
+the model **sees only surrogates**, the model preserves them verbatim in its
+fix, and the post-processor substitutes the originals back. That is exactly
+what this module does.
 
 Approach: deterministic pseudonymization. For every distinct sensitive value we
 issue a stable surrogate that is **both** a valid ABAP identifier (letters / digits

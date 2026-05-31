@@ -68,11 +68,8 @@ variable "alert_email" {
 }
 
 # ── GenAI Configuration ──────────────────────
-variable "bedrock_model_id" {
-  type        = string
-  description = "Bedrock foundation model ID for GenAI code analysis"
-  default     = "anthropic.claude-3-sonnet-20240229-v1:0"
-}
+# bedrock_model_id removed - this stack uses the direct Anthropic API (see
+# prod/variables.tf for anthropic_model_id / anthropic_escalation_model).
 
 variable "ast_change_threshold" {
   type        = number

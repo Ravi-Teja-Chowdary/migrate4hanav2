@@ -30,11 +30,6 @@ variable "entity_resolution_workflow_arn" {
   default     = ""
   description = "ARN of the AWS Entity Resolution matching workflow for BP dedup"
 }
-variable "bedrock_model_id" {
-  type        = string
-  default     = "anthropic.claude-3-sonnet-20240229-v1:0"
-  description = "Bedrock foundation model ID for GenAI code analysis"
-}
 variable "anthropic_secret_arn" {
   type        = string
   default     = ""
@@ -175,14 +170,10 @@ resource "aws_iam_role_policy" "lambda" {
         ]
         Resource = "*"
       },
-      {
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream"
-        ]
-        Resource = "arn:aws:bedrock:*::foundation-model/*"
-      },
+      # NOTE: bedrock:InvokeModel removed - this stack uses the direct Anthropic
+      # API (api.anthropic.com via NAT egress, key in Secrets Manager). To
+      # re-enable Bedrock later, restore this block and the bedrock_runtime
+      # VPC endpoint in modules/vpc-endpoints.
       # Lambda-to-Lambda chained invocation (two-plane orchestrators).
       {
         Effect   = "Allow"
@@ -418,11 +409,10 @@ resource "aws_lambda_function" "migration" {
         ENTITY_RESOLUTION_WORKFLOW_ARN = var.entity_resolution_workflow_arn
       } : {},
       {
-        BEDROCK_MODEL_ID            = var.bedrock_model_id
         AST_CHANGE_THRESHOLD        = tostring(var.ast_change_threshold)
         LLM_MODE                    = var.llm_mode
         OLLAMA_MODEL                = var.ollama_model
-        # Direct Anthropic API (used when Bedrock model access is not granted)
+        # Direct Anthropic API (Bedrock is not used on this account)
         M4H_ANTHROPIC_SECRET_ARN    = var.anthropic_secret_arn
         ANTHROPIC_MODEL_ID          = var.anthropic_model_id
         ANTHROPIC_ESCALATION_MODEL  = var.anthropic_escalation_model

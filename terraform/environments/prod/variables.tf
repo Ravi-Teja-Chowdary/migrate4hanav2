@@ -64,11 +64,6 @@ variable "transform_rules" {
 }
 
 # ── GenAI ────────────────────────────────────
-variable "bedrock_model_id" {
-  type    = string
-  default = "anthropic.claude-3-sonnet-20240229-v1:0"
-}
-
 # Direct Anthropic API (replaces Bedrock when the AWS account does not have
 # model access). Set anthropic_api_key in terraform.tfvars - it is loaded into
 # Secrets Manager and read by the code-analyzer Lambda at runtime.

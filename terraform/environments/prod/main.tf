@@ -122,7 +122,6 @@ module "lambda" {
   # backed). Deterministic BP dedup runs alongside this regardless.
   entity_resolution_workflow_arn = ""
 
-  bedrock_model_id     = var.bedrock_model_id
   ast_change_threshold = var.ast_change_threshold
 
   # Direct Anthropic API path (replaces Bedrock when the AWS account does not
@@ -269,8 +268,8 @@ module "lambda" {
       source_dir  = "${path.root}/../../../lambda/migration-validator"
       layers      = [local.pyrfc_layer_arn]
     }
-    bedrock-llm-router = {
-      description = "Routes standard AST syntax to Amazon Bedrock (Anthropic/Titan)"
+    code-analyzer = {
+      description = "ABAP code remediation: AST engine + Claude (Anthropic API) fail-safe"
       handler     = "handler.lambda_handler"
       runtime     = "python3.11"
       timeout     = 900
@@ -355,7 +354,6 @@ module "ecs" {
   secrets_arn        = aws_secretsmanager_secret.sap_credentials.arn
   s3_staging_bucket  = module.s3_staging.bucket_name
   s3_staging_arn     = module.s3_staging.bucket_arn
-  bedrock_model_id   = var.bedrock_model_id
   llm_mode           = var.llm_mode
   ollama_model       = var.ollama_model
   ollama_url         = var.enable_airgapped_llm ? "http://${module.airgapped_llm[0].private_ip}:11434" : ""
