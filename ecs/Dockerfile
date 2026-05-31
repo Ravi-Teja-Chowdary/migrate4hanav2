@@ -40,13 +40,15 @@ ENV LD_LIBRARY_PATH=/opt/sap/lib:$LD_LIBRARY_PATH
 # Install Python dependencies. pyrfc is fetched from SAP's GitHub release (the
 # PyPI release has no Linux wheel — only macOS-arm64 + Windows); the wheel is
 # precompiled cp311 linux_x86_64, no compilation needed.
+# faker is the synthetic-data generator for the battletest harness.
 ARG PYRFC_VERSION=3.3.1
 # pip is strict about PEP-427 wheel filenames, so we keep the original whl name.
 RUN WHL="pyrfc-${PYRFC_VERSION}-cp311-cp311-linux_x86_64.whl" && \
     curl -fsSL "https://github.com/SAP/PyRFC/releases/download/v${PYRFC_VERSION}/${WHL}" -o "/tmp/${WHL}" && \
-    python3.11 -m pip install --no-cache-dir --target /opt/python "/tmp/${WHL}" boto3 && \
+    python3.11 -m pip install --no-cache-dir --target /opt/python "/tmp/${WHL}" boto3 faker && \
     rm -f "/tmp/${WHL}" && \
-    test -d /opt/python/pyrfc && echo "pyrfc installed OK"
+    test -d /opt/python/pyrfc && \
+    test -d /opt/python/faker && echo "pyrfc + faker installed OK"
 
 # ── Stage 2: Slim runtime image ─────────────
 FROM public.ecr.aws/amazonlinux/amazonlinux:2023
@@ -75,11 +77,8 @@ COPY --chown=1000:1000 ecs/entrypoint.py /app/entrypoint.py
 # Copy the battletest harness so the Fargate task can run the standalone
 # proof-run mode (entrypoint.py:run_battletest_mode). Only the .py files;
 # the gitignored fixtures/abap-suite/results dirs are NOT in the image.
+# (faker is already installed into /opt/python by the builder stage.)
 COPY --chown=1000:1000 tests/battletest/*.py /app/battletest/
-
-# Install faker for the synthetic data generator (optional dep; generator
-# falls back to deterministic names without it but quality is lower).
-RUN python3.11 -m pip install --no-cache-dir --target /opt/python faker
 
 # Non-root user for security
 RUN useradd -r -u 1000 -s /bin/false appuser
