@@ -182,17 +182,33 @@ if ($IncludeCodeRemediation) {
 # ── Step 3: Get networking config from the existing prod stack ───────────────
 Write-Step "Step 3/5 — Resolve VPC networking for Fargate"
 
+# First find the VPC by Name tag so we can filter subnets + SGs by vpc_id
+# (much more reliable than guessing tag patterns)
+$vpcId = aws ec2 describe-vpcs --region $Region `
+    --filters "Name=tag:Name,Values=migrate4hana-$Environment" `
+    --query "Vpcs[0].VpcId" --output text 2>$null
+if (-not $vpcId -or $vpcId -eq "None") {
+    Fail "Could not find VPC tagged Name=migrate4hana-$Environment. Did terraform apply complete?"
+}
+Write-Host "  VPC: $vpcId"
+
+# Private subnets - terraform names them migrate4hana-private-<index>-<env>
 $subnets = aws ec2 describe-subnets --region $Region `
-    --filters "Name=tag:Name,Values=migrate4hana-$Environment-private-*" `
+    --filters "Name=vpc-id,Values=$vpcId" `
+              "Name=tag:Name,Values=migrate4hana-private-*-$Environment" `
     --query "Subnets[].SubnetId" --output text
-if (-not $subnets) { Fail "Could not find private subnets tagged migrate4hana-$Environment-private-*" }
+if (-not $subnets) {
+    Fail "Could not find private subnets in $vpcId tagged migrate4hana-private-*-$Environment"
+}
 $subnetList = $subnets -split "\s+" | Where-Object { $_ }
 Write-Host "  Subnets: $($subnetList -join ', ')"
 
+# ECS security group - terraform creates with name_prefix migrate4hana-ecs-
 $sg = aws ec2 describe-security-groups --region $Region `
-    --filters "Name=group-name,Values=migrate4hana-ecs-*" `
+    --filters "Name=vpc-id,Values=$vpcId" `
+              "Name=group-name,Values=migrate4hana-ecs-*" `
     --query "SecurityGroups[0].GroupId" --output text
-if (-not $sg -or $sg -eq "None") { Fail "ECS security group not found" }
+if (-not $sg -or $sg -eq "None") { Fail "ECS security group not found in $vpcId" }
 Write-Host "  Security group: $sg"
 
 # ── Step 4a: Register a new task definition revision pointing at the real ECR image
