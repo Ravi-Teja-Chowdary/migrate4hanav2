@@ -227,11 +227,16 @@ def main():
         print(f"No result files in {res_dir}")
         return
 
-    # Pick the largest by total records as the "headline" run
+    # Pick the largest by total records as the "headline" run.
+    # Tie-break: newest started_at wins (otherwise stale runs at the same scale
+    # keep beating new ones because max() returns the first match).
     def total_records(r):
         return sum(s["records_in"] for s in r["stages"] if s["name"] == "extract")
 
-    largest = max(runs, key=total_records)
+    def headline_key(r):
+        return (total_records(r), r.get("started_at", ""))
+
+    largest = max(runs, key=headline_key)
     load_stage = next((s for s in largest["stages"] if s["name"] == "load"), {})
 
     out = HEADER.format(

@@ -3,7 +3,7 @@
 *Auto-generated from `tests/battletest/orchestrator.py` runs. Re-run the
 orchestrator at larger scale and `generate_report.py` to refresh.*
 
-**Generated:** 2026-05-31 14:02:01 UTC
+**Generated:** 2026-05-31 15:56:26 UTC
 **Generator commit:** see `git log -1 tests/battletest/`
 **Tool version:** see git log -1
 
@@ -17,15 +17,15 @@ harness against the deployed prod infrastructure.
 
 | Metric | Value |
 |---|---|
-| Largest scale tested | **small** (35,400 records) |
-| End-to-end elapsed | **61.47s** |
-| Throughput (load) | **715 records/sec** |
+| Largest scale tested | **large** (3,505,000 records) |
+| End-to-end elapsed | **1370.97s** |
+| Throughput (load) | **2,854 records/sec** |
 | Issues found | **0** |
-| Hash chain blocks | **36** |
+| Hash chain blocks | **3,471** |
 | Hash chain verifies | **True** |
 | Cutover verdict | **GO** |
-| Mock target hard failures (injected 0.05%) | 23 |
-| Mock target NRIV-busy (injected) | 0 |
+| Mock target hard failures (injected 0.05%) | 13 |
+| Mock target NRIV-busy (injected) | 34814 |
 
 ---
 
@@ -33,6 +33,10 @@ harness against the deployed prod infrastructure.
 
 | Started | Scale | Elapsed (s) | Records | Issues | Verdict |
 |---|---|---|---|---|---|
+| 2026-05-31T15:25:33Z | large | 1370.97 | 3,505,000 | 0 | GO |
+| 2026-05-31T15:13:50Z | small | 32.08 | 35,400 | 0 | GO |
+| 2026-05-31T14:27:04Z | large | 1394.06 | 3,505,000 | 0 | GO |
+| 2026-05-31T14:14:38Z | small | 31.91 | 35,400 | 0 | GO |
 | 2026-05-31T14:01:13Z | tiny | 0.55 | 390 | 0 | GO |
 | 2026-05-31T12:48:56Z | small | 61.47 | 35,400 | 0 | GO |
 | 2026-05-31T12:48:34Z | tiny | 1.59 | 390 | 0 | GO |
@@ -43,12 +47,12 @@ harness against the deployed prod infrastructure.
 
 | Stage | Elapsed (s) | Records in | Records out | Throughput (rec/s) | Errors |
 |---|---|---|---|---|---|
-| extract | 0.226 | 35,400 | 35,400 | 156,637 | 0 |
-| transform_and_coverage | 0.805 | 35,400 | 35,400 | 43,975 | 0 |
-| load | 49.486 | 35,400 | 35,377 | 715 | 23 |
-| hash_chain | 0.0 | 35,377 | 36 | 0 | 0 |
-| gap_closure_stress | 5.433 | 15,000 | 0 | 2,761 | 0 |
-| code_remediation | 0.173 | 50 | 50 | 289 | 0 |
+| extract | 14.879 | 3,505,000 | 3,505,000 | 235,567 | 0 |
+| transform_and_coverage | 63.014 | 3,505,000 | 3,505,000 | 55,623 | 0 |
+| load | 1227.934 | 3,505,000 | 3,470,173 | 2,854 | 34827 |
+| hash_chain | 0.152 | 3,470,173 | 3,471 | 22,830,086 | 0 |
+| gap_closure_stress | 63.579 | 1,500,000 | 0 | 23,593 | 0 |
+| code_remediation | 0.131 | 100 | 100 | 763 | 0 |
 | cutover_verdict | 0.0 | 0 | 0 | 0 | 0 |
 
 ---
@@ -57,19 +61,19 @@ harness against the deployed prod infrastructure.
 
 ### CVI two-phase unification
 
-- Customers in: **10,000**, vendors in: **5,000**
-- Mappings produced: **15,000** -> 14,686 phase-1 stubs + 314 phase-2 attach-xrefs
-- Conflicts requiring review: **108197**
+- Customers in: **1,000,000**, vendors in: **500,000**
+- Mappings produced: **1,500,000** -> 1,471,145 phase-1 stubs + 28,855 phase-2 attach-xrefs
+- Conflicts requiring review: **66018**
 - Intercompany cycles detected (no infinite loop): **0**
-- Out-of-batch xrefs (deferred): **10**
-- Elapsed: **4.98s**
+- Out-of-batch xrefs (deferred): **1030**
+- Elapsed: **43.03s**
 
 ### Dependency DAG
 
 - Nodes: **28**, cycles in default DAG: **0** (expected 0)
 - Topological order length: **28**
 - Execution state walked to completion: **True**
-- Elapsed: **0.0s**
+- Elapsed: **0.0014s**
 
 ### Workload throttle (SAP-side TH_WPINFO + NRIV-lock)
 
@@ -88,8 +92,8 @@ harness against the deployed prod infrastructure.
 
 - Blocks appended: **10,000**
 - Verifies clean: **True**
-- Throughput: **37,643 blocks/sec**
-- Elapsed: **0.27s**
+- Throughput: **48,510 blocks/sec**
+- Elapsed: **0.21s**
 
 ### Cutover verdict precedence (5 scenarios)
 
@@ -101,12 +105,12 @@ harness against the deployed prod infrastructure.
 
 ## Code remediation results (largest run)
 
-- Programs processed: **50**
-- Deterministic AST engine handled: **50**
+- Programs processed: **100**
+- Deterministic AST engine handled: **100**
 - AI fallback invoked: **0**
 - Quarantined: **0**
 - Errors: **0**
-- Elapsed: **0.173s**
+- Elapsed: **0.131s**
 
 
 ---
@@ -119,12 +123,12 @@ harness against the deployed prod infrastructure.
   "reasons": [],
   "precedence_rule": "SAP-standard spool reports outrank tool ledger; tool ledger cannot override a NO_GO",
   "chain": {
-    "blocks": 36,
-    "head": "c70a59331acd5201fb6126b53339b3a242419f7d16d5fedf382744f5280c577b",
+    "blocks": 3471,
+    "head": "ff262a0ac7dc02ab8bb6b6649c8d4fb6187516bdd84a09ce73726cdd836823b4",
     "verify": {
       "ok": true,
-      "blocks": 36,
-      "head": "c70a59331acd5201fb6126b53339b3a242419f7d16d5fedf382744f5280c577b"
+      "blocks": 3471,
+      "head": "ff262a0ac7dc02ab8bb6b6649c8d4fb6187516bdd84a09ce73726cdd836823b4"
     }
   }
 }
