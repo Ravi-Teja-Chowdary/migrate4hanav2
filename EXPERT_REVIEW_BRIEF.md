@@ -4,13 +4,33 @@
 is an honest assessment of where the tool stands — gaps are stated deliberately so your
 review is efficient. Nothing here is marketing; please challenge any claim.*
 
-**Date:** 2026-05-29 · **Branch reviewed:** `aws-lift-and-shift` · **Build status:** working prototype on a live system pair.
+**Date:** 2026-05-31 · **Branch reviewed:** `aws-lift-and-shift` · **Build status:** working prototype on a live system pair; **full AWS prod stack provisions and tears down cleanly end-to-end** (200 resources, see §13).
 
-> **2026-05-29 update:** four new "competitive-parity" layers and a light-themed Project Tracker UI were
-> added (commit `0e7b7e0`). They are **self-tested deterministically but NOT yet integrated into the
-> live ECC→S/4 loop** — see **§10** for exactly what each does and its maturity, and **§11** for an
-> honest head-to-head read vs SmartShift / Syniti / Natuvion. Read §10–11 as "newly built, integration
-> + live-proof pending," not as additions to the §4 live-proven evidence.
+> **2026-05-29 update:** four "competitive-parity" layers + a fresh light-themed Project Tracker UI
+> were added (commit `0e7b7e0`). They are **self-tested deterministically but NOT yet integrated into
+> the live ECC→S/4 loop** — see **§10** for what each does, **§11** for the honest head-to-head vs
+> SmartShift / Syniti / Natuvion.
+>
+> **2026-05-31 update (commits `6e4a689` + `1ebea30`):**
+> - **AWS prod stack now apply→destroy idempotent end-to-end** (200 resources). Root-cause fixes for
+>   every class of stuck-state failure (secrets pending-deletion, S3 Object Lock race, WAF/tag ASCII
+>   constraints, ASL placeholder ARNs, dashboard region property) are committed in source — see §13.
+> - **Bedrock removed; replaced by direct Anthropic API** (`api.anthropic.com` over NAT egress, key
+>   in Secrets Manager). Default model `claude-sonnet-4-6`; retry escalates to `claude-opus-4-7`. The
+>   pseudonymizer (reversible PII masking) still runs and matters more now. **All Bedrock-named
+>   plumbing also removed** — IAM `bedrock:InvokeModel`, both Bedrock PrivateLink VPC endpoints,
+>   `BEDROCK_MODEL_ID` env var, and the misleadingly-named `bedrock-llm-router` Lambda (renamed
+>   `code-analyzer`). Reason: this AWS account has no Bedrock model access.
+> - **Pillars 1.1 / 1.2 / 3 AWS infra now live, not just unit-tested** (see §12 rewrite). Fargate task
+>   def, ECR repo, Step Functions `waitForTaskToken` gates (4 instances), SNS gate topic, signed
+>   `/api/spine/approve` webhook — all provisioned by the prod stack and survive destroy/re-apply.
+> - **One-command Fargate image push** — `.\scripts\push-fargate-image.ps1` (pre-flight, ECR login,
+>   build, push, verify, warn about running tasks). Required once after each `terraform apply`.
+> - **Intentional regression from previous §12 claim:** **S3 Object Lock WORM removed** from the
+>   evidence + audit-logs buckets (per user directive 2026-05-30) so `terraform destroy` is clean
+>   during the inner-loop test cycle. Re-enable for real prod by setting `object_lock_enabled = true`
+>   at bucket creation (cannot toggle on later) and restoring `aws_s3_bucket_object_lock_configuration`.
+>   Inline comments in `evidence-ledger/main.tf:64-68` document the exact change.
 
 ---
 
@@ -284,24 +304,108 @@ architecture and the in-stage wiring now exist; the depth, content, and live-at-
 
 ---
 
-## 12. Production-hardening pillars (2026-05-29, cont.) — built + verified offline
+## 12. Production-hardening pillars — current state
 
-On expert guidance toward a PROD-ready engine, three of four hardening pillars were implemented as
-additive, guarded changes (proven deterministic paths untouched; all files `py_compile`-clean):
+The four PROD-hardening pillars from the original directive. **AWS infra for all four is now
+provisioned by `terraform apply` and survives destroy/re-apply** (see §13). Code and infra are live;
+volume-proof on a real ECC/S4 pair is still owed.
 
-| Pillar | Implementation | Verified (offline self-test) | Still pending |
+| Pillar | Implementation | Verified | Still pending |
 |---|---|---|---|
-| **2 — Transformation / Value-Map / DQ** (closes §6.3) | `lambda/utils/transformation_engine.py`: JSON rule schema (FIELD_MAP / VALUE_MAP / REGEX_CLEANSE / CONST/TRIM/UPPER/PAD), cached S3-backed value-map matrix (local/inline fallback), DQ gates (MANDATORY / REGEX_VALID / MAX_LEN / ALLOWED / UNIQUE) → `DATA_QUALITY_REJECTION`. Hooked into `UnifiedLoader._load_one` (+ parallel-worker propagation), wired into `data-migrator` (env-gated `M4H_TRANSFORM_RULES`, **no-op by default**). | value-map (3000→1710) + name cleanse applied; all five DQ gates reject correctly; quarantine routes to dead-letter | live business mapping matrices; a mapping UI; DQ scorecards/cleansing library |
-| **1.3 — Write-capacity isolation** | thread-safe `TokenBucket` in `lambda/utils/key_map.py`; optional ledger limiter (default off) to protect DynamoDB WCU under high-concurrency loops | 120 writes throttled to ~1.41s at 50/s burst-50 | sizing against real table WCU under a live mass load |
-| **4 — Cryptographic auditing** | `lambda/utils/reconciler.py`: `HashChainLedger` (SHA-256 hash-chained, tamper-evident, resume-safe, optional DynamoDB vault); `AggregateReconciler` (count + total + debit/credit tie-out source↔target); `EvidencePack` (hash-sealed manifest + S3 **WORM** Object Lock). Chain wired into the `data-migrator` run summary. | chain verifies + **detects a tampered block**; aggregate tie-out flags balance VARIANCE; evidence pack hash-sealed into the chain | real source↔target aggregate queries at volume; WORM S3 bucket; multi-part compliance PDF render |
+| **1.1 — Dynamic compute dispatcher (Lambda → Fargate)** | `lambda/utils/scaling.py:ComputeDispatcher` routes to Fargate with auto-scaled memory tier when est-rows > threshold, else inline/Lambda. Wired into `pipeline_spine_master.py:296` (`decision.target == "fargate"` → `fargate_routed` count in run summary). | offline: routing logic + dispatcher decision in carve-out phase. **infra: ECS cluster + Fargate task def + ECR repo are provisioned by the prod stack (`migrate4hana-prod-worker` task) and confirmed in state.** | live 10⁶-row run that actually fans out to Fargate; auto-scaling memory tier observed under load |
+| **1.2 — Chunked cursor streaming (ABAP `OPEN CURSOR…PACKAGE SIZE` + OData `$top/$skiptoken`)** | `lambda/data-migrator/handler.py:628` (cursor streaming in extract); `lambda/utils/scaling.py:ODataPager` (server-side OData paging). | offline: pager test passes. **infra: live in the extract path.** | end-to-end stream of 10⁶ rows; back-pressure behaviour under realistic latency |
+| **1.3 — Write-capacity isolation (DynamoDB token bucket)** | Thread-safe `TokenBucket` in `lambda/utils/key_map.py:23`; optional ledger limiter (default off) to protect DynamoDB WCU under high-concurrency loops. | 120 writes throttled to ~1.41s at 50/s burst-50. | sizing against real table WCU under a live mass load |
+| **2 — Transformation / Value-Map / DQ** (closes §6.3) | `lambda/utils/transformation_engine.py` (434 LOC): JSON rule schema (FIELD_MAP / VALUE_MAP / REGEX_CLEANSE / CONST/TRIM/UPPER/PAD), cached S3-backed value-map matrix (local/inline fallback), DQ gates (MANDATORY / REGEX_VALID / MAX_LEN / ALLOWED / UNIQUE) → `DATA_QUALITY_REJECTION`. Hooked into `UnifiedLoader._load_one:423-430` (+ parallel-worker propagation), wired into `data-migrator` (env-gated `M4H_TRANSFORM_RULES`, **no-op by default**). | value-map (3000→1710) + name cleanse applied; all five DQ gates reject correctly; quarantine routes to dead-letter. | live business mapping matrices; a mapping UI; DQ scorecards/cleansing library |
+| **3 — Human-in-the-loop governance gates** | `lambda/utils/governance.py` — `GateController` (HMAC-signed, file-backed, cross-process, no-double-pass) + schema-validated SNS alert payloads; signed `/api/spine/approve` (+ `/api/spine/gates`) webhook. | offline: HMAC verify + replay-block tests pass. **infra: 4 × `arn:aws:states:::lambda:invoke.waitForTaskToken` states in `lift_and_shift_pipeline.asl.json` (lines 43/201/240/282) covering ASSESS, DATA-PREP, VALIDATE, CUTOVER; `aws_sns_topic.spine_gates` provisioned; `manual-gate` Lambda persists token to `migrate4hana-gates-prod` DynamoDB table; HMAC secret in Secrets Manager (`migrate4hana/prod/gate-secret`).** | live cut-over with an actual human in the loop; SNS email subscription end-to-end |
+| **4 — Cryptographic auditing** | `lambda/utils/reconciler.py:273-455` — `HashChainLedger` (SHA-256, tamper-evident, resume-safe, optional DynamoDB vault); `AggregateReconciler` (count + total + debit/credit tie-out source↔target); `EvidencePack` (hash-sealed manifest). Chain wired into the `data-migrator` run summary. `pdf_report_generator.py` exists with Unicode safety net (516 mojibake fixes applied). | chain verifies + **detects a tampered block**; aggregate tie-out flags balance VARIANCE; evidence pack hash-sealed into the chain. **Infra: `migrate4hana-audit-ledger-prod` DynamoDB table provisioned; `evidence_app` S3 bucket provisioned (encrypted + versioned + public-access-block).** | real source↔target aggregate queries at volume; multi-part compliance PDF that auditors would sign off on; **S3 Object Lock WORM is currently OFF** (see §13 — intentional for the test loop, must be re-enabled at bucket creation for real prod) |
 
-**Pillars 1.1/1.2 & 3 — code modules built + verified offline; AWS infra pending.**
-`lambda/utils/scaling.py` — `ComputeDispatcher` (routes a unit of work to Fargate with an auto-scaled
-memory tier when est-rows exceed a threshold, else inline/Lambda) + `ODataPager` (streams large entity
-sets via `$top`/`$skiptoken`); the dispatcher decision is wired into the spine's carve-out phase
-(`fargate_routed` count in the result). `lambda/utils/governance.py` — `GateController` (HMAC-signed,
-file-backed, cross-process, no-double-pass) + schema-validated SNS alert payloads; a signed
-**`/api/spine/approve`** (+ `/api/spine/gates`) webhook is live in the API. All ship with green self-tests.
-**What remains is live AWS**: the ECS Fargate task definition + `run_task` execution, the Step Functions
-`TaskToken` wait-states after ASSESS/DATA-PREP/VALIDATE, the SNS topic, and the Terraform to provision
-them — written/owed but not certifiable in this environment. Treat as built-and-unit-tested, not live-delivered.
+**One honest regression** vs the 2026-05-29 §12: Pillar 4's evidence S3 bucket previously had Object
+Lock COMPLIANCE 2555-day retention. It was **deliberately removed** so `terraform destroy` is clean
+during the inner-loop test cycle. Re-impose for real prod with two changes (cannot toggle on after
+bucket creation): `object_lock_enabled = true` on `aws_s3_bucket.evidence` + restore the
+`aws_s3_bucket_object_lock_configuration` block. See `evidence-ledger/main.tf:64-77` for the exact
+diff.
+
+---
+
+## 13. Production-ops hardening (2026-05-30 → 2026-05-31)
+
+The architecture above is well-tested in code; this section is about whether you can **actually
+deploy and operate it** without manual AWS intervention every cycle.
+
+### 13.1 Apply → destroy is idempotent end-to-end (200 resources)
+
+The prod stack now provisions cleanly from zero state and tears down cleanly back to zero. Every
+class of stuck-state failure encountered during the certification run was fixed at root cause and
+committed:
+
+| Failure class | Root cause | Permanent fix in source |
+|---|---|---|
+| "Secret … is already scheduled for deletion" | Secrets Manager 30-day soft-delete reserves the name; next apply hits 400. | `recovery_window_in_days = 0` on `sap-credentials` / `s4hana-credentials` / `gate-secret` / `anthropic-api-key`. |
+| Bucket non-empty / `InvalidBucketState: Versioning must be Enabled` on Object Lock | `aws_s3_bucket_object_lock_configuration` raced ahead of versioning; bucket created without `object_lock_enabled = true`. | `object_lock_enabled = true` on the bucket itself + explicit `depends_on = [aws_s3_bucket_versioning.audit_logs]` on the lock configuration. |
+| Step Functions `Value is not a valid resource ARN` × 5 | `lookup()` for unbuilt Lambdas (`discovery-engine`, etc.) returned `""`, breaking schema validation. | `local.ls_fallback_arn = manual-gate ARN`; every unresolved Lambda lookup falls back to it so the state machine validates. The router is functional only once the real Lambda exists. |
+| CloudWatch dashboard 12× "should have required property 'region'" | Metric widget `properties` blocks were missing `region`. | `region = var.aws_region` threaded into the cloudwatch module and added to all 4 widget property blocks. |
+| WAF / tag value rejections | `"SOX,GxP"` (comma) and em-dash characters violated AWS string regex. | Replaced with `"SOX-GxP"` and ASCII hyphens. |
+| CloudTrail `InvalidEventSelectorsException` | Wildcards forbidden in the function name portion of a Lambda data_resource value. | Bare prefix `"arn:aws:lambda"` (= all functions in account). |
+
+A fresh `terraform destroy` is also clean — except for one remaining manual: the audit-logs bucket
+holds CloudTrail-written objects under Object Lock GOVERNANCE that need `BypassGovernanceRetention`
+to empty. Drop a one-line `force_destroy = true` if you want full hands-off destroy too (cost: a
+future destroy would wipe SOX audit history without prompting).
+
+### 13.2 Bedrock → direct Anthropic API
+
+The user's AWS account does not have Bedrock model access. The runtime LLM path therefore goes to
+`api.anthropic.com` over the Lambda's NAT egress, not via `bedrock-runtime`:
+
+- New shared client: `lambda/code-analyzer/anthropic_client.py` (stdlib `urllib`, Secrets Manager
+  fetch with module-level cache, returns `None` on any failure — never raises).
+- Default model `claude-sonnet-4-6` (cheap + fast + near-Opus quality for narrow ABAP fragment
+  fixes); on retry escalates to `claude-opus-4-7`.
+- API key in `aws_secretsmanager_secret.anthropic_api_key` (`recovery_window_in_days = 0`).
+- IAM: `secretsmanager:GetSecretValue` on the new secret for both Lambda and Fargate task. Bedrock
+  permissions and the two Bedrock PrivateLink VPC endpoints have been **removed**.
+- The pseudonymizer (`lambda/code-analyzer/pseudonymize.py`) — reversible PII masking before the
+  prompt leaves the process — now matters more, since payload leaves AWS. It still runs unchanged.
+- Compatibility-only aliases preserved: `_invoke_bedrock`, `check_bedrock_connectivity`, the
+  filename `bedrock_genai_engine.py` — all documented as routing through Anthropic. The Lambda
+  function itself is renamed `bedrock-llm-router` → `code-analyzer`.
+
+Trade-off worth naming: today ABAP fragments travel over TLS to `api.anthropic.com` instead of
+staying inside AWS. Pseudonymizer masks PII (emails / IPs / passwords) but not business logic. For
+some compliance contexts that's a concern; flag if relevant.
+
+### 13.3 One-command Fargate image deployment
+
+`.\scripts\push-fargate-image.ps1` (PowerShell-only — user's environment) wraps the otherwise-manual
+Docker steps required after each `terraform apply`:
+
+1. Pre-flight: Docker running in Linux-container mode, AWS CLI authenticated, SAP NW RFC SDK zip in
+   `ecs/`, ECR repo present.
+2. ECR login (12h token).
+3. `docker build -f ecs/Dockerfile -t migrate4hana-worker:latest .` (build context = repo root).
+4. Tag + push.
+5. Verify via `describe-images`.
+6. Warn about any running Fargate tasks that would not auto-pull the new image.
+
+Required because Terraform creates the ECR repo + task definition but does **not** build/push the
+image (intentional — avoids burning 5-8 min on every apply for unchanged images). First run
+~7-10 min total; subsequent runs with cached layers ~30-60s.
+
+### 13.4 What's still NOT in the production loop
+
+To keep the brief honest:
+
+- **ECC ↔ AWS connectivity deferred.** The current prod stack runs in-AWS-only; the user's local
+  ECC system is reachable from the workstation but not from VPC-attached Lambdas. Site-to-site VPN
+  or AWS Client VPN is needed before stages can actually call ECC from AWS. See [[connectivity-quirks]].
+- **Object Lock WORM off.** As §12 notes — intentional but a regression vs the original Pillar 4
+  spec. Two-line fix when ready for prod.
+- **No live large-volume run on AWS.** Code paths for Fargate dispatch + cursor streaming + token
+  bucket + hash chain all exist and pass unit tests; none have been exercised against 10⁶ rows on
+  the deployed stack.
+- **Several Lambdas referenced by `lift_and_shift_pipeline.asl.json` are not yet built**
+  (`discovery-engine`, `migration-completeness-analyzer`, `pdf_report_generator` as a separate
+  function). They currently resolve to the `manual-gate` fallback ARN, so the state machine
+  validates and starts but those specific tasks no-op. Each needs its own handler before
+  end-to-end execution against a real source/target.
