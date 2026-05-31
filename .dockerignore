@@ -10,4 +10,11 @@ docs
 mock-ecc
 # (directory removed in aws-branch — entry retained as a no-op guard)
 tests
+# Battletest harness DOES go into the image (used by entrypoint.py:run_battletest_mode)
+!tests/battletest/
+# But the regenerable artefacts inside battletest stay out
+tests/battletest/fixtures/
+tests/battletest/abap-suite/
+tests/battletest/results/
+tests/battletest/*.log
 scripts
