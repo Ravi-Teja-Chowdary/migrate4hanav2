@@ -458,6 +458,41 @@ resource "aws_secretsmanager_secret" "s4hana_credentials" {
   tags                    = { Component = "Security" }
 }
 
+# ─────────────────────────────────────────────
+# Route 53 private hosted zone — so Lambdas in the VPC can resolve the SAP CAL
+# S/4HANA hostname `vhcals4hci.dummy.nodomain` (which only exists in the user's
+# local Windows hosts file otherwise). The A record value is the CAL appliance's
+# CURRENT public IP — set via var.s4_public_ip; update when CAL drifts.
+# Only created when s4_public_ip is non-empty.
+# ─────────────────────────────────────────────
+resource "aws_route53_zone" "s4_cal" {
+  count = var.s4_public_ip != "" ? 1 : 0
+  name  = "dummy.nodomain"
+  vpc {
+    vpc_id = module.vpc.vpc_id
+  }
+  comment = "Private zone for SAP CAL S/4HANA hostname resolution from Lambda"
+  tags    = { Component = "ConnectivityDNS" }
+}
+
+resource "aws_route53_record" "s4_vhcals4hci" {
+  count   = var.s4_public_ip != "" ? 1 : 0
+  zone_id = aws_route53_zone.s4_cal[0].zone_id
+  name    = "vhcals4hci.dummy.nodomain"
+  type    = "A"
+  ttl     = 60
+  records = [var.s4_public_ip]
+}
+
+resource "aws_route53_record" "s4_vhcals4hcs" {
+  count   = var.s4_public_ip != "" ? 1 : 0
+  zone_id = aws_route53_zone.s4_cal[0].zone_id
+  name    = "vhcals4hcs.dummy.nodomain"
+  type    = "A"
+  ttl     = 60
+  records = [var.s4_public_ip]
+}
+
 # Anthropic API key - used by code-analyzer Lambda for Claude remediation in
 # accounts without Bedrock access. The secret resource is always created; the
 # value is only set when var.anthropic_api_key is non-empty (so an empty value
@@ -817,4 +852,17 @@ output "bastion_private_ip" {
 output "bastion_ssh_hint" {
   value       = length(module.bastion) > 0 ? module.bastion[0].ssh_command_hint : ""
   description = "Copy-paste SSH command for the laptop-side reverse tunnel"
+}
+
+# ─────────────────────────────────────────────
+# S/4HANA + NAT outputs (used by helper scripts)
+# ─────────────────────────────────────────────
+output "nat_gateway_public_ip" {
+  value       = module.vpc.nat_gateway_public_ip
+  description = "Lambda's outbound source IP. Add to S/4HANA SG to allow Lambda -> S/4 RFC/OData."
+}
+
+output "s4_public_ip" {
+  value       = var.s4_public_ip
+  description = "Echoes the s4_public_ip variable so helper scripts can read it."
 }

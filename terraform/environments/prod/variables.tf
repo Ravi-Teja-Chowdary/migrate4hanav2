@@ -175,3 +175,14 @@ variable "ssh_allowed_cidrs" {
   default     = ["0.0.0.0/0"]
   description = "Source IP CIDRs allowed inbound SSH. Tighten to your home /32 for production."
 }
+
+# ─────────────────────────────────────────────
+# S/4HANA CAL appliance public IP (drifts on every stop/start of the CAL VM).
+# Empty = no Route 53 private zone created. Set this to enable Lambda's DNS
+# resolution of vhcals4hci.dummy.nodomain.
+# ─────────────────────────────────────────────
+variable "s4_public_ip" {
+  type        = string
+  default     = ""
+  description = "Current public IP of the SAP CAL S/4HANA appliance. Update on every CAL restart."
+}

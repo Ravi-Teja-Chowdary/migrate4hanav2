@@ -127,3 +127,7 @@ output "private_subnet_ids" { value = aws_subnet.private[*].id }
 output "public_subnet_ids" { value = aws_subnet.public[*].id }
 output "lambda_security_group_id" { value = aws_security_group.lambda.id }
 output "default_security_group_id" { value = aws_vpc.main.default_security_group_id }
+output "nat_gateway_public_ip" {
+  value       = aws_eip.nat.public_ip
+  description = "Public IP of NAT gateway - what S/4 sees as Lambda's source IP; authorise it in S/4 security group"
+}
