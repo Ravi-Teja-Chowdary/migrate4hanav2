@@ -494,6 +494,24 @@ module "vpc_endpoints" {
   vpce_security_group_id = module.vpc.default_security_group_id
 }
 
+# ─────────────────────────────────────────────
+# Bastion — reverse-SSH tunnel target so Lambdas in the private subnets can
+# reach the user's laptop ECC at 192.168.100.129. Only created when the
+# operator provides an ssh_public_key (count=0 otherwise).
+# ─────────────────────────────────────────────
+module "bastion" {
+  count  = var.ssh_public_key != "" ? 1 : 0
+  source = "../../modules/bastion"
+
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  public_subnet_id   = module.vpc.public_subnet_ids[0]
+  private_subnet_ids = module.vpc.private_subnet_ids
+  ssh_public_key     = var.ssh_public_key
+  # By default allow SSH from anywhere; tighten via -var=ssh_allowed_cidrs='["YOUR_IP/32"]'
+  ssh_allowed_cidrs  = var.ssh_allowed_cidrs
+}
+
 
 # ─────────────────────────────────────────────
 # Entity Resolution — ML-powered BP dedup (NOT IN hashicorp/aws PROVIDER)
@@ -780,4 +798,22 @@ resource "aws_lambda_permission" "code_delta_scheduler_eventbridge" {
   function_name = "migrate4hana-code-delta-scheduler-${var.environment}"
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.code_delta_daily.arn
+}
+
+# ─────────────────────────────────────────────
+# Bastion outputs (only meaningful when ssh_public_key is set)
+# ─────────────────────────────────────────────
+output "bastion_public_ip" {
+  value       = length(module.bastion) > 0 ? module.bastion[0].public_ip : ""
+  description = "Public IP of the reverse-SSH tunnel bastion (empty if not provisioned)"
+}
+
+output "bastion_private_ip" {
+  value       = length(module.bastion) > 0 ? module.bastion[0].private_ip : ""
+  description = "Private IP - Lambda reaches the laptop ECC at <this>:3341 via the reverse tunnel"
+}
+
+output "bastion_ssh_hint" {
+  value       = length(module.bastion) > 0 ? module.bastion[0].ssh_command_hint : ""
+  description = "Copy-paste SSH command for the laptop-side reverse tunnel"
 }

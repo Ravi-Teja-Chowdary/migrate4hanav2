@@ -155,3 +155,24 @@ variable "s4_db_user" {
   default = "SAPHANADB"
 }
 # s4_db_password removed — now fetched from Secrets Manager (see main.tf)
+
+# ─────────────────────────────────────────────
+# Bastion (reverse-SSH tunnel for Lambda -> laptop ECC)
+# Empty = bastion is NOT provisioned. Provide an OpenSSH-format public key
+# to provision a t3.micro bastion with this key pair installed.
+#   Generate locally first:
+#     ssh-keygen -t ed25519 -f migrate4hana-bastion -C migrate4hana-bastion
+#   Then set in terraform.tfvars:
+#     ssh_public_key = "ssh-ed25519 AAAAC3Nz... migrate4hana-bastion"
+# ─────────────────────────────────────────────
+variable "ssh_public_key" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "ssh_allowed_cidrs" {
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+  description = "Source IP CIDRs allowed inbound SSH. Tighten to your home /32 for production."
+}
