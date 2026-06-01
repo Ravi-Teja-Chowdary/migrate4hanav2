@@ -30,47 +30,36 @@ tunnel through an AWS bastion in the migrate4hana VPC.*
 
 ---
 
-## One-time setup (~15 min)
+## One-time setup (~10 min)
 
-### Step 1 — Generate an SSH key pair (laptop)
+### Step 1 — Confirm your AWS key pair (laptop)
 
-```powershell
-cd C:\Users\ajays\Downloads\migrate4hanav2
-ssh-keygen -t ed25519 -f migrate4hana-bastion -C migrate4hana-bastion
-# Press Enter twice to skip passphrase (or set one if you want extra security
-# - but you'll have to type it every time the tunnel reconnects).
-```
-
-You now have:
-- `migrate4hana-bastion`     ← private key (keep secret, never commit)
-- `migrate4hana-bastion.pub` ← public key (goes to terraform.tfvars)
-
-### Step 2 — Add the public key to terraform.tfvars
+Default key pair name is `migrate4hana-key` (your existing one). Verify it
+exists and you have the `.pem` file locally:
 
 ```powershell
-# Get the contents of the .pub file
-$pub = (Get-Content .\migrate4hana-bastion.pub -Raw).Trim()
+# Should return the key pair details:
+aws ec2 describe-key-pairs --key-names migrate4hana-key --region us-east-1
 
-# Open terraform.tfvars (or create it)
-cd terraform\environments\prod
-notepad terraform.tfvars
+# Confirm .pem file is on your laptop:
+Test-Path .\migrate4hana-key.pem    # adjust to wherever you saved it
 ```
 
-Add this line (paste the public key value):
+If you want to use a different key pair, override in `terraform.tfvars`:
 
 ```hcl
-ssh_public_key = "ssh-ed25519 AAAAC3Nz...your-public-key-here... migrate4hana-bastion"
+bastion_key_pair_name = "your-different-key-name"
 ```
 
-Optional but recommended — also restrict SSH to your home IP:
+Optional but recommended — restrict SSH to your home IP only:
 
 ```powershell
 $myIp = (Invoke-WebRequest -Uri "https://checkip.amazonaws.com").Content.Trim()
-# Add this too:
+# Add to terraform.tfvars:
 #   ssh_allowed_cidrs = ["YOUR_IP/32"]
 ```
 
-### Step 3 — Apply terraform to provision the bastion (~3-5 min)
+### Step 2 — Apply terraform to provision the bastion (~3-5 min)
 
 ```powershell
 cd terraform\environments\prod
@@ -78,10 +67,11 @@ terraform apply -auto-approve
 ```
 
 Expect 3 new resources: `aws_instance.bastion`, `aws_eip.bastion`,
-`aws_security_group.bastion`, plus one `aws_key_pair.bastion`. After apply
-completes, terraform outputs `bastion_public_ip` and `bastion_private_ip`.
+`aws_security_group.bastion`. (No `aws_key_pair` created — we reference
+your existing one as a data source.) After apply, terraform outputs
+`bastion_public_ip` and `bastion_private_ip`.
 
-### Step 4 — Update the SAP-credentials secret
+### Step 3 — Update the SAP-credentials secret
 
 ```powershell
 cd ..\..\..\
@@ -94,18 +84,18 @@ cd ..\..\..\
 
 ## Per-session use (each time you want to run a Lambda against ECC)
 
-### Step 5 — Wake the ECC VM
+### Step 4 — Wake the ECC VM
 
 1. Open VMware Workstation; resume / start the NPL VM.
 2. Inside the VM, confirm SAP is up. If not, log in as `npladm`, run `startsap`.
 3. (If ECC's host-only IP drifted from `192.168.100.129`, run
-   `ipconfig` inside the VM and update the `EccHost` param of step 6.)
+   `ipconfig` inside the VM and update the `EccHost` param of step 5.)
 
-### Step 6 — Open the reverse tunnel (laptop)
+### Step 5 — Open the reverse tunnel (laptop)
 
 ```powershell
 .\scripts\launch-ecc-tunnel.ps1 `
-    -SshKeyPath .\migrate4hana-bastion `
+    -SshKeyPath .\migrate4hana-key.pem `
     -Persistent
 ```
 
@@ -123,7 +113,7 @@ Leave that window open. Output looks like:
 
 **Leave running.** Ctrl-C closes the tunnel.
 
-### Step 7 — Verify the tunnel is alive (from AWS side)
+### Step 6 — Verify the tunnel is alive (from AWS side)
 
 In another PowerShell window:
 
@@ -133,12 +123,12 @@ In another PowerShell window:
 # or aws cli, then watch for "pyrfc connection established" in CloudWatch.
 
 # Or test from the bastion itself:
-ssh -i .\migrate4hana-bastion ec2-user@<bastion-public-ip> `
+ssh -i .\migrate4hana-key.pem ec2-user@<bastion-public-ip> `
     "nc -zv 127.0.0.1 3341"
 # Expect: "Connection to 127.0.0.1 3341 port [tcp/*] succeeded!"
 ```
 
-### Step 8 — Trigger an actual migration
+### Step 7 — Trigger an actual migration
 
 The Migrate4HANA tool's normal entry points now reach laptop ECC:
 
@@ -207,7 +197,7 @@ aws ec2 stop-instances --instance-ids (
 
 ## What this proves
 
-After Step 8 returns clean data, you have **the AWS-deployed Migrate4HANA
+After Step 7 returns clean data, you have **the AWS-deployed Migrate4HANA
 data-migrator Lambda successfully reading from your real laptop ECC**. That's
 the end-to-end claim you couldn't make before. Pair this with the
 S/4HANA-side connectivity (separate runbook coming) for the full

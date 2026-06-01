@@ -23,9 +23,9 @@ variable "private_subnet_ids" {
   type        = list(string)
   description = "Subnets that Lambdas live in; SG opens these CIDRs inward on the tunneled ports"
 }
-variable "ssh_public_key" {
+variable "key_pair_name" {
   type        = string
-  description = "OpenSSH-format public key for the laptop user. Generate with: ssh-keygen -t ed25519 -C migrate4hana-bastion"
+  description = "Name of an existing AWS key pair (visible in EC2 console -> Key Pairs). The user keeps the .pem locally for SSH access."
 }
 variable "ssh_allowed_cidrs" {
   type        = list(string)
@@ -39,15 +39,12 @@ variable "tunneled_ports" {
 }
 
 # ─────────────────────────────────────────────
-# SSH key pair
+# SSH key pair - we reference an EXISTING key pair by name (the user already
+# has the .pem locally for SSH access; no new resource needed). Data source
+# verifies it exists at plan time so apply fails fast if the name is wrong.
 # ─────────────────────────────────────────────
-resource "aws_key_pair" "bastion" {
-  key_name   = "migrate4hana-bastion-${var.environment}"
-  public_key = var.ssh_public_key
-  tags = {
-    Name      = "migrate4hana-bastion-${var.environment}"
-    Component = "ConnectivityBastion"
-  }
+data "aws_key_pair" "bastion" {
+  key_name = var.key_pair_name
 }
 
 # ─────────────────────────────────────────────
@@ -112,7 +109,7 @@ data "aws_ami" "al2023" {
 resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.al2023.id
   instance_type               = "t3.micro"
-  key_name                    = aws_key_pair.bastion.key_name
+  key_name                    = data.aws_key_pair.bastion.key_name
   vpc_security_group_ids      = [aws_security_group.bastion.id]
   subnet_id                   = var.public_subnet_id
   associate_public_ip_address = true

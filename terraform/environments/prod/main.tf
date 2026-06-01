@@ -497,17 +497,18 @@ module "vpc_endpoints" {
 # ─────────────────────────────────────────────
 # Bastion — reverse-SSH tunnel target so Lambdas in the private subnets can
 # reach the user's laptop ECC at 192.168.100.129. Only created when the
-# operator provides an ssh_public_key (count=0 otherwise).
+# operator names an existing AWS key pair via bastion_key_pair_name
+# (count=0 otherwise).
 # ─────────────────────────────────────────────
 module "bastion" {
-  count  = var.ssh_public_key != "" ? 1 : 0
+  count  = var.bastion_key_pair_name != "" ? 1 : 0
   source = "../../modules/bastion"
 
   environment        = var.environment
   vpc_id             = module.vpc.vpc_id
   public_subnet_id   = module.vpc.public_subnet_ids[0]
   private_subnet_ids = module.vpc.private_subnet_ids
-  ssh_public_key     = var.ssh_public_key
+  key_pair_name      = var.bastion_key_pair_name
   # By default allow SSH from anywhere; tighten via -var=ssh_allowed_cidrs='["YOUR_IP/32"]'
   ssh_allowed_cidrs  = var.ssh_allowed_cidrs
 }

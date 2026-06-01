@@ -22,8 +22,9 @@
     SAP system number; the gateway port is 33<sysnr> (e.g. sysnr=41 -> port 3341).
 
 .PARAMETER SshKeyPath
-    Path to the SSH private key matching the public key registered with
-    the bastion (variable ssh_public_key in terraform.tfvars).
+    Path to the .pem private key for the AWS key pair attached to the bastion
+    (default key pair name 'migrate4hana-key', see terraform variable
+    bastion_key_pair_name).
 
 .PARAMETER Region / Environment
     AWS region + terraform environment (default us-east-1 / prod).
@@ -33,7 +34,7 @@
     exits on the first disconnect.
 
 .EXAMPLE
-    .\scripts\launch-ecc-tunnel.ps1 -SshKeyPath .\migrate4hana-bastion -Persistent
+    .\scripts\launch-ecc-tunnel.ps1 -SshKeyPath .\migrate4hana-key.pem -Persistent
     # The standard demo invocation. Keeps the tunnel up until Ctrl-C.
 #>
 [CmdletBinding()]
@@ -88,12 +89,12 @@ try {
 if (-not $bastionPublic) {
     Fail @"
 Bastion is not provisioned. To provision it:
-  1. Generate an SSH key pair (if you haven't):
-       ssh-keygen -t ed25519 -f migrate4hana-bastion -C migrate4hana-bastion
-  2. Add the .pub contents to terraform/environments/prod/terraform.tfvars:
-       ssh_public_key = "ssh-ed25519 AAAAC3Nz... migrate4hana-bastion"
+  1. Confirm your AWS key pair exists (default name 'migrate4hana-key'):
+       aws ec2 describe-key-pairs --key-names migrate4hana-key --region us-east-1
+  2. (Optional) Override the key pair name in terraform/environments/prod/terraform.tfvars:
+       bastion_key_pair_name = "your-key-name"
   3. Re-apply terraform: cd terraform\environments\prod ; terraform apply -auto-approve
-  4. Re-run this script with -SshKeyPath pointing at the private key half.
+  4. Re-run this script with -SshKeyPath pointing at your .pem file.
 "@
 }
 

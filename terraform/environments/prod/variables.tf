@@ -158,17 +158,16 @@ variable "s4_db_user" {
 
 # ─────────────────────────────────────────────
 # Bastion (reverse-SSH tunnel for Lambda -> laptop ECC)
-# Empty = bastion is NOT provisioned. Provide an OpenSSH-format public key
-# to provision a t3.micro bastion with this key pair installed.
-#   Generate locally first:
-#     ssh-keygen -t ed25519 -f migrate4hana-bastion -C migrate4hana-bastion
-#   Then set in terraform.tfvars:
-#     ssh_public_key = "ssh-ed25519 AAAAC3Nz... migrate4hana-bastion"
+# Empty = bastion is NOT provisioned. Set this to the name of an EXISTING
+# AWS key pair (visible in EC2 console -> Key Pairs). The user keeps the
+# .pem locally for SSH access; terraform just references the name.
+# Default 'migrate4hana-key' is the user's existing key pair.
+# Set to "" in terraform.tfvars to skip provisioning the bastion entirely.
 # ─────────────────────────────────────────────
-variable "ssh_public_key" {
-  type      = string
-  default   = ""
-  sensitive = true
+variable "bastion_key_pair_name" {
+  type        = string
+  default     = "migrate4hana-key"
+  description = "Name of an existing AWS EC2 key pair for the bastion. Empty = no bastion provisioned."
 }
 
 variable "ssh_allowed_cidrs" {
