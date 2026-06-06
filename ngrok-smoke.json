@@ -1,0 +1,1 @@
+{"run_id": "ngrok-smoke-001", "status": "ok", "object": "Customer", "lane": "MC", "row_count": 19575, "artifacts": {"mc_csv": "s3://migrate4hana-staging-prod/runs/ngrok-smoke-001/data-migrator/mc/Customer.csv"}}

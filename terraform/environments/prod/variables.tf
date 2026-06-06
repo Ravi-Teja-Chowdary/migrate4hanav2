@@ -186,3 +186,21 @@ variable "s4_public_ip" {
   default     = ""
   description = "Current public IP of the SAP CAL S/4HANA appliance. Update on every CAL restart."
 }
+
+# ─────────────────────────────────────────────
+# SAP CAL ECC IDES appliance (Linux) — public IP + hostname.
+# Mirrors the S/4 setup: drifts on every stop/start, hostname is what the SAP
+# kernel uses internally (visible on the CAL appliance landing page).
+# Empty IP = no Route 53 A record for ECC created.
+# ─────────────────────────────────────────────
+variable "cal_ecc_public_ip" {
+  type        = string
+  default     = ""
+  description = "Current public IP of the SAP CAL IDES ECC appliance. Update on every CAL restart."
+}
+
+variable "cal_ecc_hostname" {
+  type        = string
+  default     = "vhcalabaci"
+  description = "Internal hostname of the CAL ECC appliance (kernel uses it for back-verify). Follows the vhcal<sid>ci convention: ABA -> vhcalabaci, IDS -> vhcalidsci, NPL -> vhcalnplci. Check the CAL 'Connect' page if RFC fails with WSAENETUNREACH."
+}

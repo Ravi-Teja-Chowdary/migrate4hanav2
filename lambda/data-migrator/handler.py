@@ -56,9 +56,10 @@ except Exception:  # pragma: no cover
     Reconciler = None
 
 try:
-    from key_map import KeyMap  # type: ignore
+    from key_map import KeyMap, PersistentKeyMap  # type: ignore
 except Exception:  # pragma: no cover
     KeyMap = None
+    PersistentKeyMap = None
 
 try:
     import compliance  # type: ignore
@@ -87,10 +88,21 @@ IDOC_SENDER = os.environ.get("M4H_IDOC_SENDER", "M4HSENDER")
 def _ecc(secret_id: str):
     sec = json.loads(SECRETS.get_secret_value(SecretId=secret_id)["SecretString"])
     from pyrfc import Connection
-    return Connection(ashost=sec["ashost"], sysnr=sec.get("sysnr", "00"),
-                      client=sec["client"], user=sec["user"],
-                      passwd=sec.get("passwd") or sec.get("password"),
-                      lang=sec.get("lang", "EN"))
+    # Base connection kwargs from the secret. Optional gwhost/gwserv/saprouter
+    # allow connection through a TCP forwarder (e.g. ngrok) where the published
+    # port differs from the SAP-derived sapgw<NN> port.
+    kwargs = {
+        "ashost": sec["ashost"],
+        "sysnr":  sec.get("sysnr", "00"),
+        "client": sec["client"],
+        "user":   sec["user"],
+        "passwd": sec.get("passwd") or sec.get("password"),
+        "lang":   sec.get("lang", "EN"),
+    }
+    for opt in ("gwhost", "gwserv", "saprouter"):
+        if sec.get(opt):
+            kwargs[opt] = sec[opt]
+    return Connection(**kwargs)
 
 
 def _read_table(conn, table: str, fields: list, where: str = "", max_rows: int = MAX_ROWS_PER_TEMPLATE) -> list:
@@ -394,10 +406,31 @@ DEFAULT_OBJECT_TABLES = {
 LEDGER_KEY = "migration-ledger/key_mapping.json"
 
 
-def _load_ledger():
-    """Load the cross-run migration ledger into a KeyMap (empty if first run)."""
+def _load_ledger(run_id: str = ""):
+    """Load the cross-run migration ledger into a KeyMap.
+
+    Two modes, chosen at runtime:
+
+    * **DynamoDB mode** (production): if ``M4H_KEYMAP_TABLE`` env var is set AND
+      ``PersistentKeyMap`` is importable, return a PersistentKeyMap. Writes during
+      the run stream straight to DynamoDB (per-mapping, atomic, race-safe);
+      resolves for dependent objects fall through to DynamoDB on miss.
+    * **S3-blob fallback** (local/dev or when DDB isn't configured): same shape as
+      before — load the single JSON blob and accumulate in memory.
+
+    Returns ``None`` only if KeyMap itself is unimportable.
+    """
     if KeyMap is None:
         return None
+    table = os.environ.get("M4H_KEYMAP_TABLE", "").strip()
+    if table and PersistentKeyMap is not None:
+        try:
+            return PersistentKeyMap(table_name=table, run_id=run_id or "",
+                                    target_release=os.environ.get("M4H_TARGET_RELEASE", ""))
+        except Exception:
+            # Fall through to S3 fallback below; DDB connectivity blip shouldn't
+            # halt the run when we have a working S3 alternative.
+            pass
     try:
         obj = S3.get_object(Bucket=STAGING_BUCKET, Key=LEDGER_KEY)
         return KeyMap.from_dict(json.loads(obj["Body"].read()))
@@ -406,7 +439,20 @@ def _load_ledger():
 
 
 def _save_ledger(km) -> None:
-    """Persist the (now-merged) ledger so the next run reuses instead of re-creating."""
+    """Persist the (now-merged) ledger.
+
+    For PersistentKeyMap, writes already streamed to DynamoDB during the run, so
+    we only need to emit the audit-friendly per-run CSV (done by _emit_key_map).
+    For plain KeyMap, dump the merged ledger to S3 as before so the next run
+    reuses it.
+    """
+    if PersistentKeyMap is not None and isinstance(km, PersistentKeyMap):
+        # DDB writes already happened; persistence_stats() gives the verdict.
+        try:
+            log_stage_event("", "data-migrator", "key_map_persisted", km.persistence_stats())
+        except Exception:
+            pass
+        return
     try:
         S3.put_object(Bucket=STAGING_BUCKET, Key=LEDGER_KEY,
                       Body=json.dumps(km.to_dict(), indent=2).encode(),
@@ -786,7 +832,7 @@ def lambda_handler(event, context):
                                         {"reason": str(_ce)[:160]})
                 # Live source->target registry, shared across the run so dependent
                 # objects (OpenPO -> Vendor) resolve refs; source conn for PO items.
-                loader.key_map = _load_ledger()   # cross-run ledger -> idempotent re-runs
+                loader.key_map = _load_ledger(run_id)   # cross-run ledger -> idempotent re-runs (DDB-backed when M4H_KEYMAP_TABLE set)
                 loader.source_conn = conn
                 loader.odata = _target_odata()   # transaction-ready partner creation (OData)
                 # Factories for the parallel worker pool (fresh per-worker connections):

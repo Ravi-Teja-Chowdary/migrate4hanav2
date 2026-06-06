@@ -1,5 +1,11 @@
 # ECC Tunnel HOWTO — Connect AWS Lambda to Your Laptop ECC
 
+> **⚠️ SUPERSEDED — see [`LAMBDA_TO_LOCAL_ECC.md`](./LAMBDA_TO_LOCAL_ECC.md).**
+> This bastion + reverse-SSH approach hit unresolvable SAP gateway back-verify
+> issues. The ngrok + Python forwarder approach in `LAMBDA_TO_LOCAL_ECC.md` is
+> the proven working path (validated 2026-06-02 with a 19,575-row Customer extract).
+> The bastion EC2 can be stopped or destroyed via terraform.
+
 *One-page runbook. Lets the deployed Migrate4HANA Lambdas reach your
 laptop's SAP ECC (host-only VMnet at 192.168.100.x) via a reverse SSH
 tunnel through an AWS bastion in the migrate4hana VPC.*

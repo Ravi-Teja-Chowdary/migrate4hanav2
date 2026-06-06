@@ -1,0 +1,1 @@
+{"run_id":"ngrok-smoke-001","runbook_only":false,"target_creds_arn":"migrate4hana/prod/s4hana-credentials","object":"Customer","mc_mode":"simulate","mc_project":"M4H_LIFT_AND_SHIFT","template_s3_uri":"s3://migrate4hana-staging-prod/runs/ngrok-smoke-001/data-migrator/mc/Customer.csv"}

@@ -459,19 +459,19 @@ resource "aws_secretsmanager_secret" "s4hana_credentials" {
 }
 
 # ─────────────────────────────────────────────
-# Route 53 private hosted zone — so Lambdas in the VPC can resolve the SAP CAL
-# S/4HANA hostname `vhcals4hci.dummy.nodomain` (which only exists in the user's
-# local Windows hosts file otherwise). The A record value is the CAL appliance's
-# CURRENT public IP — set via var.s4_public_ip; update when CAL drifts.
-# Only created when s4_public_ip is non-empty.
+# Route 53 private hosted zone — so Lambdas in the VPC can resolve SAP CAL
+# hostnames (`vhcals4hci.dummy.nodomain`, `vhcalerphci.dummy.nodomain`, etc.)
+# which would otherwise only exist in the user's local hosts file. A-record
+# values are the CAL appliances' CURRENT public IPs; update when CAL drifts.
+# Zone is created if EITHER s4_public_ip OR cal_ecc_public_ip is non-empty.
 # ─────────────────────────────────────────────
 resource "aws_route53_zone" "s4_cal" {
-  count = var.s4_public_ip != "" ? 1 : 0
+  count = (var.s4_public_ip != "" || var.cal_ecc_public_ip != "") ? 1 : 0
   name  = "dummy.nodomain"
   vpc {
     vpc_id = module.vpc.vpc_id
   }
-  comment = "Private zone for SAP CAL S/4HANA hostname resolution from Lambda"
+  comment = "Private zone for SAP CAL hostname resolution from Lambda (S/4 + ECC)"
   tags    = { Component = "ConnectivityDNS" }
 }
 
@@ -491,6 +491,27 @@ resource "aws_route53_record" "s4_vhcals4hcs" {
   type    = "A"
   ttl     = 60
   records = [var.s4_public_ip]
+}
+
+# CAL ECC IDES — kernel back-verify uses the internal hostname (var.cal_ecc_hostname);
+# we publish A records for both the "ci" (central instance) and "cs" (central service)
+# aliases since the kernel may use either depending on operation.
+resource "aws_route53_record" "cal_ecc_ci" {
+  count   = var.cal_ecc_public_ip != "" ? 1 : 0
+  zone_id = aws_route53_zone.s4_cal[0].zone_id
+  name    = "${var.cal_ecc_hostname}.dummy.nodomain"
+  type    = "A"
+  ttl     = 60
+  records = [var.cal_ecc_public_ip]
+}
+
+resource "aws_route53_record" "cal_ecc_cs" {
+  count   = var.cal_ecc_public_ip != "" ? 1 : 0
+  zone_id = aws_route53_zone.s4_cal[0].zone_id
+  name    = "${replace(var.cal_ecc_hostname, "ci", "cs")}.dummy.nodomain"
+  type    = "A"
+  ttl     = 60
+  records = [var.cal_ecc_public_ip]
 }
 
 # Anthropic API key - used by code-analyzer Lambda for Claude remediation in

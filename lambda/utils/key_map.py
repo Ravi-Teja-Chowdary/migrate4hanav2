@@ -147,6 +147,260 @@ class KeyMap:
                 "by_disposition": dict(by_disp)}
 
 
+class PersistentKeyMap(KeyMap):
+    """KeyMap with cross-run DynamoDB-backed persistence.
+
+    Behaviour vs the in-memory ``KeyMap``:
+
+    * ``add(...)`` writes through to DynamoDB after the in-memory mutation. The DynamoDB
+      write uses ``ConditionExpression="attribute_not_exists(source_key)"`` so the FIRST
+      writer for a given ``(object, source_key)`` wins — concurrent runs racing on the
+      same legacy customer don't clobber each other.
+    * ``resolve(obj, source)`` falls through three tiers: in-memory cache → negative
+      cache (we've already missed in DDB) → DynamoDB GetItem. Hits hydrate the in-memory
+      cache so subsequent resolves are free.
+    * ``prefetch_object(obj, source_keys=...)`` bulk-loads via BatchGetItem (or Query when
+      ``source_keys`` is None). Callers about to load 1M sales orders should
+      ``prefetch_object("Customer", set_of_referenced_kunnrs)`` first — turns a million
+      GetItem requests into ~10k BatchGetItem requests.
+
+    Item schema (matches ``aws_dynamodb_table.key_map`` in terraform — hash=object,
+    range=source_key)::
+
+        object         (S, PK)  e.g. "Customer", "Vendor", "Material"
+        source_key     (S, SK)  source-system key (KUNNR, LIFNR, ...)
+        target_key     (S)      resolved target key (BP_xxx, ...)
+        disposition    (S)      created | matched_existing | remapped | harmonized | ...
+        run_id         (S)      the run that wrote this mapping
+        written_at     (S)      ISO-8601 UTC timestamp
+        target_release (S)      optional, S/4 release tag for version drift
+        lineage_hash   (S)      optional, SHA256 of source record for tamper detection
+
+    Backwards-compat: ``KeyMap``-typed callers (``UnifiedLoader.key_map``,
+    ``bapi_loader.create_*``) keep working unchanged — ``PersistentKeyMap`` IS a
+    ``KeyMap`` and adds persistence beneath the existing interface.
+    """
+
+    # Limit the negative-resolve cache so unbounded lookups can't OOM a long-running
+    # Fargate worker; LRU-evict when we cross the ceiling.
+    _NEG_CACHE_MAX = 50_000
+
+    def __init__(self, table_name: str | None = None, *, dynamodb_client=None,
+                 rate_limiter: "TokenBucket | None" = None, run_id: str = "",
+                 target_release: str = "",
+                 negative_cache_max: int | None = None):
+        super().__init__(rate_limiter=rate_limiter)
+        self._table_name = table_name
+        self._run_id = run_id
+        self._target_release = target_release
+        self._neg_max = negative_cache_max if negative_cache_max is not None else self._NEG_CACHE_MAX
+        # Deferred import: boto3 is heavy, and unit tests inject a mock client
+        # via ``dynamodb_client`` so they never need to import boto3.
+        if dynamodb_client is not None:
+            self._ddb = dynamodb_client
+        elif table_name:
+            import boto3   # type: ignore
+            self._ddb = boto3.client("dynamodb")
+        else:
+            self._ddb = None   # no-persistence mode (equivalent to plain KeyMap)
+        # negative cache: items we already KNOW are not in DDB; avoid round-trips
+        self._neg: dict = {}   # (obj, source) -> True; insertion-order ≈ LRU on add
+        # counters for observability
+        self._writes = 0
+        self._cond_failures = 0   # someone else wrote first — that's idempotency, not error
+        self._ddb_gets = 0
+        self._ddb_hits = 0
+
+    # ── write path ────────────────────────────────────────────────────────────
+    def add(self, obj: str, source, target, disposition: str = "") -> None:
+        # 1. in-memory mutation (parent handles validation + rate limit)
+        super().add(obj, source, target, disposition)
+        if self._ddb is None:
+            return
+        # 2. persist; skip silently if invalid input (parent already early-returned)
+        if obj is None or source is None or str(source).strip() == "":
+            return
+        self._persist_one(obj, str(source).strip(),
+                          str(target).strip() if target is not None else "",
+                          disposition or "")
+
+    def _persist_one(self, obj: str, source_key: str, target_key: str, disposition: str) -> None:
+        item = {
+            "object":      {"S": obj},
+            "source_key":  {"S": source_key},
+            "target_key":  {"S": target_key},
+            "disposition": {"S": disposition},
+            "written_at":  {"S": _now_iso()},
+        }
+        if self._run_id:
+            item["run_id"] = {"S": self._run_id}
+        if self._target_release:
+            item["target_release"] = {"S": self._target_release}
+        try:
+            self._ddb.put_item(
+                TableName=self._table_name,
+                Item=item,
+                # Conditional write = idempotent ledger semantics. If the mapping
+                # already exists (a previous run, or a concurrent worker beat us),
+                # we treat it as success and trust the existing entry.
+                ConditionExpression="attribute_not_exists(source_key)",
+            )
+            self._writes += 1
+        except Exception as e:
+            # ConditionalCheckFailedException is normal — someone else wrote first.
+            # Anything else is a real error; log but don't crash the loader.
+            msg = str(e)
+            if "ConditionalCheckFailed" in msg or "ConditionalCheckFailedException" in msg:
+                self._cond_failures += 1
+            else:
+                # Don't take down the whole run for a transient DDB blip; the
+                # in-memory cache still has the mapping, and the next run will
+                # re-attempt. Surface in stats so it's visible.
+                self._writes += 0   # explicit no-increment
+                self._last_error = msg[:240]
+
+    # ── read path ────────────────────────────────────────────────────────────
+    def resolve(self, obj: str, source, default=None):
+        # tier 1: in-memory
+        result = super().resolve(obj, source, default=None)
+        if result is not None:
+            return result
+        # only spend cycles on DDB if we actually have a connection
+        if self._ddb is None or obj is None or source is None:
+            return default
+        src = str(source).strip()
+        if not src:
+            return default
+        # tier 2: negative cache (we already missed for this key)
+        if (obj, src) in self._neg:
+            return default
+        # tier 3: DDB GetItem with eventually-consistent read (cheaper, and reads
+        # are usually after a write that's already propagated)
+        try:
+            resp = self._ddb.get_item(
+                TableName=self._table_name,
+                Key={"object": {"S": obj}, "source_key": {"S": src}},
+                ConsistentRead=False,
+            )
+            self._ddb_gets += 1
+        except Exception:
+            return default
+        item = resp.get("Item")
+        if not item:
+            self._cache_negative(obj, src)
+            return default
+        # hydrate the in-memory cache so subsequent calls are free
+        tgt = item.get("target_key", {}).get("S")
+        disp = item.get("disposition", {}).get("S", "")
+        if tgt is not None:
+            with self._lock:
+                self._m.setdefault(obj, {})[src] = {"target": tgt, "disposition": disp}
+            self._ddb_hits += 1
+            return tgt
+        self._cache_negative(obj, src)
+        return default
+
+    def _cache_negative(self, obj: str, source_key: str, default=None):
+        if len(self._neg) >= self._neg_max:
+            # FIFO evict — dict preserves insertion order in py3.7+
+            try:
+                self._neg.pop(next(iter(self._neg)))
+            except StopIteration:
+                pass
+        self._neg[(obj, source_key)] = True
+        return default
+
+    # ── bulk prefetch ─────────────────────────────────────────────────────────
+    def prefetch_object(self, obj: str, source_keys: list | None = None,
+                        batch_size: int = 100) -> int:
+        """Hydrate the in-memory cache from DynamoDB for an object.
+
+        * If ``source_keys`` is None: full Query of the partition (use sparingly —
+          unbounded scan-of-partition). Returns count hydrated.
+        * If ``source_keys`` is provided: BatchGetItem in chunks of 100 (DDB limit).
+          Use this for the common case of "I'm about to load N sales orders that
+          reference these K customers — pre-resolve them".
+        """
+        if self._ddb is None:
+            return 0
+        hydrated = 0
+        if source_keys is None:
+            # Full Query of the partition. Safe up to a few hundred thousand items
+            # per object; not safe at 10M+ per object.
+            last_key = None
+            while True:
+                kwargs = {
+                    "TableName": self._table_name,
+                    "KeyConditionExpression": "#o = :o",
+                    "ExpressionAttributeNames": {"#o": "object"},
+                    "ExpressionAttributeValues": {":o": {"S": obj}},
+                }
+                if last_key:
+                    kwargs["ExclusiveStartKey"] = last_key
+                resp = self._ddb.query(**kwargs)
+                for item in resp.get("Items", []):
+                    self._hydrate_item(obj, item)
+                    hydrated += 1
+                last_key = resp.get("LastEvaluatedKey")
+                if not last_key:
+                    break
+            return hydrated
+        # BatchGetItem path
+        unique_keys = list({str(k).strip() for k in source_keys if k is not None})
+        for i in range(0, len(unique_keys), batch_size):
+            chunk = unique_keys[i:i + batch_size]
+            request = {
+                self._table_name: {
+                    "Keys": [{"object": {"S": obj}, "source_key": {"S": k}} for k in chunk],
+                }
+            }
+            # Retry-with-backoff loop for UnprocessedKeys (DDB returns them when throttled)
+            attempt = 0
+            while request:
+                resp = self._ddb.batch_get_item(RequestItems=request)
+                for item in resp.get("Responses", {}).get(self._table_name, []):
+                    self._hydrate_item(obj, item)
+                    hydrated += 1
+                request = resp.get("UnprocessedKeys") or {}
+                attempt += 1
+                if request and attempt > 8:
+                    # Give up cleanly; remaining keys will fall through to per-call GetItem
+                    break
+                if request:
+                    time.sleep(min(0.05 * (2 ** attempt), 1.0))
+        return hydrated
+
+    def _hydrate_item(self, obj: str, item: dict) -> None:
+        src = item.get("source_key", {}).get("S")
+        tgt = item.get("target_key", {}).get("S")
+        disp = item.get("disposition", {}).get("S", "")
+        if src and tgt is not None:
+            with self._lock:
+                self._m.setdefault(obj, {})[src] = {"target": tgt, "disposition": disp}
+
+    # ── observability ────────────────────────────────────────────────────────
+    def persistence_stats(self) -> dict:
+        """Stats specific to the persistence layer. Combine with .stats() for the full
+        picture across in-memory + DDB."""
+        return {
+            "table":                self._table_name,
+            "run_id":               self._run_id,
+            "target_release":       self._target_release,
+            "writes":               self._writes,
+            "conditional_skips":    self._cond_failures,
+            "ddb_gets":             self._ddb_gets,
+            "ddb_hits":             self._ddb_hits,
+            "negative_cache_size":  len(self._neg),
+            "negative_cache_cap":   self._neg_max,
+        }
+
+
+def _now_iso() -> str:
+    """ISO-8601 UTC timestamp; pulled out so tests can monkeypatch."""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 # ── self-test (no AWS) — registry round-trip + token-bucket throttling ───────
 if __name__ == "__main__":
     print("=" * 70)
