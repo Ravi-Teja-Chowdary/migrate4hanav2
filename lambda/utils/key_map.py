@@ -188,11 +188,25 @@ class PersistentKeyMap(KeyMap):
     def __init__(self, table_name: str | None = None, *, dynamodb_client=None,
                  rate_limiter: "TokenBucket | None" = None, run_id: str = "",
                  target_release: str = "",
-                 negative_cache_max: int | None = None):
+                 negative_cache_max: int | None = None,
+                 tenant_context=None):
         super().__init__(rate_limiter=rate_limiter)
         self._table_name = table_name
         self._run_id = run_id
         self._target_release = target_release
+        # F7 - tenant scoping. None = default tenant (legacy single-tenant
+        # behavior; DDB partition keys remain bare object names). When a
+        # real TenantContext is attached, every DDB row's partition key is
+        # prefixed "<tenant_slug>#<object>" - hard separation, no possibility
+        # of cross-tenant resolve hits.
+        try:
+            from tenant_context import default_context   # type: ignore
+            self._tenant = tenant_context or default_context()
+        except Exception:
+            class _NullCtx:
+                tenant_id = "default"; tenant_slug = "default"; is_default = True
+                def ddb_object_key(self, obj): return obj
+            self._tenant = _NullCtx()
         self._neg_max = negative_cache_max if negative_cache_max is not None else self._NEG_CACHE_MAX
         # Deferred import: boto3 is heavy, and unit tests inject a mock client
         # via ``dynamodb_client`` so they never need to import boto3.
@@ -225,13 +239,19 @@ class PersistentKeyMap(KeyMap):
                           disposition or "")
 
     def _persist_one(self, obj: str, source_key: str, target_key: str, disposition: str) -> None:
+        # F7 - tenant-scoped partition key. For default tenant this is
+        # "Customer"; for tenant "acme-corp" it's "acme-corp#Customer".
+        pk = self._tenant.ddb_object_key(obj)
         item = {
-            "object":      {"S": obj},
+            "object":      {"S": pk},
             "source_key":  {"S": source_key},
             "target_key":  {"S": target_key},
             "disposition": {"S": disposition},
             "written_at":  {"S": _now_iso()},
         }
+        # Carry the tenant_id as a column for audit + admin queries
+        if not getattr(self._tenant, "is_default", True):
+            item["tenant_id"] = {"S": self._tenant.tenant_id}
         if self._run_id:
             item["run_id"] = {"S": self._run_id}
         if self._target_release:
@@ -277,9 +297,10 @@ class PersistentKeyMap(KeyMap):
         # tier 3: DDB GetItem with eventually-consistent read (cheaper, and reads
         # are usually after a write that's already propagated)
         try:
+            pk = self._tenant.ddb_object_key(obj)
             resp = self._ddb.get_item(
                 TableName=self._table_name,
-                Key={"object": {"S": obj}, "source_key": {"S": src}},
+                Key={"object": {"S": pk}, "source_key": {"S": src}},
                 ConsistentRead=False,
             )
             self._ddb_gets += 1
@@ -327,13 +348,14 @@ class PersistentKeyMap(KeyMap):
         if source_keys is None:
             # Full Query of the partition. Safe up to a few hundred thousand items
             # per object; not safe at 10M+ per object.
+            pk = self._tenant.ddb_object_key(obj)
             last_key = None
             while True:
                 kwargs = {
                     "TableName": self._table_name,
                     "KeyConditionExpression": "#o = :o",
                     "ExpressionAttributeNames": {"#o": "object"},
-                    "ExpressionAttributeValues": {":o": {"S": obj}},
+                    "ExpressionAttributeValues": {":o": {"S": pk}},
                 }
                 if last_key:
                     kwargs["ExclusiveStartKey"] = last_key
@@ -346,12 +368,13 @@ class PersistentKeyMap(KeyMap):
                     break
             return hydrated
         # BatchGetItem path
+        pk = self._tenant.ddb_object_key(obj)
         unique_keys = list({str(k).strip() for k in source_keys if k is not None})
         for i in range(0, len(unique_keys), batch_size):
             chunk = unique_keys[i:i + batch_size]
             request = {
                 self._table_name: {
-                    "Keys": [{"object": {"S": obj}, "source_key": {"S": k}} for k in chunk],
+                    "Keys": [{"object": {"S": pk}, "source_key": {"S": k}} for k in chunk],
                 }
             }
             # Retry-with-backoff loop for UnprocessedKeys (DDB returns them when throttled)
