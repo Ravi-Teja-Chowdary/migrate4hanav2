@@ -379,16 +379,38 @@ class BaseSpineOrchestrator(ABC):
 
         # 7) execute BAPI
         try:
-            tgt_key, msgs = self.call_bapi(payload)
+            bapi_result = self.call_bapi(payload)
         except Exception as e:
             return self._dead(result, DEAD_LETTER_BAPI, f"BAPI call raised: {e}")
+
+        # call_bapi may return (tgt_key, msgs) - classification is INFERRED from
+        # the key relationship - or (tgt_key, msgs, disposition_hint) for
+        # subclasses that need to signal matched_existing explicitly (e.g. Bank
+        # where the target key always equals the source key by SAP convention).
+        disp_hint: Optional[str] = None
+        if isinstance(bapi_result, tuple) and len(bapi_result) == 3:
+            tgt_key, msgs, disp_hint = bapi_result
+        else:
+            tgt_key, msgs = bapi_result
         result.messages = msgs or []
         if not tgt_key:
             return self._dead(result, DEAD_LETTER_BAPI, "BAPI returned no target key")
 
         # 8) classify status (created / matched / remapped / collision_skipped)
         result.target_key = tgt_key
-        if tgt_key == src_key:
+        if disp_hint == DISP_CREATED:
+            result.status = DISP_CREATED
+            result.disposition = DISP_CREATED
+            with self._lock: self.stats.created += 1
+        elif disp_hint == DISP_MATCHED_EXISTING:
+            result.status = DISP_MATCHED_EXISTING
+            result.disposition = DISP_MATCHED_EXISTING
+            with self._lock: self.stats.matched_existing += 1
+        elif disp_hint == DISP_REMAPPED:
+            result.status = DISP_REMAPPED
+            result.disposition = DISP_REMAPPED
+            with self._lock: self.stats.remapped += 1
+        elif tgt_key == src_key:
             result.status = DISP_CREATED
             result.disposition = DISP_CREATED
             with self._lock: self.stats.created += 1
