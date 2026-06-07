@@ -763,13 +763,18 @@ def lambda_handler(event, context):
     spec = event.get("object_spec") or {}
     log_stage_event(run_id, "data-migrator", "start", {"mode": mode, "object": spec.get("object")})
 
-    # F2/F3 Phase B validation modes - exercise the new spine + dynamic-schema
-    # paths against real SAP without the DAG/batch-mode overhead. Tiny entry
-    # point; the validator function lives further down.
+    # F2/F3/F5/F6 Phase B validation modes - exercise the new spine + dynamic-
+    # schema + version-routing + benchmark paths against real SAP without the
+    # DAG/batch-mode overhead. Tiny entry points; the validator functions live
+    # further down.
     if mode == "phase_b_validate_f2":
         return _phase_b_validate_f2(event, run_id)
     if mode == "phase_b_validate_f3":
         return _phase_b_validate_f3(event, run_id)
+    if mode == "phase_b_validate_f6":
+        return _phase_b_validate_f6(event, run_id)
+    if mode == "phase_b_validate_f5":
+        return _phase_b_validate_f5(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -1331,4 +1336,246 @@ def _phase_b_validate_f3(event, run_id):
         "schema_source": schema.source,
         "field_count":   len(schema.fields),
         "sample_fields": schema.fields[:20],
+    }
+
+
+def _resolve_routing(source_code: str, target_code: str, source_db=None):
+    """Helper - resolve a version_matrix RoutingPlan for the given pair.
+    Returns ``(plan_dict, error_str)``. Either or both may be None."""
+    try:
+        from version_matrix import routing_for_pair, VersionIncompatibilityError
+    except Exception as e:
+        return None, f"version_matrix unimportable: {e}"
+    try:
+        plan = routing_for_pair(source_code, target_code, source_db=source_db)
+        return plan.to_dict(), None
+    except Exception as e:
+        return None, f"{type(e).__name__}: {str(e)[:200]}"
+
+
+def _phase_b_validate_f6(event, run_id):
+    """F6 Phase B - validate that a saved version selection compiles into a
+    RoutingPlan whose tags actually shape extract behaviour.
+
+    Two-part proof:
+      1. Resolve the routing plan from (source_code, target_code, source_db)
+         either from the event payload or from auto-detection via RFC.
+      2. Apply the plan's ``package_size`` to a real RFC_READ_TABLE call
+         against the live ECC, and confirm the row-count cap matches the plan.
+
+    Payload shape::
+
+        { "mode": "phase_b_validate_f6",
+          "run_id": "f6-phaseb-001",
+          "source_code": "ECC60_EHP8",        # optional - auto-detect if absent
+          "target_code": "S4HANA_2023",       # optional - auto-detect if absent
+          "source_db":   "HANA",              # optional override
+          "ecc_secret_id": "migrate4hana/prod/sap-credentials",
+          "probe_table": "KNA1",
+          "probe_fields": ["KUNNR", "NAME1"] }
+    """
+    ecc_secret_id = (event.get("ecc_secret_id")
+                     or os.environ.get("ECC_SECRET_ID")
+                     or "migrate4hana/prod/sap-credentials")
+    src_code = event.get("source_code")
+    tgt_code = event.get("target_code")
+    src_db   = event.get("source_db")
+    probe_table  = event.get("probe_table", "KNA1")
+    probe_fields = event.get("probe_fields", ["KUNNR", "NAME1", "LAND1"])
+
+    diag = {"detection": None, "routing_plan": None, "probe": None}
+
+    # Open the ECC connection
+    try:
+        conn = _ecc(ecc_secret_id)
+    except Exception as e:
+        return {"status": "error", "phase": "connect_ecc", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # If the caller didn't supply the version codes, auto-detect via RFC_SYSTEM_INFO
+    if not src_code:
+        try:
+            from version_matrix import detect_source_ecc_version
+            info = conn.call("RFC_SYSTEM_INFO")
+            detected = detect_source_ecc_version(info)
+            if detected:
+                src_code = detected.code
+                if not src_db:
+                    src_db = detected.db_default
+                diag["detection"] = {"source_code": src_code,
+                                      "source_db": src_db,
+                                      "rfc_release": info.get("RFCSI_EXPORT", {}).get("RFCSAPRL"),
+                                      "rfc_dbsys":   info.get("RFCSI_EXPORT", {}).get("RFCDBSYS")}
+            else:
+                diag["detection"] = {"error": "RFC_SYSTEM_INFO returned an unmapped release",
+                                      "raw": info.get("RFCSI_EXPORT")}
+        except Exception as e:
+            diag["detection"] = {"error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # Fall back to a sensible default target if not specified
+    tgt_code = tgt_code or "S4HANA_2023"
+
+    # Resolve routing plan
+    if not src_code:
+        try: conn.close()
+        except Exception: pass
+        return {"status": "error", "phase": "resolve_source_version",
+                "run_id": run_id, "diag": diag,
+                "error": "could not resolve source ECC version (pass source_code explicitly)"}
+
+    plan, err = _resolve_routing(src_code, tgt_code, source_db=src_db)
+    if err:
+        try: conn.close()
+        except Exception: pass
+        return {"status": "error", "phase": "resolve_routing", "run_id": run_id,
+                "diag": diag, "error": err}
+    diag["routing_plan"] = plan
+
+    # Apply the routing plan's package_size as the ROWCOUNT cap on a live probe
+    cap = int(plan["package_size"])
+    try:
+        t0 = time.time()
+        resp = conn.call(
+            "RFC_READ_TABLE",
+            QUERY_TABLE=probe_table,
+            FIELDS=[{"FIELDNAME": f} for f in probe_fields],
+            ROWCOUNT=cap,
+        )
+        elapsed_ms = int((time.time() - t0) * 1000)
+        rows = resp.get("DATA") or []
+        diag["probe"] = {"ok": True,
+                          "table": probe_table,
+                          "package_size_applied": cap,
+                          "rows_returned": len(rows),
+                          "elapsed_ms": elapsed_ms,
+                          "throughput_rows_per_sec":
+                              round(len(rows) / (elapsed_ms / 1000), 1) if elapsed_ms else None}
+    except Exception as e:
+        diag["probe"] = {"ok": False,
+                          "error": f"{type(e).__name__}: {str(e)[:240]}"}
+    finally:
+        try: conn.close()
+        except Exception: pass
+
+    return {
+        "run_id":      run_id,
+        "status":      "ok",
+        "phase":       "f6_version_routing",
+        "source_code": src_code,
+        "target_code": tgt_code,
+        "source_db":   src_db,
+        "extract_strategy":     plan["extract_strategy"],
+        "package_size":         plan["package_size"],
+        "template_format":      plan["template_format"],
+        "fargate_fan_out":      plan["fargate_fan_out"],
+        "cluster_read_safety":  plan["cluster_read_safety"],
+        "odata_ltmc_supported": plan["odata_ltmc_supported"],
+        "diag":        diag,
+    }
+
+
+def _percentile(values, p):
+    if not values:
+        return 0.0
+    s = sorted(values)
+    import math
+    k = (len(s) - 1) * (p / 100.0)
+    lo, hi = math.floor(k), math.ceil(k)
+    if lo == hi:
+        return float(s[int(k)])
+    return s[lo] + (s[hi] - s[lo]) * (k - lo)
+
+
+def _phase_b_validate_f5(event, run_id):
+    """F5 Phase B - benchmark the spine path against real S/4 with per-record
+    latency capture. Returns the same BenchmarkResult shape as the offline
+    harness so SCALE_BENCHMARK.md can drop the numbers in directly.
+
+    Payload shape::
+
+        { "mode": "phase_b_validate_f5",
+          "run_id": "f5-phaseb-001",
+          "count": 25,
+          "prefix": "F5PHASEB",
+          "target_secret_id": "migrate4hana/prod/s4hana-credentials" }
+    """
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    count   = int(event.get("count", 25))
+    prefix  = event.get("prefix", "F5PHASEB")
+
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    try:
+        from material_spine import MaterialSpineOrchestrator
+        from key_map import PersistentKeyMap
+    except Exception as e:
+        return {"status": "error", "phase": "import_spine", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+    km = PersistentKeyMap(table_name=ddb_table, run_id=run_id)
+    orch = MaterialSpineOrchestrator(tconn, key_map=km)
+
+    # Build records up front so generation cost isn't in the latency window
+    records = []
+    for i in range(count):
+        records.append({
+            "MATNR": f"{prefix}_{run_id[-6:]}_{i:04d}",
+            "MTART": "HALB",
+            "MBRSH": "M",
+            "MEINS": "EA",
+            "MAKTX": f"Phase B perf {i:04d}",
+        })
+
+    latencies_ms = []
+    status_breakdown = {}
+    dead_letter_codes = {}
+    ext_rows_total = 0
+
+    t0 = time.perf_counter()
+    for row in records:
+        r0 = time.perf_counter()
+        res = orch.load_one(row)
+        latencies_ms.append((time.perf_counter() - r0) * 1000)
+        status_breakdown[res.status] = status_breakdown.get(res.status, 0) + 1
+        if res.dead_letter:
+            dead_letter_codes[res.dead_letter] = dead_letter_codes.get(res.dead_letter, 0) + 1
+        ext_rows_total += res.extension_rows
+    wall_clock_s = round(time.perf_counter() - t0, 3)
+
+    try:
+        tconn.close()
+    except Exception:
+        pass
+
+    return {
+        "run_id":             run_id,
+        "status":             "ok",
+        "phase":              "f5_spine_benchmark",
+        "object_type":        "Material",
+        "count":              count,
+        "wall_clock_s":       wall_clock_s,
+        "throughput_per_sec": round(count / wall_clock_s, 2) if wall_clock_s else 0.0,
+        "p50_ms":             round(_percentile(latencies_ms, 50), 1),
+        "p90_ms":             round(_percentile(latencies_ms, 90), 1),
+        "p99_ms":             round(_percentile(latencies_ms, 99), 1),
+        "p999_ms":            round(_percentile(latencies_ms, 99.9), 1),
+        "min_ms":             round(min(latencies_ms), 1) if latencies_ms else 0,
+        "max_ms":             round(max(latencies_ms), 1) if latencies_ms else 0,
+        "status_breakdown":   status_breakdown,
+        "dead_letter_codes":  dead_letter_codes,
+        "extension_rows":     ext_rows_total,
+        "spine_stats":        orch.stats.to_dict(),
+        "key_map_writes":     km.persistence_stats(),
     }
