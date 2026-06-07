@@ -1,1 +1,1 @@
-{"run_id":"ngrok-smoke-001","runbook_only":false,"target_creds_arn":"migrate4hana/prod/s4hana-credentials","object":"Customer","mc_mode":"simulate","mc_project":"M4H_LIFT_AND_SHIFT","template_s3_uri":"s3://migrate4hana-staging-prod/runs/ngrok-smoke-001/data-migrator/mc/Customer.csv"}
+{"ecc_secret_id":"migrate4hana/prod/sap-credentials","object_spec":{"object":"Customer","source_table":"KNA1","fields":["KUNNR","NAME1","LAND1","ORT01","STRAS"],"lane":"MC"},"run_id":"ngrok-smoke-001"}
