@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Server, GitBranch, KanbanSquare, ShieldCheck, FileText,
-  TerminalSquare, Boxes, ArrowRight, Circle,
+  TerminalSquare, Boxes, ArrowRight, Circle, GitCompareArrows,
 } from 'lucide-react';
 import { ping } from '../lib/api';
 
@@ -17,7 +17,10 @@ const NAV = [
   },
   {
     group: 'Setup',
-    items: [{ to: '/connections', label: 'Connections', icon: Server }],
+    items: [
+      { to: '/connections', label: 'Connections', icon: Server },
+      { to: '/versions', label: 'Version Matrix', icon: GitCompareArrows },
+    ],
   },
   {
     group: 'Execute',

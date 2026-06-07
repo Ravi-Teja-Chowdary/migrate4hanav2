@@ -33,6 +33,19 @@ local-staging/
 lambda/**/*.zip
 lambda/**/package/
 
+# Local deploy staging dirs + session scratch
+build-dm/
+build-orch/
+first-chat.txt
+*.session.txt
+ngrok-smoke.json
+cal-smoke.json
+mc-runbook.json
+mc-simulate.json
+mc-runbook.md
+scale-mock-*.json
+ecc-tunnel-test.json
+
 # Lambda layer builds (PyRFC)
 layer-build/build/
 layer-build/pyrfc-layer.zip

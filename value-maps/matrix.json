@@ -1,0 +1,120 @@
+{
+  "_meta": {
+    "description": "Migrate4HANA value-mapping matrix. Each top-level key is a NAMED TABLE referenced by a VALUE_MAP transform rule in ruleset.json. Source values are matched case-insensitively after trim.",
+    "version": "2026-06-07",
+    "edit_workflow": "1) scripts\\manage-value-maps.ps1 -Action pull   (downloads from S3)  2) edit this file in any text editor  3) scripts\\manage-value-maps.ps1 -Action push   (uploads + validates)",
+    "schema": "https://migrate4hana.dev/schemas/value-maps-v1.json"
+  },
+
+  "company_code_map": {
+    "_doc": "Legacy ECC BUKRS -> S/4 BUKRS. Used by Customer/Vendor/Material/GL/Asset objects.",
+    "1000": "US01",
+    "2000": "DE01",
+    "3000": "GB01",
+    "4000": "FR01",
+    "5000": "JP01",
+    "6000": "AU01",
+    "BP01": "US01"
+  },
+
+  "currency_map": {
+    "_doc": "Legacy ECC WAERS -> ISO 4217. Critical for FI postings; DEM/FRF/ITL drop to EUR.",
+    "USD": "USD",
+    "EUR": "EUR",
+    "GBP": "GBP",
+    "JPY": "JPY",
+    "AUD": "AUD",
+    "DEM": "EUR",
+    "FRF": "EUR",
+    "ITL": "EUR",
+    "ESP": "EUR",
+    "BEF": "EUR",
+    "ATS": "EUR",
+    "FIM": "EUR",
+    "GRD": "EUR",
+    "IEP": "EUR",
+    "LUF": "EUR",
+    "NLG": "EUR",
+    "PTE": "EUR"
+  },
+
+  "country_map": {
+    "_doc": "Legacy ECC LAND1 -> ISO 3166-1 alpha-2. Most ECC values already match; this catches legacy aliases.",
+    "USA": "US",
+    "GERMANY": "DE",
+    "UK": "GB",
+    "ENGLAND": "GB",
+    "JAPAN": "JP",
+    "AUSTRALIA": "AU",
+    "FRANCE": "FR",
+    "ITALY": "IT",
+    "SPAIN": "ES",
+    "NETHERLANDS": "NL"
+  },
+
+  "language_map": {
+    "_doc": "Legacy ECC SPRAS -> ISO 639-1 (S/4 prefers ISO codes). Single-char ECC codes like 'E' get expanded.",
+    "E": "EN",
+    "D": "DE",
+    "F": "FR",
+    "S": "ES",
+    "I": "IT",
+    "J": "JA",
+    "P": "PT",
+    "EN": "EN",
+    "DE": "DE",
+    "FR": "FR"
+  },
+
+  "material_type_map": {
+    "_doc": "Legacy MARA.MTART -> S/4 material type. Most pass through unchanged; ZFG/ZHA/ZHB are legacy custom types we remap to standard.",
+    "ZFG": "FERT",
+    "ZHA": "HALB",
+    "ZHB": "HAWA",
+    "ZRO": "ROH",
+    "ZSE": "DIEN",
+    "FERT": "FERT",
+    "HALB": "HALB",
+    "HAWA": "HAWA",
+    "ROH": "ROH",
+    "DIEN": "DIEN"
+  },
+
+  "customer_group_map": {
+    "_doc": "Legacy KNA1.KTOKD -> S/4 BP grouping. 0001-class becomes BP01 in S/4 BP-led numbering.",
+    "0001": "BP01",
+    "0002": "BP02",
+    "0003": "BP03",
+    "Z001": "BP01",
+    "Z002": "BP02"
+  },
+
+  "vendor_group_map": {
+    "_doc": "Legacy LFA1.KTOKK -> S/4 BP grouping for vendors.",
+    "0001": "BPV1",
+    "0002": "BPV2",
+    "ZVEN": "BPV1"
+  },
+
+  "gl_account_map": {
+    "_doc": "Legacy SKA1.SAKNR remaps. Use sparingly - most accounts pass through; this is for the few that got renumbered in the S/4 design.",
+    "100000": "10000000",
+    "200000": "20000000",
+    "400000": "40000000"
+  },
+
+  "sales_org_map": {
+    "_doc": "Legacy VKORG -> S/4 sales org. Often re-keyed during S/4 implementation.",
+    "1000": "US01",
+    "2000": "DE01",
+    "ZS01": "US01"
+  },
+
+  "plant_map": {
+    "_doc": "Legacy WERKS -> S/4 plant. Plant consolidation is common during S/4 cutover; this table holds the merge map.",
+    "1100": "P100",
+    "1200": "P100",
+    "2100": "P200",
+    "2200": "P200"
+  }
+}

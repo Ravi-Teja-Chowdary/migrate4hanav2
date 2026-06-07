@@ -3,6 +3,24 @@
 *An honest, evidence-backed summary of what this tool does and where it stands. Written
 for SAP-experienced partners, prospective design-partner customers, and evaluators.*
 
+> **2026-06-07 capability update — Six production-grade foundations shipped (F1-F6).**
+> The capabilities listed below are now backed by 98 passing unit tests (+5 real-DDB
+> integration tests), 6 consultant-facing guide docs, and a working promotion-factory
+> pattern that turns each new object into a 1-2-day exercise instead of 2-week bespoke.
+> Material progress in 6 areas:
+>
+> 1. **Cross-run idempotency** — `PersistentKeyMap` on real DynamoDB, verified end-to-end
+> 2. **Promotion factory** — `BaseSpineOrchestrator` + Material Master deep view (MARA+MARC+MARD+MBEW+MARM+MAKT) as the proof, ~150 LOC per new object
+> 3. **Version-resilient catalogs** — `dynamic_schema_builder` reads DDIC at runtime, caches per-landscape in S3
+> 4. **Declarative value mapping** — 10-table starter matrix + 5-object ruleset + PowerShell admin workflow
+> 5. **Scale benchmark harness** — `spine_benchmark.py` + 25K rec/sec autonomous baseline
+> 6. **UI-driven version routing** — 51-pair compatibility matrix in `VersionMatrix.jsx` with RFC auto-detect
+>
+> See the per-foundation guides for the full deep-dive: `SPINE_PROMOTION_GUIDE.md`,
+> `DYNAMIC_SCHEMA_GUIDE.md`, `VALUE_MAPPING_GUIDE.md`, `SCALE_BENCHMARK.md`,
+> `VERSION_MATRIX_GUIDE.md`, `COMPLIANCE.md`. Detailed engineering write-up in
+> `EXPERT_REVIEW_DETAILED.md §25`.
+
 ---
 
 ## 1. What it is (positioning)

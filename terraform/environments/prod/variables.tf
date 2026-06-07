@@ -204,3 +204,27 @@ variable "cal_ecc_hostname" {
   default     = "vhcalabaci"
   description = "Internal hostname of the CAL ECC appliance (kernel uses it for back-verify). Follows the vhcal<sid>ci convention: ABA -> vhcalabaci, IDS -> vhcalidsci, NPL -> vhcalnplci. Check the CAL 'Connect' page if RFC fails with WSAENETUNREACH."
 }
+
+# ─────────────────────────────────────────────
+# F6 — Production governance toggles
+# Defaults preserve current prod posture: WORM + 7y retention + AWS-managed KMS.
+# Per-environment overrides go in terraform.tfvars; dev/staging sandboxes can
+# flip object_lock_enabled to false for fast tfdestroy cycles.
+# ─────────────────────────────────────────────
+variable "object_lock_enabled" {
+  type        = bool
+  default     = true
+  description = "Enable S3 Object Lock + GOVERNANCE retention on the audit-logs bucket. true = SOX-defensible WORM; false = bucket is destroyable (dev/staging only). Creation-time attribute — changing on an existing bucket triggers replacement."
+}
+
+variable "audit_retention_days" {
+  type        = number
+  default     = 2555
+  description = "Days to retain audit logs before lifecycle expires them. 2555 = ~7 years (SOX). Adjust for GxP/SOC2/GDPR regimes that require different windows."
+}
+
+variable "audit_kms_key_arn" {
+  type        = string
+  default     = ""
+  description = "Optional CMK ARN to encrypt the audit-logs bucket. Empty = AWS-managed aws/s3 key. CMK provides explicit rotation, key policy, and CloudTrail key-usage events."
+}

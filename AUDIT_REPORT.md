@@ -1,7 +1,26 @@
 # Migrate4HANA — End-to-End Pipeline Audit (real vs. scaffold → path to production-grade)
 
-*Audit started 2026-05-27. Goal: classify every non-data-spine stage as real vs. scaffold
-with evidence, then drive each to production-grade. This is a living document.*
+*Audit started 2026-05-27. Updated 2026-06-07 with the F1-F6 foundation pass —
+six new production-grade modules + 98/98 unit tests + 6 consultant-facing docs.
+This is a living document.*
+
+> **2026-06-07 audit update — Foundation pass shipped:**
+>
+> | Stage / capability | Before this audit cycle | After 2026-06-07 |
+> |---|---|---|
+> | Cross-run key registry | **SCAFFOLD** (single S3 JSON blob, race-unsafe) | **PRODUCTION** (`PersistentKeyMap` on `migrate4hana-key-map-prod` DDB; race-safe; verified by `tests/integration_test_persistent_key_map.py` against real DDB) |
+> | Per-object loader extensibility | **SCAFFOLD** (every new object = bespoke 2-week build) | **PRODUCTION** (`BaseSpineOrchestrator` promotion factory; ~150 LOC + 12 tests = 1-2 days per object; pattern documented in `SPINE_PROMOTION_GUIDE.md`) |
+> | BAPI field catalog (used by the coverage gate) | **SCAFFOLD** (hand-curated `bapi_field_catalog.py`; breaks across S/4 releases) | **PRODUCTION** (`dynamic_schema_builder` with `DD_BAPI_PARAMETER_GET` → DD03L → static-fallback resolution chain; S3-cached per landscape with 7-day TTL) |
+> | Value-mapping rules engine | **PARTIAL SCAFFOLD** (the engine existed and was wired but unconfigured) | **PRODUCTION** (10-table starter `matrix.json` + 5-object `ruleset.json` + `scripts/manage-value-maps.ps1` pull/push/validate + 11 ruleset tests green) |
+> | Scale benchmark | **SCAFFOLD** (battletest harness existed but didn't drive the spine path) | **PARTIAL** (`tests/battletest/spine_benchmark.py` harness + 25K rec/sec autonomous baseline; the 1M-row real-systems run remains Phase B) |
+> | UI version routing | **MISSING** | **PRODUCTION** (`frontend/src/pages/VersionMatrix.jsx` + 4 FastAPI endpoints + 51-pair compatibility matrix + RFC auto-detect) |
+> | Governance toggles | **HARDCODED** (`object_lock_enabled = true` hardcoded in audit module) | **TOGGLEABLE** (`object_lock_enabled` / `audit_retention_days` / `kms_key_arn` are now terraform variables with defaults preserving current prod posture) |
+>
+> Total test sweep: **98 passing in 3.68s** (11 PersistentKeyMap + 15 wave1 + 11 ruleset + 18 version_matrix + 20 spine + 15 dynamic_schema + 8 benchmark). Plus 5 real-DDB integration tests (run on-demand). **Zero regressions in the existing wave1 suite.**
+>
+> The "scaffold → production" classification in §13.2's audit table needs updating to reflect the seven items in the table above. The detailed `lambda/*` per-Lambda audit (§4) is unchanged; the cross-cutting capability assessment is materially better.
+
+---
 
 ## Method
 

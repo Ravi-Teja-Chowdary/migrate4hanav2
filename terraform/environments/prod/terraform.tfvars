@@ -26,7 +26,7 @@ pyrfc_layer_arn = ""
 waf_rate_limit = 1000
 
 #S4HANA Public IP (CAL appliance — drifts on every stop/start)
-s4_public_ip = "13.220.38.97"
+s4_public_ip = "54.147.124.20"
 
 # SAP CAL IDES EHP8 for SAP ERP 6.0 on SAP ASE (June 2021 build)
 # Connect dialog shows SID=ABA (CAL naming) but it IS the full IDES appliance —

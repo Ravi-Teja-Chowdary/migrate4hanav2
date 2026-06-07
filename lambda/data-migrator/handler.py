@@ -821,7 +821,37 @@ def lambda_handler(event, context):
                         from bapi_coverage import LtmcStagingEmitter
                         import bapi_field_catalog as _bfc
                         loader.bapi_coverage_emitter = LtmcStagingEmitter(_cov_dir)
+
+                        # F3 - dynamic schema preferred. When M4H_DYNAMIC_SCHEMA_S3
+                        # is set AND we have a target connection, introspect via
+                        # DDIC; otherwise use the static baseline.
                         loader.bapi_field_catalog = _bfc.as_dict()
+                        _dyn_s3 = os.environ.get("M4H_DYNAMIC_SCHEMA_S3", "").strip()
+                        if _dyn_s3:
+                            try:
+                                from dynamic_schema_builder import build_all_schemas
+                                from bapi_field_catalog import known_objects
+                                dyn = build_all_schemas(
+                                    sorted(known_objects()),
+                                    conn=tconn, sid=tsec.get("sid", "S4H"),
+                                    client=tsec.get("client", "100"),
+                                    s4_release=os.environ.get("M4H_TARGET_RELEASE",
+                                                              "UNKNOWN"),
+                                    cache_s3_uri=_dyn_s3,
+                                )
+                                # Overlay dynamic results on top of static baseline:
+                                # static fields stay as fallback; dynamic widens.
+                                for obj, fields in dyn.items():
+                                    base = loader.bapi_field_catalog.get(obj, set())
+                                    loader.bapi_field_catalog[obj] = base | fields
+                                log_stage_event(run_id, "data-migrator",
+                                                "dynamic_schema_active",
+                                                {"s3": _dyn_s3,
+                                                 "objects_introspected": len(dyn)})
+                            except Exception as _dse:
+                                log_stage_event(run_id, "data-migrator",
+                                                "dynamic_schema_skipped",
+                                                {"reason": str(_dse)[:160]})
                         log_stage_event(run_id, "data-migrator",
                                         "bapi_coverage_active",
                                         {"dir": _cov_dir,

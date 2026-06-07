@@ -76,7 +76,7 @@ locals {
   pyrfc_layer_exists = fileexists(local.pyrfc_layer_zip)
   pyrfc_layer_arn = (local.pyrfc_layer_exists
     ? aws_lambda_layer_version.pyrfc[0].arn
-    : var.pyrfc_layer_arn)
+  : var.pyrfc_layer_arn)
 }
 
 resource "aws_lambda_layer_version" "pyrfc" {
@@ -127,8 +127,8 @@ module "lambda" {
   # Direct Anthropic API path (replaces Bedrock when the AWS account does not
   # have model access). The code-analyzer Lambda fetches the key at runtime
   # from this Secrets Manager secret via M4H_ANTHROPIC_SECRET_ARN.
-  anthropic_secret_arn      = aws_secretsmanager_secret.anthropic_api_key.arn
-  anthropic_model_id        = var.anthropic_model_id
+  anthropic_secret_arn       = aws_secretsmanager_secret.anthropic_api_key.arn
+  anthropic_model_id         = var.anthropic_model_id
   anthropic_escalation_model = var.anthropic_escalation_model
 
   # ── PROD-hardening pillars wired into every function (no-op when empty) ──
@@ -138,7 +138,7 @@ module "lambda" {
   gate_secret_arn    = aws_secretsmanager_secret.gate_secret.arn
   audit_ledger_table = aws_dynamodb_table.audit_ledger.name
   key_map_table      = aws_dynamodb_table.key_map.name
-  evidence_bucket    = aws_s3_bucket.evidence_app.id   # exposed to code as M4H_EVIDENCE_BUCKET
+  evidence_bucket    = aws_s3_bucket.evidence_app.id # exposed to code as M4H_EVIDENCE_BUCKET
   fargate_cluster    = module.ecs.cluster_arn
   fargate_taskdef    = module.ecs.task_definition_arn
   fargate_sgs        = module.ecs.security_group_id
@@ -566,7 +566,7 @@ module "bastion" {
   private_subnet_ids = module.vpc.private_subnet_ids
   key_pair_name      = var.bastion_key_pair_name
   # By default allow SSH from anywhere; tighten via -var=ssh_allowed_cidrs='["YOUR_IP/32"]'
-  ssh_allowed_cidrs  = var.ssh_allowed_cidrs
+  ssh_allowed_cidrs = var.ssh_allowed_cidrs
 }
 
 
@@ -603,6 +603,15 @@ module "audit" {
   source      = "../../modules/audit"
   environment = var.environment
   region      = var.aws_region
+
+  # F6 governance toggles. Defaults preserve current prod posture:
+  #   object_lock_enabled = true   -> WORM retention (SOX-defensible)
+  #   audit_retention_days = 2555  -> 7 years (SOX requirement)
+  #   kms_key_arn = ""             -> AWS-managed s3 key (set to CMK ARN later)
+  # Overridable in terraform.tfvars per environment.
+  object_lock_enabled  = var.object_lock_enabled
+  audit_retention_days = var.audit_retention_days
+  kms_key_arn          = var.audit_kms_key_arn
 }
 
 # ─────────────────────────────────────────────
@@ -839,8 +848,8 @@ output "gates_table_name" {
 resource "aws_cloudwatch_event_rule" "code_delta_daily" {
   name                = "migrate4hana-code-delta-daily-${var.environment}"
   description         = "Daily TADIR snapshot + code-delta detection"
-  schedule_expression = "cron(0 6 ? * MON-FRI *)"   # 06:00 UTC business days
-  tags = { Component = "DualMaintenance" }
+  schedule_expression = "cron(0 6 ? * MON-FRI *)" # 06:00 UTC business days
+  tags                = { Component = "DualMaintenance" }
 }
 
 resource "aws_cloudwatch_event_target" "code_delta_daily" {

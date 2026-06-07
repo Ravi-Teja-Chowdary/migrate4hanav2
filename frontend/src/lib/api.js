@@ -68,4 +68,11 @@ export const api = {
   rejectGate: (id, decided_by) =>
     apiFetch(`/api/gates/${id}/reject`, { method: 'POST', body: JSON.stringify({ decided_by }) }),
   trigger: (mode) => apiFetch(`/api/pipeline/${mode}`, { method: 'POST' }),
+
+  // F6 — Version compatibility matrix
+  versionsSupported: () => apiFetch('/api/versions/supported'),
+  versionsDetected: () => apiFetch('/api/versions/detected'),
+  versionsSelected: () => apiFetch('/api/versions/selected'),
+  saveVersions: (payload) =>
+    apiFetch('/api/versions/selected', { method: 'POST', body: JSON.stringify(payload) }),
 };

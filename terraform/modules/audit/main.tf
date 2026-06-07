@@ -11,6 +11,38 @@ variable "region" {
   type = string
 }
 
+# ─────────────────────────────────────────────
+# Governance toggles (F6)
+# ─────────────────────────────────────────────
+# Object Lock enables WORM (write-once-read-many) for SOX/SOC2 audit retention.
+# Default true keeps existing prod behavior. Dev/staging sandboxes that need
+# fast tfdestroy cycles can flip this to false at terraform.tfvars level.
+# IMPORTANT: Object Lock on/off is a CREATION-time bucket attribute. Changing
+# this on an existing bucket triggers replacement — be deliberate.
+variable "object_lock_enabled" {
+  type        = bool
+  default     = true
+  description = "Enable S3 Object Lock + 7-year GOVERNANCE retention on the audit-logs bucket. true = SOX-defensible, false = bucket can be emptied/destroyed cleanly."
+}
+
+# Optional Customer-Managed KMS key (CMK) for audit-logs bucket encryption.
+# Empty string = use AWS-managed s3 key (default aws:kms). Pass the CMK ARN
+# to gain key-policy control, key rotation visibility, and CloudTrail key-usage
+# events for compliance.
+variable "kms_key_arn" {
+  type        = string
+  default     = ""
+  description = "ARN of a customer-managed KMS key to encrypt audit-logs bucket. Empty = AWS-managed aws/s3 key."
+}
+
+# Days of audit-log retention before the lifecycle policy expires objects.
+# SOX = 2555 (7 years). GxP / SOC2 / GDPR may need longer; tune per regime.
+variable "audit_retention_days" {
+  type        = number
+  default     = 2555
+  description = "Days to retain audit logs before lifecycle expiration. 2555 = ~7 years (SOX default)."
+}
+
 data "aws_caller_identity" "current" {}
 
 locals {
@@ -23,14 +55,16 @@ locals {
 resource "aws_s3_bucket" "audit_logs" {
   bucket = "migrate4hana-audit-logs-${var.environment}-${local.account_id}"
 
-  # Object Lock can only be turned ON at bucket creation. Required because the
-  # aws_s3_bucket_object_lock_configuration resource below sets GOVERNANCE mode.
-  object_lock_enabled = true
+  # Object Lock can only be turned ON at bucket creation. The conditional Lock
+  # Configuration resource below only creates the WORM retention rule when this
+  # bucket-level attribute is true.
+  object_lock_enabled = var.object_lock_enabled
 
   tags = {
     Name        = "migrate4hana-audit-logs-${var.environment}"
     Component   = "Compliance"
     Environment = var.environment
+    ObjectLock  = var.object_lock_enabled ? "enabled-WORM" : "disabled-destroyable"
   }
 }
 
@@ -46,7 +80,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit_logs" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
+      sse_algorithm     = "aws:kms"
+      # Use the CMK when one is supplied; else fall back to the AWS-managed s3 key.
+      # CMK = explicit rotation visibility, key-policy control, CloudTrail key events.
+      kms_master_key_id = var.kms_key_arn != "" ? var.kms_key_arn : null
     }
     bucket_key_enabled = true
   }
@@ -80,23 +117,25 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
       storage_class = "GLACIER"
     }
 
-    # SOX requires 7 years retention; GxP may require longer
+    # Configurable per-environment via var.audit_retention_days. SOX default = 7y.
     expiration {
-      days = 2555 # ~7 years
+      days = var.audit_retention_days
     }
   }
 }
 
-# S3 Object Lock for WORM compliance (prevents deletion). Object Lock requires
-# versioning to be enabled FIRST — the explicit depends_on prevents the race
-# where Terraform applies the lock config before versioning lands.
+# S3 Object Lock for WORM compliance (prevents deletion). Only meaningful when
+# the bucket itself was created with object_lock_enabled=true; gated by the
+# same toggle so dev/staging sandboxes can opt out cleanly.
+# Versioning must land FIRST — the explicit depends_on prevents that race.
 resource "aws_s3_bucket_object_lock_configuration" "audit_logs" {
+  count  = var.object_lock_enabled ? 1 : 0
   bucket = aws_s3_bucket.audit_logs.id
 
   rule {
     default_retention {
       mode = "GOVERNANCE"
-      days = 2555
+      days = var.audit_retention_days
     }
   }
 

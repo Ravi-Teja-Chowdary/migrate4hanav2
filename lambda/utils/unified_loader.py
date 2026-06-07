@@ -31,6 +31,19 @@ except Exception:  # pragma: no cover
     BapiLoader = IDocLoader = MetaRecipeResolver = None
     IDOC_RECIPES = {}
 
+# F2 - spine-promoted objects. Import side-effect registers each subclass
+# (decorator @register_spine on the class definition). UnifiedLoader.load_object
+# consults the registry first; objects without a spine orchestrator stay on the
+# legacy BapiLoader/IDocLoader path so this is purely additive.
+try:
+    from base_spine_orchestrator import get_spine, registered_spines  # type: ignore
+    import material_spine  # noqa: F401  (registration via @register_spine decorator)
+    _SPINE_AVAILABLE = True
+except Exception:  # pragma: no cover
+    def get_spine(_obj): return None
+    def registered_spines(): return []
+    _SPINE_AVAILABLE = False
+
 try:
     import bp_odata   # OData path: create TRANSACTION-READY customers/suppliers (BP-led)
 except Exception:  # pragma: no cover
@@ -160,6 +173,14 @@ class UnifiedLoader:
         return obj in OBJECT_MECHANISM
 
     def load_object(self, obj: str, rows: list, max_rows: int = 5) -> dict:
+        # F2 - check the spine registry FIRST. If a BaseSpineOrchestrator
+        # subclass is registered for this object, drive its lifecycle (deeper
+        # field coverage, EXTENSIONIN, dead-letter routing) instead of the
+        # legacy single-BAPI path. Falls through to legacy on miss.
+        spine_cls = get_spine(obj)
+        if spine_cls is not None:
+            return self._load_via_spine(obj, spine_cls, rows, max_rows)
+
         mech = OBJECT_MECHANISM.get(obj)
         if not mech:
             return {"object": obj, "loaded": False, "reason": "no mechanism registered"}
@@ -219,6 +240,56 @@ class UnifiedLoader:
         # dependent objects (e.g. OpenPO -> Vendor) can resolve their references.
         if self.key_map is not None:
             self.key_map.add_many(obj, kmaps)
+        return result
+
+    # ── F2 spine path ─────────────────────────────────────────────────────────
+    def _load_via_spine(self, obj: str, spine_cls, rows: list, max_rows: int) -> dict:
+        """Drive a BaseSpineOrchestrator subclass for ``obj``. Mirrors the
+        legacy load_object result shape so the rest of the pipeline (audit
+        ledger, recon, dead-letter packaging) doesn't notice the switch."""
+        t0 = time.time()
+        orch = spine_cls(
+            self.c,
+            key_map=self.key_map,
+            transformer=self.transformer,
+            bapi_field_catalog=self.bapi_field_catalog,
+            dry_run=False,
+        )
+        results = orch.load_many(rows, max_rows=max_rows)
+        ok = [r for r in results if r.status in ("created", "matched_existing", "remapped")]
+        dl = [r for r in results if r.status == "dead_letter"]
+        elapsed = round(time.time() - t0, 1)
+        created_keys = [r.target_key for r in ok if r.target_key]
+        kmaps = [{"source": r.source_key, "target": r.target_key, "disposition": r.disposition}
+                 for r in ok if r.target_key]
+        result = {
+            "object":        obj,
+            "mechanism":     f"spine/{spine_cls.__name__}",
+            "attempted":     len(results),
+            "created_in_s4": len([r for r in ok if r.status == "created"]),
+            "status_breakdown": {
+                **{r.status: 1 + r2 for r2, r in enumerate([])},     # placeholder
+            },
+            "created_keys": created_keys,
+            "samples":      [r.to_dict() for r in (ok or results)[:3]],
+            "elapsed_sec":  elapsed,
+            "throughput_per_sec": (round(len(ok) / elapsed, 2) if elapsed and ok else None),
+            "spine_stats":  orch.stats.to_dict(),
+        }
+        # Recompute status_breakdown cleanly
+        from collections import Counter
+        result["status_breakdown"] = dict(Counter(r.status for r in results))
+        if dl:
+            result["failed_count"] = len(dl)
+            result["dead_letter"] = [
+                {"source_key": r.source_key, "code": r.dead_letter,
+                 "messages": r.messages[:3]} for r in dl[:50]
+            ]
+        if kmaps:
+            result["key_mappings"] = kmaps
+        # PersistentKeyMap registration: load_one already wrote each mapping
+        # incrementally via self._register_key, so no batch add_many needed
+        # for the spine path. Keep this fact in mind when wiring new objects.
         return result
 
     @staticmethod

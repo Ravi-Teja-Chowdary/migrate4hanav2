@@ -56,6 +56,16 @@ PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "test-output")
 CONNECTIONS_FILE = os.path.join(PROJECT_DIR, "connections.json")
 
+# F6 - version_matrix module lives under lambda/utils
+_VERSION_MATRIX_DIR = os.path.join(PROJECT_DIR, "lambda", "utils")
+if _VERSION_MATRIX_DIR not in sys.path:
+    sys.path.insert(0, _VERSION_MATRIX_DIR)
+try:
+    import version_matrix as _vm   # noqa: E402
+except Exception as _vm_e:
+    _vm = None
+    _vm_import_err = str(_vm_e)
+
 # Shared state for active runs
 _active_run = {"status": "idle", "results": None, "run_id": None}
 _lock = asyncio.Lock()
@@ -733,6 +743,147 @@ async def save_lift_and_shift_target(body: TargetLiftAndShiftConnection):
     _save_connections(conns)
     return {"status": "saved", "connection": payload}
 
+
+
+# =============================================================================
+# ROUTES - VERSION MATRIX (F6)
+# =============================================================================
+# Exposes the source-ECC + target-S/4 version catalogue to the UI, plus an
+# RFC-driven auto-detect, plus the user's saved selection. The data-migrator
+# and downstream Lambdas consume the saved selection at runtime to route the
+# extract path, package size, template format, and BAPI version.
+
+class VersionSelection(BaseModel):
+    """User's chosen (source, target) pair + optional DB hint for HANA override."""
+    source_code: str         # e.g. "ECC60_EHP8"
+    target_code: str         # e.g. "S4HANA_2023"
+    source_db:   Optional[str] = None    # "HANA" or "ANY_DB"; None = use catalogue default
+    detected_at: Optional[str] = None    # ISO timestamp when last auto-detected (informational)
+
+
+def _vm_or_503():
+    """Surface a 503 if the version_matrix module isn't importable (deploy bug)."""
+    if _vm is None:
+        raise HTTPException(status_code=503,
+                            detail=f"version_matrix unavailable: {_vm_import_err}")
+
+
+def _detect_ecc_via_rfc() -> dict:
+    """Call RFC_SYSTEM_INFO on the saved ECC connection. Returns {detected: EccVersion|None, error: str|None}."""
+    try:
+        from pyrfc import Connection   # type: ignore
+    except Exception as e:
+        return {"detected": None, "error": f"pyrfc unavailable: {e}"}
+    conns = _load_connections()
+    ecc = conns.get("ecc") or {}
+    if not (ecc.get("ashost") and _ecc_passwd):
+        return {"detected": None, "error": "no live ECC session (configure + test the connection first)"}
+    try:
+        c = Connection(ashost=ecc["ashost"], sysnr=ecc.get("sysnr", "00"),
+                       client=ecc["client"], user=ecc["user"],
+                       passwd=_ecc_passwd, lang="EN")
+        info = c.call("RFC_SYSTEM_INFO")
+        c.close()
+    except Exception as e:
+        return {"detected": None, "error": f"RFC call failed: {e}"}
+    v = _vm.detect_source_ecc_version(info)
+    if v is None:
+        return {"detected": None, "error": "RFC_SYSTEM_INFO returned a release we can't map (paste it to support)"}
+    from dataclasses import asdict
+    return {"detected": asdict(v), "error": None, "raw": info.get("RFCSI_EXPORT")}
+
+
+def _detect_s4_via_rfc() -> dict:
+    """Read CVERS from the saved S/4 connection. Returns {detected: S4Release|None, error: str|None}."""
+    try:
+        from pyrfc import Connection   # type: ignore
+    except Exception as e:
+        return {"detected": None, "error": f"pyrfc unavailable: {e}"}
+    conns = _load_connections()
+    s4 = conns.get("s4hana") or conns.get("lift_and_shift_target") or {}
+    if not s4.get("ashost"):
+        return {"detected": None, "error": "no S/4 connection configured"}
+    s4_passwd = globals().get("_s4_passwd", "")     # set by test-s4 handler if available
+    if not s4_passwd:
+        return {"detected": None,
+                "error": "no live S/4 session; run the S/4 connection test once so the password is cached"}
+    try:
+        c = Connection(ashost=s4["ashost"], sysnr=s4.get("sysnr", "00"),
+                       client=s4["client"], user=s4["user"], passwd=s4_passwd, lang="EN")
+        # CVERS layout: COMPONENT (CHAR 30), RELEASE (CHAR 10) - reading both as text rows
+        resp = c.call("RFC_READ_TABLE", QUERY_TABLE="CVERS",
+                      FIELDS=[{"FIELDNAME": "COMPONENT"}, {"FIELDNAME": "RELEASE"}],
+                      ROWCOUNT=100)
+        c.close()
+    except Exception as e:
+        return {"detected": None, "error": f"CVERS read failed: {e}"}
+    # Parse the column-positional rows
+    fields = resp.get("FIELDS") or []
+    rows = []
+    for r in (resp.get("DATA") or []):
+        wa = (r.get("WA") or "").rstrip()
+        item = {}
+        for f in fields:
+            off = int(f.get("OFFSET", 0))
+            ln  = int(f.get("LENGTH", 0))
+            item[f["FIELDNAME"]] = wa[off:off + ln].strip()
+        rows.append(item)
+    r = _vm.detect_target_s4_release(rows)
+    if r is None:
+        return {"detected": None, "error": "CVERS has no S4CORE row or release unmapped"}
+    from dataclasses import asdict
+    return {"detected": asdict(r), "error": None, "rows": rows[:10]}
+
+
+@app.get("/api/versions/supported", dependencies=[Depends(require_auth)])
+async def versions_supported():
+    """Static catalogue of all (source, target) pairs the tool supports."""
+    _vm_or_503()
+    return _vm.matrix_payload()
+
+
+@app.get("/api/versions/detected", dependencies=[Depends(require_auth)])
+async def versions_detected():
+    """Live RFC detection of source ECC and target S/4 versions."""
+    _vm_or_503()
+    return {"source": _detect_ecc_via_rfc(), "target": _detect_s4_via_rfc()}
+
+
+@app.get("/api/versions/selected", dependencies=[Depends(require_auth)])
+async def versions_selected():
+    """Return the currently saved (source, target) selection, or empty if not set."""
+    _vm_or_503()
+    conns = _load_connections()
+    sel = conns.get("versions") or {}
+    if not sel:
+        return {"selected": None, "routing": None}
+    try:
+        plan = _vm.routing_for_pair(sel["source_code"], sel["target_code"],
+                                     source_db=sel.get("source_db"))
+        return {"selected": sel, "routing": plan.to_dict()}
+    except _vm.VersionIncompatibilityError as e:
+        return {"selected": sel, "routing": None, "error": str(e)}
+
+
+@app.post("/api/versions/selected", dependencies=[Depends(require_auth)])
+async def versions_save_selection(body: VersionSelection):
+    """Validate the selection against the matrix; persist to connections.json on success."""
+    _vm_or_503()
+    try:
+        plan = _vm.routing_for_pair(body.source_code, body.target_code,
+                                     source_db=body.source_db)
+    except _vm.VersionIncompatibilityError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    conns = _load_connections()
+    conns["versions"] = {
+        "source_code": body.source_code,
+        "target_code": body.target_code,
+        "source_db":   body.source_db,
+        "detected_at": body.detected_at,
+        "saved_at":    datetime.now().isoformat(),
+    }
+    _save_connections(conns)
+    return {"status": "saved", "selected": conns["versions"], "routing": plan.to_dict()}
 
 
 # =============================================================================

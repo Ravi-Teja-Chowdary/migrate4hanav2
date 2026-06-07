@@ -1,0 +1,82 @@
+{
+  "_meta": {
+    "description": "Migrate4HANA transformation ruleset - per-object FIELD_MAP, VALUE_MAP, REGEX_CLEANSE, CONST, TRIM, UPPER, PAD transforms + DQ gates (MANDATORY, REGEX_VALID, MAX_LEN, ALLOWED, UNIQUE, CROSS_FIELD_VALIDATE). Referenced via M4H_TRANSFORM_RULES env var on the data-migrator Lambda.",
+    "version": "2026-06-07",
+    "matrix_source": "loaded from M4H_MAPPING_S3 (s3://migrate4hana-mapping-prod-905418407458/mappings/matrix.json) - see value-maps/matrix.json",
+    "edit_workflow": "Same pull/push as matrix.json. Test with: python tests\\test_transformation_ruleset.py"
+  },
+
+  "object_rules": {
+
+    "Customer": {
+      "transforms": [
+        { "type": "TRIM",       "field": "KUNNR" },
+        { "type": "UPPER",      "field": "LAND1" },
+        { "type": "VALUE_MAP",  "field": "LAND1",  "table": "country_map",        "on_missing": "keep" },
+        { "type": "VALUE_MAP",  "field": "BUKRS",  "table": "company_code_map",   "on_missing": "keep" },
+        { "type": "VALUE_MAP",  "field": "WAERS",  "table": "currency_map",       "on_missing": "default", "default": "EUR" },
+        { "type": "VALUE_MAP",  "field": "SPRAS",  "table": "language_map",       "on_missing": "default", "default": "EN" },
+        { "type": "VALUE_MAP",  "field": "KTOKD",  "table": "customer_group_map", "on_missing": "default", "default": "BP01" },
+        { "type": "REGEX_CLEANSE", "field": "NAME1", "pattern": "\\s{2,}", "replacement": " " }
+      ],
+      "dq_rules": [
+        { "type": "MANDATORY",  "field": "KUNNR" },
+        { "type": "MANDATORY",  "field": "NAME1" },
+        { "type": "MAX_LEN",    "field": "NAME1", "len": 35 },
+        { "type": "REGEX_VALID","field": "LAND1", "pattern": "^[A-Z]{2}$" },
+        { "type": "ALLOWED",    "field": "WAERS", "values": ["USD","EUR","GBP","JPY","AUD","CAD","CHF","CNY","INR","SGD"] }
+      ]
+    },
+
+    "Vendor": {
+      "transforms": [
+        { "type": "TRIM",      "field": "LIFNR" },
+        { "type": "UPPER",     "field": "LAND1" },
+        { "type": "VALUE_MAP", "field": "LAND1", "table": "country_map",      "on_missing": "keep" },
+        { "type": "VALUE_MAP", "field": "BUKRS", "table": "company_code_map", "on_missing": "keep" },
+        { "type": "VALUE_MAP", "field": "WAERS", "table": "currency_map",     "on_missing": "default", "default": "EUR" },
+        { "type": "VALUE_MAP", "field": "SPRAS", "table": "language_map",     "on_missing": "default", "default": "EN" },
+        { "type": "VALUE_MAP", "field": "KTOKK", "table": "vendor_group_map", "on_missing": "default", "default": "BPV1" }
+      ],
+      "dq_rules": [
+        { "type": "MANDATORY",  "field": "LIFNR" },
+        { "type": "MANDATORY",  "field": "NAME1" },
+        { "type": "REGEX_VALID","field": "LAND1", "pattern": "^[A-Z]{2}$" }
+      ]
+    },
+
+    "Material": {
+      "transforms": [
+        { "type": "TRIM",      "field": "MATNR" },
+        { "type": "VALUE_MAP", "field": "MTART", "table": "material_type_map", "on_missing": "keep" }
+      ],
+      "dq_rules": [
+        { "type": "MANDATORY",  "field": "MATNR" },
+        { "type": "ALLOWED",    "field": "MTART", "values": ["FERT","HALB","HAWA","ROH","DIEN","HIBE","NLAG"] },
+        { "type": "MAX_LEN",    "field": "MATNR", "len": 40 }
+      ]
+    },
+
+    "GLAccount": {
+      "transforms": [
+        { "type": "VALUE_MAP", "field": "SAKNR", "table": "gl_account_map", "on_missing": "keep" }
+      ],
+      "dq_rules": [
+        { "type": "MANDATORY",  "field": "SAKNR" },
+        { "type": "REGEX_VALID","field": "SAKNR", "pattern": "^\\d{1,10}$" }
+      ]
+    },
+
+    "CompanyCode": {
+      "transforms": [
+        { "type": "VALUE_MAP", "field": "BUKRS", "table": "company_code_map", "on_missing": "keep" },
+        { "type": "VALUE_MAP", "field": "WAERS", "table": "currency_map",     "on_missing": "default", "default": "EUR" }
+      ],
+      "dq_rules": [
+        { "type": "MANDATORY",  "field": "BUKRS" },
+        { "type": "UNIQUE",     "field": "BUKRS" }
+      ]
+    }
+
+  }
+}
