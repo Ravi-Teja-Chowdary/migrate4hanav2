@@ -110,11 +110,66 @@ def introspect_via_dd_bapi_parameter_get(conn, bapi_name: str) -> list:
     """Call DD_BAPI_PARAMETER_GET on the target system. Returns a list of raw
     parameter rows (one dict per BAPI parameter). Raises on RFC error.
 
-    The function returns a deeply nested structure; we flatten only what's
-    needed for the field-coverage gate (field names).
+    NOTE: this function module does NOT exist on every SAP release. When it's
+    absent the caller gets FU_NOT_FOUND; build_schema's resolution chain
+    will then try introspect_via_get_function_interface() instead.
     """
     resp = conn.call("DD_BAPI_PARAMETER_GET", FUNCNAME=bapi_name)
     return list(resp.get("PARAMS") or resp.get("BAPI_PARAMS") or [])
+
+
+def introspect_via_get_function_interface(conn, function_name: str) -> list:
+    """Call RFC_GET_FUNCTION_INTERFACE - the universal SAP-side RFC for any
+    function-module's interface. Exists on every release since R/3 4.0.
+
+    Returns the parameter list with the constituent field names expanded out of
+    each STRUCTURE / TABLE parameter (we read DD03L for each referenced TABNAME).
+
+    Each returned item carries::
+
+        {"PARAMETER": "<param-name>",
+         "PARAMCLASS": "I"|"E"|"T"|"C"|"X",   # import/export/tables/changing/exceptions
+         "TABNAME": "<dictionary-structure-name>"|"",
+         "FIELDS": [{"FIELDNAME": ..., "DATATYPE": ..., "LENG": ...}, ...]}
+    """
+    resp = conn.call("RFC_GET_FUNCTION_INTERFACE", FUNCNAME=function_name)
+    params = list(resp.get("PARAMS") or [])
+
+    # Expand STRUCTURE / TABLE parameters into their field rows.
+    out: list = []
+    for p in params:
+        param_name  = (p.get("PARAMETER") or "").strip()
+        param_class = (p.get("PARAMCLASS") or "").strip()
+        if param_class == "X":   # exceptions - skip
+            continue
+        tabname = (p.get("TABNAME") or p.get("STRUCTURE") or "").strip()
+        item = {"PARAMETER": param_name, "PARAMCLASS": param_class,
+                "TABNAME": tabname, "FIELDS": []}
+        if tabname:
+            try:
+                rows = introspect_via_dd03l(conn, tabname)
+                item["FIELDS"] = rows
+            except Exception:
+                # If DD03L is unreadable, fall back to just the parameter name.
+                pass
+        out.append(item)
+    return out
+
+
+def compile_field_set_from_function_interface(interface_rows: list) -> set:
+    """Compile the uppercased field set from the
+    introspect_via_get_function_interface output. The set is the union of
+    parameter names + every constituent field of every STRUCTURE / TABLE."""
+    out: set = set()
+    for p in interface_rows or []:
+        pname = (p.get("PARAMETER") or "").strip()
+        if pname:
+            out.add(pname.upper())
+        for f in (p.get("FIELDS") or []):
+            fn = (f.get("FIELDNAME") or "").strip()
+            if fn and not fn.startswith("."):
+                out.add(fn.upper())
+    return out
 
 
 def introspect_via_dd03l(conn, structure_name: str, max_rows: int = 500) -> list:
@@ -298,40 +353,50 @@ def build_schema(object_type: str, *,
         if cached is not None and cached.is_fresh(ttl_seconds):
             return cached
 
-    # 2) Try RFC introspection
+    # 2) Try RFC introspection. The chain tries each RFC in order and emits a
+    # schema as soon as any step yields a non-empty field set. Each step falls
+    # through cleanly on both EXCEPTIONS and EMPTY RESULTS.
+    def _emit_and_cache(field_set):
+        schema = CachedSchema(
+            sid=sid, client=client, s4_release=s4_release,
+            object_type=object_type, bapi=bapi_name,
+            fields=sorted(field_set), written_at=time.time(),
+            source="rfc",
+        )
+        save_cached_schema(cache_s3_uri, schema, s3_client=s3_client)
+        return schema
+
     if conn is not None and bapi_name:
+        # 2a) DD_BAPI_PARAMETER_GET (older systems only - missing on most S/4 releases)
         try:
             params = introspect_via_dd_bapi_parameter_get(conn, bapi_name)
             field_set = compile_field_set_from_dd_bapi(params)
-            if field_set:
-                schema = CachedSchema(
-                    sid=sid, client=client, s4_release=s4_release,
-                    object_type=object_type, bapi=bapi_name,
-                    fields=sorted(field_set), written_at=time.time(),
-                    source="rfc",
-                )
-                save_cached_schema(cache_s3_uri, schema, s3_client=s3_client)
-                return schema
         except Exception as e:
-            logger.info("DD_BAPI_PARAMETER_GET failed for %s; trying DD03L: %s",
-                        bapi_name, e)
-            # DD_BAPI fallback: read DD03L for one of the structures the BAPI
-            # uses. We don't always know the structure name, so this only
-            # catches a subset; that's OK because step 3 covers everything.
-            try:
-                rows = introspect_via_dd03l(conn, structure_name=bapi_name)
-                field_set = compile_field_set_from_dd03l(rows)
-                if field_set:
-                    schema = CachedSchema(
-                        sid=sid, client=client, s4_release=s4_release,
-                        object_type=object_type, bapi=bapi_name,
-                        fields=sorted(field_set), written_at=time.time(),
-                        source="rfc",
-                    )
-                    save_cached_schema(cache_s3_uri, schema, s3_client=s3_client)
-                    return schema
-            except Exception as e2:
-                logger.info("DD03L fallback also failed for %s: %s", bapi_name, e2)
+            logger.info("DD_BAPI_PARAMETER_GET failed for %s: %s", bapi_name, e)
+            field_set = set()
+        if field_set:
+            return _emit_and_cache(field_set)
+
+        # 2b) RFC_GET_FUNCTION_INTERFACE - the universally-available path.
+        # Returns parameter list + DD03L-expanded fields for each struct/table param.
+        try:
+            iface = introspect_via_get_function_interface(conn, bapi_name)
+            field_set = compile_field_set_from_function_interface(iface)
+        except Exception as e:
+            logger.info("RFC_GET_FUNCTION_INTERFACE failed for %s: %s", bapi_name, e)
+            field_set = set()
+        if field_set:
+            return _emit_and_cache(field_set)
+
+        # 2c) DD03L direct (rarely useful for a BAPI but harmless as a final RFC attempt)
+        try:
+            rows = introspect_via_dd03l(conn, structure_name=bapi_name)
+            field_set = compile_field_set_from_dd03l(rows)
+        except Exception as e:
+            logger.info("DD03L fallback failed for %s: %s", bapi_name, e)
+            field_set = set()
+        if field_set:
+            return _emit_and_cache(field_set)
 
     # 3) Fall back to the static bundled catalog
     static_fields: set = set()

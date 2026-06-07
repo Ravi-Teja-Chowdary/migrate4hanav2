@@ -763,6 +763,14 @@ def lambda_handler(event, context):
     spec = event.get("object_spec") or {}
     log_stage_event(run_id, "data-migrator", "start", {"mode": mode, "object": spec.get("object")})
 
+    # F2/F3 Phase B validation modes - exercise the new spine + dynamic-schema
+    # paths against real SAP without the DAG/batch-mode overhead. Tiny entry
+    # point; the validator function lives further down.
+    if mode == "phase_b_validate_f2":
+        return _phase_b_validate_f2(event, run_id)
+    if mode == "phase_b_validate_f3":
+        return _phase_b_validate_f3(event, run_id)
+
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
                  or event.get("ecc_creds_arn")
@@ -1114,3 +1122,213 @@ def lambda_handler(event, context):
                "row_count": len(rows), "artifacts": artifacts}
     log_stage_event(run_id, "data-migrator", "ok", summary)
     return summary
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase B validators
+# ─────────────────────────────────────────────────────────────────────────────
+def _phase_b_validate_f2(event, run_id):
+    """F2 Phase B - drive MaterialSpineOrchestrator against the live S/4 target.
+
+    Loads `count` synthetic Material records (default 3) via BAPI_MATERIAL_SAVEDATA
+    and reports the per-record LoadResult, PersistentKeyMap writes, and stats.
+
+    Payload shape::
+
+        { "mode": "phase_b_validate_f2",
+          "run_id": "f2-phaseb-001",
+          "count": 3,
+          "prefix": "F2PHASEB",
+          "target_secret_id": "migrate4hana/prod/s4hana-credentials" }
+    """
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    count   = int(event.get("count", 3))
+    prefix  = event.get("prefix", "F2PHASEB")
+
+    # Open target connection
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # PersistentKeyMap pointed at the real DDB table
+    try:
+        from key_map import PersistentKeyMap
+        ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+        km = PersistentKeyMap(table_name=ddb_table, run_id=run_id,
+                              target_release=os.environ.get("M4H_TARGET_RELEASE", "S4HANA_UNKNOWN"))
+    except Exception as e:
+        km = None
+        log_stage_event(run_id, "data-migrator", "phaseB_keymap_skipped",
+                        {"reason": str(e)[:160]})
+
+    # Drive the spine
+    try:
+        from material_spine import MaterialSpineOrchestrator
+    except Exception as e:
+        return {"status": "error", "phase": "import_spine", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    orch = MaterialSpineOrchestrator(tconn, key_map=km)
+
+    # Synthetic records - keep the field set tight so a Phase B validation works
+    # against any S/4 release without needing customer customizing.
+    rows = []
+    for i in range(count):
+        rows.append({
+            "MATNR": f"{prefix}_{i:04d}",
+            "MTART": "HALB",        # universally supported semi-finished
+            "MBRSH": "M",           # mechanical industry
+            "MEINS": "EA",
+            "MAKTX": f"Phase B test material {i:04d}",
+        })
+
+    results = orch.load_many(rows)
+    summary = {
+        "run_id":     run_id,
+        "status":     "ok",
+        "phase":      "f2_material_spine",
+        "target":     {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                       "ashost": tsec.get("ashost")},
+        "count":      count,
+        "results":    [r.to_dict() for r in results],
+        "spine_stats": orch.stats.to_dict(),
+        "key_map_writes": (km.persistence_stats() if km is not None else None),
+    }
+    log_stage_event(run_id, "data-migrator", "phaseB_f2_complete",
+                    {"created": orch.stats.created, "dead_letter": orch.stats.dead_letter})
+    try:
+        tconn.close()
+    except Exception:
+        pass
+    return summary
+
+
+def _phase_b_validate_f3(event, run_id):
+    """F3 Phase B - drive dynamic_schema_builder against the live S/4 target.
+
+    Calls DD_BAPI_PARAMETER_GET on the target, compiles the field set, writes
+    the S3 cache, and returns the compiled CachedSchema.
+
+    Payload shape::
+
+        { "mode": "phase_b_validate_f3",
+          "run_id": "f3-phaseb-001",
+          "object_type": "Material",
+          "target_secret_id": "migrate4hana/prod/s4hana-credentials",
+          "force_refresh": true }
+    """
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    object_type      = event.get("object_type", "Material")
+    force_refresh    = bool(event.get("force_refresh", True))
+
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # Try each RFC entry point directly so we capture and surface the real
+    # error responses (build_schema falls back silently, which hides why the
+    # live introspection didn't work).
+    diag = {"dd_bapi_param_get": None, "get_function_interface": None,
+            "dd03l_read": None}
+    try:
+        from dynamic_schema_builder import (
+            introspect_via_dd_bapi_parameter_get, introspect_via_dd03l,
+            introspect_via_get_function_interface,
+            compile_field_set_from_dd_bapi, compile_field_set_from_dd03l,
+            compile_field_set_from_function_interface,
+            build_schema,
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "import_dynamic_schema",
+                "run_id": run_id, "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    bapi = "BAPI_MATERIAL_SAVEDATA" if object_type == "Material" \
+           else f"BAPI_{object_type.upper()}_CREATE"
+
+    # 1) DD_BAPI_PARAMETER_GET direct probe (older releases only)
+    try:
+        params = introspect_via_dd_bapi_parameter_get(tconn, bapi)
+        diag["dd_bapi_param_get"] = {"ok": True, "param_count": len(params),
+                                      "compiled_fields": sorted(compile_field_set_from_dd_bapi(params))[:30]}
+    except Exception as e:
+        diag["dd_bapi_param_get"] = {"ok": False,
+                                      "error": f"{type(e).__name__}: {str(e)[:300]}"}
+
+    # 2) RFC_GET_FUNCTION_INTERFACE direct probe (universally available)
+    try:
+        iface = introspect_via_get_function_interface(tconn, bapi)
+        fields = sorted(compile_field_set_from_function_interface(iface))
+        diag["get_function_interface"] = {
+            "ok": True,
+            "param_count": len(iface),
+            "param_summary": [
+                {"name": p.get("PARAMETER"), "class": p.get("PARAMCLASS"),
+                 "tabname": p.get("TABNAME"), "field_count": len(p.get("FIELDS") or [])}
+                for p in iface[:10]
+            ],
+            "compiled_field_count": len(fields),
+            "compiled_fields_sample": fields[:40],
+        }
+    except Exception as e:
+        diag["get_function_interface"] = {"ok": False,
+                                           "error": f"{type(e).__name__}: {str(e)[:300]}"}
+
+    # 3) DD03L direct probe (read structure for the BAPI's function-module name)
+    try:
+        rows = introspect_via_dd03l(tconn, bapi)
+        diag["dd03l_read"] = {"ok": True, "row_count": len(rows),
+                               "compiled_fields": sorted(compile_field_set_from_dd03l(rows))[:30]}
+    except Exception as e:
+        diag["dd03l_read"] = {"ok": False,
+                               "error": f"{type(e).__name__}: {str(e)[:300]}"}
+
+    # 3) Full build_schema (fallback chain) for the actual cache write
+    try:
+        schema = build_schema(
+            object_type,
+            conn=tconn,
+            sid=tsec.get("sid", "S4H"),
+            client=tsec.get("client", "100"),
+            s4_release=os.environ.get("M4H_TARGET_RELEASE", "S4HANA_2023"),
+            cache_s3_uri=os.environ.get("M4H_DYNAMIC_SCHEMA_S3",
+                                        f"s3://{STAGING_BUCKET}/dynamic-schema"),
+            force_refresh=force_refresh,
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "build_schema", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}", "diag": diag}
+    finally:
+        try:
+            tconn.close()
+        except Exception:
+            pass
+
+    return {
+        "run_id":   run_id,
+        "status":   "ok",
+        "phase":    "f3_dynamic_schema",
+        "object":   object_type,
+        "bapi":     bapi,
+        "diag":     diag,
+        "schema_source": schema.source,
+        "field_count":   len(schema.fields),
+        "sample_fields": schema.fields[:20],
+    }
