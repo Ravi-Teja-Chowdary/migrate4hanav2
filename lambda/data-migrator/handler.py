@@ -783,6 +783,8 @@ def lambda_handler(event, context):
         return _phase_b_validate_chain(event, run_id)
     if mode == "phase_b_validate_reconcile":
         return _phase_b_validate_reconcile(event, run_id)
+    if mode == "phase_b_validate_production_path":
+        return _phase_b_validate_production_path(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -2313,4 +2315,141 @@ def _phase_b_validate_reconcile(event, run_id):
         "reconciler_report": report,
         "proof":        proof,
         "spine_stats":  orch.stats.to_dict(),
+    }
+
+
+def _phase_b_validate_production_path(event, run_id):
+    """End-to-end production-path proof: UnifiedLoader -> spine -> Reconciler.
+
+    Closes roadmap #2. The Step Functions pipeline's data-load stage routes
+    through ECS Fargate; the ECS data-loader entrypoint (and the data-migrator
+    lambda's BAPI/in-place mode under M4H_LOAD_TO_S4=1) both invoke
+    UnifiedLoader.load_object(obj, rows, max_rows). This validator exercises
+    THAT same code path -- not the spine subclass directly -- and proves:
+
+      1. UnifiedLoader.load_object dispatches to the spine via the registry
+         when one is available (not the legacy bapi_loader.create_* path).
+      2. The dispatched spine emits verify_key dicts in its results.
+      3. UnifiedLoader._load_via_spine packages verify_key dicts into
+         created_keys (the shape Reconciler.reconcile expects), not flat
+         target_key strings (the pre-fix shape that silently produced
+         NOT_VERIFIABLE reports in production).
+      4. The Reconciler can consume the result dict directly and tie out
+         to RECONCILED status.
+
+    Payload::
+
+        { "mode": "phase_b_validate_production_path",
+          "run_id": "prodpath-001",
+          "count": 3,
+          "object": "Material" }
+    """
+    count = int(event.get("count", 3))
+    obj_name = (event.get("object") or "Material").strip()
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    try:
+        from unified_loader import UnifiedLoader
+        from base_spine_orchestrator import get_spine, registered_spines
+        from key_map import PersistentKeyMap
+        from reconciler import Reconciler
+    except Exception as e:
+        try: tconn.close()
+        except Exception: pass
+        return {"status": "error", "phase": "import_production_path", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # Synthetic rows for the object under test
+    if obj_name == "Material":
+        rows = [{"MATNR": f"PROD_{run_id[-6:]}_{i:03d}",
+                  "MTART": "HALB", "MBRSH": "M", "MEINS": "EA",
+                  "MAKTX": f"Production-path test {i:03d}"}
+                 for i in range(count)]
+    else:
+        # Generic shape for other objects; caller can override via event["rows"]
+        rows = event.get("rows") or []
+
+    ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+    km = PersistentKeyMap(table_name=ddb_table, run_id=run_id)
+
+    # Construct UnifiedLoader the same way the data-migrator lambda does in
+    # production (M4H_LOAD_TO_S4=1 code path).
+    loader = UnifiedLoader(tconn, own_logical_system="M4H_PROD",
+                            sender="MIGRATE4HANA",
+                            client=tsec.get("client", "100"),
+                            target_sid=tsec.get("sid", "S4H"))
+    loader.key_map = km
+
+    # Confirm the spine registry has the object before we exercise the path
+    spine_present = get_spine(obj_name) is not None
+
+    # The production call -- this is exactly what the prod pipeline runs
+    load_result = loader.load_object(obj_name, rows, max_rows=count)
+
+    # Inspect the result shape: created_keys MUST be a list of verify_key
+    # dicts (post-fix) -- pre-fix was a flat list of target_key strings.
+    created_keys = load_result.get("created_keys") or []
+    created_keys_are_dicts = (
+        bool(created_keys)
+        and all(isinstance(k, dict) and "table" in k and "key" in k
+                 for k in created_keys)
+    )
+
+    # Drive the Reconciler against the load_result -- the production
+    # reconciliation stage does this same step against the same shape.
+    reconciler = Reconciler(tconn)
+    report = reconciler.reconcile(obj_name, load_result, extracted=count)
+
+    proof = {
+        "spine_registered_for_object":   spine_present,
+        "unified_loader_dispatched_to_spine":
+            "spine/" in str(load_result.get("mechanism", "")),
+        "created_keys_are_verify_dicts": created_keys_are_dicts,
+        "reconciler_status_reconciled":  report.get("status") == "RECONCILED",
+        "verified_count_matches_created":
+            report.get("verified_in_target") == report.get("created")
+            and (report.get("created") or 0) > 0,
+        "value_tie_out_passed":
+            report.get("value_checked", 0) == 0
+            or report.get("value_matched", 0) == report.get("value_checked", 0),
+    }
+    overall_ok = all(proof.values())
+
+    log_stage_event(run_id, "data-migrator", "phaseB_production_path_complete",
+                    {"object": obj_name,
+                     "mechanism": load_result.get("mechanism"),
+                     "status":    report.get("status"),
+                     "overall_ok": overall_ok})
+
+    try:
+        tconn.close()
+    except Exception:
+        pass
+
+    return {
+        "run_id":            run_id,
+        "status":            "ok" if overall_ok else "mismatch",
+        "phase":             "production_path_unifiedloader_to_reconciler",
+        "object":            obj_name,
+        "count":             count,
+        "target":            {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                                "ashost": tsec.get("ashost")},
+        "load_result":       load_result,
+        "reconciler_report": report,
+        "proof":             proof,
+        "spine_registry":    {"object_registered": spine_present,
+                                "total_spines": len(registered_spines())},
     }

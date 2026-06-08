@@ -37,7 +37,33 @@ except Exception:  # pragma: no cover
 # legacy BapiLoader/IDocLoader path so this is purely additive.
 try:
     from base_spine_orchestrator import get_spine, registered_spines  # type: ignore
-    import material_spine  # noqa: F401  (registration via @register_spine decorator)
+    # Import all spine modules so their @register_spine decorators execute at
+    # import time. Each import is wrapped individually so a single missing
+    # module doesn't disable the entire spine path -- the loader transparently
+    # falls back to the legacy BapiLoader for unregistered objects.
+    for _spine_module in (
+        "material_spine",
+        # Batch 1: masters
+        "bank_spine", "cost_center_spine", "profit_center_spine", "equipment_spine",
+        # Batch 2: tricky-shape masters
+        "internal_order_spine", "funcloc_spine", "fixed_asset_spine", "project_spine",
+        # Batch 3: classification + hierarchies
+        "characteristic_spine", "class_spine",
+        "cost_element_group_spine", "profit_center_group_spine",
+        # Batch 4: transactional documents
+        "purchase_requisition_spine", "purchase_order_spine",
+        "purchase_contract_spine", "sales_order_spine",
+        # Batch 5: balance + FI postings
+        "open_ar_spine", "open_ap_spine", "batch_spine", "inventory_balance_spine",
+        # Batch 6: CVI + exchange rates (closes the live-25 sweep)
+        "business_partner_spine", "customer_spine", "vendor_spine",
+        "exchange_rates_spine",
+    ):
+        try:
+            __import__(_spine_module)
+        except Exception:
+            # Missing module -> that object stays on the legacy path; not fatal
+            pass
     _SPINE_AVAILABLE = True
 except Exception:  # pragma: no cover
     def get_spine(_obj): return None
@@ -259,7 +285,13 @@ class UnifiedLoader:
         ok = [r for r in results if r.status in ("created", "matched_existing", "remapped")]
         dl = [r for r in results if r.status == "dead_letter"]
         elapsed = round(time.time() - t0, 1)
-        created_keys = [r.target_key for r in ok if r.target_key]
+        # Reconciler.reconcile expects created_keys to be a list of verify_key
+        # DICTS shaped {"table","key","values"} — NOT a flat list of target_key
+        # strings. Use the spine's verify_key (added 2026-06-09 for roadmap #3
+        # wiring). Subclasses that haven't been migrated to emit verify_key
+        # yet will be skipped here (the reconciler treats the object as
+        # NOT_VERIFIABLE in that case rather than spuriously discrepant).
+        created_keys = [r.verify_key for r in ok if r.verify_key]
         kmaps = [{"source": r.source_key, "target": r.target_key, "disposition": r.disposition}
                  for r in ok if r.target_key]
         result = {

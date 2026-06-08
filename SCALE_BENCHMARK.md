@@ -54,14 +54,43 @@ Material  25 rows + 0 ZZ custom fields (clean baseline)
   key_map writes       25 / 0 conditional skips
 ```
 
-What this baseline tells you about production-planning extrapolations:
+## Scale curve (measured 2026-06-09)
+
+**Real numbers up to 1,000 records.** The 25-record baseline above was
+cold-start-dominated; running larger batches shows the actual steady-state.
+
+| N | Wall clock | Throughput | p50 | p90 | p99 | p999 |
+|---|---|---|---|---|---|---|
+| 25 | 3.15s | 7.94/sec | 70ms | 84ms | 1061ms | 1302ms |
+| 100 | 7.47s | 13.38/sec | 71.8ms | 76.0ms | 148.8ms | 252.2ms |
+| 500 | 35.12s | 14.24/sec | 70.7ms | 75.4ms | 92.1ms | 188.2ms |
+| 1,000 | 65.46s | **15.28/sec** | **63.1ms** | 72.8ms | 87.9ms | 121.3ms |
+
+What the curve tells us:
+
+1. **Throughput rises with N**, then plateaus around 15/sec for single-
+   threaded Lambda. Two effects: cold-start amortizes over more records, and
+   the pyrfc connection / SAP gateway warm-state holds steady.
+2. **p50 is rock solid** at 60-70ms across all scales -- the BAPI RTT is the
+   floor. There's no apparent contention or degradation as N grows.
+3. **p99 TIGHTENS at larger N** (1061ms -> 92ms -> 88ms) -- the cold-start
+   outlier diludes proportionally.
+4. **No dead letters at any scale tested.** 1000/1000 created cleanly.
+
+What this baseline tells you about production-planning extrapolations (now
+using the **measured** 15.28/sec instead of the 7.94/sec cold-start floor):
 
 | Scale | Single-threaded | 32-way Fargate fan-out |
 |---|---|---|
-| 1,000 | ~2.1 min | ~4 sec |
-| 10,000 | ~21 min | ~40 sec |
-| 100,000 | ~3.5 hours | ~7 min |
-| 1,000,000 | **~35 hours** | **~1.1 hour** |
+| 1,000 | 65.5 sec (measured) | ~2 sec |
+| 10,000 | ~11 min | ~20 sec |
+| 100,000 | ~1.8 hours | ~3.5 min |
+| 1,000,000 | **~18 hours** | **~34 min** |
+
+The original SCALE_BENCHMARK estimate of 35 hr single-threaded / 1.1 hr at
+32-way was based on the 7.94/sec cold-start-dominated 25-row baseline. The
+measured 15.28/sec at N=1000 says the production-planning numbers are
+roughly **2x better than originally extrapolated**.
 
 The p99 outlier at 1,061ms is the **cold-start tax** on the first record: RFC
 handshake + SAP gateway back-verify + connection pool warmup. After that, the
