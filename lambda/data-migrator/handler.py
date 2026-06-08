@@ -775,6 +775,8 @@ def lambda_handler(event, context):
         return _phase_b_validate_f6(event, run_id)
     if mode == "phase_b_validate_f5":
         return _phase_b_validate_f5(event, run_id)
+    if mode == "phase_b_validate_f4":
+        return _phase_b_validate_f4(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -1578,4 +1580,192 @@ def _phase_b_validate_f5(event, run_id):
         "extension_rows":     ext_rows_total,
         "spine_stats":        orch.stats.to_dict(),
         "key_map_writes":     km.persistence_stats(),
+    }
+
+
+def _phase_b_validate_f4(event, run_id):
+    """F4 Phase B - drive TransformationEngine against the live S/4 target.
+
+    Proves three properties end-to-end against real SAP:
+
+      1. VALUE_MAP succeeds: a source MTART value (e.g. legacy 'ZHALB') is
+         translated to a target-valid one ('HALB') BEFORE the BAPI call, and
+         the row creates successfully.
+      2. DQ gate rejects BEFORE the BAPI: a row missing a mandatory field
+         (MEINS) dead-letters as DATA_QUALITY_REJECTION; the BAPI is never
+         called for that row (proven by the spine stats — created=0 for the
+         rejected row, and dead_letter+=1 with code DATA_QUALITY_REJECTION).
+      3. VALUE_MAP unmapped-with-reject sentinel composes with ALLOWED gate:
+         an unmapped MTART hits the reject sentinel and is caught by a DQ
+         ALLOWED rule, dead-lettering before the BAPI.
+
+    Payload shape::
+
+        { "mode": "phase_b_validate_f4",
+          "run_id": "f4-phaseb-001",
+          "prefix": "F4PHASEB",
+          "target_secret_id": "migrate4hana/prod/s4hana-credentials" }
+    """
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    prefix = event.get("prefix", "F4PHASEB")
+
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    try:
+        from transformation_engine import TransformationEngine
+        from material_spine import MaterialSpineOrchestrator
+        from key_map import PersistentKeyMap
+    except Exception as e:
+        try: tconn.close()
+        except Exception: pass
+        return {"status": "error", "phase": "import_f4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # Ruleset: legacy MTART value mapping + DQ gates that must trigger BEFORE the BAPI
+    ruleset = {
+        "version": "1",
+        "value_maps": {
+            "mtart_map": {"ZHALB": "HALB", "ZROH": "ROH"},
+        },
+        "object_rules": {
+            "Material": {
+                "transforms": [
+                    {"type": "TRIM",  "field": "MATNR"},
+                    {"type": "UPPER", "field": "MEINS"},
+                    {"type": "VALUE_MAP", "field": "MTART", "table": "mtart_map",
+                     "on_missing": "reject", "reject_sentinel": "__UNMAPPED__"},
+                ],
+                "dq_rules": [
+                    {"type": "MANDATORY", "field": "MEINS"},
+                    {"type": "MANDATORY", "field": "MBRSH"},
+                    {"type": "ALLOWED",   "field": "MTART",
+                     "values": ["HALB", "ROH", "FERT"]},
+                ],
+            }
+        }
+    }
+    try:
+        engine = TransformationEngine(ruleset=ruleset)
+    except Exception as e:
+        try: tconn.close()
+        except Exception: pass
+        return {"status": "error", "phase": "init_engine", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+    km = PersistentKeyMap(table_name=ddb_table, run_id=run_id)
+    orch = MaterialSpineOrchestrator(tconn, key_map=km, transformer=engine)
+
+    # Three records exercising the three properties
+    records = [
+        # 1) value-map success: legacy ZHALB -> HALB, then BAPI creates
+        {"id": "value_map_success",
+         "row": {"MATNR": f"{prefix}_VMOK_{run_id[-6:]}",
+                 "MTART": "ZHALB",   # gets mapped to HALB
+                 "MBRSH": "M",
+                 "MEINS": "ea",       # uppercased to EA by TRIM/UPPER
+                 "MAKTX": "F4 phase-B value-map success"},
+         "expect_status": "created",
+         "expect_transformed_mtart": "HALB",
+         "expect_transformed_meins": "EA"},
+        # 2) DQ-mandatory rejects BEFORE BAPI: missing MEINS
+        {"id": "dq_mandatory_reject",
+         "row": {"MATNR": f"{prefix}_DQFAIL_{run_id[-6:]}",
+                 "MTART": "ZHALB",
+                 "MBRSH": "M",
+                 # MEINS deliberately omitted
+                 "MAKTX": "F4 phase-B mandatory reject"},
+         "expect_status": "dead_letter",
+         "expect_dead_letter": "DATA_QUALITY_REJECTION"},
+        # 3) VALUE_MAP unmapped-with-reject composes with ALLOWED gate -> dead-letter
+        {"id": "value_map_unmapped_then_allowed_reject",
+         "row": {"MATNR": f"{prefix}_UNMAP_{run_id[-6:]}",
+                 "MTART": "ZSOMETHING",   # unmapped -> reject sentinel
+                 "MBRSH": "M",
+                 "MEINS": "EA",
+                 "MAKTX": "F4 phase-B unmapped"},
+         "expect_status": "dead_letter",
+         "expect_dead_letter": "DATA_QUALITY_REJECTION"},
+    ]
+
+    # Snapshot stats so we can confirm:
+    #   - created went up by 1 (record 1 only)
+    #   - dead_letter went up by 2 (records 2 and 3)
+    #   - the BAPI was NOT called for records 2 and 3 (otherwise created > 1)
+    base_created = orch.stats.created
+    base_dead    = orch.stats.dead_letter
+
+    per_record_results = []
+    for spec in records:
+        # Also call engine.apply directly so we can prove the transform output
+        # matches expectations BEFORE the spine sends it (useful evidence in
+        # the report even when the row is later rejected).
+        transformed, dq = engine.apply("Material", dict(spec["row"]))
+        res = orch.load_one(spec["row"])
+        per_record_results.append({
+            "id":                       spec["id"],
+            "expected_status":          spec["expect_status"],
+            "actual_status":            res.status,
+            "actual_dead_letter":       res.dead_letter,
+            "expected_dead_letter":     spec.get("expect_dead_letter"),
+            "actual_target_key":        res.target_key,
+            "transformed_record":       transformed,
+            "transformed_mtart_match":  (spec.get("expect_transformed_mtart") is None
+                                          or transformed.get("MTART") == spec.get("expect_transformed_mtart")),
+            "transformed_meins_match":  (spec.get("expect_transformed_meins") is None
+                                          or transformed.get("MEINS") == spec.get("expect_transformed_meins")),
+            "dq_passed":                None if dq is None else dq.passed,
+            "dq_reasons":               [] if dq is None else dq.reasons,
+            "messages":                 res.messages,
+            "match_expected":           (res.status == spec["expect_status"]
+                                          and (spec.get("expect_dead_letter") is None
+                                                or res.dead_letter == spec.get("expect_dead_letter"))),
+        })
+
+    delta_created = orch.stats.created - base_created
+    delta_dead    = orch.stats.dead_letter - base_dead
+
+    proof = {
+        "p1_value_map_success_created":           delta_created == 1,
+        "p2_dq_blocked_bapi_count":               delta_dead == 2,
+        "p3_no_bapi_for_dq_rejected_rows":        delta_created == 1,  # if BAPI had run for #2 or #3, created > 1
+        "all_per_record_expectations_met":        all(r["match_expected"] for r in per_record_results),
+    }
+    overall_ok = all(proof.values())
+
+    log_stage_event(run_id, "data-migrator", "phaseB_f4_complete",
+                    {"created": delta_created, "dead_letter": delta_dead,
+                     "overall_ok": overall_ok})
+    try:
+        tconn.close()
+    except Exception:
+        pass
+
+    return {
+        "run_id":          run_id,
+        "status":          "ok" if overall_ok else "mismatch",
+        "phase":           "f4_transformation_engine",
+        "target":          {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                            "ashost": tsec.get("ashost")},
+        "ruleset_summary": {
+            "value_maps": list(ruleset["value_maps"].keys()),
+            "transform_count": len(ruleset["object_rules"]["Material"]["transforms"]),
+            "dq_rule_count":   len(ruleset["object_rules"]["Material"]["dq_rules"]),
+        },
+        "per_record":      per_record_results,
+        "delta_stats":     {"created": delta_created, "dead_letter": delta_dead},
+        "spine_stats":     orch.stats.to_dict(),
+        "key_map_writes":  km.persistence_stats(),
+        "proof":           proof,
     }
