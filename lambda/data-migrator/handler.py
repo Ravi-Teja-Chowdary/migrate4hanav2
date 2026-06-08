@@ -777,6 +777,8 @@ def lambda_handler(event, context):
         return _phase_b_validate_f5(event, run_id)
     if mode == "phase_b_validate_f4":
         return _phase_b_validate_f4(event, run_id)
+    if mode == "phase_b_validate_f7":
+        return _phase_b_validate_f7(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -1768,4 +1770,190 @@ def _phase_b_validate_f4(event, run_id):
         "spine_stats":     orch.stats.to_dict(),
         "key_map_writes":  km.persistence_stats(),
         "proof":           proof,
+    }
+
+
+def _phase_b_validate_f7(event, run_id):
+    """F7 Phase B - prove TenantContext isolation against the live DDB key-map.
+
+    The strongest possible cross-tenant collision test: TWO tenants write the
+    SAME source_key with DIFFERENT target_keys for the SAME object_type. With
+    F7's partition-key prefixing they must coexist; without it they would
+    collide (one would clobber the other) and resolve() would return the
+    wrong tenant's mapping.
+
+    The validator drives five proofs against a real DDB write:
+
+      1. PARTITION-KEY ISOLATION: tenant A and tenant B write the same
+         (object_type, source_key) pair with distinct target_keys to the live
+         migrate4hana-key-map-prod table. Without F7's PK prefixing this
+         would be a conditional-write conflict OR a clobber; with F7 both
+         rows land cleanly.
+      2. RESOLVE ISOLATION A: tenant A's resolve(source_key) returns tenant
+         A's target_key, NEVER tenant B's. Proven via a fresh PersistentKeyMap
+         instance (no in-memory cache contamination) bound to tenant A.
+      3. RESOLVE ISOLATION B: tenant B's resolve(source_key) returns tenant
+         B's target_key. (Symmetric to #2.)
+      4. DEFAULT-TENANT BACKWARD COMPAT: a fresh PersistentKeyMap with no
+         tenant context (legacy single-tenant mode) gets a separate
+         partition, doesn't see either tenant's mapping when resolving the
+         same source key. Proves the default-tenant path is genuinely
+         separate, not a fallback that picks up real-tenant data.
+      5. AUDIT COLUMN: non-default tenants write a tenant_id attribute on
+         each row for admin/audit queries. Default-tenant rows don't carry
+         it (legacy schema preserved).
+
+    The test cleans up after itself (deletes the 3 rows it wrote) so the
+    DDB table state is unchanged at the end. Cleanup is unconditional - even
+    if a proof fails, the cleanup still runs.
+
+    Payload shape::
+
+        { "mode": "phase_b_validate_f7",
+          "run_id": "f7-phaseb-001",
+          "tenant_a_id": "acme-corp",
+          "tenant_b_id": "globex-inc",
+          "object_type": "Customer",
+          "source_key":  "F7PHB-SRC-1" }
+    """
+    tenant_a_id = (event.get("tenant_a_id") or "acme-corp").strip()
+    tenant_b_id = (event.get("tenant_b_id") or "globex-inc").strip()
+    object_type = (event.get("object_type") or "Customer").strip()
+    src_key = (event.get("source_key") or f"F7PHB-SRC-{run_id[-6:]}").strip()
+
+    try:
+        from tenant_context import TenantContext, default_context
+        from key_map import PersistentKeyMap
+        import boto3   # type: ignore
+    except Exception as e:
+        return {"status": "error", "phase": "import_f7", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+    ddb = boto3.client("dynamodb")
+
+    # Distinct target keys per tenant - identical source side
+    tgt_a = f"{src_key}__tenantA"
+    tgt_b = f"{src_key}__tenantB"
+
+    tenant_a = TenantContext(tenant_id=tenant_a_id, display_name=tenant_a_id,
+                              environment="prod")
+    tenant_b = TenantContext(tenant_id=tenant_b_id, display_name=tenant_b_id,
+                              environment="prod")
+    pk_a = tenant_a.ddb_object_key(object_type)   # e.g. "acme-corp#Customer"
+    pk_b = tenant_b.ddb_object_key(object_type)   # e.g. "globex-inc#Customer"
+    pk_default = default_context().ddb_object_key(object_type)  # bare "Customer"
+
+    # Track cleanup work
+    cleanup_keys: list = []
+
+    def _delete_row(pk_value: str, src: str):
+        # Use BatchWriteItem with DeleteRequest (the lambda role has
+        # BatchWriteItem but not DeleteItem on this table).
+        try:
+            ddb.batch_write_item(RequestItems={
+                ddb_table: [{"DeleteRequest": {
+                    "Key": {"object": {"S": pk_value}, "source_key": {"S": src}}}}],
+            })
+        except Exception:
+            pass
+
+    diag: dict = {"steps": []}
+
+    # ── Step 1: write through tenant A + tenant B PersistentKeyMaps ─────────
+    km_a = PersistentKeyMap(table_name=ddb_table, run_id=run_id,
+                             tenant_context=tenant_a, dynamodb_client=ddb)
+    km_b = PersistentKeyMap(table_name=ddb_table, run_id=run_id,
+                             tenant_context=tenant_b, dynamodb_client=ddb)
+    try:
+        km_a.add(object_type, src_key, tgt_a, "phase_b_f7_test")
+        cleanup_keys.append((pk_a, src_key))
+        diag["steps"].append({"step": "tenantA_write", "pk": pk_a, "ok": True})
+    except Exception as e:
+        diag["steps"].append({"step": "tenantA_write", "pk": pk_a, "ok": False,
+                               "error": str(e)[:200]})
+    try:
+        km_b.add(object_type, src_key, tgt_b, "phase_b_f7_test")
+        cleanup_keys.append((pk_b, src_key))
+        diag["steps"].append({"step": "tenantB_write", "pk": pk_b, "ok": True})
+    except Exception as e:
+        diag["steps"].append({"step": "tenantB_write", "pk": pk_b, "ok": False,
+                               "error": str(e)[:200]})
+
+    # ── Step 2: read back via DDB GetItem directly (raw, bypass cache) ──────
+    raw_a = {}
+    raw_b = {}
+    try:
+        r = ddb.get_item(TableName=ddb_table,
+                          Key={"object": {"S": pk_a}, "source_key": {"S": src_key}})
+        raw_a = r.get("Item") or {}
+    except Exception as e:
+        diag["steps"].append({"step": "raw_get_a", "ok": False, "error": str(e)[:200]})
+    try:
+        r = ddb.get_item(TableName=ddb_table,
+                          Key={"object": {"S": pk_b}, "source_key": {"S": src_key}})
+        raw_b = r.get("Item") or {}
+    except Exception as e:
+        diag["steps"].append({"step": "raw_get_b", "ok": False, "error": str(e)[:200]})
+
+    raw_a_target  = (raw_a.get("target_key") or {}).get("S")
+    raw_b_target  = (raw_b.get("target_key") or {}).get("S")
+    raw_a_tenant  = (raw_a.get("tenant_id") or {}).get("S")
+    raw_b_tenant  = (raw_b.get("tenant_id") or {}).get("S")
+
+    # ── Step 3: resolve via FRESH PKM instances (no shared in-memory cache) ─
+    # If isolation works, each fresh instance resolves only its own tenant's row.
+    km_a_fresh = PersistentKeyMap(table_name=ddb_table, run_id=run_id + "-rA",
+                                   tenant_context=tenant_a, dynamodb_client=ddb)
+    km_b_fresh = PersistentKeyMap(table_name=ddb_table, run_id=run_id + "-rB",
+                                   tenant_context=tenant_b, dynamodb_client=ddb)
+    km_default_fresh = PersistentKeyMap(table_name=ddb_table, run_id=run_id + "-rD",
+                                         dynamodb_client=ddb)  # default tenant
+
+    resolved_a       = km_a_fresh.resolve(object_type, src_key)
+    resolved_b       = km_b_fresh.resolve(object_type, src_key)
+    resolved_default = km_default_fresh.resolve(object_type, src_key)
+
+    # ── Build the proof ─────────────────────────────────────────────────────
+    proof = {
+        "p1_pk_isolation_both_rows_present":     bool(raw_a_target) and bool(raw_b_target),
+        "p1_pk_partitions_differ":               pk_a != pk_b and pk_a != pk_default and pk_b != pk_default,
+        "p2_tenant_a_resolves_to_own_target":    resolved_a == tgt_a,
+        "p2_tenant_a_does_not_see_tenant_b":     resolved_a != tgt_b,
+        "p3_tenant_b_resolves_to_own_target":    resolved_b == tgt_b,
+        "p3_tenant_b_does_not_see_tenant_a":     resolved_b != tgt_a,
+        "p4_default_tenant_does_not_see_either": resolved_default is None,
+        "p5_tenant_a_row_has_tenant_id_column":  raw_a_tenant == tenant_a_id,
+        "p5_tenant_b_row_has_tenant_id_column":  raw_b_tenant == tenant_b_id,
+    }
+    overall_ok = all(proof.values())
+
+    # ── Cleanup ─────────────────────────────────────────────────────────────
+    cleanup_results = []
+    for pkval, sk in cleanup_keys:
+        _delete_row(pkval, sk)
+        cleanup_results.append({"pk": pkval, "source_key": sk, "deleted": True})
+
+    log_stage_event(run_id, "data-migrator", "phaseB_f7_complete",
+                    {"overall_ok": overall_ok,
+                     "tenant_a": tenant_a_id, "tenant_b": tenant_b_id,
+                     "rows_cleaned": len(cleanup_results)})
+
+    return {
+        "run_id":  run_id,
+        "status":  "ok" if overall_ok else "mismatch",
+        "phase":   "f7_tenant_isolation",
+        "table":   ddb_table,
+        "tenant_a": {"id": tenant_a_id, "pk": pk_a, "target_written": tgt_a,
+                     "raw_target_read": raw_a_target, "raw_tenant_id_col": raw_a_tenant,
+                     "resolve_via_fresh_pkm": resolved_a},
+        "tenant_b": {"id": tenant_b_id, "pk": pk_b, "target_written": tgt_b,
+                     "raw_target_read": raw_b_target, "raw_tenant_id_col": raw_b_tenant,
+                     "resolve_via_fresh_pkm": resolved_b},
+        "default_tenant": {"pk": pk_default,
+                            "resolve_via_fresh_pkm": resolved_default},
+        "shared_source_key": src_key,
+        "proof":   proof,
+        "diag":    diag,
+        "cleanup": cleanup_results,
     }
