@@ -6,7 +6,7 @@ Recipe per object: probe BAPI/OData + ECC source → `create_<obj>` (+ idempoten
 → discovery if needed → wire 4 files (`bapi_loader`, `unified_loader` ×2, `handler`) → live
 load+reconcile RECONCILED → commit. See `BREADTH_BUILDOUT_PROMPT.md` and `SPINE_PROMOTION_GUIDE.md`.
 
-## Spine-promoted to the F2 promotion factory (✨ 21)
+## Spine-promoted to the F2 promotion factory (✨ 25 — LIVE-25 SWEEP COMPLETE)
 **Material** (live-verified F2 Phase B 2026-06-07: 3 + 25 = 28 real Materials created in real S/4 via the spine) ·
 **Bank** · **ProfitCenter** · **CostCenter** · **Equipment**
 (promotion batch 1, 2026-06-08 — 17 unit tests green, registered via @register_spine, drop-in via UnifiedLoader._load_via_spine)
@@ -23,14 +23,17 @@ load+reconcile RECONCILED → commit. See `BREADTH_BUILDOUT_PROMPT.md` and `SPIN
 **OpenAR** · **OpenAP** · **Batch** · **InventoryBalance**
 (promotion batch 5, 2026-06-09 — 17 unit tests green; balance + FI postings; tricky shapes: KNB1/LFB1 recon-account-ready partner harmonization with same BAPI but different ACCOUNT*+DOC_TYPE shapes per kind, batch-managed (MARC.XCHPF) material harmonization with collision-safe CHARG suffixing, mvt-561 initial-stock posting with MM-period self-heal that parses "period YYYY/MM" from the BAPI error and retries on the 15th of the open period)
 
-## Live today on the legacy bapi_loader path (✅ 25)
-BusinessPartner · Customer · Vendor · ~~Material~~ ✨ · ExchangeRates · ~~OpenPO~~ ✨ · ~~OpenAR~~ ✨ · ~~OpenAP~~ ✨ ·
+**BusinessPartner** · **Customer** · **Vendor** · **ExchangeRates**
+(promotion batch 6, 2026-06-09 — 17 unit tests green; **closes the live-25 sweep**; non-create-BAPI shapes covered: BAPI_BUPA_CREATE_FROM_DATA for the BP shell with BP-led SAP-assigned numbering (org category 2 / person category 1), CVI two-step pattern for Customer + Vendor [BP shell + BAPI_BUPA_ROLES_CHANGE for FLCU01 sold-to / FLVN01 supplier with transactional rollback on role failure], ExchangeRates with TCURV customizing prerequisite gate + TCURF operational-set tag + GDATU inverted-date un-inversion with 1995-floor clamping)
+
+## Live today on the legacy bapi_loader path (✅ 25 — all 25 now spine-promoted)
+~~BusinessPartner~~ ✨ · ~~Customer~~ ✨ · ~~Vendor~~ ✨ · ~~Material~~ ✨ · ~~ExchangeRates~~ ✨ · ~~OpenPO~~ ✨ · ~~OpenAR~~ ✨ · ~~OpenAP~~ ✨ ·
 ~~CostCenter~~ ✨ · ~~ProfitCenter~~ ✨ · ~~FixedAsset~~ ✨ · ~~Bank~~ ✨ · ~~InternalOrder~~ ✨ · ~~Equipment~~ ✨ ·
 ~~FunctionalLocation~~ ✨ · ~~Characteristic~~ ✨ · ~~Class~~ ✨ · ~~CostElementGroup~~ ✨ ·
 ~~ProfitCenterGroup~~ ✨ · ~~Project~~ ✨ · ~~PurchaseRequisition~~ ✨ · ~~OpenSO~~ ✨ ·
 ~~PurchaseContract~~ ✨ · ~~Batch~~ ✨ · ~~InventoryBalance~~ ✨
 
-(The 21 with strikethrough have ALSO been promoted to the spine; the legacy bapi_loader path still works as fallback during transition. The 4 still on legacy — BusinessPartner / Customer / Vendor / ExchangeRates — are deferred because they need the BP-led-numbering CVI migration path or a custom reconciler shape rather than direct BAPI promotion.)
+(All 25 promoted to the spine as of 2026-06-09. The legacy bapi_loader path remains as fallback during transition. 101 unit tests across batches 1-6.)
 
 ## Route to non-BAPI lane (🔀 — evidence-based lane decision, not a gap)
 - **Routing** (PLKO) — `BAPI_ROUTING_CREATE` exists but returns "S" with empty TASK_LIST_GROUP
