@@ -785,6 +785,8 @@ def lambda_handler(event, context):
         return _phase_b_validate_reconcile(event, run_id)
     if mode == "phase_b_validate_production_path":
         return _phase_b_validate_production_path(event, run_id)
+    if mode == "pilot_readiness_probe":
+        return _pilot_readiness_probe(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -2452,4 +2454,200 @@ def _phase_b_validate_production_path(event, run_id):
         "proof":             proof,
         "spine_registry":    {"object_registered": spine_present,
                                 "total_spines": len(registered_spines())},
+    }
+
+
+def _pilot_readiness_probe(event, run_id):
+    """Pre-pilot diagnostic: probe a target S/4 system and report what would
+    go right vs wrong on a real-customer data load.
+
+    Roadmap #5 scaffolding: a true customer pilot needs the customer's data,
+    but this probe lets a customer's IT person validate their TARGET S/4
+    against the spine's customizing assumptions BEFORE the pilot day --
+    surfacing the "we'd dead-letter half the load because TCURV is empty"
+    cases as known yellow/red items, not surprises.
+
+    Probes (each is a quick RFC_READ_TABLE against the connected target):
+
+      - target_rate_types: count of TCURV entries (ExchangeRates loadability)
+      - operational_rate_types: count of TCURF entries (factor settings)
+      - class_types: count of TCLA entries (Class object loadability)
+      - chart_of_accounts: distinct T001.KTOPL values (CO group loadability)
+      - controlling_areas: distinct T001.KOKRS values (PC group + IO + OpenAR/AP)
+      - sales_areas: tuples in KNVV ∩ MVKE (SalesOrder loadability)
+      - recon_ready_customers: KNB1 row count (OpenAR loadability)
+      - recon_ready_vendors: LFB1 row count (OpenAP loadability)
+      - purchasing_ready_vendors: LFM1 row count (PO + Contract loadability)
+      - batch_managed_materials: MARC where XCHPF='X' row count
+      - stock_master_population: MARD row count (InventoryBalance)
+      - func_loc_structure_indicators: distinct IFLOT.TPLKZ count
+      - project_profiles: distinct PROJ.PROFL count
+
+    Each probe yields a verdict:
+      green:  ready -- the customizing supports a real load at scale
+      yellow: partially ready -- some objects will dead-letter as
+              customizing prerequisites
+      red:    blocker -- the object category is largely unloadable on this
+              target until customizing is provisioned
+
+    Payload::
+
+        { "mode":  "pilot_readiness_probe",
+          "run_id": "pilot-probe-001",
+          "target_secret_id": "migrate4hana/prod/s4hana-credentials" }
+    """
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    def _read_count(qt, fields, options=None, rowcount=1000):
+        try:
+            r = tconn.call("RFC_READ_TABLE", QUERY_TABLE=qt, DELIMITER="|",
+                            FIELDS=[{"FIELDNAME": f} for f in fields],
+                            OPTIONS=options or [], ROWCOUNT=rowcount)
+            data = r.get("DATA") or []
+            return len(data), [(x.get("WA") or "").strip() for x in data[:5]]
+        except Exception as e:
+            return None, [f"ERR: {str(e)[:120]}"]
+
+    findings: list = []
+
+    def add(category, label, count, sample, *,
+             green_at, yellow_at,
+             affects, customizing_table=None):
+        if count is None:
+            v = "red"; reason = "probe failed (RFC_READ_TABLE error)"
+        elif count >= green_at:
+            v = "green"; reason = f"{count} rows in {customizing_table or label}"
+        elif count >= yellow_at:
+            v = ("yellow"); reason = (f"only {count} rows in {customizing_table or label} "
+                                       f"(threshold for green: {green_at})")
+        else:
+            v = "red";    reason = (f"{count} rows in {customizing_table or label} "
+                                     f"(below pilot threshold {yellow_at})")
+        findings.append({
+            "category":  category, "label": label, "verdict": v,
+            "count":     count, "sample": sample[:3],
+            "affects":   affects, "reason": reason,
+        })
+
+    # Currency / rate-type customizing
+    n, s = _read_count("TCURV", ["KURST"])
+    add("CurrencyConfig", "TCURV rate types", n, s,
+         green_at=20, yellow_at=5, affects=["ExchangeRates"],
+         customizing_table="TCURV")
+    n, s = _read_count("TCURF", ["KURST"])
+    add("CurrencyConfig", "TCURF operational rate types", n, s,
+         green_at=20, yellow_at=5, affects=["ExchangeRates"],
+         customizing_table="TCURF")
+
+    # Classification customizing
+    n, s = _read_count("TCLA", ["KLART"])
+    add("Classification", "TCLA class types", n, s,
+         green_at=10, yellow_at=1, affects=["Class"],
+         customizing_table="TCLA")
+
+    # CO customizing
+    n, s = _read_count("T001", ["KTOPL", "BUKRS"])
+    add("ControllingConfig", "T001 chart-of-accounts coverage", n, s,
+         green_at=1, yellow_at=1, affects=["CostElementGroup"],
+         customizing_table="T001.KTOPL")
+
+    # Partner readiness
+    n, s = _read_count("KNB1", ["KUNNR"])
+    add("PartnerReadiness", "KNB1 recon-ready customers", n, s,
+         green_at=50, yellow_at=5, affects=["OpenAR"],
+         customizing_table="KNB1")
+    n, s = _read_count("LFB1", ["LIFNR"])
+    add("PartnerReadiness", "LFB1 recon-ready vendors", n, s,
+         green_at=50, yellow_at=5, affects=["OpenAP"],
+         customizing_table="LFB1")
+    n, s = _read_count("LFM1", ["LIFNR"])
+    add("PartnerReadiness", "LFM1 purchasing-ready vendors", n, s,
+         green_at=50, yellow_at=5,
+         affects=["PurchaseOrder", "PurchaseContract"],
+         customizing_table="LFM1")
+
+    # Sales-area readiness (the chain-test SO finding)
+    n, s = _read_count("KNVV", ["KUNNR", "VKORG", "VTWEG", "SPART"])
+    add("SalesAreaReadiness", "KNVV sales-area customer pool", n, s,
+         green_at=100, yellow_at=10, affects=["SalesOrder"],
+         customizing_table="KNVV")
+    n, s = _read_count("MVKE", ["MATNR", "VKORG", "VTWEG"])
+    add("SalesAreaReadiness", "MVKE saleable material pool", n, s,
+         green_at=100, yellow_at=10, affects=["SalesOrder"],
+         customizing_table="MVKE")
+
+    # Inventory readiness
+    n, s = _read_count("MARC",
+                        ["MATNR", "WERKS"],
+                        options=[{"TEXT": "XCHPF = 'X'"}])
+    add("InventoryReadiness", "Batch-managed material+plant", n, s,
+         green_at=10, yellow_at=1, affects=["Batch"],
+         customizing_table="MARC.XCHPF")
+    n, s = _read_count("MARD", ["MATNR", "WERKS", "LGORT"])
+    add("InventoryReadiness", "MARD stock master rows", n, s,
+         green_at=50, yellow_at=1, affects=["InventoryBalance"],
+         customizing_table="MARD")
+
+    # Plant maintenance readiness
+    n, s = _read_count("IFLOT", ["TPLKZ"])
+    add("PMReadiness", "IFLOT structure-indicator coverage", n, s,
+         green_at=5, yellow_at=1, affects=["FunctionalLocation"],
+         customizing_table="IFLOT.TPLKZ")
+
+    # Project system readiness
+    n, s = _read_count("PROJ", ["PROFL"])
+    add("PSReadiness", "PROJ project profiles in use", n, s,
+         green_at=5, yellow_at=1, affects=["Project"],
+         customizing_table="PROJ.PROFL")
+
+    # Score the overall pilot readiness
+    by_verdict = {"green": 0, "yellow": 0, "red": 0}
+    for f in findings:
+        by_verdict[f["verdict"]] += 1
+    pilot_ready = (by_verdict["red"] == 0 and by_verdict["yellow"] <= 2)
+    rate_types_known = next((f for f in findings
+                              if f["label"] == "TCURV rate types"), {}).get("count")
+
+    affected_objects_at_risk = sorted({
+        obj for f in findings
+        if f["verdict"] in ("red", "yellow")
+        for obj in f["affects"]
+    })
+
+    try:
+        tconn.close()
+    except Exception:
+        pass
+
+    return {
+        "run_id":      run_id,
+        "status":      "ok",
+        "phase":       "pilot_readiness_probe",
+        "target":      {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                          "ashost": tsec.get("ashost")},
+        "pilot_ready": pilot_ready,
+        "scorecard":   {
+            "green":  by_verdict["green"],
+            "yellow": by_verdict["yellow"],
+            "red":    by_verdict["red"],
+            "total":  len(findings),
+            "pilot_verdict": ("READY" if pilot_ready
+                               else ("CONDITIONAL" if by_verdict["red"] == 0
+                                       else "BLOCKED")),
+        },
+        "affected_objects_at_risk": affected_objects_at_risk,
+        "findings":    findings,
+        "rate_types_known": rate_types_known,
     }
