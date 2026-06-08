@@ -71,10 +71,10 @@ class BusinessPartnerSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED
         src_bp = payload.pop("_src_bp", "")
-        payload.pop("_category", None)
+        cat = payload.pop("_category", "2")
 
         resp = self.c.call("BAPI_BUPA_CREATE_FROM_DATA", **payload)
         ret = resp.get("RETURN") or []
@@ -90,11 +90,14 @@ class BusinessPartnerSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
-        return bp, msgs, DISP_CREATED
+            return None, msgs, None, None
+        # verify_key: BUT000 row + category tie-out
+        verify_key = {"table": "BUT000", "key": {"PARTNER": bp},
+                       "values": {"TYPE": cat}}
+        return bp, msgs, DISP_CREATED, verify_key

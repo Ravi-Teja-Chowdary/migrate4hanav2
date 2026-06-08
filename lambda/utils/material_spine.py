@@ -207,9 +207,12 @@ class MaterialSpineOrchestrator(BaseSpineOrchestrator):
         return payload
 
     # ── BAPI invocation ──────────────────────────────────────────────────────
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list]:
+    def call_bapi(self, payload: dict) -> tuple:
         """Execute BAPI_MATERIAL_SAVEDATA + commit-or-rollback per the standard
-        loader pattern. Returns (target_key, messages)."""
+        loader pattern. Returns a 4-tuple (target_key, messages, disposition_hint,
+        verify_key) where verify_key shapes the post-load reconciliation read
+        against MARA.MATNR + MTART value tie-out."""
+        from base_spine_orchestrator import DISP_CREATED
         resp = self.c.call("BAPI_MATERIAL_SAVEDATA", **payload)
         ret  = resp.get("RETURN") or {}
         # RETURN can be a dict (single message) or a list of messages
@@ -225,15 +228,22 @@ class MaterialSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs
+            return None, msgs, None, None
         # Commit
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs
-        # Target key = the MATNR we sent
-        return (payload["HEADDATA"]["MATERIAL"], msgs)
+            return None, msgs, None, None
+        # Target key = the MATNR we sent. verify_key proves the row landed in
+        # MARA with the expected material type.
+        tgt_matnr = payload["HEADDATA"]["MATERIAL"]
+        verify_key = {
+            "table":  "MARA",
+            "key":    {"MATNR": tgt_matnr},
+            "values": {"MTART": payload["HEADDATA"].get("MATL_TYPE", "")},
+        }
+        return tgt_matnr, msgs, DISP_CREATED, verify_key
 
     # ── helpers ──────────────────────────────────────────────────────────────
     @staticmethod

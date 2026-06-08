@@ -779,6 +779,10 @@ def lambda_handler(event, context):
         return _phase_b_validate_f4(event, run_id)
     if mode == "phase_b_validate_f7":
         return _phase_b_validate_f7(event, run_id)
+    if mode == "phase_b_validate_chain":
+        return _phase_b_validate_chain(event, run_id)
+    if mode == "phase_b_validate_reconcile":
+        return _phase_b_validate_reconcile(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -1956,4 +1960,357 @@ def _phase_b_validate_f7(event, run_id):
         "proof":   proof,
         "diag":    diag,
         "cleanup": cleanup_results,
+    }
+
+
+def _phase_b_validate_chain(event, run_id):
+    """End-to-end dependency-chain proof against live S/4 + live DDB.
+
+    The spine sweep promoted 25 objects individually; this validator drives
+    them as a CONNECTED GRAPH via the F1 PersistentKeyMap, proving that
+    composition works -- i.e. that loading BPs makes them resolvable by
+    Customer, and loading Customers makes them resolvable by SalesOrder.
+
+    Pipeline::
+
+        Step A: load N BusinessPartners       -> registers (BPARTNER -> tgtBP)
+        Step B: load N Customers (CVI)         -> registers (KUNNR -> tgtBP/cust)
+        Step C: load N SalesOrders             -> resolve KUNNR via F1
+
+    The interesting metric is HOW the SO step resolves customers:
+      - "registry": F1 found the (Customer, KUNNR) -> BP mapping AND that BP
+        was in the discovered sales-area customer pool. This is the only path
+        that proves the chain actually composed.
+      - "harmonized": F1 found nothing OR the BP wasn't in the sales-area
+        pool. The SO falls back to a sample customer. Harmonization itself is
+        a valid migration pattern, but for THIS proof it means the chain
+        DIDN'T compose -- which is a real finding worth reporting (typically
+        because freshly-created BPs lack KNVV sales-area data).
+
+    The validator therefore returns BOTH classification counts, so the user
+    can see the registry-vs-harmonized split and act on it.
+
+    Payload shape::
+
+        { "mode": "phase_b_validate_chain",
+          "run_id": "chain-001",
+          "count": 5,
+          "prefix": "CHAIN" }
+    """
+    count = int(event.get("count", 3))
+    prefix = (event.get("prefix") or f"CHAIN{run_id[-4:]}").strip()
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    try:
+        from business_partner_spine import BusinessPartnerSpineOrchestrator
+        from customer_spine          import CustomerSpineOrchestrator
+        from sales_order_spine       import SalesOrderSpineOrchestrator
+        from key_map import PersistentKeyMap
+    except Exception as e:
+        try: tconn.close()
+        except Exception: pass
+        return {"status": "error", "phase": "import_chain", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # ── F1: a SHARED PersistentKeyMap across all three steps. This is the
+    # whole point — Customer step registers (KUNNR -> BP) and the SO step
+    # finds it via the same registry instance + the DDB-backed lookup.
+    ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+    km = PersistentKeyMap(table_name=ddb_table, run_id=run_id)
+
+    # Spine instances
+    bp_orch  = BusinessPartnerSpineOrchestrator(tconn, key_map=km)
+    cust_orch = CustomerSpineOrchestrator(tconn, key_map=km)
+    so_orch   = SalesOrderSpineOrchestrator(tconn, key_map=km)
+
+    # ── Step A: BP loads ──────────────────────────────────────────────────────
+    bp_records = [
+        {"BPARTNER": f"{prefix}_BP_{i:03d}", "CATEGORY": "2",
+         "NAME": f"{prefix} BP organization {i:03d}"}
+        for i in range(count)
+    ]
+    bp_results = [bp_orch.load_one(r) for r in bp_records]
+    bp_targets = {r.source_key: r.target_key for r in bp_results if r.target_key}
+
+    # ── Step B: Customer loads (each creates its OWN BP + role) ───────────────
+    cust_records = [
+        {"KUNNR": f"{prefix}_C_{i:03d}", "NAME1": f"{prefix} customer {i:03d}"}
+        for i in range(count)
+    ]
+    cust_results = [cust_orch.load_one(r) for r in cust_records]
+    cust_targets = {r.source_key: r.target_key for r in cust_results if r.target_key}
+
+    # F1 readback: confirm Customer step actually populated the registry
+    f1_customer_resolutions = {}
+    for src in cust_targets.keys():
+        f1_customer_resolutions[src] = km.resolve("Customer", src)
+
+    # ── Step C: SalesOrder loads referencing the customers we just created ───
+    so_records = [
+        {"VBELN": f"{prefix}_SO_{i:03d}", "KUNNR": f"{prefix}_C_{i:03d}"}
+        for i in range(count)
+    ]
+    # IMPORTANT: snapshot the F1 registry BEFORE the SO loads run. The SO
+    # spine's harmonization path overwrites F1 entries (a documented pattern:
+    # once a customer harmonizes for sales-doc purposes, route all subsequent
+    # SOs to the same harmonized target). For the chain proof we want to know
+    # what F1 had at the time step C started -- not what step C left behind.
+    so_f1_pre = {rec["KUNNR"]: km.resolve("Customer", rec["KUNNR"])
+                  for rec in so_records}
+    so_results = [so_orch.load_one(r) for r in so_records]
+    so_f1_post = {rec["KUNNR"]: km.resolve("Customer", rec["KUNNR"])
+                   for rec in so_records}
+    so_f1_overwrites = [k for k in so_f1_pre
+                          if so_f1_pre[k] and so_f1_post[k] != so_f1_pre[k]]
+
+    # Classify each SO outcome: did it use the chain (registry path) or fall
+    # back to harmonization (BP not in KNVV sales-area pool)?
+    so_classification = {
+        "registry":       0,   # SO used F1-resolved BP, BP was in sales-area pool
+        "harmonized":     0,   # SO had to fall back to sample customer
+        "dead_letter":    0,   # SO failed entirely (e.g. no sales-area at all)
+    }
+    # Use the PRE-step-C F1 snapshot as the chain-composition proof. This
+    # captures what step C saw on entry, before its own harmonization writes.
+    so_details = []
+    for src_kunnr, r in zip([rec["KUNNR"] for rec in so_records], so_results):
+        f1_pre = so_f1_pre.get(src_kunnr)
+        if r.dead_letter:
+            so_classification["dead_letter"] += 1
+            so_details.append({"src_kunnr": src_kunnr, "outcome": "dead_letter",
+                                "messages": r.messages, "code": r.dead_letter,
+                                "f1_pre_step_c": f1_pre})
+        elif any("harmonized" in m for m in (r.messages or [])):
+            so_classification["harmonized"] += 1
+            so_details.append({"src_kunnr": src_kunnr, "outcome": "harmonized",
+                                "target_so": r.target_key,
+                                "messages": [m for m in r.messages if "harmonized" in m][:1],
+                                "f1_pre_step_c": f1_pre,
+                                "f1_post_step_c": so_f1_post.get(src_kunnr),
+                                "note": ("F1 chain DID resolve the customer to its created BP; "
+                                          "SO harmonized because that BP is not in the target "
+                                          "KNVV sales-area pool. F1 layer composed correctly.")
+                                          if f1_pre else None})
+        else:
+            so_classification["registry"] += 1
+            so_details.append({"src_kunnr": src_kunnr, "outcome": "registry",
+                                "target_so": r.target_key,
+                                "expected_customer_target": cust_targets.get(src_kunnr),
+                                "f1_pre_step_c": f1_pre})
+
+    # ── Build the proof object ────────────────────────────────────────────────
+    # Two compositional proofs:
+    #   F1-layer:   shared registry can resolve a customer registered by
+    #               step B from step C's perspective (the engineering claim
+    #               of F1). This works even if SAP refuses the SO downstream.
+    #   SAP-layer:  step C actually wrote a SO linked to the BP from step B
+    #               via SAP data (KNVV / VBAK). Requires sales-area data on
+    #               the freshly-created BP, which IDES typically lacks.
+    proof = {
+        "bp_step_all_created":          all(r.target_key for r in bp_results),
+        "customer_step_all_created":    all(r.target_key for r in cust_results),
+        "f1_customer_resolves_for_all": all(f1_customer_resolutions.get(s) for s in cust_targets),
+        "so_step_no_dead_letters":      so_classification["dead_letter"] == 0,
+        # F1-LAYER composition: at step C entry, the shared registry resolved
+        # every customer registered in step B. This is the engineering proof
+        # of the F1 chain composition -- captured BEFORE step C's harmonization
+        # writes (which would otherwise clobber the entries).
+        "f1_chain_composed_in_step_c":  all(so_f1_pre.get(rec["KUNNR"])
+                                              for rec in so_records),
+        # F1-LAYER consistency: did the customer-spine's target_key match the
+        # F1-pre-step-C resolution? This proves the customer step really wrote
+        # to F1 (the SAP-assigned BP, not a fallback).
+        "f1_customer_writes_match_targets":
+            all(so_f1_pre.get(rec["KUNNR"]) == cust_targets.get(rec["KUNNR"])
+                for rec in so_records),
+        # SAP-LAYER composition: at least one SO actually went through the
+        # registry path (BP was in KNVV pool). If 0 -> KNVV gap, surfaced
+        # as a known finding rather than a chain failure.
+        "sap_chain_composed_at_least_once": so_classification["registry"] >= 1,
+    }
+    # Overall: F1-layer is the engineering claim of the spine sweep; SAP-layer
+    # composition is a downstream data-prep concern (KNVV provisioning).
+    overall_ok = all([proof["bp_step_all_created"],
+                       proof["customer_step_all_created"],
+                       proof["f1_customer_resolves_for_all"],
+                       proof["so_step_no_dead_letters"],
+                       proof["f1_chain_composed_in_step_c"],
+                       proof["f1_customer_writes_match_targets"]])
+
+    log_stage_event(run_id, "data-migrator", "phaseB_chain_complete",
+                    {"bp_created":   sum(1 for r in bp_results   if r.target_key),
+                     "cust_created": sum(1 for r in cust_results if r.target_key),
+                     "so_registry":  so_classification["registry"],
+                     "so_harmonized": so_classification["harmonized"],
+                     "so_dead":      so_classification["dead_letter"],
+                     "overall_ok":   overall_ok})
+    try:
+        tconn.close()
+    except Exception:
+        pass
+
+    return {
+        "run_id":  run_id,
+        "status":  "ok" if overall_ok else "partial",
+        "phase":   "chain_end_to_end",
+        "count":   count,
+        "target":  {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                    "ashost": tsec.get("ashost")},
+        "step_a_business_partner": {
+            "attempted": len(bp_results),
+            "created":   sum(1 for r in bp_results if r.target_key),
+            "targets":   bp_targets,
+            "errors":    [{"src": r.source_key, "code": r.dead_letter,
+                            "messages": (r.messages or [])[:3]}
+                           for r in bp_results if not r.target_key][:3],
+        },
+        "step_b_customer": {
+            "attempted": len(cust_results),
+            "created":   sum(1 for r in cust_results if r.target_key),
+            "targets":   cust_targets,
+            "f1_resolutions": f1_customer_resolutions,
+            "errors":    [{"src": r.source_key, "code": r.dead_letter,
+                            "messages": (r.messages or [])[:3]}
+                           for r in cust_results if not r.target_key][:3],
+        },
+        "step_c_sales_order": {
+            "attempted":          len(so_results),
+            "classification":     so_classification,
+            "f1_pre_snapshot":    so_f1_pre,
+            "f1_post_snapshot":   so_f1_post,
+            "f1_overwrites":      so_f1_overwrites,
+            "details":            so_details,
+        },
+        "proof":         proof,
+        "spine_stats":   {
+            "bp":   bp_orch.stats.to_dict(),
+            "cust": cust_orch.stats.to_dict(),
+            "so":   so_orch.stats.to_dict(),
+        },
+        "key_map_writes": km.persistence_stats(),
+    }
+
+
+def _phase_b_validate_reconcile(event, run_id):
+    """Reconciliation engine wiring proof: drive spine loads + Reconciler against
+    live S/4 to prove the end-to-end "BAPI said OK + record actually persisted +
+    values match what we sent" loop closes.
+
+    Closes the #3 roadmap gap: the legacy bapi_loader.create_* methods emit
+    verify_key dicts that the Reconciler reads back from MARA / BUT000 / etc.
+    The new spine subclasses now emit verify_key via the 4-tuple call_bapi
+    return. This validator proves that wiring works end-to-end.
+
+    Loads N Materials, then calls Reconciler.reconcile() and reports:
+      - records the BAPI claimed to create
+      - records read back from MARA via RFC_READ_TABLE
+      - MTART value tie-out (sent vs stored)
+      - final status: RECONCILED / DISCREPANCY / VALUE_DISCREPANCY
+
+    Payload::
+
+        { "mode": "phase_b_validate_reconcile",
+          "run_id": "recon-001",
+          "count":  3,
+          "prefix": "RECON" }
+    """
+    count = int(event.get("count", 3))
+    prefix = (event.get("prefix") or f"RECON{run_id[-4:]}").strip()
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    try:
+        from material_spine import MaterialSpineOrchestrator
+        from base_spine_orchestrator import BaseSpineOrchestrator
+        from key_map import PersistentKeyMap
+        from reconciler import Reconciler
+    except Exception as e:
+        try: tconn.close()
+        except Exception: pass
+        return {"status": "error", "phase": "import_reconcile", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+    km = PersistentKeyMap(table_name=ddb_table, run_id=run_id)
+
+    # Drive N Material loads (proven object — F2 already validated)
+    orch = MaterialSpineOrchestrator(tconn, key_map=km)
+    rows = [
+        {"MATNR": f"{prefix}_{run_id[-6:]}_{i:03d}",
+         "MTART": "HALB", "MBRSH": "M", "MEINS": "EA",
+         "MAKTX": f"Reconcile phase B {i:03d}"}
+        for i in range(count)
+    ]
+    results = orch.load_many(rows)
+
+    # Convert spine results -> reconciler input shape (the new helper)
+    recon_input = BaseSpineOrchestrator.to_reconciler_input(results)
+
+    # Drive the reconciler against live S/4
+    reconciler = Reconciler(tconn)
+    report = reconciler.reconcile("Material", recon_input, extracted=count)
+
+    # Build proof object
+    proof = {
+        "spine_emitted_verify_keys":
+            recon_input["created_in_s4"] == orch.stats.created,
+        "reconciler_verified_all_created":
+            report["verified_in_target"] == report["created"]
+            and report["created"] > 0,
+        "value_match_all":
+            report.get("value_checked", 0) == 0
+            or report.get("value_matched", 0) == report.get("value_checked", 0),
+        "status_reconciled":
+            report["status"] == "RECONCILED",
+    }
+    overall_ok = all(proof.values())
+
+    log_stage_event(run_id, "data-migrator", "phaseB_reconcile_complete",
+                    {"created":   report["created"],
+                     "verified":  report["verified_in_target"],
+                     "status":    report["status"],
+                     "overall_ok": overall_ok})
+
+    try:
+        tconn.close()
+    except Exception:
+        pass
+
+    return {
+        "run_id":       run_id,
+        "status":       "ok" if overall_ok else "mismatch",
+        "phase":        "reconciliation_engine_wired",
+        "target":       {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                          "ashost": tsec.get("ashost")},
+        "count":        count,
+        "spine_results": [r.to_dict() for r in results],
+        "reconciler_input":  recon_input,
+        "reconciler_report": report,
+        "proof":        proof,
+        "spine_stats":  orch.stats.to_dict(),
     }

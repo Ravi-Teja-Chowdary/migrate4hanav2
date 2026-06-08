@@ -106,6 +106,12 @@ class LoadResult:
     partner_rows:  int = 0
     condition_rows: int = 0
     longtext_calls: int = 0
+    # verify_key: post-load reconciler input. Shape:
+    #   {"table": "MARA", "key": {"MATNR": "..."}, "values": {"MTART": "..."}}
+    # The reconciler reads it back from the target system of record to prove
+    # the record actually persisted (not just that the BAPI said OK). Optional
+    # so subclasses can opt in incrementally without breaking older shapes.
+    verify_key:    Optional[dict] = None
 
     def to_dict(self) -> dict:
         return {
@@ -117,6 +123,7 @@ class LoadResult:
             "partner_rows": self.partner_rows,
             "condition_rows": self.condition_rows,
             "longtext_calls": self.longtext_calls,
+            "verify_key": self.verify_key,
         }
 
 
@@ -381,18 +388,30 @@ class BaseSpineOrchestrator(ABC):
         try:
             bapi_result = self.call_bapi(payload)
         except Exception as e:
-            return self._dead(result, DEAD_LETTER_BAPI, f"BAPI call raised: {e}")
+            import traceback as _tb
+            tb_tail = _tb.format_exc().splitlines()[-5:]
+            return self._dead(result, DEAD_LETTER_BAPI,
+                              f"BAPI call raised: {type(e).__name__}: {e} | tb: {' || '.join(tb_tail)}")
 
-        # call_bapi may return (tgt_key, msgs) - classification is INFERRED from
-        # the key relationship - or (tgt_key, msgs, disposition_hint) for
-        # subclasses that need to signal matched_existing explicitly (e.g. Bank
-        # where the target key always equals the source key by SAP convention).
+        # call_bapi may return:
+        #   (tgt_key, msgs)                                      - 2-tuple, legacy
+        #   (tgt_key, msgs, disposition_hint)                    - 3-tuple, explicit class
+        #   (tgt_key, msgs, disposition_hint, verify_key)        - 4-tuple, reconciler-ready
+        # The verify_key is a dict {"table": ..., "key": {...}, "values": {...}}
+        # that the post-load reconciler reads back to prove persistence.
         disp_hint: Optional[str] = None
-        if isinstance(bapi_result, tuple) and len(bapi_result) == 3:
-            tgt_key, msgs, disp_hint = bapi_result
+        verify_key: Optional[dict] = None
+        if isinstance(bapi_result, tuple):
+            if len(bapi_result) == 4:
+                tgt_key, msgs, disp_hint, verify_key = bapi_result
+            elif len(bapi_result) == 3:
+                tgt_key, msgs, disp_hint = bapi_result
+            else:
+                tgt_key, msgs = bapi_result
         else:
             tgt_key, msgs = bapi_result
         result.messages = msgs or []
+        result.verify_key = verify_key
         if not tgt_key:
             return self._dead(result, DEAD_LETTER_BAPI, "BAPI returned no target key")
 
@@ -501,3 +520,28 @@ class BaseSpineOrchestrator(ABC):
                 break
             out.append(self.load_one(row))
         return out
+
+    @staticmethod
+    def to_reconciler_input(results: list) -> dict:
+        """Convert a list of LoadResults into the dict shape the post-load
+        Reconciler.reconcile(obj, load_result) expects:
+
+            {"attempted": N,
+             "created_in_s4": M,
+             "created_keys": [verify_key dict, ...]}
+
+        Only records with a non-None ``verify_key`` AND a status indicating
+        successful persistence (created / matched_existing / remapped) are
+        included. Dead-letters are excluded because there's nothing in the
+        target to reconcile."""
+        attempted = len(results)
+        created_keys = []
+        countable = (DISP_CREATED, DISP_MATCHED_EXISTING, DISP_REMAPPED)
+        for r in results:
+            if r.status in countable and r.verify_key:
+                created_keys.append(r.verify_key)
+        return {
+            "attempted":      attempted,
+            "created_in_s4":  len(created_keys),
+            "created_keys":   created_keys,
+        }

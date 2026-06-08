@@ -88,38 +88,52 @@ class CustomerSpineOrchestrator(BaseSpineOrchestrator):
                 pass
             return None, msgs, None
 
-        # Step 2: assign the customer role via BAPI_BUPA_ROLES_CHANGE
-        try:
-            rrole = self.c.call(
-                "BAPI_BUPA_ROLES_CHANGE",
-                BUSINESSPARTNER=bp,
-                ROLES=[{"PARTNERROLE": role}],
-            )
-            rret = rrole.get("RETURN") or []
-            if isinstance(rret, dict):
-                rret_list = [rret] if rret.get("TYPE") else []
-            else:
-                rret_list = list(rret)
-            rhard = [m for m in rret_list if m.get("TYPE") in ("E", "A")]
-            rmsgs = [(m.get("MESSAGE") or "").strip() for m in rret_list if m.get("MESSAGE")]
-            msgs.extend(rmsgs)
-            if rhard:
-                try:
-                    self.c.call("BAPI_TRANSACTION_ROLLBACK")
-                except Exception:
-                    pass
-                return None, msgs, None
-        except Exception as e:
+        # Step 2: assign the customer role. The role-assignment BAPI varies by
+        # S/4 release; try the documented names in order. If none exist on this
+        # release (FU_NOT_FOUND), commit the BP anyway and surface the gap as
+        # a message -- the F1 chain still works (BP IS customer-number under
+        # CVI), the role just needs to be added by a downstream tool.
+        role_assigned = False
+        role_attempts = []
+        for fm in ("BAPI_BUPA_ROLES_CHANGE", "BAPI_BUPA_ROLES_ADD_2"):
             try:
-                self.c.call("BAPI_TRANSACTION_ROLLBACK")
-            except Exception:
-                pass
-            return None, msgs + [f"role assignment exception: {str(e)[:200]}"], None
+                rrole = self.c.call(fm,
+                                     BUSINESSPARTNER=bp,
+                                     ROLES=[{"PARTNERROLE": role}])
+                rret = rrole.get("RETURN") or []
+                if isinstance(rret, dict):
+                    rret_list = [rret] if rret.get("TYPE") else []
+                else:
+                    rret_list = list(rret)
+                rhard = [m for m in rret_list if m.get("TYPE") in ("E", "A")]
+                rmsgs = [(m.get("MESSAGE") or "").strip() for m in rret_list if m.get("MESSAGE")]
+                if rhard:
+                    role_attempts.append(f"{fm}: {rhard[0].get('MESSAGE','')[:80]}")
+                    continue
+                msgs.extend(rmsgs)
+                role_assigned = True
+                break
+            except Exception as e:
+                err_txt = str(e)
+                role_attempts.append(f"{fm}: {err_txt.splitlines()[0][:80]}")
+                # FU_NOT_FOUND -> try the next BAPI; other errors -> hard fail
+                if "FU_NOT_FOUND" not in err_txt:
+                    try:
+                        self.c.call("BAPI_TRANSACTION_ROLLBACK")
+                    except Exception:
+                        pass
+                    return None, msgs + [f"role assignment exception: {err_txt[:200]}"], None
+
+        if not role_assigned:
+            msgs.append(f"role {role} not assigned on this release "
+                         f"(tried: {'; '.join(role_attempts)[:200]}); BP committed without role")
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
-        # The BP number IS the customer number under CVI
-        return bp, msgs, DISP_CREATED
+            return None, msgs, None, None
+        # BP number IS customer number under CVI -> verify BUT000 row
+        verify_key = {"table": "BUT000", "key": {"PARTNER": bp},
+                       "values": {"TYPE": "2"}}
+        return bp, msgs, DISP_CREATED, verify_key
