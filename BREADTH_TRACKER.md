@@ -6,7 +6,7 @@ Recipe per object: probe BAPI/OData + ECC source → `create_<obj>` (+ idempoten
 → discovery if needed → wire 4 files (`bapi_loader`, `unified_loader` ×2, `handler`) → live
 load+reconcile RECONCILED → commit. See `BREADTH_BUILDOUT_PROMPT.md` and `SPINE_PROMOTION_GUIDE.md`.
 
-## Spine-promoted to the F2 promotion factory (✨ 17)
+## Spine-promoted to the F2 promotion factory (✨ 21)
 **Material** (live-verified F2 Phase B 2026-06-07: 3 + 25 = 28 real Materials created in real S/4 via the spine) ·
 **Bank** · **ProfitCenter** · **CostCenter** · **Equipment**
 (promotion batch 1, 2026-06-08 — 17 unit tests green, registered via @register_spine, drop-in via UnifiedLoader._load_via_spine)
@@ -20,14 +20,17 @@ load+reconcile RECONCILED → commit. See `BREADTH_BUILDOUT_PROMPT.md` and `SPIN
 **PurchaseRequisition** · **PurchaseOrder** · **PurchaseContract** · **SalesOrder**
 (promotion batch 4, 2026-06-09 — 16 unit tests green; FIRST transactional documents on the spine; tricky shapes: internal numbering + cc_org gates, vendor harmonization via F1 PersistentKeyMap when registry vendor not purchasing-ready, TESTRUN-validated contract-capable vendor + per-org caching, coherent target sales-area discovery [KNVV ∩ MVKE] + customer harmonization + default order-type fallback)
 
+**OpenAR** · **OpenAP** · **Batch** · **InventoryBalance**
+(promotion batch 5, 2026-06-09 — 17 unit tests green; balance + FI postings; tricky shapes: KNB1/LFB1 recon-account-ready partner harmonization with same BAPI but different ACCOUNT*+DOC_TYPE shapes per kind, batch-managed (MARC.XCHPF) material harmonization with collision-safe CHARG suffixing, mvt-561 initial-stock posting with MM-period self-heal that parses "period YYYY/MM" from the BAPI error and retries on the 15th of the open period)
+
 ## Live today on the legacy bapi_loader path (✅ 25)
-BusinessPartner · Customer · Vendor · ~~Material~~ ✨ · ExchangeRates · ~~OpenPO~~ ✨ · OpenAR · OpenAP ·
+BusinessPartner · Customer · Vendor · ~~Material~~ ✨ · ExchangeRates · ~~OpenPO~~ ✨ · ~~OpenAR~~ ✨ · ~~OpenAP~~ ✨ ·
 ~~CostCenter~~ ✨ · ~~ProfitCenter~~ ✨ · ~~FixedAsset~~ ✨ · ~~Bank~~ ✨ · ~~InternalOrder~~ ✨ · ~~Equipment~~ ✨ ·
 ~~FunctionalLocation~~ ✨ · ~~Characteristic~~ ✨ · ~~Class~~ ✨ · ~~CostElementGroup~~ ✨ ·
 ~~ProfitCenterGroup~~ ✨ · ~~Project~~ ✨ · ~~PurchaseRequisition~~ ✨ · ~~OpenSO~~ ✨ ·
-~~PurchaseContract~~ ✨ · Batch · InventoryBalance
+~~PurchaseContract~~ ✨ · ~~Batch~~ ✨ · ~~InventoryBalance~~ ✨
 
-(The 17 with strikethrough have ALSO been promoted to the spine; the legacy bapi_loader path still works as fallback during transition.)
+(The 21 with strikethrough have ALSO been promoted to the spine; the legacy bapi_loader path still works as fallback during transition. The 4 still on legacy — BusinessPartner / Customer / Vendor / ExchangeRates — are deferred because they need the BP-led-numbering CVI migration path or a custom reconciler shape rather than direct BAPI promotion.)
 
 ## Route to non-BAPI lane (🔀 — evidence-based lane decision, not a gap)
 - **Routing** (PLKO) — `BAPI_ROUTING_CREATE` exists but returns "S" with empty TASK_LIST_GROUP
