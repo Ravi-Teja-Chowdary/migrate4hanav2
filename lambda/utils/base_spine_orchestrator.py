@@ -339,7 +339,8 @@ class BaseSpineOrchestrator(ABC):
 
     def __init__(self, conn, *, key_map=None, transformer=None,
                  bapi_field_catalog: Optional[dict] = None,
-                 dry_run: bool = False, target_release: str = ""):
+                 dry_run: bool = False, target_release: str = "",
+                 sink_router=None, tenant_id: str = "default"):
         if not self.object_type or not self.source_key_field:
             raise ValueError("BaseSpineOrchestrator subclass must set object_type "
                              "and source_key_field class attributes")
@@ -349,6 +350,13 @@ class BaseSpineOrchestrator(ABC):
         self.bapi_field_catalog = bapi_field_catalog or {}
         self.dry_run       = dry_run
         self.target_release = target_release
+        # WS4 pillar 3: multi-cloud SinkRouter. Optional — when None the
+        # spine behaves identically to pre-WS4. When set, every successful
+        # create / match / remap fans the transformed row out to Snowflake,
+        # Salesforce, S3 Parquet, EventBridge, etc. in parallel with the
+        # BAPI write. Dead-letters are NOT fanned out.
+        self.sink_router   = sink_router
+        self.tenant_id     = tenant_id
         self.stats         = SpineStats()
         self._lock         = threading.Lock()
 
@@ -397,6 +405,7 @@ class BaseSpineOrchestrator(ABC):
                                         transformed, cached_target)
                 with self._lock:
                     self.stats.matched_existing += 1
+                self._fan_out_to_sinks(result, transformed)
                 return result
 
         # 3) FK resolution via key_map (Customer/Vendor/Material lookups for
@@ -447,6 +456,7 @@ class BaseSpineOrchestrator(ABC):
             result.target_key = self._dry_run_target(src_key, transformed)
             with self._lock: self.stats.created += 1
             self._register_key(result)
+            self._fan_out_to_sinks(result, transformed)
             return result
 
         # 7) execute BAPI
@@ -509,6 +519,8 @@ class BaseSpineOrchestrator(ABC):
 
         # 9) register in the cross-run key_map for dependent objects
         self._register_key(result)
+        # 10) WS4 pillar 3: multi-cloud fan-out (Snowflake/SF/Parquet/EventBridge)
+        self._fan_out_to_sinks(result, transformed)
         return result
 
     # ── subclass hooks (override these) ───────────────────────────────────────
@@ -594,6 +606,38 @@ class BaseSpineOrchestrator(ABC):
     @staticmethod
     def _dry_run_target(src_key: str, _row: dict) -> str:
         return src_key or "<dry-run>"
+
+    # ── WS4 pillar 3: multi-cloud sink fan-out ───────────────────────────────
+    def _fan_out_to_sinks(self, result: LoadResult, transformed: dict) -> None:
+        """Mirror the just-loaded row to non-SAP destinations via SinkRouter.
+
+        Fires on created / matched_existing / remapped. Skipped on dead-letter
+        or when no sink_router was injected. A router-level exception is
+        swallowed into result.messages so a downstream sink failure cannot
+        flip an already-successful BAPI write into a failed LoadResult.
+        """
+        if self.sink_router is None or not result.target_key:
+            return
+        if result.status not in (DISP_CREATED, DISP_MATCHED_EXISTING, DISP_REMAPPED):
+            return
+        try:
+            self.sink_router.fan_out(
+                self.object_type, result.target_key,
+                transformed, self.tenant_id)
+        except Exception as e:
+            result.messages.append(
+                f"sink fan-out warning: {type(e).__name__}: {str(e)[:120]}")
+
+    def flush_sinks_at_end_of_run(self) -> list:
+        """Flush every registered sink's pending buffer. Lambda handler calls
+        this after load_many() completes. Returns per-sink flush summaries
+        for telemetry."""
+        if self.sink_router is None:
+            return []
+        try:
+            return self.sink_router.flush_all()
+        except Exception as e:
+            return [{"sink": "router", "error": str(e)[:200]}]
 
     # ── bulk entrypoint (used by UnifiedLoader for parallel pools) ───────────
     def load_many(self, rows: list, *, max_rows: Optional[int] = None) -> list:
