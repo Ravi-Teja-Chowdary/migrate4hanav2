@@ -1557,6 +1557,7 @@ def _phase_b_validate_f5(event, run_id):
     latencies_ms = []
     status_breakdown = {}
     dead_letter_codes = {}
+    dead_letter_samples = []   # first 5 dead-letters with messages
     ext_rows_total = 0
 
     t0 = time.perf_counter()
@@ -1567,6 +1568,12 @@ def _phase_b_validate_f5(event, run_id):
         status_breakdown[res.status] = status_breakdown.get(res.status, 0) + 1
         if res.dead_letter:
             dead_letter_codes[res.dead_letter] = dead_letter_codes.get(res.dead_letter, 0) + 1
+            if len(dead_letter_samples) < 5:
+                dead_letter_samples.append({
+                    "src_key": res.source_key,
+                    "code":    res.dead_letter,
+                    "msg":     (res.messages or [""])[0][:300],
+                })
         ext_rows_total += res.extension_rows
     wall_clock_s = round(time.perf_counter() - t0, 3)
 
@@ -1591,6 +1598,7 @@ def _phase_b_validate_f5(event, run_id):
         "max_ms":             round(max(latencies_ms), 1) if latencies_ms else 0,
         "status_breakdown":   status_breakdown,
         "dead_letter_codes":  dead_letter_codes,
+        "dead_letter_samples": dead_letter_samples,
         "extension_rows":     ext_rows_total,
         "spine_stats":        orch.stats.to_dict(),
         "key_map_writes":     km.persistence_stats(),
