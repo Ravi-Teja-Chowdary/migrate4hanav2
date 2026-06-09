@@ -58,6 +58,12 @@ try:
         # Batch 6: CVI + exchange rates (closes the live-25 sweep)
         "business_partner_spine", "customer_spine", "vendor_spine",
         "exchange_rates_spine",
+        # Batch 7: PP + MM + SD extension (beyond live-25)
+        "work_center_spine", "info_record_spine", "quotation_spine",
+        "outbound_delivery_spine",
+        # Batch 8: SD docs + PP planning
+        "inquiry_spine", "billing_document_spine", "planned_order_spine",
+        "production_bom_spine",
     ):
         try:
             __import__(_spine_module)
@@ -222,6 +228,15 @@ class UnifiedLoader:
         "Batch":                "BAPI_BATCH_CREATE",
         "InventoryBalance":     "BAPI_GOODSMVT_CREATE",
         "ExchangeRates":        "BAPI_EXCHRATE_CREATEMULTIPLE",
+        # Batch 7 + 8 -- beyond live-25
+        "WorkCenter":           "BAPI_WORKCENTER_CREATE",
+        "InfoRecord":           "BAPI_INFORECORD_CREATE",
+        "Quotation":            "BAPI_QUOTATION_CREATEFROMDATA",
+        "OutboundDelivery":     "BAPI_OUTB_DELIVERY_CREATESLS",
+        "Inquiry":              "BAPI_INQUIRY_CREATEFROMDATA",
+        "BillingDocument":      "BAPI_BILLINGDOC_CREATEMULTIPLE",
+        "PlannedOrder":         "BAPI_PLANNEDORDER_CREATE",
+        "ProductionBOM":        "CSAP_MAT_BOM_CREATE",
     }
 
     def hydrate_catalog_for(self, obj: str) -> int:

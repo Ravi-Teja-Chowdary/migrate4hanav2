@@ -119,6 +119,15 @@ _OBJECT_HOME_TABLE: dict = {
     "BusinessPartner":    ("BUT000",     "PARTNER"),
     "Customer":           ("BUT000",     "PARTNER"),
     "Vendor":             ("BUT000",     "PARTNER"),
+    # Batch 7 + 8 -- beyond live-25
+    "WorkCenter":         ("CRHD",       "OBJID"),
+    "InfoRecord":         ("EINA",       "INFNR"),
+    "Quotation":          ("VBAK",       "VBELN"),
+    "OutboundDelivery":   ("LIKP",       "VBELN"),
+    "Inquiry":            ("VBAK",       "VBELN"),
+    "BillingDocument":    ("VBRK",       "VBELN"),
+    "PlannedOrder":       ("PLAF",       "PLNUM"),
+    "ProductionBOM":      ("STKO",       "STLNR"),
 }
 
 
