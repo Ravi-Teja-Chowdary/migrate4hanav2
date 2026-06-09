@@ -52,8 +52,51 @@ load+reconcile RECONCILED → commit. See `BREADTH_BUILDOUT_PROMPT.md` and `SPIN
   (**InventoryBalance** is now LIVE via BAPI_GOODSMVT_CREATE mvt 561 — see above.)
 - **NumberRanges / CustomZTable** — out-of-spine by design (cutover artifacts / Z-tables are project-specific). Lane: **manual_gate**.
 
+## Spine-promoted batches 7+8 (✨ 8 more — beyond live-25, 2026-06-09)
+
+**WorkCenter** · **InfoRecord** · **Quotation** · **OutboundDelivery**
+(promotion batch 7, 2026-06-09 — 12 unit tests green; first batch beyond
+live-25. PP master + MM purchasing master + SD pre-sales + SD shipping.
+Tricky shapes: WERKS-gated idempotency probe; dual F1 resolve [Material
++ Vendor]; SO-shape mirror with DOC_TYPE=AG; F1-resolved referenced SO
+before create-from-SO.)
+
+**Inquiry** · **BillingDocument** · **PlannedOrder** · **ProductionBOM**
+(promotion batch 8, 2026-06-09 — 9 unit tests green; SD docs + PP planning.
+Smart REF_TYPE routing on BillingDocument [SO -> SalesOrder registry,
+DLV -> OutboundDelivery registry]; TRIPLE-deep F1 resolve on
+ProductionBOM [parent + every child] with unresolved-count metric.)
+
+**Spine roster now: 33 objects, 122 unit tests across batches 1-8.**
+
+## Migration Cockpit file lane (📁 20 objects — single-framework registration, 2026-06-09)
+
+`lambda/utils/mc_file_exporter.py` registers 20 pseudo-spine subclasses
+under the BaseSpineOrchestrator registry covering the catalog objects
+that DON'T have a usable direct create BAPI (probed and documented above).
+UnifiedLoader.load_object() routes these the SAME as BAPI-lane objects --
+caller sees `mechanism = "spine/MCFile_<obj>"` and an identical
+load_result shape. Per-row work is buffered; `mc_file_exporter.flush_all`
+at end-of-run uploads each object's accumulated rows to S3 as a CSV
+conforming to the SAP Migration Cockpit template, plus a Z-customs
+sidecar JSON if any source row carried ZZ_/YY_/CI_ columns.
+
+Covered (column-validated against the MC template's mandatory column spec):
+
+  **Routing** · **ActivityType** · **StatisticalKeyFigure** · **CommitmentItem** ·
+  **GLAccount** · **TaskList** · **InspPlan** · **InspMethod** · **ServiceMaster** ·
+  **SourceList** · **HouseBank** · **HouseBankAccount** · **ConditionRecord** ·
+  **CustomerHierarchy** · **BOMItem** · **Network** · **WBSElement** · **OrgUnit** ·
+  **Position** · **EmployeeAction**
+
+9 unit tests green covering: per-template mandatory validation, row
+projection onto the template column set, Z-column sidecar routing,
+CSV flush + buffer reset, customs sidecar JSON when present, omission
+when absent, multi-object flush_all visiting every accumulated buffer,
+and UnifiedLoader spine-registry routing.
+
 ## Honest coverage
-**25 BAPI-loaded (load+reconcile RECONCILED) + 102 routed-extract (MC/IDoc lanes for tool-consumed templates) = 127 catalog objects with explicit lane decisions today.**
+**33 BAPI-loaded (load+reconcile RECONCILED) + 20 MC-file-lane (single framework, S3-uploaded CSVs) + 49 still-routed-extract = 102 catalog objects with explicit lane decisions today.**
 
 The full Migration-Cockpit catalog is ~120; we now cover the standard MC catalog across MM
 (SourceList, InfoRecord, BOM, ScheduleAgreement, MaterialStock, ...), SD (Quotation, Inquiry,

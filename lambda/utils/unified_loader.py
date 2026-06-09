@@ -64,6 +64,8 @@ try:
         # Batch 8: SD docs + PP planning
         "inquiry_spine", "billing_document_spine", "planned_order_spine",
         "production_bom_spine",
+        # MC file lane: 20 catalog objects under one framework
+        "mc_file_exporter",
     ):
         try:
             __import__(_spine_module)
