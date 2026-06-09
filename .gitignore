@@ -74,10 +74,17 @@ terraform/environments/dev/.terraform/
 terraform/environments/dev/terraform.tfstate*
 terraform/environments/**/.terraform/
 terraform/environments/**/terraform.tfstate*
+terraform.tfstate
+terraform.tfstate.*
 *.tfplan
 .terraform.lock.hcl
 crash.log
 deployment_outputs.txt
+
+# Phase B / scale-probe runtime artifacts (test outputs, regenerated per run)
+phase-b-*.json
+parallel-scale-*.json
+single-baseline.json
 
 # Entity Resolution outputs
 entity-resolution-output/
