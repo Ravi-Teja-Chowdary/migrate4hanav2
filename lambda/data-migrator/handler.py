@@ -2386,11 +2386,20 @@ def _phase_b_validate_production_path(event, run_id):
         return {"status": "error", "phase": "import_production_path", "run_id": run_id,
                 "error": f"{type(e).__name__}: {str(e)[:240]}"}
 
-    # Synthetic rows for the object under test
+    # Synthetic rows for the object under test. Each generator yields rows
+    # whose source_key derives from `run_id[-6:]` so per-invocation
+    # uniqueness is automatic and the F1 ledger-hit guard doesn't
+    # short-circuit a fresh proof.
+    seed = run_id[-6:].upper()
     if obj_name == "Material":
-        rows = [{"MATNR": f"PROD_{run_id[-6:]}_{i:03d}",
+        rows = [{"MATNR": f"PROD_{seed}_{i:03d}",
                   "MTART": "HALB", "MBRSH": "M", "MEINS": "EA",
                   "MAKTX": f"Production-path test {i:03d}"}
+                 for i in range(count)]
+    elif obj_name == "BusinessPartner":
+        rows = [{"BPARTNER": f"PROD_BP_{seed}_{i:03d}",
+                  "CATEGORY": "2",
+                  "NAME":     f"PROD path test org {seed} {i:03d}"}
                  for i in range(count)]
     else:
         # Generic shape for other objects; caller can override via event["rows"]

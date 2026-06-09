@@ -14,6 +14,17 @@ variable "deploy_lift_and_shift" {
   default = false
 }
 
+# BAPI / in-place state machine — opt-in. Deploys an INDEPENDENT state machine
+# that drives the data-migrator lambda's UnifiedLoader + 25-spine roster path.
+# Set to true for customer landscapes running BAPI/in-place mode (not
+# lift-and-shift). Default false to preserve current prod posture; flipping to
+# true adds exactly 3 net-new resources (sfn state machine + log group +
+# output).
+variable "deploy_bapi_inplace" {
+  type    = bool
+  default = false
+}
+
 # ── ECS / Fargate variables (heavy-compute stages) ──
 variable "ecs_cluster_arn" {
   type        = string
@@ -1087,4 +1098,60 @@ resource "aws_cloudwatch_log_group" "sfn_ls" {
 output "lift_and_shift_state_machine_arn" {
   value       = var.deploy_lift_and_shift ? aws_sfn_state_machine.lift_and_shift[0].arn : ""
   description = "ARN of the lift-and-shift state machine (empty if not deployed)"
+}
+
+###############################################################################
+# BAPI / in-place pipeline (NEW 2026-06-09)
+###############################################################################
+#
+# Parallel-to-lift-and-shift state machine for customers running the
+# BAPI/in-place migration mode (data-migrator lambda's UnifiedLoader -> 25-
+# spine roster). Independent state machine, independent log group, opt-in via
+# var.deploy_bapi_inplace (default false), so deploying this module does NOT
+# disturb the existing lift-and-shift or main migration_pipeline state
+# machines for current customers.
+#
+# Per-object fan-out invokes data-migrator with mode
+# `phase_b_validate_production_path` -- the same code path proven against
+# live S/4 on 2026-06-09 (UnifiedLoader -> spine -> Reconciler, RECONCILED on
+# Material + BusinessPartner). Each per-object result already carries the
+# reconciler verdict and verify_key tie-out, so the state machine just
+# orchestrates and gates.
+#
+# To enable for a customer landscape: set deploy_bapi_inplace=true in the
+# environment tfvars and `terraform apply`. Plan should show exactly 3 net-
+# new resources (sfn state machine + log group + this output).
+#
+resource "aws_sfn_state_machine" "bapi_inplace" {
+  count    = var.deploy_bapi_inplace ? 1 : 0
+  name     = "migrate4hana-bapi-inplace-${var.environment}"
+  role_arn = aws_iam_role.step_functions.arn
+
+  definition = replace(
+    file("${path.module}/bapi_inplace_pipeline.asl.json"),
+    "$${DataMigratorArn}",
+    local.ls_arns.DataMigratorArn,
+  )
+
+  logging_configuration {
+    log_destination        = "${aws_cloudwatch_log_group.sfn_bapi[0].arn}:*"
+    include_execution_data = true
+    level                  = "ALL"
+  }
+
+  tags = {
+    Name     = "migrate4hana-bapi-inplace-${var.environment}"
+    Pipeline = "bapi-inplace"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "sfn_bapi" {
+  count             = var.deploy_bapi_inplace ? 1 : 0
+  name              = "/aws/stepfunctions/migrate4hana-bapi-inplace-${var.environment}"
+  retention_in_days = 30
+}
+
+output "bapi_inplace_state_machine_arn" {
+  value       = var.deploy_bapi_inplace ? aws_sfn_state_machine.bapi_inplace[0].arn : ""
+  description = "ARN of the BAPI/in-place state machine (empty if not deployed)"
 }

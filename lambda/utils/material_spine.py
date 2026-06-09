@@ -121,9 +121,20 @@ class MaterialSpineOrchestrator(BaseSpineOrchestrator):
           row["_alt_uoms"]  -> list of MARM rows
           row["_descs"]     -> list of MAKT rows (one per language)
         """
-        matnr = (row.get("MATNR") or "").strip()
+        # MATNR is stored UPPERCASED in MARA (SAP CHAR40 convention) regardless
+        # of the case sent to BAPI_MATERIAL_SAVEDATA. The reconciler's
+        # RFC_READ_TABLE on MARA uses a case-sensitive WHERE clause, so if we
+        # let lowercase characters through the BAPI we get a verify_key whose
+        # MATNR no longer matches the stored row -> spurious DISCREPANCY at
+        # tie-out. Normalize here so what we send IS what gets stored AND
+        # what the verify_key key reads back.
+        matnr = (row.get("MATNR") or "").strip().upper()
         if not matnr:
             raise ValueError("MATNR is mandatory")
+        # Ensure the source_key on the orchestrator's load_one matches the
+        # uppercased target (otherwise F1 idempotency would miss-classify
+        # the next re-load).
+        row["MATNR"] = matnr
 
         # HEADDATA (always required)
         headdata = {"MATERIAL": matnr, "BASIC_VIEW": "X"}

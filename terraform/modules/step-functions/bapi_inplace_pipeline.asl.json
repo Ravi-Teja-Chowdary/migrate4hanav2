@@ -1,0 +1,102 @@
+{
+  "Comment": "Migrate4HANA BAPI / in-place pipeline. Fans out per-object loads through the data-migrator lambda's UnifiedLoader -> 25-spine roster path, then reconciles each result via Reconciler.reconcile against live S/4 SoR tables (MARA / BUT000 / EKKO / VBAK / BSID / BSIK / etc.). For BAPI/in-place customers; separate from the lift-and-shift state machine which routes via MC/LTMOM/IDOC handlers.",
+  "StartAt": "Stage0_PrepareRun",
+  "States": {
+    "Stage0_PrepareRun": {
+      "Type": "Pass",
+      "Comment": "Normalize the caller payload into the per-object iteration shape the DistributedMap expects.",
+      "Parameters": {
+        "run_id.$": "$$.Execution.Name",
+        "tenant_id.$": "$.tenant_id",
+        "objects.$": "$.objects"
+      },
+      "ResultPath": "$.input",
+      "Next": "Stage1_FanOutSpineLoads"
+    },
+    "Stage1_FanOutSpineLoads": {
+      "Type": "Map",
+      "Comment": "Parallel per-object loads. Each invocation drives UnifiedLoader.load_object(obj, rows, max_rows) which routes through the spine registry (25 promoted objects) and emits verify_key dicts the Reconciler can consume.",
+      "ItemsPath": "$.input.objects",
+      "MaxConcurrency": 8,
+      "Iterator": {
+        "StartAt": "InvokeDataMigratorPerObject",
+        "States": {
+          "InvokeDataMigratorPerObject": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "TimeoutSeconds": 900,
+            "Retry": [
+              {
+                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 5,
+                "MaxAttempts": 2,
+                "BackoffRate": 2.0
+              }
+            ],
+            "Catch": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "ResultPath": "$.error",
+                "Next": "RecordObjectFailure"
+              }
+            ],
+            "Parameters": {
+              "FunctionName": "${DataMigratorArn}",
+              "Payload": {
+                "mode":      "phase_b_validate_production_path",
+                "object.$":  "$.object",
+                "count.$":   "$.count",
+                "tenant_id.$": "$$.Execution.Input.tenant_id"
+              }
+            },
+            "ResultPath": "$.result",
+            "End": true
+          },
+          "RecordObjectFailure": {
+            "Type": "Pass",
+            "Parameters": {
+              "object.$":  "$.object",
+              "error.$":   "$.error",
+              "status":    "failed"
+            },
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.loads",
+      "Next": "Stage2_AggregateReconciliation"
+    },
+    "Stage2_AggregateReconciliation": {
+      "Type": "Pass",
+      "Comment": "Aggregate per-object reconciler reports. Each iterator result already carries the reconciler verdict from _phase_b_validate_production_path (status=RECONCILED / DISCREPANCY / VALUE_DISCREPANCY / NOT_VERIFIABLE / NO_LOAD).",
+      "Parameters": {
+        "run_id.$":     "$.input.run_id",
+        "tenant_id.$":  "$.input.tenant_id",
+        "object_count.$": "States.ArrayLength($.loads)",
+        "results.$":    "$.loads"
+      },
+      "Next": "Stage3_VerdictGate"
+    },
+    "Stage3_VerdictGate": {
+      "Type": "Choice",
+      "Comment": "Binary gate: any per-object result.reconciler_report.status != RECONCILED routes to a manual review. Conservative default; can be relaxed per customer SLA.",
+      "Default": "MigrationComplete",
+      "Choices": [
+        {
+          "Variable": "$.results[0].result.Payload.status",
+          "StringEquals": "mismatch",
+          "Next": "ManualReviewBlock"
+        }
+      ]
+    },
+    "ManualReviewBlock": {
+      "Type": "Fail",
+      "Cause": "BAPI in-place pipeline: at least one object reconciler reported a discrepancy. Inspect per_object[*].reconciler_report.by_table for the gap.",
+      "Error": "RECONCILE_DISCREPANCY"
+    },
+    "MigrationComplete": {
+      "Type": "Succeed",
+      "Comment": "All objects loaded via the spine path AND reconciled against live target SoR. Run audit-ledger captures the per-object verify_key tie-out."
+    }
+  }
+}
