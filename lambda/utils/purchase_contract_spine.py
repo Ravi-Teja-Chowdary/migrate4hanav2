@@ -107,12 +107,12 @@ class PurchaseContractSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED
         if payload.get("_no_supplier"):
-            return None, [f"no purchasing-ready supplier for org {payload.get('_ekorg')}"], None
+            return None, [f"no purchasing-ready supplier for org {payload.get('_ekorg')}"], None, None
         if payload.get("_no_capable_vendor"):
-            return None, [f"no contract-capable supplier in org {payload.get('_ekorg')}"], None
+            return None, [f"no contract-capable supplier in org {payload.get('_ekorg')}"], None, None
 
         src_doc    = payload.pop("_src_doc", "")
         src_vendor = payload.pop("_src_vendor", "")
@@ -126,7 +126,7 @@ class PurchaseContractSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, [f"contract create exception: {str(ex).splitlines()[0]}"], None
+            return None, [f"contract create exception: {str(ex).splitlines()[0]}"], None, None
 
         ret = resp.get("RETURN") or []
         if isinstance(ret, dict):
@@ -141,13 +141,13 @@ class PurchaseContractSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         if vdisp == "harmonized" and self.key_map is not None and src_vendor:
             try:
@@ -155,7 +155,8 @@ class PurchaseContractSpineOrchestrator(BaseSpineOrchestrator):
             except Exception:
                 pass
             msgs.append(f"vendor {src_vendor} harmonized to {tgt_vendor}")
-        return target, msgs, DISP_CREATED
+        vk = {"table": "EKKO", "key": {"EBELN": target}}
+        return target, msgs, DISP_CREATED, vk
 
     # ── helpers ──────────────────────────────────────────────────────────────
     def _contract_payload(self, dtype: str, vendor: str, src_doc: str):

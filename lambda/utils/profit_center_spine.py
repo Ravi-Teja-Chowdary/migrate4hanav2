@@ -87,12 +87,13 @@ class ProfitCenterSpineOrchestrator(BaseSpineOrchestrator):
         return payload
 
     # ── BAPI invocation (pre-flight idempotency probe) ───────────────────────
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list]:
-        from base_spine_orchestrator import DISP_MATCHED_EXISTING
+    def call_bapi(self, payload: dict) -> tuple:
+        from base_spine_orchestrator import DISP_MATCHED_EXISTING, DISP_CREATED
         kokrs = payload["PROFITCENTER_KEY"]["CONTROLLINGAREA"]
         prctr = payload["PROFITCENTER_KEY"]["PROFIT_CTR"]
+        vk = {"table": "CEPC", "key": {"KOKRS": kokrs, "PRCTR": prctr}}
         if self._profit_center_exists(kokrs, prctr):
-            return prctr, [f"profit center {prctr} already exists in {kokrs}"], DISP_MATCHED_EXISTING
+            return prctr, [f"profit center {prctr} already exists in {kokrs}"], DISP_MATCHED_EXISTING, vk
 
         resp = self.c.call("BAPI_PROFITCENTER_CREATE", **payload)
         ret = resp.get("RETURN") or {}
@@ -107,13 +108,13 @@ class ProfitCenterSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs
+            return None, msgs, None, None
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs
-        return prctr, msgs
+            return None, msgs, None, None
+        return prctr, msgs, DISP_CREATED, vk
 
     # ── target probe ─────────────────────────────────────────────────────────
     def _profit_center_exists(self, kokrs: str, prctr: str) -> bool:

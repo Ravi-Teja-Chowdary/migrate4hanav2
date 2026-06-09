@@ -68,18 +68,19 @@ class ClassSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED, DISP_MATCHED_EXISTING
         if payload.get("_no_class_type"):
             ktype = payload.get("_ktype")
-            return None, [f"class type {ktype} not configured in target (TCLA)"], None
+            return None, [f"class type {ktype} not configured in target (TCLA)"], None, None
 
         name    = payload.pop("_name", "")
-        payload.pop("_ktype", None)
+        ktype   = payload.pop("_ktype", "")
         already = payload.pop("_already", False)
+        vk = {"table": "KLAH", "key": {"CLASS": name, "KLART": ktype}}
 
         if already:
-            return name, [f"class {name} already exists"], DISP_MATCHED_EXISTING
+            return name, [f"class {name} already exists"], DISP_MATCHED_EXISTING, vk
 
         resp = self.c.call("BAPI_CLASS_CREATE", **payload)
         ret = resp.get("RETURN") or []
@@ -94,14 +95,14 @@ class ClassSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
-        return name, msgs, DISP_CREATED
+            return None, msgs, None, None
+        return name, msgs, DISP_CREATED, vk
 
     # ── target customizing discovery ─────────────────────────────────────────
     def _class_types(self) -> set:

@@ -89,6 +89,39 @@ DISP_DEAD_LETTER        = "dead_letter"
 CUSTOM_FIELD_PREFIXES = ("ZZ", "YY", "CI_", "Z_", "Y_")
 
 
+# Object_type -> (home_table, primary_key_field). Used by the ledger-hit
+# short-circuit to synthesize a minimal verify_key when the spine doesn't
+# run the BAPI. Subclasses can override _ledger_hit_verify_key() for richer
+# multi-field keys (e.g. composite (CLASS, KLART) for Class).
+_OBJECT_HOME_TABLE: dict = {
+    "Material":           ("MARA",       "MATNR"),
+    "Bank":               ("BNKA",       "BANKL"),
+    "ProfitCenter":       ("CEPC",       "PRCTR"),
+    "CostCenter":         ("CSKS",       "KOSTL"),
+    "Equipment":          ("EQUI",       "EQUNR"),
+    "InternalOrder":      ("AUFK",       "AUFNR"),
+    "FunctionalLocation": ("IFLOT",      "TPLNR"),
+    "FixedAsset":         ("ANLA",       "ANLN1"),
+    "Project":            ("PROJ",       "PSPID"),
+    "Characteristic":     ("CABN",       "ATNAM"),
+    "Class":              ("KLAH",       "CLASS"),
+    "CostElementGroup":   ("SETHEADER",  "SETNAME"),
+    "ProfitCenterGroup":  ("SETHEADER",  "SETNAME"),
+    "PurchaseRequisition":("EBAN",       "BANFN"),
+    "PurchaseOrder":      ("EKKO",       "EBELN"),
+    "PurchaseContract":   ("EKKO",       "EBELN"),
+    "SalesOrder":         ("VBAK",       "VBELN"),
+    "OpenAR":             ("BSID",       "BELNR"),
+    "OpenAP":             ("BSIK",       "BELNR"),
+    "Batch":              ("MCH1",       "CHARG"),
+    "InventoryBalance":   ("MKPF",       "MBLNR"),
+    "ExchangeRates":      ("TCURR",      "FCURR"),
+    "BusinessPartner":    ("BUT000",     "PARTNER"),
+    "Customer":           ("BUT000",     "PARTNER"),
+    "Vendor":             ("BUT000",     "PARTNER"),
+}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Result types
 # ─────────────────────────────────────────────────────────────────────────────
@@ -334,6 +367,29 @@ class BaseSpineOrchestrator(ABC):
         if v_err:
             return self._dead(result, DEAD_LETTER_DQ, v_err)
 
+        # 2.5) F1 ledger short-circuit: if a previous run already migrated this
+        # (object_type, src_key), DO NOT re-call the BAPI. The PersistentKeyMap
+        # is a CROSS-RUN GUARD, not just a cache. Without this check the spine
+        # path burns RFC RTT on every replay of an already-migrated record;
+        # at scale this is the difference between a clean retry and a 2x cost.
+        # The matched_existing result carries a verify_key so reconciliation
+        # still counts the row as verified.
+        if (self.key_map is not None and src_key
+                and not getattr(self, "_skip_ledger_check", False)):
+            try:
+                cached_target = self.key_map.resolve(self.object_type, src_key)
+            except Exception:
+                cached_target = None
+            if cached_target:
+                result.target_key  = cached_target
+                result.status      = DISP_MATCHED_EXISTING
+                result.disposition = DISP_MATCHED_EXISTING + "_ledger_hit"
+                result.verify_key  = self._ledger_hit_verify_key(
+                                        transformed, cached_target)
+                with self._lock:
+                    self.stats.matched_existing += 1
+                return result
+
         # 3) FK resolution via key_map (Customer/Vendor/Material lookups for
         #    dependent objects like SO/PO/BOM)
         try:
@@ -504,6 +560,27 @@ class BaseSpineOrchestrator(ABC):
             return
         self.key_map.add(self.object_type, result.source_key,
                          result.target_key, result.disposition)
+
+    def _ledger_hit_verify_key(self, transformed: dict, target_key: str) -> Optional[dict]:
+        """Produce a minimal verify_key for a ledger-hit short-circuit.
+
+        On a F1 short-circuit we don't run the BAPI, so we don't have the
+        per-object value tie-out the subclass would have built. We DO know:
+          - the object_type's home table (from a class-level OBJECT_TABLE
+            mapping below)
+          - the target key
+
+        The reconciler reads this back from the home table -- existence-only
+        verification, no value tie-out, but enough to count the row as
+        verified and avoid spurious DISCREPANCY at scale.
+
+        Subclasses can override to return a richer verify_key with values.
+        """
+        info = _OBJECT_HOME_TABLE.get(self.object_type)
+        if not info:
+            return None
+        table, key_field = info
+        return {"table": table, "key": {key_field: target_key}}
 
     @staticmethod
     def _dry_run_target(src_key: str, _row: dict) -> str:

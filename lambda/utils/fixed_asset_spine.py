@@ -116,7 +116,7 @@ class FixedAssetSpineOrchestrator(BaseSpineOrchestrator):
         payload["_class_remapped"] = class_remapped
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED, DISP_MATCHED_EXISTING, DISP_REMAPPED
         external       = payload.pop("_external", False)
         src_anln1      = payload.pop("_src_anln1", "")
@@ -124,9 +124,11 @@ class FixedAssetSpineOrchestrator(BaseSpineOrchestrator):
         src_class      = payload.pop("_src_class", "")
         used_class     = payload.pop("_used_class", "")
         class_remapped = payload.pop("_class_remapped", False)
+        bukrs          = (payload.get("KEY", {}) or {}).get("COMPANYCODE", "")
 
         if already_exists:
-            return src_anln1, [f"asset {src_anln1} already exists"], DISP_MATCHED_EXISTING
+            vk = {"table": "ANLA", "key": {"BUKRS": bukrs, "ANLN1": src_anln1}}
+            return src_anln1, [f"asset {src_anln1} already exists"], DISP_MATCHED_EXISTING, vk
 
         resp = self.c.call("BAPI_FIXEDASSET_CREATE1", **payload)
         ret = resp.get("RETURN") or []
@@ -141,21 +143,22 @@ class FixedAssetSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         target = (resp.get("ASSET") or src_anln1 or "").strip()
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         if class_remapped:
             msgs.append(f"asset class {src_class} not valid; used {used_class}")
         if not target:
-            return None, msgs, None
+            return None, msgs, None, None
+        vk = {"table": "ANLA", "key": {"BUKRS": bukrs, "ANLN1": target}}
         # External numbering preserves the key; internal numbering = SAP-assigned -> CREATED
-        return target, msgs, DISP_CREATED
+        return target, msgs, DISP_CREATED, vk
 
     # ── target probes ────────────────────────────────────────────────────────
     def _fixed_asset_exists(self, anln1: str, bukrs: str) -> bool:

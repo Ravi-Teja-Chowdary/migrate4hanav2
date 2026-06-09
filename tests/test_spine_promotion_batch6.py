@@ -139,19 +139,31 @@ def test_customer_happy_path_creates_bp_then_assigns_role():
     print("  [OK] Customer: BP shell created + sold-to role FLCU01 assigned")
 
 
-def test_customer_role_assignment_failure_rolls_back():
+def test_customer_role_assignment_failure_degrades_gracefully():
+    """Updated contract (2026-06-09): role-assignment BAPI varies by S/4
+    release and may return E or FU_NOT_FOUND. On failure, the spine tries
+    BAPI_BUPA_ROLES_ADD_2 as fallback; if BOTH fail, the BP commits anyway
+    with a "role not assigned" message surfacing the gap. The BP IS the
+    customer number under CVI so F1 chain still works -- role can be
+    added by downstream tooling. Old behavior was DEAD_LETTER; new
+    behavior is graceful-degrade."""
     rfc = FakeRfc()
     rfc.script("BAPI_BUPA_CREATE_FROM_DATA",
                 {"RETURN": [{"TYPE": "S"}], "BUSINESSPARTNER": "0001000201"})
     rfc.script("BAPI_BUPA_ROLES_CHANGE",
                 {"RETURN": [{"TYPE": "E", "MESSAGE": "Role not configured for grouping"}]})
+    rfc.script("BAPI_BUPA_ROLES_ADD_2",
+                {"RETURN": [{"TYPE": "E", "MESSAGE": "Role not configured for grouping"}]})
     orch = CustomerSpineOrchestrator(rfc)
     res = orch.load_one({"KUNNR": "SRC_C_X", "NAME1": "Test"})
-    assert res.status == DISP_DEAD_LETTER
-    assert res.dead_letter == DEAD_LETTER_BAPI
-    assert any(c[0] == "BAPI_TRANSACTION_ROLLBACK" for c in rfc.calls)
-    assert any("Role not configured" in m for m in res.messages)
-    print("  [OK] Customer role assignment failure -> rolls back the whole txn")
+    # BP commits even though role failed: target_key is set, status is created
+    assert res.status == DISP_CREATED
+    assert res.target_key == "0001000201"
+    assert any("role" in m.lower() and "not assigned" in m for m in res.messages)
+    # verify_key still emitted on BUT000 -- the BP IS the customer record
+    assert res.verify_key and res.verify_key["table"] == "BUT000"
+    assert res.verify_key["key"]["PARTNER"] == "0001000201"
+    print("  [OK] Customer role failure -> graceful-degrade (BP committed + audit msg)")
 
 
 def test_customer_custom_role_via_cc_org():

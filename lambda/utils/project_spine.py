@@ -73,10 +73,10 @@ class ProjectSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED, DISP_MATCHED_EXISTING, DISP_REMAPPED
         if payload.get("_no_profile"):
-            return None, ["no target project profile discovered"], None
+            return None, ["no target project profile discovered"], None, None
         already   = payload.pop("_already", False)
         src_pid   = payload.pop("_src_pid", "")
         candidates = payload.pop("_candidates", [src_pid])
@@ -85,7 +85,8 @@ class ProjectSpineOrchestrator(BaseSpineOrchestrator):
         co_area   = payload.pop("_co_area", "")
 
         if already:
-            return src_pid, [f"project {src_pid} already exists"], DISP_MATCHED_EXISTING
+            vk = {"table": "PROJ", "key": {"PSPID": src_pid}}
+            return src_pid, [f"project {src_pid} already exists"], DISP_MATCHED_EXISTING, vk
 
         last_err = None
         for cand in candidates:
@@ -123,14 +124,15 @@ class ProjectSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
             except Exception as e:
                 msgs.append(f"commit failed: {e}")
-                return None, msgs, None
+                return None, msgs, None, None
+            vk = {"table": "PROJ", "key": {"PSPID": cand}}
             if cand != src_pid:
                 msgs.append(f"project id {src_pid} sanitized to {cand}")
-                return cand, msgs, DISP_REMAPPED
-            return cand, msgs, DISP_CREATED
+                return cand, msgs, DISP_REMAPPED, vk
+            return cand, msgs, DISP_CREATED, vk
 
         # All candidates failed
-        return None, [last_err or "all project-id candidates rejected"], None
+        return None, [last_err or "all project-id candidates rejected"], None, None
 
     # ── target probes / config discovery ─────────────────────────────────────
     def _project_exists(self, pid: str) -> bool:

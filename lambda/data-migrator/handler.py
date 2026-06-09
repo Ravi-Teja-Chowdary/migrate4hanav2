@@ -787,6 +787,10 @@ def lambda_handler(event, context):
         return _phase_b_validate_production_path(event, run_id)
     if mode == "pilot_readiness_probe":
         return _pilot_readiness_probe(event, run_id)
+    if mode == "phase_b_validate_reconcile_sweep":
+        return _phase_b_validate_reconcile_sweep(event, run_id)
+    if mode == "phase_b_validate_idempotency":
+        return _phase_b_validate_idempotency(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -2650,4 +2654,267 @@ def _pilot_readiness_probe(event, run_id):
         "affected_objects_at_risk": affected_objects_at_risk,
         "findings":    findings,
         "rate_types_known": rate_types_known,
+    }
+
+
+def _phase_b_validate_reconcile_sweep(event, run_id):
+    """Reconcile sweep across multiple spine objects -- proves verify_key
+    wiring works END-TO-END for the full roster (roadmap A finish).
+
+    Drives each loadable object through UnifiedLoader.load_object -> spine ->
+    verify_key emission -> Reconciler.reconcile -> RECONCILED. Per-object
+    counts are small (3 records) so the sweep stays under the lambda timeout.
+
+    Objects covered: every spine that can be driven with no cc_org input.
+    Currently: Material, BusinessPartner (org category).
+
+    Payload::
+
+        { "mode": "phase_b_validate_reconcile_sweep",
+          "run_id": "recon-sweep-001",
+          "count": 3 }
+    """
+    count = int(event.get("count", 3))
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    try:
+        from unified_loader import UnifiedLoader
+        from key_map import PersistentKeyMap
+        from reconciler import Reconciler
+    except Exception as e:
+        try: tconn.close()
+        except Exception: pass
+        return {"status": "error", "phase": "import_sweep", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # Object -> synthetic-row generator
+    def gen_material(i):
+        return {"MATNR": f"SWEEP_M_{run_id[-5:]}_{i:03d}",
+                 "MTART": "HALB", "MBRSH": "M", "MEINS": "EA",
+                 "MAKTX": f"Sweep test material {i:03d}"}
+
+    def gen_bp(i):
+        return {"BPARTNER": f"SWEEP_BP_{run_id[-5:]}_{i:03d}",
+                 "CATEGORY": "2",
+                 "NAME": f"Sweep test org {i:03d}"}
+
+    targets = [
+        ("Material",         gen_material),
+        ("BusinessPartner",  gen_bp),
+    ]
+
+    ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+    km = PersistentKeyMap(table_name=ddb_table, run_id=run_id)
+    loader = UnifiedLoader(tconn, own_logical_system="M4H_SWEEP",
+                            sender="MIGRATE4HANA",
+                            client=tsec.get("client", "100"),
+                            target_sid=tsec.get("sid", "S4H"))
+    loader.key_map = km
+    reconciler = Reconciler(tconn)
+
+    per_object = []
+    for obj, gen in targets:
+        rows = [gen(i) for i in range(count)]
+        load_result = loader.load_object(obj, rows, max_rows=count)
+        report = reconciler.reconcile(obj, load_result, extracted=count)
+        # Inspect the shape: every created row should have a verify_key dict
+        keys = load_result.get("created_keys") or []
+        verify_dicts = [k for k in keys if isinstance(k, dict)
+                          and "table" in k and "key" in k]
+        per_object.append({
+            "object":              obj,
+            "mechanism":           load_result.get("mechanism"),
+            "attempted":           load_result.get("attempted"),
+            "created":             report.get("created"),
+            "verified_in_target":  report.get("verified_in_target"),
+            "value_checked":       report.get("value_checked"),
+            "value_matched":       report.get("value_matched"),
+            "status":              report.get("status"),
+            "verify_key_dict_count": len(verify_dicts),
+            "verify_key_dict_pct":  (round(100*len(verify_dicts)/max(len(keys),1), 1)),
+            "by_table":            report.get("by_table") or {},
+        })
+
+    sweep_proof = {
+        "all_objects_reconciled":
+            all(p["status"] == "RECONCILED" for p in per_object),
+        "all_via_spine":
+            all((p["mechanism"] or "").startswith("spine/") for p in per_object),
+        "all_emit_verify_key_dicts":
+            all(p["verify_key_dict_pct"] == 100.0 for p in per_object),
+    }
+    overall_ok = all(sweep_proof.values())
+
+    log_stage_event(run_id, "data-migrator", "phaseB_reconcile_sweep_complete",
+                    {"objects_swept": len(per_object),
+                     "all_reconciled": sweep_proof["all_objects_reconciled"]})
+
+    try:
+        tconn.close()
+    except Exception:
+        pass
+
+    return {
+        "run_id":   run_id,
+        "status":   "ok" if overall_ok else "mismatch",
+        "phase":    "reconcile_sweep_multi_object",
+        "target":   {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                       "ashost": tsec.get("ashost")},
+        "count":    count,
+        "per_object": per_object,
+        "proof":    sweep_proof,
+    }
+
+
+def _phase_b_validate_idempotency(event, run_id):
+    """Idempotency proof for partial / retried runs.
+
+    F1 PersistentKeyMap promises: re-running the same source key resolves to
+    the same target without re-creating. This validator proves it against
+    live DDB + live S/4 via three independent runs:
+
+      1. Load N Materials with prefix P -> verify created
+      2. Re-run the SAME prefix + same source keys via a FRESH lambda invo
+         (simulating Fargate task restart) -> verify F1 resolution returns
+         the original target keys, NO new BAPI creates happen
+      3. Load N more Materials with prefix P+1 -> verify these ARE new
+         creates (the F1 ledger doesn't false-positive on different src keys)
+
+    The proof relies on PersistentKeyMap.resolve() reading from DDB rather
+    than from in-memory state, since the in-memory cache resets between
+    lambda invocations. Two lambda invocations per validator run share only
+    the DDB table; everything else is independent.
+
+    Payload::
+
+        { "mode": "phase_b_validate_idempotency",
+          "run_id": "idemp-001",
+          "count": 2,
+          "prefix": "IDEMP" }
+    """
+    count = int(event.get("count", 2))
+    prefix = (event.get("prefix") or f"IDEMP{run_id[-4:]}").strip()
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    try:
+        from material_spine import MaterialSpineOrchestrator
+        from key_map import PersistentKeyMap
+    except Exception as e:
+        try: tconn.close()
+        except Exception: pass
+        return {"status": "error", "phase": "import_idempotency", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+
+    def make_rows(suffix_seed, n=count, override_prefix=None):
+        p = override_prefix or prefix
+        return [{"MATNR": f"{p}_{suffix_seed}_{i:03d}",
+                  "MTART": "HALB", "MBRSH": "M", "MEINS": "EA",
+                  "MAKTX": f"Idemp {p} {suffix_seed} {i:03d}"}
+                 for i in range(n)]
+
+    # ── Run 1: fresh load ────────────────────────────────────────────────────
+    km1 = PersistentKeyMap(table_name=ddb_table, run_id=run_id + "-r1")
+    orch1 = MaterialSpineOrchestrator(tconn, key_map=km1)
+    rows1 = make_rows(suffix_seed="A")
+    results1 = orch1.load_many(rows1)
+    run1_created = sum(1 for r in results1 if r.target_key)
+    run1_targets = {r.source_key: r.target_key for r in results1 if r.target_key}
+
+    # ── Run 2: same source keys, fresh PKM instance (simulates Fargate retry) ─
+    km2 = PersistentKeyMap(table_name=ddb_table, run_id=run_id + "-r2")
+    orch2 = MaterialSpineOrchestrator(tconn, key_map=km2)
+    # Resolve each source key BEFORE attempting load -- this is the path the
+    # production loader uses to decide "skip, already migrated".
+    run2_pre_resolved = {row["MATNR"]: km2.resolve("Material", row["MATNR"])
+                          for row in rows1}
+    # Now load (the SAME rows). If F1 idempotency works AND the loader honors
+    # the resolution, we should see 0 new MARA creates. If it doesn't honor
+    # F1, MaterialSpine would attempt re-create -> SAP returns "material
+    # already exists" -> classify as matched_existing (still no duplicate).
+    results2 = orch2.load_many(rows1)
+    run2_created = sum(1 for r in results2 if r.status == "created")
+    run2_matched = sum(1 for r in results2 if r.status == "matched_existing")
+
+    # ── Run 3: DIFFERENT source keys, prove F1 doesn't false-positive ────────
+    km3 = PersistentKeyMap(table_name=ddb_table, run_id=run_id + "-r3")
+    orch3 = MaterialSpineOrchestrator(tconn, key_map=km3)
+    rows3 = make_rows(suffix_seed="B")
+    run3_pre_resolved = {row["MATNR"]: km3.resolve("Material", row["MATNR"])
+                          for row in rows3}
+    results3 = orch3.load_many(rows3)
+    run3_created = sum(1 for r in results3 if r.target_key)
+
+    proof = {
+        "run1_creates_all": run1_created == count,
+        # F1 pre-resolve in run 2 returned every key registered by run 1
+        "run2_f1_resolves_all": all(run2_pre_resolved.get(k) == v
+                                      for k, v in run1_targets.items()),
+        # No duplicate creates in run 2 (either matched_existing or skipped)
+        "run2_no_duplicate_creates": run2_created == 0,
+        # Run 3 had distinct source keys -> F1 didn't false-positive
+        "run3_no_false_positive_skip":
+            all(v is None for v in run3_pre_resolved.values()),
+        "run3_creates_all_new": run3_created == count,
+    }
+    overall_ok = all(proof.values())
+
+    log_stage_event(run_id, "data-migrator", "phaseB_idempotency_complete",
+                    {"run1_created": run1_created,
+                     "run2_created": run2_created,
+                     "run2_matched": run2_matched,
+                     "run3_created": run3_created,
+                     "overall_ok":  overall_ok})
+
+    try:
+        tconn.close()
+    except Exception:
+        pass
+
+    return {
+        "run_id":  run_id,
+        "status":  "ok" if overall_ok else "mismatch",
+        "phase":   "idempotency_proof_three_run",
+        "target":  {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                     "ashost": tsec.get("ashost")},
+        "count":   count,
+        "prefix":  prefix,
+        "run1":    {"created": run1_created, "targets": run1_targets},
+        "run2":    {
+            "pre_resolved":     run2_pre_resolved,
+            "created":          run2_created,
+            "matched_existing": run2_matched,
+        },
+        "run3":    {
+            "pre_resolved":     run3_pre_resolved,
+            "created":          run3_created,
+        },
+        "proof":   proof,
     }

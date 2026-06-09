@@ -83,10 +83,10 @@ class InventoryBalanceSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED, DISP_REMAPPED
         if payload.get("_no_target"):
-            return None, ["no target material/plant/storage-location discovered"], None
+            return None, ["no target material/plant/storage-location discovered"], None, None
 
         src_mat = payload.pop("_src_mat", "")
         tgt_mat = payload.pop("_tgt_mat", "")
@@ -147,21 +147,22 @@ class InventoryBalanceSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         # Target identity is "<target_material>@<material_document>" — captures
         # both the material harmonization AND the matdoc reference
         target = f"{tgt_mat}@{doc}" if year == "" else f"{tgt_mat}@{doc}/{year}"
+        vk = {"table": "MKPF", "key": {"MBLNR": doc, "MJAHR": year}}
         if tgt_mat != src_mat:
             msgs.append(f"material {src_mat} harmonized to target {tgt_mat}/{plant}/{sloc}")
-            return target, msgs, DISP_REMAPPED
-        return target, msgs, DISP_CREATED
+            return target, msgs, DISP_REMAPPED, vk
+        return target, msgs, DISP_CREATED, vk
 
     # ── target probes / MM-period cache ─────────────────────────────────────
     def _stock_target(self) -> tuple:

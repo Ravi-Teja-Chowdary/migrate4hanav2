@@ -80,17 +80,18 @@ class ProfitCenterGroupSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED, DISP_MATCHED_EXISTING
         if payload.get("_too_long"):
             n = payload.get("_name")
-            return None, [f"group name {n} exceeds the 12-char SAP set-name limit (manual rename required)"], None
+            return None, [f"group name {n} exceeds the 12-char SAP set-name limit (manual rename required)"], None, None
 
         name    = payload.pop("_name", "")
         already = payload.pop("_already", False)
 
         if already:
-            return name, [f"group {name} already exists"], DISP_MATCHED_EXISTING
+            vk = {"table": "SETHEADER", "key": {"SETCLASS": self._SETCLASS, "SETNAME": name}}
+            return name, [f"group {name} already exists"], DISP_MATCHED_EXISTING, vk
 
         resp = self.c.call("BAPI_PROFITCENTERGRP_CREATE", **payload)
         ret = resp.get("RETURN") or []
@@ -105,15 +106,16 @@ class ProfitCenterGroupSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         target = (resp.get("GROUPNAME") or name).strip()
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
-        return target, msgs, DISP_CREATED
+            return None, msgs, None, None
+        vk = {"table": "SETHEADER", "key": {"SETCLASS": self._SETCLASS, "SETNAME": target}}
+        return target, msgs, DISP_CREATED, vk
 
     def _cogroup_exists(self, setclass: str, name: str) -> bool:
         try:

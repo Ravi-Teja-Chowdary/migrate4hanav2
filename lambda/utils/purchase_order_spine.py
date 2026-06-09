@@ -139,11 +139,11 @@ class PurchaseOrderSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED
         if payload.get("_no_supplier"):
             ekorg = payload.get("_ekorg")
-            return None, [f"no purchasing-ready supplier for org {ekorg}"], None
+            return None, [f"no purchasing-ready supplier for org {ekorg}"], None, None
         src_po     = payload.pop("_src_po", "")
         src_vendor = payload.pop("_src_vendor", "")
         tgt_vendor = payload.pop("_tgt_vendor", "")
@@ -163,13 +163,13 @@ class PurchaseOrderSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         # Register the vendor harmonization back to the ledger AFTER commit
         if vdisp == "harmonized" and self.key_map is not None and src_vendor:
@@ -178,7 +178,8 @@ class PurchaseOrderSpineOrchestrator(BaseSpineOrchestrator):
             except Exception:
                 pass
             msgs.append(f"vendor {src_vendor} harmonized to {tgt_vendor}")
-        return target, msgs, DISP_CREATED
+        vk = {"table": "EKKO", "key": {"EBELN": target}}
+        return target, msgs, DISP_CREATED, vk
 
     # ── target probe ─────────────────────────────────────────────────────────
     def _ready_suppliers(self, ekorg: str) -> list:

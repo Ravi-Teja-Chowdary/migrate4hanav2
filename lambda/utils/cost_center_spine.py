@@ -98,12 +98,13 @@ class CostCenterSpineOrchestrator(BaseSpineOrchestrator):
         return payload
 
     # ── BAPI invocation ──────────────────────────────────────────────────────
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list]:
-        from base_spine_orchestrator import DISP_MATCHED_EXISTING
+    def call_bapi(self, payload: dict) -> tuple:
+        from base_spine_orchestrator import DISP_MATCHED_EXISTING, DISP_CREATED
         kokrs = payload["CONTROLLINGAREA"]
         kostl = payload["COSTCENTERLIST"][0]["COSTCENTER"]
+        vk = {"table": "CSKS", "key": {"KOKRS": kokrs, "KOSTL": kostl}}
         if self._cost_center_exists(kokrs, kostl):
-            return kostl, [f"cost center {kostl} already exists in {kokrs}"], DISP_MATCHED_EXISTING
+            return kostl, [f"cost center {kostl} already exists in {kokrs}"], DISP_MATCHED_EXISTING, vk
 
         resp = self.c.call("BAPI_COSTCENTER_CREATEMULTIPLE", **payload)
         ret = resp.get("RETURN") or []
@@ -118,13 +119,13 @@ class CostCenterSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs
+            return None, msgs, None, None
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs
-        return kostl, msgs
+            return None, msgs, None, None
+        return kostl, msgs, DISP_CREATED, vk
 
     # ── target probe ─────────────────────────────────────────────────────────
     def _cost_center_exists(self, kokrs: str, kostl: str) -> bool:

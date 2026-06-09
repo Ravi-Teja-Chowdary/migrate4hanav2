@@ -86,10 +86,10 @@ class SalesOrderSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED
         if payload.get("_no_sales_area"):
-            return None, ["no coherent target sales area (customer+material) discovered"], None
+            return None, ["no coherent target sales area (customer+material) discovered"], None, None
 
         src_so   = payload.pop("_src_so", "")
         src_cust = payload.pop("_src_cust", "")
@@ -110,13 +110,13 @@ class SalesOrderSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         if cdisp == "harmonized" and self.key_map is not None and src_cust:
             try:
@@ -124,7 +124,8 @@ class SalesOrderSpineOrchestrator(BaseSpineOrchestrator):
             except Exception:
                 pass
             msgs.append(f"customer {src_cust} harmonized to {tgt_cust}")
-        return target, msgs, DISP_CREATED
+        vk = {"table": "VBAK", "key": {"VBELN": target}}
+        return target, msgs, DISP_CREATED, vk
 
     # ── sales-area discovery ─────────────────────────────────────────────────
     def _so_config(self):

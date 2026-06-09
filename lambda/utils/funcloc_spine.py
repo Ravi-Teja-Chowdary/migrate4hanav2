@@ -71,10 +71,10 @@ class FunctionalLocationSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED, DISP_REMAPPED
         if payload.get("_no_strind"):
-            return None, ["target has no functional-location structure indicator"], None
+            return None, ["target has no functional-location structure indicator"], None, None
 
         src_label  = payload.pop("_src_label", "")
         tgt_label  = payload.pop("_target_label", "")
@@ -93,7 +93,7 @@ class FunctionalLocationSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         target = (resp.get("FUNCTLOCATION") or tgt_label).strip()
         # Track to keep cross-run collision-safety
@@ -106,13 +106,14 @@ class FunctionalLocationSpineOrchestrator(BaseSpineOrchestrator):
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
+        vk = {"table": "IFLOT", "key": {"TPLNR": target}}
         if remapped:
             msgs.append(f"label {src_label} reformatted -> {target}")
-            return target, msgs, DISP_REMAPPED
+            return target, msgs, DISP_REMAPPED, vk
         # If SAP echoed back the label unchanged it's a clean create
-        return target, msgs, DISP_CREATED
+        return target, msgs, DISP_CREATED, vk
 
     # ── discover the target structure indicator + mask ───────────────────────
     def _floc_config(self) -> dict:

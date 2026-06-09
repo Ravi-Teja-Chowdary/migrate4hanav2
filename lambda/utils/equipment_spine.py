@@ -96,7 +96,7 @@ class EquipmentSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs
+            return None, msgs, None, None
 
         # Target EQUNR assigned by SAP - capture from the response
         target = (resp.get("EQUIPMENT") or "").strip()
@@ -104,7 +104,7 @@ class EquipmentSpineOrchestrator(BaseSpineOrchestrator):
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs
+            return None, msgs, None, None
 
         if cat_remapped:
             msgs.append(f"equipment category {src_cat} not in target catalogue; used {used_cat}")
@@ -113,8 +113,9 @@ class EquipmentSpineOrchestrator(BaseSpineOrchestrator):
         # base orchestrator doesn't misclassify it as matched_existing.
         from base_spine_orchestrator import DISP_CREATED
         if not target:
-            return None, msgs
-        return target, msgs, DISP_CREATED
+            return None, msgs, None, None
+        vk = {"table": "EQUI", "key": {"EQUNR": target}}
+        return target, msgs, DISP_CREATED, vk
 
     # ── discover the target's in-use equipment categories ────────────────────
     def _equip_cats(self):

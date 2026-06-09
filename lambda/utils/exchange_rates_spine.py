@@ -144,11 +144,11 @@ class ExchangeRatesSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED
         if payload.get("_no_rate_type"):
             rt = payload.get("_rt")
-            return None, [f"rate type {rt} not defined in target (TCURV) -- customizing prerequisite"], None
+            return None, [f"rate type {rt} not defined in target (TCURV) -- customizing prerequisite"], None, None
 
         rate_type   = payload.pop("_rate_type", "")
         fcurr       = payload.pop("_from_curr", "")
@@ -164,7 +164,7 @@ class ExchangeRatesSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, [f"exchrate create exception: {str(e).splitlines()[0]}"], None
+            return None, [f"exchrate create exception: {str(e).splitlines()[0]}"], None, None
 
         ret = resp.get("RETURN") or []
         if isinstance(ret, dict):
@@ -184,13 +184,13 @@ class ExchangeRatesSpineOrchestrator(BaseSpineOrchestrator):
                         or "no exchange rate type" in txt)
             if cfg_gap:
                 msgs.insert(0, f"customizing prerequisite: rate type {rate_type} lacks TCURF factor settings")
-            return None, msgs, None
+            return None, msgs, None, None
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         if clamped:
             msgs.append(f"valid-from clamped to {valid_from.isoformat()} (source date out of BAPI range)")
@@ -198,7 +198,12 @@ class ExchangeRatesSpineOrchestrator(BaseSpineOrchestrator):
             msgs.append(f"rate type {rate_type} not in TCURF operational set (loaded but may not apply at runtime)")
         # Target key is the rate tuple: KURST/FCURR/TCURR@valid_from
         target = f"{rate_type}|{fcurr}|{tcurr}@{valid_from.isoformat()}"
-        return target, msgs, DISP_CREATED
+        # TCURR.GDATU is stored INVERTED (99999999 - YYYYMMDD)
+        gdatu = str(99999999 - int(valid_from.strftime("%Y%m%d")))
+        vk = {"table": "TCURR",
+              "key": {"KURST": rate_type, "FCURR": fcurr,
+                      "TCURR": tcurr, "GDATU": gdatu}}
+        return target, msgs, DISP_CREATED, vk
 
     # ── target customizing discovery ─────────────────────────────────────────
     def _target_rate_types(self) -> set:

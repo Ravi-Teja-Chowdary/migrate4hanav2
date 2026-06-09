@@ -117,10 +117,10 @@ class OpenAPSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED
         if payload.get("_no_partner"):
-            return None, [f"no recon-ready {payload.get('_kind')} in company {payload.get('_bukrs')}"], None
+            return None, [f"no recon-ready {payload.get('_kind')} in company {payload.get('_bukrs')}"], None, None
 
         src_doc     = payload.pop("_src_doc", "")
         src_partner = payload.pop("_src_partner", "")
@@ -141,13 +141,13 @@ class OpenAPSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         belnr = objkey[:10]
         if pdisp == "harmonized" and self.key_map is not None and src_partner:
@@ -156,7 +156,10 @@ class OpenAPSpineOrchestrator(BaseSpineOrchestrator):
             except Exception:
                 pass
             msgs.append(f"vendor {src_partner} harmonized to {tgt_partner}")
-        return belnr, msgs, DISP_CREATED
+        vk = {"table": "BSIK",
+              "key": {"BUKRS": objkey[10:14] or self.cc_org.get("COMP_CODE", ""),
+                      "BELNR": belnr, "GJAHR": objkey[14:18]}}
+        return belnr, msgs, DISP_CREATED, vk
 
     def _recon_partners(self, table: str, key_field: str, bukrs: str) -> list:
         cache = getattr(self, "_recon_cache", None)

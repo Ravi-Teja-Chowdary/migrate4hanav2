@@ -84,8 +84,9 @@ class CharacteristicSpineOrchestrator(BaseSpineOrchestrator):
         used_dtype     = payload.pop("_used_dtype", "")
         dtype_remapped = payload.pop("_dtype_remapped", False)
 
+        vk = {"table": "CABN", "key": {"ATNAM": name}}
         if already:
-            return name, [f"characteristic {name} already exists"], DISP_MATCHED_EXISTING
+            return name, [f"characteristic {name} already exists"], DISP_MATCHED_EXISTING, vk
 
         resp = self.c.call("BAPI_CHARACT_CREATE", **payload)
         ret = resp.get("RETURN") or []
@@ -100,17 +101,17 @@ class CharacteristicSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         if dtype_remapped:
             msgs.append(f"data type {src_dtype} unsupported; used {used_dtype}")
-        return name, msgs, DISP_CREATED
+        return name, msgs, DISP_CREATED, vk
 
     def _charact_exists(self, name: str) -> bool:
         try:

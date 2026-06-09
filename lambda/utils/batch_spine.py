@@ -72,9 +72,9 @@ class BatchSpineOrchestrator(BaseSpineOrchestrator):
     def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
         from base_spine_orchestrator import DISP_CREATED, DISP_REMAPPED
         if payload.get("_no_target"):
-            return None, ["no target batch-managed material/plant discovered"], None
+            return None, ["no target batch-managed material/plant discovered"], None, None
         if payload.get("_no_free_batch"):
-            return None, [f"could not find a free batch number for {payload.get('_src')}"], None
+            return None, [f"could not find a free batch number for {payload.get('_src')}"], None, None
 
         src_mat   = payload.pop("_src_mat", "")
         src_batch = payload.pop("_src_batch", "")
@@ -95,14 +95,14 @@ class BatchSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         target = (resp.get("BATCH") or tgt_batch).strip()
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         mat_remap = tgt_mat != src_mat
         batch_remap = target != src_batch
@@ -110,9 +110,10 @@ class BatchSpineOrchestrator(BaseSpineOrchestrator):
             msgs.append(f"material {src_mat} harmonized to batch-managed {tgt_mat}/plant {plant}")
         if batch_remap:
             msgs.append(f"batch {src_batch} collided -> {target}")
+        vk = {"table": "MCH1", "key": {"MATNR": tgt_mat, "CHARG": target}}
         if mat_remap or batch_remap:
-            return target, msgs, DISP_REMAPPED
-        return target, msgs, DISP_CREATED
+            return target, msgs, DISP_REMAPPED, vk
+        return target, msgs, DISP_CREATED, vk
 
     # ── target discovery ────────────────────────────────────────────────────
     def _batch_target_mat(self) -> tuple:

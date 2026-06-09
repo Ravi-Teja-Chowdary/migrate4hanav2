@@ -87,7 +87,7 @@ class InternalOrderSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
-    def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
+    def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED, DISP_REMAPPED
         ot_remapped = payload.pop("_ot_remapped", False)
         src_ot      = payload.pop("_src_ot", "")
@@ -106,7 +106,7 @@ class InternalOrderSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs, None
+            return None, msgs, None, None
 
         target = (resp.get("ORDERID")
                   or (resp.get("E_MASTER_DATA") or {}).get("ORDER")
@@ -115,14 +115,15 @@ class InternalOrderSpineOrchestrator(BaseSpineOrchestrator):
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs, None
+            return None, msgs, None, None
 
         if ot_remapped:
             msgs.append(f"order type {src_ot} not valid; used {used_ot}")
         if not target:
-            return None, msgs, None
+            return None, msgs, None, None
+        vk = {"table": "AUFK", "key": {"AUFNR": target}}
         # Order numbers are SAP-assigned -> CREATED disposition
-        return target, msgs, DISP_CREATED
+        return target, msgs, DISP_CREATED, vk
 
     def _order_type_valid(self, kokrs, otype, comp, curr, prctr) -> bool:
         """TESTRUN-based order-type validation (cached on the orchestrator)."""

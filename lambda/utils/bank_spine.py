@@ -84,8 +84,9 @@ class BankSpineOrchestrator(BaseSpineOrchestrator):
         from base_spine_orchestrator import DISP_MATCHED_EXISTING
         ctry = payload["BANK_CTRY"]
         key  = payload["BANK_KEY"]
+        vk = {"table": "BNKA", "key": {"BANKS": ctry, "BANKL": key}}
         if self._bank_exists(ctry, key):
-            return key, [f"bank {ctry}/{key} already exists"], DISP_MATCHED_EXISTING
+            return key, [f"bank {ctry}/{key} already exists"], DISP_MATCHED_EXISTING, vk
 
         resp = self.c.call("BAPI_BANK_CREATE", **payload)
         ret  = resp.get("RETURN") or {}
@@ -100,13 +101,13 @@ class BankSpineOrchestrator(BaseSpineOrchestrator):
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")
             except Exception:
                 pass
-            return None, msgs
+            return None, msgs, None, None
         try:
             self.c.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
         except Exception as e:
             msgs.append(f"commit failed: {e}")
-            return None, msgs
-        return key, msgs
+            return None, msgs, None, None
+        return key, msgs, None, vk
 
     # ── target probe ─────────────────────────────────────────────────────────
     def _bank_exists(self, ctry: str, key: str) -> bool:
