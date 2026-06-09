@@ -1,0 +1,33 @@
+1) S/4HANA secret — populate with the script
+
+  The secret already exists in Secrets Manager (terraform created the shell), but it has no AWSCURRENT value yet. The script that
+  fills it is scripts\update-s4-secret.ps1 — same one I had you use last month. Run from the repo root:
+
+  .\scripts\update-s4-secret.ps1 -S4PublicIp 54.147.124.20
+
+  It'll prompt for the S/4 password (paste the CAL master password you used for the appliance). The script also opens S/4's security
+  group to Lambda's NAT EIP and prints reminders. The S/4 user is MIGRATE_ADMI by default — if you want DEVELOPER instead, add -S4User
+  DEVELOPER.
+
+  ▎ One thing it does NOT do: grant the lambda role permission to read that secret. That IAM policy edit is the second piece you'll
+  ▎ have to authorize separately — after you run the script, tell me and I'll show you the one-line aws iam put-role-policy to add the
+  ▎ s4hana ARN to migrate4hana-lambda-policy.
+
+  2) Hosts file — inside the ECC VM (Windows)
+
+  Your ECC VM is Windows (Server 2008 R2 running CAL ECC IDES), not Linux. The hosts file location is:
+
+  C:\Windows\System32\drivers\etc\hosts
+
+  Open it with Notepad as Administrator (right-click Notepad → Run as administrator → File → Open → paste the path above; change the
+  file filter to "All Files"). It needs exactly these two lines, using the new VM IP 192.168.100.150:
+
+  192.168.100.150   myecc.hanamasters.com   myecc
+  192.168.100.150   0.tcp.in.ngrok.io
+
+  Critical rules:
+  - Never use 127.0.0.1 for myecc.hanamasters.com — SAP refuses to start (SAP Note 1054467 / DP_FATAL_ERROR DpMsAttach). Must be a
+  real non-loopback IP — the VM's own host-only IP.
+  - Both lines use the same IP (the VM's own). The first lets SAP back-verify its own gateway; the second lets the SAP gateway resolve
+  0.tcp.in.ngrok.io (the VM has no internet so it can't ask external DNS).
+  - After saving, run ipconfig /flushdns in an admin cmd window inside the VM.
