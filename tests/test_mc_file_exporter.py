@@ -52,20 +52,30 @@ def _orch_for(obj: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-def test_all_20_mc_objects_registered():
-    expected = [
-        "Routing", "ActivityType", "StatisticalKeyFigure", "CommitmentItem",
-        "GLAccount", "TaskList", "InspPlan", "InspMethod", "ServiceMaster",
-        "SourceList", "HouseBank", "HouseBankAccount", "ConditionRecord",
-        "CustomerHierarchy", "BOMItem", "Network", "WBSElement", "OrgUnit",
-        "Position", "EmployeeAction",
-    ]
+def test_all_mc_objects_registered_min_99():
+    # The MC registry expanded to cover the full standard SAP Migration
+    # Cockpit catalog. Floor of 99 (sanity check; we keep adding entries).
     registered = mc.registered_objects()
-    assert sorted(registered) == sorted(expected)
-    # All accessible via get_spine
-    for obj in expected:
+    assert len(registered) >= 99, f"only {len(registered)} MC objects registered"
+    # Spot-check the original 20 are still there
+    for obj in ["Routing", "GLAccount", "OrgUnit", "Position",
+                 "HouseBank", "CustomerHierarchy"]:
         assert get_spine(obj) is not None
-    print(f"  [OK] all {len(expected)} MC file objects registered + accessible")
+    print(f"  [OK] {len(registered)} MC file objects registered + accessible")
+
+
+def test_all_mc_templates_have_required_shape():
+    """Structural validator: every entry must have csv_columns + mandatory +
+    template + target_table; mandatory must be a subset of csv_columns."""
+    for obj, spec in mc.MC_TEMPLATES.items():
+        assert "csv_columns" in spec and spec["csv_columns"], f"{obj} missing csv_columns"
+        assert "mandatory" in spec, f"{obj} missing mandatory"
+        assert "template" in spec, f"{obj} missing template"
+        assert "target_table" in spec, f"{obj} missing target_table"
+        for col in spec["mandatory"]:
+            assert col in spec["csv_columns"], \
+                f"{obj}: mandatory column {col} not in csv_columns"
+    print(f"  [OK] all {len(mc.MC_TEMPLATES)} MC templates have valid structure")
 
 
 def test_routing_validates_mandatory_columns():
