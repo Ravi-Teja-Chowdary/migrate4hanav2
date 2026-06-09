@@ -183,6 +183,75 @@ class UnifiedLoader:
         # `bapi_coverage_emitter` is None, so existing flow is unchanged.
         self.bapi_coverage_emitter = None       # bapi_coverage.LtmcStagingEmitter
         self.bapi_field_catalog = {}            # {object_type: set(supported_fields)}
+        # WS2 — opt-in dynamic catalog wiring. When M4H_DYNAMIC_CATALOG is set
+        # the loader calls dynamic_schema_builder.build_schema() for each
+        # object_type on first load, caching the resulting field set against
+        # bapi_field_catalog. The base spine's collect_custom_fields() uses
+        # this set to drop unknown Z fields with a metric (extension_field_drops)
+        # rather than letting the BAPI reject the record. Without this flag the
+        # behavior is unchanged -- catalog stays empty, no filtering happens.
+        self._dynamic_catalog_enabled = bool(os.environ.get("M4H_DYNAMIC_CATALOG", ""))
+        self._dynamic_catalog_attempted = set()  # object_types we've tried hydrating
+
+    # Mapping from object_type to its primary create BAPI -- used to look up
+    # the dynamic field-set per object on demand. Mirrors the lift-and-shift
+    # naming the spine subclasses target.
+    _OBJECT_TO_BAPI = {
+        "Material":             "BAPI_MATERIAL_SAVEDATA",
+        "BusinessPartner":      "BAPI_BUPA_CREATE_FROM_DATA",
+        "Customer":             "BAPI_BUPA_CREATE_FROM_DATA",
+        "Vendor":               "BAPI_BUPA_CREATE_FROM_DATA",
+        "Bank":                 "BAPI_BANK_CREATE",
+        "ProfitCenter":         "BAPI_PROFITCENTER_CREATE",
+        "CostCenter":           "BAPI_COSTCENTER_CREATEMULTIPLE",
+        "Equipment":            "BAPI_EQUI_CREATE",
+        "InternalOrder":        "BAPI_INTERNALORDER_CREATE",
+        "FunctionalLocation":   "BAPI_FUNCLOC_CREATE",
+        "FixedAsset":           "BAPI_FIXEDASSET_CREATE1",
+        "Project":              "BAPI_PROJECTDEF_CREATE",
+        "Characteristic":       "BAPI_CHARACT_CREATE",
+        "Class":                "BAPI_CLASS_CREATE",
+        "CostElementGroup":     "BAPI_COSTELEMENTGRP_CREATE",
+        "ProfitCenterGroup":    "BAPI_PROFITCENTERGRP_CREATE",
+        "PurchaseRequisition":  "BAPI_REQUISITION_CREATE",
+        "PurchaseOrder":        "BAPI_PO_CREATE1",
+        "PurchaseContract":     "BAPI_CONTRACT_CREATE",
+        "SalesOrder":           "BAPI_SALESORDER_CREATEFROMDAT2",
+        "OpenAR":               "BAPI_ACC_DOCUMENT_POST",
+        "OpenAP":               "BAPI_ACC_DOCUMENT_POST",
+        "Batch":                "BAPI_BATCH_CREATE",
+        "InventoryBalance":     "BAPI_GOODSMVT_CREATE",
+        "ExchangeRates":        "BAPI_EXCHRATE_CREATEMULTIPLE",
+    }
+
+    def hydrate_catalog_for(self, obj: str) -> int:
+        """WS2: hydrate the bapi_field_catalog entry for `obj` from F3 dynamic
+        schema introspection. Idempotent + safe to call before every load --
+        the result is cached against self.bapi_field_catalog AND a per-loader
+        attempted set so repeated calls don't re-introspect or re-log on miss.
+
+        Returns the count of fields hydrated (0 = catalog disabled or already
+        empty for this object).
+        """
+        if not self._dynamic_catalog_enabled:
+            return 0
+        if obj in self.bapi_field_catalog:
+            return len(self.bapi_field_catalog[obj])
+        if obj in self._dynamic_catalog_attempted:
+            return 0   # already tried + failed; don't retry per record
+        self._dynamic_catalog_attempted.add(obj)
+        bapi = self._OBJECT_TO_BAPI.get(obj)
+        if not bapi:
+            return 0
+        try:
+            from dynamic_schema_builder import build_schema   # type: ignore
+            fields = build_schema(self.c, bapi)
+            if fields:
+                self.bapi_field_catalog[obj] = set(fields)
+                return len(fields)
+        except Exception:
+            pass
+        return 0
 
     def odata_ready(self) -> bool:
         """True if the OData BP service is available — gates transaction-ready partner
@@ -205,6 +274,12 @@ class UnifiedLoader:
         # legacy single-BAPI path. Falls through to legacy on miss.
         spine_cls = get_spine(obj)
         if spine_cls is not None:
+            # WS2 dynamic catalog hydration -- opt-in via M4H_DYNAMIC_CATALOG.
+            # Called once per object_type per loader instance; the spine then
+            # uses the resulting field-set as the EXTENSIONIN allowed-fields
+            # filter so unknown Z columns get dropped with a metric rather
+            # than the BAPI hard-failing the record.
+            self.hydrate_catalog_for(obj)
             return self._load_via_spine(obj, spine_cls, rows, max_rows)
 
         mech = OBJECT_MECHANISM.get(obj)
