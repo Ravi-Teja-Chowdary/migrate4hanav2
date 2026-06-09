@@ -132,6 +132,48 @@ class PurchaseOrderSpineOrchestrator(BaseSpineOrchestrator):
             "_tgt_vendor":  tgt_vendor,
             "_vdisp":       vdisp,
         }
+
+        # WS2 — partner-function depth. Vendor (LF) is implicit on the
+        # POHEADER; row["partners"] can carry GS (goods supplier), RS
+        # (invoicing party), AB (ordering address), etc. Each routes
+        # through F1 so the target sees BP_IDs.
+        from base_spine_orchestrator import (
+            normalise_partner_rows, normalise_condition_rows,
+            normalise_text_rows,
+        )
+        src_partners = row.get("partners") or []
+        if src_partners:
+            po_partners = normalise_partner_rows(
+                src_partners, role_field="PARVW", number_field="LIFNR",
+                key_map=self.key_map, source_object="Vendor",
+            )
+            if po_partners:
+                payload["POPARTNER"] = [
+                    {"PARTNERDESC": p["PARTN_ROLE"],
+                     "BUSPARTNO":   (p["PARTN_NUMB"] or "").zfill(10)}
+                    for p in po_partners
+                ]
+
+        # WS2 — pricing conditions. Per-item condition rows; flat-rate
+        # GRWR/EFFW etc go through POCOND (the BAPI's pricing table).
+        src_conds = row.get("conditions") or []
+        if src_conds:
+            cond_rows = []
+            for c in src_conds:
+                item_index = int(c.get("ITEM") or 10)
+                cond_rows.extend(normalise_condition_rows([c], item_index=item_index))
+            payload["POCOND"] = [
+                {"ITM_NUMBER": cr["ITM_NUMBER"], "COND_TYPE": cr["COND_TYPE"],
+                 "COND_VALUE": cr["COND_VALUE"], "CURRENCY": cr["CURRENCY"],
+                 "COND_P_UNT": cr["COND_P_UNT"]}
+                for cr in cond_rows
+            ]
+
+        # WS2 — header / item long texts -> BAPI_LONGTEXT_SAVE post-create
+        src_texts = row.get("texts") or []
+        if src_texts:
+            payload["LONGTEXTS"] = normalise_text_rows(src_texts)
+
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows
             from base_spine_orchestrator import build_extensioninx

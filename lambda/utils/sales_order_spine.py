@@ -44,6 +44,20 @@ class SalesOrderSpineOrchestrator(BaseSpineOrchestrator):
         return None
 
     def build_payload(self, row: dict, ext_rows: list) -> dict:
+        """WS2-deepened payload. Supports:
+          - Multi-item lines from row["items"]  (each item: MATNR/MENGE/MEINS)
+          - Multi-role partners from row["partners"] (PARVW/KUNNR rows;
+            roles other than AG resolved through F1)
+          - Pricing conditions from row["conditions"] (KSCHL/KBETR rows)
+          - Header / item long texts from row["texts"]
+        All optional; the legacy single-item / sold-to-only shape still
+        works when these arrays are absent.
+        """
+        from base_spine_orchestrator import (
+            normalise_partner_rows, normalise_condition_rows,
+            normalise_text_rows,
+        )
+
         cfg = self._so_config()
         if not cfg:
             return {"_no_sales_area": True}
@@ -64,10 +78,48 @@ class SalesOrderSpineOrchestrator(BaseSpineOrchestrator):
             "DISTR_CHAN": cfg["chan"],
             "DIVISION":   cfg["div"],
         }
+
+        # ── PARTNERS — sold-to is always present; additional partner functions
+        # come from row["partners"] (KNVP-style: PARVW + KUNNR) and route
+        # through F1 so target sees BP_IDs not legacy KUNNRs.
         parts = [{"PARTN_ROLE": "AG", "PARTN_NUMB": tgt_cust.zfill(10)}]
-        items = [{"ITM_NUMBER": "000010", "MATERIAL": cfg["sample_material"],
-                  "TARGET_QTY": "1", "TARGET_QU": "EA"}]
-        sched = [{"ITM_NUMBER": "000010", "REQ_QTY": "1"}]
+        extra_partners = normalise_partner_rows(
+            row.get("partners") or [],
+            role_field="PARVW", number_field="KUNNR",
+            key_map=self.key_map, source_object="Customer",
+        )
+        for p in extra_partners:
+            if p["PARTN_ROLE"] != "AG":   # don't double sold-to
+                p["PARTN_NUMB"] = (p["PARTN_NUMB"] or "").zfill(10)
+                parts.append(p)
+
+        # ── ITEMS — accept multi-line items from row["items"]; each entry can
+        # carry MATNR (source material, resolved through F1 if registered),
+        # MENGE (quantity), MEINS (UoM). Falls back to the single-sample
+        # item shape when the input doesn't carry an items array.
+        src_items = row.get("items") or []
+        if not src_items:
+            items = [{"ITM_NUMBER": "000010",
+                       "MATERIAL":   cfg["sample_material"],
+                       "TARGET_QTY": "1", "TARGET_QU": "EA"}]
+            sched = [{"ITM_NUMBER": "000010", "REQ_QTY": "1"}]
+        else:
+            items, sched = [], []
+            for i, it in enumerate(src_items, start=1):
+                inum = f"{i*10:06d}"
+                src_mat = (it.get("MATNR") or "").strip()
+                tgt_mat = None
+                if self.key_map is not None and src_mat:
+                    tgt_mat = self.key_map.resolve("Material", src_mat)
+                # If unresolved or not saleable, harmonize to a saleable
+                # material in the discovered sales area
+                if not tgt_mat:
+                    tgt_mat = cfg["sample_material"]
+                qty = str(it.get("MENGE") or it.get("QTY") or "1")
+                uom = (it.get("MEINS") or it.get("UOM") or "EA").strip()
+                items.append({"ITM_NUMBER": inum, "MATERIAL": tgt_mat,
+                                "TARGET_QTY": qty, "TARGET_QU": uom})
+                sched.append({"ITM_NUMBER": inum, "REQ_QTY": qty})
 
         payload: dict = {
             "ORDER_HEADER_IN":     hdr,
@@ -79,6 +131,28 @@ class SalesOrderSpineOrchestrator(BaseSpineOrchestrator):
             "_tgt_cust": tgt_cust,
             "_cdisp":    cdisp,
         }
+
+        # ── CONDITIONS — header-level or per-item pricing rows from
+        # row["conditions"] mapped into the BAPI's ORDER_CONDITIONS_IN
+        # table (the BAPI supports both header-level COND_TYPE 'PR00'
+        # equivalents and per-item discounts).
+        src_conds = row.get("conditions") or []
+        if src_conds:
+            # Map each per-item condition; if "ITEM" missing, attach to item 1
+            cond_rows = []
+            for c in src_conds:
+                item_index = int(c.get("ITEM") or 10)
+                cond_rows.extend(normalise_condition_rows([c],
+                                                           item_index=item_index))
+            payload["ORDER_CONDITIONS_IN"] = cond_rows
+
+        # ── LONGTEXTS — header/item texts, packaged for a follow-up
+        # BAPI_LONGTEXT_SAVE call after the SO commits. Carried in the
+        # payload so call_bapi can issue the long-text call separately.
+        src_texts = row.get("texts") or []
+        if src_texts:
+            payload["LONGTEXTS"] = normalise_text_rows(src_texts)
+
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows
             from base_spine_orchestrator import build_extensioninx
