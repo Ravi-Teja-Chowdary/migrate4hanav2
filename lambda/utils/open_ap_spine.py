@@ -84,6 +84,8 @@ class OpenAPSpineOrchestrator(BaseSpineOrchestrator):
             tgt = pool[(int(digits) if digits else 0) % len(pool)]
             pdisp = "harmonized"
 
+        # WS2 -- multi-line FI document; symmetric to OpenAR
+        extra_lines = row.get("lines") or []
         pamt = amount if shkzg == "S" else -amount
         doc_date = self.cc_org.get("DOC_DATE") or datetime.date.today().strftime("%Y%m%d")
         hdr = {
@@ -95,20 +97,44 @@ class OpenAPSpineOrchestrator(BaseSpineOrchestrator):
             "BUS_ACT":    "RFBU",
             "REF_DOC_NO": ("M4H-" + src_doc)[:16],
         }
-        gl = [{"ITEMNO_ACC": "0000000002", "GL_ACCOUNT": self.cc_org["CLEARING_GL"],
-                "ITEM_TEXT": f"M4H open AP {src_doc}"[:50],
-                "PROFIT_CTR": self.cc_org["PROFIT_CTR"]}]
-        cur = [{"ITEMNO_ACC": "0000000001", "CURRENCY": curr, "AMT_DOCCUR": "%.2f" % pamt},
-               {"ITEMNO_ACC": "0000000002", "CURRENCY": curr, "AMT_DOCCUR": "%.2f" % (-pamt)}]
+        ap_items = [{"ITEMNO_ACC": "0000000001", "VENDOR_NO": tgt}]
+        gl = []
+        cur = [{"ITEMNO_ACC": "0000000001", "CURRENCY": curr,
+                 "AMT_DOCCUR": "%.2f" % pamt}]
+        running_total = pamt
+        for i, line in enumerate(extra_lines, start=2):
+            line_amt = float(line.get("DMBTR") or 0)
+            if line_amt <= 0:
+                continue
+            signed = -line_amt if shkzg == "S" else line_amt
+            itemno = f"{i:010d}"
+            gl.append({
+                "ITEMNO_ACC":  itemno,
+                "GL_ACCOUNT":  line.get("GL_ACCOUNT") or self.cc_org["CLEARING_GL"],
+                "ITEM_TEXT":   (line.get("ITEM_TEXT") or f"M4H open AP {src_doc} L{i}")[:50],
+                "PROFIT_CTR":  line.get("PROFIT_CTR") or self.cc_org["PROFIT_CTR"],
+            })
+            cur.append({"ITEMNO_ACC": itemno, "CURRENCY": curr,
+                         "AMT_DOCCUR": "%.2f" % signed})
+            running_total += signed
+        offset_no = f"{(2 + len(gl)):010d}"
+        gl.append({"ITEMNO_ACC": offset_no,
+                    "GL_ACCOUNT": self.cc_org["CLEARING_GL"],
+                    "ITEM_TEXT":  f"M4H open AP {src_doc}"[:50],
+                    "PROFIT_CTR": self.cc_org["PROFIT_CTR"]})
+        cur.append({"ITEMNO_ACC": offset_no, "CURRENCY": curr,
+                     "AMT_DOCCUR": "%.2f" % (-running_total)})
+
         payload: dict = {
             "DOCUMENTHEADER":   hdr,
             "ACCOUNTGL":        gl,
             "CURRENCYAMOUNT":   cur,
-            "ACCOUNTPAYABLE":   [{"ITEMNO_ACC": "0000000001", "VENDOR_NO": tgt}],
+            "ACCOUNTPAYABLE":   ap_items,
             "_src_doc":         src_doc,
             "_src_partner":     src_partner,
             "_tgt_partner":     tgt,
             "_pdisp":           pdisp,
+            "_line_count":      1 + len(gl),
         }
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows
@@ -126,6 +152,7 @@ class OpenAPSpineOrchestrator(BaseSpineOrchestrator):
         src_partner = payload.pop("_src_partner", "")
         tgt_partner = payload.pop("_tgt_partner", "")
         pdisp       = payload.pop("_pdisp", "registry")
+        payload.pop("_line_count", None)
 
         resp = self.c.call("BAPI_ACC_DOCUMENT_POST", **payload)
         ret = resp.get("RETURN") or []

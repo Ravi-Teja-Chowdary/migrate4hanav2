@@ -203,6 +203,63 @@ class MaterialSpineOrchestrator(BaseSpineOrchestrator):
             payload["UNITSOFMEASUREX"] = [{"ALT_UNIT": u["ALT_UNIT"], "ALT_UNIT_X": "X"}
                                           for u in payload["UNITSOFMEASURE"]]
 
+        # WS2 -- CLASSIFICATION (material -> class -> characteristic values).
+        # Each row in row["_classifications"] links one (class, characteristic,
+        # value) triple. The BAPI accepts these via the CLASSIFICATION subtable;
+        # we F1-resolve both class names (Class spine target) and characteristic
+        # names (Characteristic spine target) when registered, otherwise pass
+        # the source value through and let the BAPI judge.
+        classifications = row.get("_classifications") or []
+        if classifications:
+            cls_rows = []
+            for c in classifications:
+                klart = (c.get("KLART") or "001").strip()    # 001 = Material class
+                src_cls = (c.get("CLASS") or "").strip().upper()
+                src_char = (c.get("ATNAM") or "").strip().upper()
+                atwrt = (c.get("ATWRT") or "").strip()       # characteristic value
+                tgt_cls = (self.key_map.resolve("Class", src_cls)
+                            if self.key_map is not None and src_cls else None) or src_cls
+                tgt_char = (self.key_map.resolve("Characteristic", src_char)
+                             if self.key_map is not None and src_char else None) or src_char
+                if not (src_cls and src_char):
+                    continue   # skip rows with no class+characteristic
+                cls_rows.append({
+                    "CLASSTYPE":     klart,
+                    "CLASSNUM":      tgt_cls,
+                    "CHARACT_NAME":  tgt_char,
+                    "VALUE_CHAR":    atwrt,
+                })
+            if cls_rows:
+                payload["CLASSIFICATION"] = cls_rows
+
+        # WS2 -- INSPECTION SETUP (MM-IM <-> QM linkage). Material may carry
+        # inspection types (QMAT) per (plant, art) tuple. Used by quality-
+        # planning customers; absent for non-QM landscapes so optional.
+        inspection = row.get("_inspection_setup") or []
+        if inspection:
+            payload["INSPECTIONCTRL"] = [
+                {"PLANT":            (i.get("WERKS") or "").strip(),
+                 "INSPECTION_TYPE":  (i.get("ART") or "").strip(),
+                 "ACTIVE":           (i.get("AKTIV") or "X").strip(),
+                 "PREF":             (i.get("AGEPREF") or "").strip()}
+                for i in inspection if i.get("WERKS") and i.get("ART")
+            ]
+            payload["INSPECTIONCTRLX"] = [
+                {"PLANT":            r["PLANT"],
+                 "INSPECTION_TYPE":  r["INSPECTION_TYPE"],
+                 "ACTIVE":           "X",
+                 "PREF":             "X" if r.get("PREF") else ""}
+                for r in payload["INSPECTIONCTRL"]
+            ]
+
+        # WS2 -- LONG TEXTS (header / item) for post-create BAPI_LONGTEXT_SAVE.
+        # Material long texts cover basic-data, purchasing, sales, and
+        # purchase-order text per language.
+        from base_spine_orchestrator import normalise_text_rows
+        long_texts = row.get("_long_texts") or []
+        if long_texts:
+            payload["LONGTEXTS"] = normalise_text_rows(long_texts)
+
         # EXTENSIONIN - custom append (Z-field) absorption
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows
