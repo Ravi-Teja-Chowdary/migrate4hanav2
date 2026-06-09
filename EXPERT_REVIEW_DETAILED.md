@@ -122,9 +122,240 @@ Saved as memory `aws-lift-shift-ip-drift-recovery.md` so future sessions skip th
 ### What still doesn't land (carry-forward gaps)
 
 1. **Zero customer cutovers.** TRL 4-5, in-the-lab maturity. Real customer pilot is the gating step to TRL 6.
-2. **~95 objects beyond the live-25** route to non-BAPI lanes; lane execution against live S/4 not yet validated.
+2. **~95 objects beyond the live-25** route to non-BAPI lanes; lane execution against live S/4 not yet validated. *(See late-session push below — MC file lane catalog now covers 99 objects; lane execution against live S/4 remains the gap.)*
 3. **Step Functions BAPI/in-place integration.** Production pipeline routes via lift-and-shift lanes (MC/LTMOM/IDOC). For BAPI/in-place customers the state-machine wiring is the next gap (commits `9965b24` / `3fd0ad7` capture the diagnosis).
-4. **The Trojan-Horse SaaS pivots** (Continuous DQ, Compliance Archive WORM, multi-cloud streaming) — design-level only; no code yet.
+4. **The Trojan-Horse SaaS pivots** (Continuous DQ, Compliance Archive WORM, multi-cloud streaming) — design-level only; no code yet. *(See late-session push below — all three pillars now have shipping code, opt-in terraform, observability, and DR. Resolved at the engineering layer; Phase B live-target validation is the remaining gap.)*
+
+---
+
+## 2026-06-09 Late-session push — Trojan-Horse mandate complete + Path 1 + Group D
+
+This section is the engineering-detail companion to the brief's late-2026-06-09 front-matter. Eight commits in a single autonomous session closing the four "this stays design-level only" items above and adding a complete production-operations layer (dashboards / alarms / runbook / DR plan / key-map recovery scripts).
+
+### Commit ladder
+
+| Commit | Summary | Net new |
+|---|---|---|
+| `82e036d` | MC catalog 53 → 132 (clears 125-threshold mandate) | `mc_file_exporter.py` MC_TEMPLATES 20→99 across 12 SAP modules; factory closure-bug found + fixed |
+| `6a2cca9` | WS3 — Client VPN + Transit Gateway + onboarding bundle | `terraform/modules/client-network/` (260 LOC) + `lambda/onboarding-bundle/` |
+| `6706028` | WS4 pillar 1 — Continuous DQ Monitor | `lambda/continuous-dq-monitor/` scan + webhook modes; hash-chained findings ledger |
+| `18704f6` | WS4 pillars 2+3 — Compliance Archive (WORM) + Multi-cloud SinkRouter | `lambda/compliance-archive/` + `lambda/utils/sink_router.py` (300 LOC) with 4 concrete sinks |
+| `9504542` | Path 1 step 1 — SinkRouter wired into spine | `BaseSpineOrchestrator` `_fan_out_to_sinks` + `flush_sinks_at_end_of_run` |
+| `e14fb63` | Path 1 step 2 — WS4 production terraform module | `terraform/modules/ws4/main.tf` (554 LOC, opt-in via `deploy_ws4`) |
+| `96655e6` | Group D items 1-3 — observability + SLA publisher | `terraform/modules/observability/main.tf` + `lambda/utils/sla_metrics.py` |
+| `bde7c82` | Group D items 4-5 — on-call runbook + DR plan + 3 PS recovery scripts | `docs/RUNBOOK.md` + `docs/DR.md` + 3 `scripts/*-key-map.ps1` |
+
+### Migration Cockpit catalog — 132 total objects covered
+
+The brief's "~95 objects beyond live-25" critique is reduced: the MC file lane now catalogs 99 objects (was 20), so total Migration Cockpit coverage is **33 BAPI spines + 99 MC file objects = 132 objects** — above the 125 threshold the mandate set. Expansion done as a factory: `_make_mc_file_class(obj_name, spec)` builds a pseudo-spine subclass per object_type with a `flush_to_s3()` per-tenant CSV writer. Catalog spans FI (15) / CO (8) / SD (14) / MM (16) / PP (10) / PM (8) / QM (6) / PS (8) / HR (5) / Master Data (9). Live-S/4 file-lane execution remains the validation gap.
+
+### WS3 — Client VPN + Transit Gateway + onboarding bundle
+
+`terraform/modules/client-network/main.tf` (opt-in via `deploy_client_network=false`) provisions on apply:
+
+- **AWS Client VPN Endpoint** with mutual cert auth (server + client ACM certs supplied as vars), CloudWatch connection log group, split tunnel = true (only Migrate4HANA traffic routed)
+- **Transit Gateway** with service-VPC attachment + cross-account RAM peer attachments (list var `tgw_peer_vpc_ids`)
+- **3-tier deny-by-default SG matrix**: `vpn_clients` → `bastion_tier` → `data_tier`, with explicit allow rules only on `data_tier_ports` (default `[3300, 3200, 44300, 44301, 443]`)
+- Outputs: `vpn_endpoint_id`, `vpn_dns_name`, `transit_gateway_id`, per-tier `sg_ids`
+
+`lambda/onboarding-bundle/handler.py` generates a per-tenant tarball with 4 artifacts:
+
+- `<tenant>.ovpn` — OVPN_TEMPLATE with AES-256-GCM cipher + embedded CA / client cert / private key
+- `firewall-routing.csv` — 8 columns: tier / src_cidr / dst_cidr / port_from / port_to / protocol / direction / description
+- `README.md` — operator instructions
+- `manifest.json` — SHA-256 fingerprint of the bundle + version + tenant_id + 24-hour presigned S3 URL
+
+Dual-shape entry point accepts both direct invoke and API Gateway proxy payloads. Tests: `test_onboarding_bundle.py` (12 tests, all green).
+
+### WS4 pillar 1 — Continuous DQ Monitor
+
+`lambda/continuous-dq-monitor/handler.py` — post-cutover SaaS pivot. Two modes:
+
+- **`scan`** (cron-triggered): iterates `objects[]` (default 5: BusinessPartner / Material / PurchaseOrder / SalesOrder / Customer), opens RFC, runs `RFC_READ_TABLE` per object against the configured DQ_PROBE_SPECS, applies the ruleset (inline → S3 → env var fallback), seals a hash-chained ledger block.
+- **`webhook`** (real-time): receives `{object, row, ruleset}` payload, runs DQ rules, returns verdict + ledger block.
+
+Ledger block schema: `tenant_obj` (S, hash) + `ts` (N, range) + `block_hash` (SHA-256 hex) + `prev_hash` (SHA-256 hex, genesis = `0`×64) + findings (S, JSON list) + run_id. The chain is per-`(tenant, object_type)` so concurrent monitors don't collide.
+
+Custom CloudWatch metrics published via `sla_metrics.publish_dq_violation_rate(scanned, violations, tenant_id, object_type)` — the observability module's `m4h-dq-violation-rate-prod` alarm subscribes to `Migrate4HANA/DQ::ViolationRatePct`. Tests: `test_continuous_dq_monitor.py` (8 tests, all green) — covers empty-target seal, MANDATORY-rule firing, webhook 400-on-missing-payload, ledger-block chain, no-ruleset → pure-extract mode, unknown mode → 400.
+
+### WS4 pillar 2 — Compliance Archive (WORM)
+
+`lambda/compliance-archive/handler.py` — 14 `LEGACY_TABLES` entries with table + key fields + projected columns:
+
+| # | Table | Object_type |
+|---|---|---|
+| 1-5 | KNA1, LFA1, BUT000, MARA, ANLA | Customer / Vendor / BusinessPartner / Material / FixedAsset |
+| 6-7 | BKPF, BSEG | FIDocumentHdr / FIDocumentLines |
+| 8-9 | VBAK, EKKO | SalesDocumentHdr / PurchaseDocHdr |
+| 10-12 | FAGLFLEXA, BSID, BSIK | GLBalances / OpenAR / OpenAP |
+| 13-14 | PA0001, PA0008 | Employee / PayrollResult |
+
+Modes: `extract` (one chunk) / `extract_all` (iterates a list or all 14) / `verify_chain` (re-walks the ledger checking each `prev_hash` matches the prior `block_hash`).
+
+Per-chunk artifact:
+- **Gzipped JSONL** at `tenants/<slug>/compliance-archive/<obj>/chunk-NNNNNN-<short_hash>.jsonl.gz`
+- Per-row `record_sha256` (canonical-JSON SHA-256 — per-row tamper-evidence independent of the chunk chain)
+- **S3 PutObject with ObjectLockMode=COMPLIANCE + ObjectLockRetainUntilDate** (3650 days default = 10 years; **irrevocable for retention_days even by AWS root**)
+- ServerSideEncryption=AES256 (or KMS when the customer-managed key arn is supplied)
+- Metadata['block-hash'] = chunk SHA-256, so the ledger and S3 are independently verifiable
+
+Ledger row (DDB `migrate4hana-compliance-ledger-prod`): `tenant_obj` (S, hash) + `ts` (N, range) + `chunk_idx` (N) + `block_hash` (S) + `prev_hash` (S) + `s3_uri` (S) + `row_count` (N) + `archived_at` (S).
+
+Tests: `test_compliance_archive.py` (8 tests, all green) — covers Object-Lock-COMPLIANCE seal + AES256 SSE + retention metadata, prev_hash chaining across 2 sequential extracts, unknown object_type → 400, `extract_all` per-object summaries, verify_chain ok=True on clean chain, verify_chain ok=False on FORGED prev_hash with `broken_at_chunk_idx` reported, per-row SHA-256 tamper evidence, unknown mode → 400.
+
+### WS4 pillar 3 — Multi-cloud SinkRouter
+
+`lambda/utils/sink_router.py` (300 LOC) — pluggable sink contract:
+
+```python
+class Sink:
+    name = "abstract"
+    def write_one(self, object_type, source_key, row, tenant_id="default") -> dict: ...
+    def flush(self) -> dict: ...
+```
+
+Four concrete implementations:
+
+| Sink | Behavior |
+|---|---|
+| `SnowflakeSink` | Per-tenant per-object buffering. `flush()` writes one JSONL stage object per `(tenant, object)` to `s3://<stage_bucket>/snowflake-stage/<tenant>/<object>/<ts>.jsonl` for Snowpipe auto-ingest |
+| `S3ParquetSink` | Hive-partitioned to `s3://<archive_bucket>/clean-room/tenant=<X>/object=<Y>/date=<YYYY-MM-DD>/batch-<ts>.jsonl`. PyArrow parquet upgrade is a drop-in replacement |
+| `SalesforceSink` | `SF_OBJECT_MAP` routes Customer/BP/Vendor → Account, SalesOrder → Order, Quotation → Quote, Material → Product2, Contact → Contact. Payload carries `External_Id__c` + `Source_System__c="Migrate4HANA"` + `Tenant_Id__c` + `Raw_Payload__c` JSON sidecar (Z-fields included). Unmapped object types silently skipped (`status="skipped_unmapped"`) |
+| `EventBusSink` | One EventBridge custom event per row: `Source="migrate4hana.spine"`, `DetailType="DataLoaded.<obj>"`, Detail = `{object_type, source_key, tenant_id, row, ts}` |
+
+Router: `SinkRouter.fan_out(object_type, source_key, row, tenant_id)` calls each sink's `write_one` in a per-sink try/except — **one sink's failure cannot block the others**. `flush_all()` returns per-sink summaries. Tests: `test_sink_router_ws4.py` (8 tests, all green).
+
+### Path 1 step 1 — SinkRouter wired into BaseSpineOrchestrator (commit `9504542`)
+
+Activates WS4 pillar 3 for every spine-routed object (not just the 5 sink-test fixtures). Surface area:
+
+- `BaseSpineOrchestrator.__init__` adds optional `sink_router=None, tenant_id="default"`
+- `_fan_out_to_sinks(result, transformed)` fires on `DISP_CREATED` / `DISP_MATCHED_EXISTING` / `DISP_REMAPPED`; skipped on `DISP_DEAD_LETTER` so a sink failure cannot mirror partial / rejected data
+- Fan-out fires on F1 ledger-hit short-circuits too — replays keep non-SAP destinations consistent (sinks remain responsible for their own idempotency via External_Id__c / partition keys)
+- `flush_sinks_at_end_of_run()` helper for handler-side cleanup telemetry
+- Per-sink exceptions stay isolated: a BoomSink does NOT flip a successful BAPI write into a failed LoadResult
+
+Tests: `test_sink_router_spine_wiring.py` (9 tests, all green) — fan-out on successful create / dead-letter skipped / BAPI exception skipped / None-router safe / ledger-hit fans out / remapped fans out with M4H-prefixed key / end-of-run flush hits every sink / sink-failure isolated / tenant_id propagates. **Full 26/26 sweep green after the wire-in, 0 regressions.**
+
+### Path 1 step 2 — WS4 production terraform module (commit `e14fb63`)
+
+Self-contained `terraform/modules/ws4/main.tf` (554 LOC, opt-in via `var.deploy_ws4=false` default). Existing prod stacks see **zero net-new resources** until the flag is flipped. When enabled, provisions ~16 resources:
+
+- **3 Lambdas**: `migrate4hana-continuous-dq-monitor-prod`, `migrate4hana-compliance-archive-prod`, `migrate4hana-onboarding-bundle-prod`
+- **2 DDB tables** (both `point_in_time_recovery=enabled`, SSE with customer-managed KMS when supplied, `deletion_protection_enabled=true`):
+  - `migrate4hana-dq-findings-prod` (hash=`tenant_obj`, range=`ts`)
+  - `migrate4hana-compliance-ledger-prod` (hash=`tenant_obj`, range=`ts`)
+- **2 S3 buckets**:
+  - `migrate4hana-compliance-archive-prod` — `object_lock_enabled=true` (set at bucket creation, irreversible), versioning enabled, COMPLIANCE-mode default retention = `compliance_retention_days` (default 3650), AES256 or KMS SSE, public-access-block
+  - `migrate4hana-snowflake-stage-prod` — 30-day lifecycle (Snowpipe should ingest well before)
+- **Dedicated IAM role** (`migrate4hana-ws4-lambda-prod`) — strictly scoped to: the 2 DDB tables + `migrate4hana-key-map-prod` (for compliance-archive's per-row hash registration), the 2 S3 buckets, `var.secrets_arn`, the KMS key, the custom event bus, and VPC ENI lifecycle. No wildcard table permissions.
+- **EventBridge custom bus** `migrate4hana-data-fabric` (SinkRouter's `EventBusSink` publishes here)
+- **EventBridge cron rule** for daily DQ scans (default `cron(0 6 * * ? *)`)
+- **4 CloudWatch log groups** (30-day retention, KMS-encrypted when key supplied)
+- VPC attachment optional — skipped when `vpc_id=""`
+
+`terraform validate` PASS (aws provider v6.49.0). Tear-down via `terraform destroy -target=module.ws4` — the compliance archive bucket's CONTENT survives destroy until each object's Object Lock retention expires (by design — that's what makes it audit-grade WORM).
+
+### Group D items 1-3 — observability module + SLA publisher (commit `96655e6`)
+
+`terraform/modules/observability/main.tf` — opt-in via `var.deploy_observability=false`. Lambdas with empty function-name vars are silently skipped via `length()` guards so the module deploys cleanly even when WS4 lambdas aren't yet provisioned.
+
+When enabled:
+
+- **1 per-Lambda deep-view dashboard** for each provisioned function (api-orchestrator, dq-monitor, compliance-archive, onboarding-bundle, data-migrator): Invocations / Errors / Throttles · Duration p50/p95/p99/max · ConcurrentExecutions · Recent ERROR log query (Logs Insights)
+- **1 cross-cutting SLA dashboard** (`Migrate4HANA-SLA-prod`): ALL-Lambdas error % via metric-math expression · ALL-Lambdas p95 latency · DDB key-map throttles + R/W capacity · DQ + compliance ledger write rates · Markdown widget with live SLA targets + RUNBOOK link
+- **Per-Lambda alarms** (each provisioned function gets all 3):
+  - `m4h-<fn>-errors-prod` — metric-math `100 * Errors / (Invocations + 0.0001)` > `error_rate_pct_threshold` (default 1%) for 2 periods, with OK_actions wired
+  - `m4h-<fn>-p95-latency-prod` — extended_statistic p95 of Duration > `p95_latency_ms_threshold` (default 30000ms) for 3 periods
+  - `m4h-<fn>-throttles-prod` — ANY throttle (>0)
+- **Domain alarms**:
+  - `m4h-key-map-throttle-prod` — ANY throttle on the F1 PersistentKeyMap table (immediate page — F1 must not throttle mid-cutover)
+  - `m4h-key-map-system-errors-prod` — DDB SystemErrors > 0 (AWS-side fault, possible corruption signal)
+  - `m4h-dq-violation-rate-prod` — custom `Migrate4HANA/DQ::ViolationRatePct` > 5%
+  - `m4h-compliance-chain-broken-prod` — custom `Migrate4HANA/Compliance::ChainBrokenCount` > 0 (immediate page — audit-evidence is the product)
+  - `m4h-ledger-write-failure-prod` — DDB `UserErrors` on the compliance ledger table > 5
+- **SNS topic** `migrate4hana-ops-alerts-prod` + email subscription + optional PagerDuty HTTPS endpoint
+
+`lambda/utils/sla_metrics.py` — the publisher half:
+
+| Helper | Namespace::Metric | Dimensions |
+|---|---|---|
+| `publish_throughput(rows, elapsed_sec, ...)` | `Migrate4HANA/Throughput::RowsPerSecond` | TenantId + ObjectType |
+| `publish_bapi_latency(duration_ms, ...)` | `Migrate4HANA/BAPI::CallDurationMs` | TenantId + ObjectType |
+| `publish_recon_lag(seconds, ...)` | `Migrate4HANA/Reconciliation::LagSeconds` | TenantId |
+| `publish_dq_violation_rate(scanned, violations, ...)` | `Migrate4HANA/DQ::ViolationRatePct` + `ScannedRecords` + `ViolationRecords` | TenantId + ObjectType |
+| `publish_chain_broken(...)` | `Migrate4HANA/Compliance::ChainBrokenCount` | TenantId |
+| `publish_archived(rows, ...)` | `Migrate4HANA/Compliance::ArchivedRecords` | TenantId + ObjectType |
+| `TimedBlock()` | context manager — pair with publishers | — |
+
+All publishers are best-effort. A CloudWatch failure CANNOT break the workload. Zero-safe (no divide-by-zero on empty / zero-rows / zero-elapsed). Kill-switch via `M4H_DISABLE_CLOUDWATCH_METRICS=1` for offline tests. Tests: `test_sla_metrics.py` (9 tests, all green) — covers zero-safety, TimedBlock recording, exception propagation, kill-switch.
+
+### Group D items 4-5 — on-call runbook + DR plan + key-map recovery scripts (commit `bde7c82`)
+
+`docs/RUNBOOK.md` (~250 lines):
+- §1 30-second triage table mapping every alarm name → first action + dashboard link
+- §2 Lambda error rate playbook (stale zip diagnosis + redeploy command; ECC unreachable; S/4 IP drift; secret rotation)
+- §3 Lambda p95 latency playbook (concurrency saturation, downstream RTT diagnosis)
+- §4 **Key-Map ledger emergency (CRITICAL)** — pause active SF execution; diagnose throttle root cause; PAY_PER_REQUEST partition hot-spot mitigation; SystemErrors → SEV-1 + DR §6
+- §5 **Compliance archive emergency** — 3 likely causes (race / tamper / gap) + per-case recovery; never delete a block; escalate to legal/compliance
+- §6 cross-references to DR.md
+- §7 common recipes (re-pull S/4 creds, force DQ scan, verify chain, Snowflake stage backlog check)
+- §8 escalation matrix (SEV-1/2/3 with examples)
+- §9 post-incident checklist
+
+`docs/DR.md` (~290 lines) — **answers the explicit question "what happens if `migrate4hana-key-map-prod` gets corrupted mid-customer-cutover":**
+- §1 Tier-0 inventory with RPO/RTO targets per resource (key_map / compliance-ledger / compliance-archive-S3 / dq-findings / evidence-S3)
+- §2 backup strategy: PITR always-on + on-demand snapshots at cutover boundaries (1h before / immediately after / every 6h during phased) + optional cross-region Global Tables
+- §3 **corruption taxonomy** — C1 logical / C2 partial loss / C3 schema break / C4 total loss / C5 tamper, each with detection signal
+- §4 **THE headline answer**: cutover does NOT auto-abort because the F1 ledger short-circuit is **advisory, not gating** — `resolve()` returning None just means the spine still calls the BAPI, and the BAPI/SAP is source of truth. Per-class recovery procedures:
+  - C1/C5 — stop, PITR-restore-to-just-before-contamination, atomic swap, replay (ledger short-circuit makes replay safe)
+  - C2 — heal in place: reconstruct missing key_map rows from BAPI duplicate-key responses + compliance ledger
+  - C3 — git revert + redeploy, then C1/C2 for any rows written under the bad code
+  - C4 — emergency PITR `--use-latest-restorable-time`, re-attach PITR/SSE/deletion-protection (not preserved by restore), re-point Lambda env vars
+- §5 conflict-resolution ordering: **SAP (BAPI duplicate-key) > compliance ledger > F1 key_map** — F1 is second-class truth derived from the first two
+- §6 RTO/RPO commitments to the founder
+- §7 customer communication template
+- §8 quarterly drill schedule
+
+Three supporting PowerShell scripts (all parse-clean under pwsh 7.6.2):
+
+| Script | Mode |
+|---|---|
+| `scripts/backup-key-map.ps1` | On-demand snapshot. Checks PITR is on (warn-but-proceed if off), creates backup with tagged name `<table>-<safe-tag>-<UTC>`, polls until AVAILABLE. `-VerifyOnly` mode: spot-checks 20 rows for expected `(object, source_key, target_key, run_id, written_at)` shape — used on restored tables before swap. |
+| `scripts/restore-key-map.ps1` | Dual mode: `-ToTimestamp` for PITR or `-FromBackup` for on-demand backup ARN. Refuses if target table name already exists. Polls until ACTIVE. **Re-applies PITR + SSE-KMS + deletion-protection** (none of which restore preserves). |
+| `scripts/swap-key-map.ps1` | Atomic production swap. **Requires `-ConfirmYes`** (destructive). Step 1: takes a final pre-swap "evidence backup" of the corrupt table. Step 2: re-points 5 consumer Lambdas' `M4H_KEYMAP_TABLE` env vars to the restored table. Step 3: leaves the corrupt table intact as forensic evidence with a guidance message. |
+
+### Test totals after the late-session push
+
+- 26 test files green, 0 regressions
+- New test files added in this session: `test_payload_depth_ws2.py`, `test_dynamic_catalog_wiring.py`, `test_spine_promotion_batch7.py`, `test_spine_promotion_batch8.py`, `test_ws2_more_depth.py`, `test_onboarding_bundle.py`, `test_mc_file_exporter.py`, `test_continuous_dq_monitor.py`, `test_compliance_archive.py`, `test_sink_router_ws4.py`, `test_sink_router_spine_wiring.py`, `test_sla_metrics.py`
+- Spine roster: **33 BAPI spines** (25 from yesterday + 8 from batches 7-8: WorkCenter / InfoRecord / Quotation / OutboundDelivery / Inquiry / BillingDocument / PlannedOrder / ProductionBOM)
+- Total Migration Cockpit coverage: **132 objects** (33 BAPI + 99 MC file)
+
+### Mandate / roadmap snapshot
+
+| Workstream | Status |
+|---|---|
+| WS1 — Governance & multi-tenancy | Engineering-complete (F7 TenantContext Phase B + value-mapping matrix + ruleset console TF). Cognito + React console for value-maps/rulesets is the remaining wiring gap. |
+| WS2 — SAP-functional depth | Engineering-complete; material classification depth + Open AR/AP multi-line FI docs shipped this session. ~95 MC objects' live-S/4 lane execution is the remaining validation gap. |
+| WS3 — Customer-landscape network | Engineering-complete; opt-in TF module for Client VPN + TGW + onboarding bundle. `deploy_client_network=true` apply with real ACM certs is the remaining go-live step. |
+| WS4 — Post-migration SaaS pivots | **Engineering-complete on all 3 pillars.** Pillar 1 (DQ) + Pillar 2 (Compliance Archive WORM) + Pillar 3 (Multi-cloud SinkRouter) all shipping code + tests + opt-in TF. Phase B against real Snowflake/SF/EventBridge/live-ECC-compliance-extract is the remaining gap. |
+| Group D — Production ops | **Shipped end-to-end.** Dashboards + alarms (per-Lambda + 5 domain alarms incl. key-map throttle & compliance-chain-broken) + SLA publisher + RUNBOOK + DR plan + 3 key-map recovery scripts answering the corruption-mid-cutover question. |
+
+**Highest-leverage next step (recommended):** Customer Zero — either a real first customer or a synthetic full-tenant end-to-end run that exercises all 4 workstreams against actual data. Every downstream group (case studies, contractual SLA tier definitions, partner conversations, scale-curve refinement) benefits from at least one real cutover signature.
+
+**Still open (not started this session):**
+
+- WS1 production wiring: Cognito user pool + per-tenant claims authorizer; React console for value-maps / rulesets / telemetry
+- WS3 production apply: ACM cert issuance + `deploy_client_network=true` terraform apply
+- BAPI in-place state machine production deploy (module exists, opt-in apply pending)
+- Phase B live runs against real Snowflake / Salesforce / EventBridge / real-ECC-compliance-extract
+- 1000-way fan-out scale curve (extending the 32-way measurement)
+- Customer Zero
+- Group A (go-to-market): pricing tiers, sales motion, demo sandbox, customer-1 contract, contractual SLA tier definitions
+- Group B (engineering nice-to-haves): chaos harness, synthetic 15-min canary, per-tenant cost attribution, Fargate spillover live test
+- Group C (security/compliance): third-party pentest, SOC2 readiness, HIPAA controls, GDPR DPA template
+- Group E (content/marketing): landing page, technical blog posts, SAP partner cert path, case studies (needs Customer Zero first)
 
 ---
 
