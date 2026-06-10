@@ -1,11 +1,13 @@
 import { useCallback, useMemo } from 'react';
+import { useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
   Activity, ShieldCheck, FileText, Server, AlertTriangle, Clock, CheckCircle2,
-  ArrowRight, Zap, Database,
+  ArrowRight, Zap, Database, Download, Eye,
 } from 'lucide-react';
-import { api } from '../lib/api';
+import { api, downloadFile, openInTab } from '../lib/api';
 import { useApi } from '../lib/useApi';
+import { useToast } from '../lib/toast.jsx';
 import {
   Panel, MetricTile, Sparkline, TimeSeriesChart, Gantt, StatusPill,
   PageHeader, Spinner, OfflineBanner, KVList, EmptyState,
@@ -22,7 +24,9 @@ function spineToSpark(spine) {
 }
 
 export default function Dashboard() {
+  const toast = useToast();
   const { triggerRefresh } = useOutletContext() || {};
+  const [pdfBusy, setPdfBusy] = useState(null); // 'download' | 'preview' | null
   const health = useApi(useCallback(() => api.health(), []), { pollMs: 10000 });
   const ecc = useApi(useCallback(() => api.eccStatus(), []));
   const status = useApi(useCallback(() => api.status(), []), { pollMs: 5000 });
@@ -39,9 +43,31 @@ export default function Dashboard() {
 
   // Latest dirty-data SLO from the most recent run (if any)
   const latestRun = Array.isArray(runs.data) && runs.data.length > 0 ? runs.data[0] : null;
+  const latestRunId = latestRun?.id || latestRun?.run_id;
   const dqPct = latestRun?.data_quality?.dead_letter_pct ?? null;
   const dqThreshold = latestRun?.data_quality?.threshold_pct ?? 5.0;
   const dqBreach = dqPct != null && dqPct > dqThreshold;
+
+  const downloadLatestPdf = async () => {
+    if (!latestRunId) return;
+    setPdfBusy('download');
+    const tId = toast.loading('Generating PDF…', latestRunId);
+    try {
+      await downloadFile(`/api/runs/${latestRunId}/pdf`, `migration-report-${latestRunId}.pdf`);
+      toast.dismiss(tId);
+      toast.success('PDF downloaded', `migration-report-${latestRunId}.pdf`);
+    } catch (e) { toast.dismiss(tId); toast.error('Download failed', e.message); }
+    finally { setPdfBusy(null); }
+  };
+  const previewLatestPdf = async () => {
+    if (!latestRunId) return;
+    setPdfBusy('preview');
+    try {
+      await openInTab(`/api/runs/${latestRunId}/pdf`);
+      toast.info('Opening PDF', latestRunId);
+    } catch (e) { toast.error('Preview failed', e.message); }
+    finally { setPdfBusy(null); }
+  };
 
   return (
     <div className="space-y-4">
@@ -51,6 +77,16 @@ export default function Dashboard() {
         subtitle="Live observability for the ECC → S/4HANA migration pipeline."
         actions={
           <>
+            {latestRunId && (
+              <>
+                <button onClick={previewLatestPdf} disabled={!!pdfBusy} className="btn btn-sm">
+                  {pdfBusy === 'preview' ? <Spinner size={12} /> : <Eye size={12} />} Preview latest PDF
+                </button>
+                <button onClick={downloadLatestPdf} disabled={!!pdfBusy} className="btn btn-sm btn-primary">
+                  {pdfBusy === 'download' ? <Spinner size={12} /> : <Download size={12} />} Download latest PDF
+                </button>
+              </>
+            )}
             <Link to="/commands" className="btn btn-sm"><span>Commands</span></Link>
             <Link to="/pipeline" className="btn btn-sm btn-primary"><Zap size={12} /><span>Run pipeline</span></Link>
           </>
@@ -184,7 +220,15 @@ export default function Dashboard() {
                       ]}
                     />
                   </div>
-                  <Link to={`/runs#${latestRun.run_id}`} className="btn btn-sm w-full mt-4 justify-center">View detail <ArrowRight size={12} /></Link>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button onClick={previewLatestPdf} disabled={!!pdfBusy} className="btn btn-sm justify-center">
+                      {pdfBusy === 'preview' ? <Spinner size={12} /> : <Eye size={12} />} Preview
+                    </button>
+                    <button onClick={downloadLatestPdf} disabled={!!pdfBusy} className="btn btn-sm btn-primary justify-center">
+                      {pdfBusy === 'download' ? <Spinner size={12} /> : <Download size={12} />} PDF
+                    </button>
+                  </div>
+                  <Link to="/runs" className="btn btn-sm w-full mt-2 justify-center">View all runs <ArrowRight size={12} /></Link>
                 </>
               ) : (
                 <EmptyState icon={FileText} title="No runs yet" hint="Trigger a run from the Pipeline page or via the Command Center." />

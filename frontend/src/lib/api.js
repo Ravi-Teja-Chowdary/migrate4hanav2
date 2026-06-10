@@ -107,4 +107,46 @@ export const api = {
   scriptRun:   (script_id, params = {}) =>
     apiFetch('/api/scripts/run', { method: 'POST', body: JSON.stringify({ script_id, params }) }),
   scriptOutput: (job_id) => apiFetch(`/api/scripts/output/${job_id}`),
+
+  // ── PDF reports ──
+  reportVolumes: (run_id) => apiFetch(`/api/v1/reports/${run_id}/volumes`),
 };
+
+/** Trigger a browser download of a PDF (or any file) at the given API path.
+ *  Uses an authenticated fetch + blob URL so the browser downloads it.
+ *  Falls back to opening the authUrl in a new tab if blob fetch fails.
+ */
+export async function downloadFile(path, filename) {
+  const token = await getToken();
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      let msg = `HTTP ${res.status}`;
+      try { msg = JSON.parse(txt).detail || msg; } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || path.split('/').pop() || 'download';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+    return true;
+  } catch (e) {
+    // Fall back: open in new tab with token query param
+    const u = await authUrl(path);
+    window.open(u, '_blank');
+    throw e;
+  }
+}
+
+/** Open a PDF in a new tab (read-only preview) with auth via query param. */
+export async function openInTab(path) {
+  const u = await authUrl(path);
+  window.open(u, '_blank');
+}

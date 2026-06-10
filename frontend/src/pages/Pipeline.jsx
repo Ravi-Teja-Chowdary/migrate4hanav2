@@ -2,8 +2,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Zap, Search, Activity, AlertTriangle, CheckCircle2, Circle, Clock, ListChecks,
+  Download, Eye, FileText,
 } from 'lucide-react';
-import { api } from '../lib/api';
+import { api, downloadFile, openInTab } from '../lib/api';
 import { useApi, useAction } from '../lib/useApi';
 import { useToast } from '../lib/toast.jsx';
 import {
@@ -36,6 +37,8 @@ export default function Pipeline() {
   const stagesQ = useApi(useCallback(() => api.stages(), []));
   const statusQ = useApi(useCallback(() => api.status(), []), { pollMs: 3000 });
   const progressQ = useApi(useCallback(() => api.progress(0), []), { pollMs: 3000 });
+  const runsQ = useApi(useCallback(() => api.runs(), []), { pollMs: 10000 });
+  const [pdfBusy, setPdfBusy] = useState(null);
 
   const assess = useAction(async () => {
     try {
@@ -113,6 +116,46 @@ export default function Pipeline() {
           </>
         }
       />
+
+      {/* Latest PDF banner — visible whenever there's a run on disk */}
+      {(() => {
+        const latest = Array.isArray(runsQ.data) && runsQ.data[0];
+        if (!latest) return null;
+        const latestId = latest.id || latest.run_id;
+        const dlPdf = async () => {
+          setPdfBusy('download');
+          const tId = toast.loading('Generating PDF…', latestId);
+          try {
+            await downloadFile(`/api/runs/${latestId}/pdf`, `migration-report-${latestId}.pdf`);
+            toast.dismiss(tId); toast.success('PDF downloaded', latestId);
+          } catch (e) { toast.dismiss(tId); toast.error('Download failed', e.message); }
+          finally { setPdfBusy(null); }
+        };
+        const prevPdf = async () => {
+          setPdfBusy('preview');
+          try { await openInTab(`/api/runs/${latestId}/pdf`); toast.info('Opening PDF', latestId); }
+          catch (e) { toast.error('Preview failed', e.message); }
+          finally { setPdfBusy(null); }
+        };
+        return (
+          <Panel
+            title="Latest run report"
+            icon={FileText}
+            subtitle={`${latestId} · ${latest.status || 'unknown'}`}
+            actions={<StatusPill tone={latest.status === 'completed' || latest.status === 'success' || latest.status === 'succeeded' ? 'ok' : 'muted'}>{latest.status || 'unknown'}</StatusPill>}
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={prevPdf} disabled={!!pdfBusy} className="btn btn-sm">
+                {pdfBusy === 'preview' ? <Spinner size={12} /> : <Eye size={12} />} Preview PDF
+              </button>
+              <button onClick={dlPdf} disabled={!!pdfBusy} className="btn btn-sm btn-primary">
+                {pdfBusy === 'download' ? <Spinner size={12} /> : <Download size={12} />} Download PDF
+              </button>
+              <span className="text-[11px] text-ink-4 ml-auto">PDF is generated on demand from this run's artifacts.</span>
+            </div>
+          </Panel>
+        );
+      })()}
 
       {(assess.error || full.error) && (
         <Panel><div className="text-xs flex items-center gap-2" style={{ color: 'var(--err)' }}><AlertTriangle size={13} /> {(assess.error || full.error).message}</div></Panel>

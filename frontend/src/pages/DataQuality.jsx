@@ -1,15 +1,19 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { Activity, AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
-import { api } from '../lib/api';
+import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Download, Eye } from 'lucide-react';
+import { api, downloadFile, openInTab } from '../lib/api';
 import { useApi } from '../lib/useApi';
+import { useToast } from '../lib/toast.jsx';
 import { Panel, MetricTile, TimeSeriesChart, StatusPill, PageHeader, Spinner, EmptyState, KVList } from '../components/dd';
 
 // Data Quality dashboard — surfaces the dead-letter SLO gate shipped 2026-06-10.
 // Pulls data_quality blocks from each run and renders trend + per-object breakdown.
 export default function DataQuality() {
+  const toast = useToast();
+  const [pdfBusy, setPdfBusy] = useState(null);
   const runs = useApi(useCallback(() => api.runs(), []), { pollMs: 15000 });
   const latest = Array.isArray(runs.data) && runs.data.length > 0 ? runs.data[0] : null;
+  const latestId = latest?.id || latest?.run_id;
   const dq = latest?.data_quality;
   const series = useMemo(() => buildDqSeries(runs.data), [runs.data]);
 
@@ -18,13 +22,45 @@ export default function DataQuality() {
   const breach = dq?.slo_breach ?? false;
   const gateDisabled = dq?.gate_disabled ?? false;
 
+  const dlPdf = async () => {
+    if (!latestId) return;
+    setPdfBusy('download');
+    const tId = toast.loading('Generating PDF…', latestId);
+    try {
+      await downloadFile(`/api/runs/${latestId}/pdf`, `migration-report-${latestId}.pdf`);
+      toast.dismiss(tId); toast.success('PDF downloaded', latestId);
+    } catch (e) { toast.dismiss(tId); toast.error('Download failed', e.message); }
+    finally { setPdfBusy(null); }
+  };
+  const prevPdf = async () => {
+    if (!latestId) return;
+    setPdfBusy('preview');
+    try { await openInTab(`/api/runs/${latestId}/pdf`); toast.info('Opening PDF', latestId); }
+    catch (e) { toast.error('Preview failed', e.message); }
+    finally { setPdfBusy(null); }
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="Data Quality"
         breadcrumb={['Migrate4HANA', 'Data Quality']}
         subtitle="Dirty-data SLO gate trends. Shipped 2026-06-10. Gate halts pipeline at ManualGate_DataQuality when dead-letter % exceeds threshold."
-        actions={<Link to="/gates" className="btn btn-sm">Open gates queue <ArrowRight size={12} /></Link>}
+        actions={
+          <>
+            {latestId && (
+              <>
+                <button onClick={prevPdf} disabled={!!pdfBusy} className="btn btn-sm">
+                  {pdfBusy === 'preview' ? <Spinner size={12} /> : <Eye size={12} />} Preview PDF
+                </button>
+                <button onClick={dlPdf} disabled={!!pdfBusy} className="btn btn-sm btn-primary">
+                  {pdfBusy === 'download' ? <Spinner size={12} /> : <Download size={12} />} Download PDF
+                </button>
+              </>
+            )}
+            <Link to="/gates" className="btn btn-sm">Open gates queue <ArrowRight size={12} /></Link>
+          </>
+        }
       />
 
       {runs.loading && !runs.data && (
