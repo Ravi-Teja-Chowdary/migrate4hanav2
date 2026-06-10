@@ -228,3 +228,21 @@ variable "audit_kms_key_arn" {
   default     = ""
   description = "Optional CMK ARN to encrypt the audit-logs bucket. Empty = AWS-managed aws/s3 key. CMK provides explicit rotation, key policy, and CloudTrail key-usage events."
 }
+
+# ─────────────────────────────────────────────
+# UI hosting (customer-facing app: CloudFront + S3 + ALB + Fargate)
+# Defaults make this deployable with no DNS prerequisites — CloudFront uses
+# its built-in *.cloudfront.net domain (HTTPS via the AWS-managed cert).
+# Set both vars together to wire in a custom domain.
+# ─────────────────────────────────────────────
+variable "ui_custom_domain" {
+  type        = string
+  default     = ""
+  description = "Optional custom domain for the UI (e.g. migrate4hana.example.com). Empty = use the CloudFront default *.cloudfront.net domain."
+}
+
+variable "ui_acm_cert_arn_us_east_1" {
+  type        = string
+  default     = ""
+  description = "ACM cert ARN in us-east-1 for ui_custom_domain. CloudFront requires the cert in us-east-1 specifically. Only consulted when ui_custom_domain is set."
+}

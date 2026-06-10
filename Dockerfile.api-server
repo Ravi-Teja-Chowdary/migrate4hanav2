@@ -1,0 +1,72 @@
+# ---------------------------------------------------------------------------
+# Migrate4HANA — api_server.py container image
+# ---------------------------------------------------------------------------
+# Runs the FastAPI backend on Fargate behind an ALB. Bundles the SAP NW RFC
+# SDK so pyrfc works without a sidecar download step. Built from repo root:
+#
+#     docker build -f Dockerfile.api-server -t migrate4hana-api-server .
+#
+# Image is pushed to ECR by scripts/deploy-ui-aws.ps1 and consumed by the
+# Fargate service defined in terraform/modules/api-server.
+# ---------------------------------------------------------------------------
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    SAPNWRFC_HOME=/opt/sapnwrfc \
+    LD_LIBRARY_PATH=/opt/sapnwrfc/lib
+
+# OS deps for pyrfc + healthchecks
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libicu-dev \
+        curl \
+        ca-certificates \
+        gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Bundle the SAP NW RFC SDK into the image at SAPNWRFC_HOME. This avoids a
+# runtime download (which would also require an SAP support login) and lets
+# pyrfc dlopen its shared libs reliably.
+COPY nwrfcsdk-linux/ /opt/sapnwrfc/
+RUN if [ -d /opt/sapnwrfc/lib ]; then \
+        echo "/opt/sapnwrfc/lib" > /etc/ld.so.conf.d/sapnwrfc.conf && ldconfig ; \
+    fi
+
+# Python deps. requirements.txt drives both local + AWS builds, so we get
+# pyrfc, fastapi, uvicorn, boto3, etc. in one shot.
+COPY requirements.txt /app/requirements.txt
+RUN pip install -r /app/requirements.txt && \
+    pip install "uvicorn[standard]"
+
+# Application source. Keep this layer last so source edits don't bust the
+# heavier dep layer above.
+COPY api_server.py            /app/api_server.py
+COPY pdf_report_generator.py  /app/pdf_report_generator.py
+COPY run_local_lift_and_shift.py /app/run_local_lift_and_shift.py
+COPY pipeline_spine_master.py /app/pipeline_spine_master.py
+COPY data_spine_orchestrator.py /app/data_spine_orchestrator.py
+COPY local_aws_shim.py        /app/local_aws_shim.py
+COPY lambda/                  /app/lambda/
+COPY agent/                   /app/agent/
+
+# Non-root user. SAP NW RFC SDK + pyrfc are happy here; only the lib path
+# needs to be world-readable (which it is).
+RUN useradd --create-home --shell /bin/bash app && \
+    chown -R app:app /app
+USER app
+
+EXPOSE 8000
+
+# Healthcheck the ALB target group also uses (GET /api/health).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://localhost:8000/api/health || exit 1
+
+# Start uvicorn directly so we get fast startup + clean signal handling.
+# Single worker keeps the in-memory _ecc_passwd / _s4_passwd globals
+# consistent (multi-worker would split sessions across worker processes).
+CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

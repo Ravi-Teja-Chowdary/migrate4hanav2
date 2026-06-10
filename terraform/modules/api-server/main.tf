@@ -1,0 +1,404 @@
+# ──────────────────────────────────────────────────────────────────────────
+# api-server module — Fargate + ALB hosting for api_server.py
+# ──────────────────────────────────────────────────────────────────────────
+# Pushes api_server.py into a public-facing ALB-fronted Fargate service so a
+# customer browser can reach it via the CloudFront distribution defined in
+# the ui-hosting module. The Fargate task gets the same IAM permissions as
+# the migration Lambdas (Secrets / S3 / DynamoDB / SFN / Lambda invoke) so
+# pipeline triggers work identically to the local dev flow.
+#
+# Inputs:
+#   environment, vpc_id, private_subnet_ids, public_subnet_ids
+#   ecs_cluster_arn — reuse the existing module.ecs cluster
+#   staging_bucket, key_map_table, lambda_arns (for IAM grants + env vars)
+#   image_tag — set by the deploy script after a docker push; defaults to "latest"
+#
+# Outputs:
+#   alb_dns_name       — internal-only DNS; CloudFront points here as origin
+#   ecr_repository_url — where the deploy script docker-pushes the image
+#   service_name       — for `aws ecs update-service --force-new-deployment`
+# ──────────────────────────────────────────────────────────────────────────
+
+variable "environment"          { type = string }
+variable "vpc_id"               { type = string }
+variable "private_subnet_ids"   { type = list(string) }
+variable "public_subnet_ids"    { type = list(string) }
+variable "ecs_cluster_arn"      { type = string }
+variable "staging_bucket"       { type = string }
+
+variable "key_map_table" {
+  type    = string
+  default = ""
+}
+
+variable "anthropic_secret_arn" {
+  type    = string
+  default = ""
+}
+
+variable "image_tag" {
+  type    = string
+  default = "latest"
+}
+
+variable "cpu" {
+  type    = string
+  default = "1024"
+}
+
+variable "memory" {
+  type    = string
+  default = "2048"
+}
+
+variable "desired_count" {
+  type    = number
+  default = 1
+}
+
+variable "log_retention_days" {
+  type    = number
+  default = 30
+}
+
+variable "alb_idle_timeout" {
+  type    = number
+  default = 120
+}
+
+# Each environment writes to its own image repo so prod and dev can diverge.
+resource "aws_ecr_repository" "api_server" {
+  name                 = "migrate4hana-api-server-${var.environment}"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Name        = "migrate4hana-api-server-${var.environment}"
+    Component   = "ApiServer"
+    Environment = var.environment
+  }
+}
+
+# Lifecycle policy: keep the last 10 images; the rest are pruned on push.
+resource "aws_ecr_lifecycle_policy" "api_server" {
+  repository = aws_ecr_repository.api_server.name
+  policy     = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep last 10 images"
+      selection = {
+        tagStatus     = "any"
+        countType     = "imageCountMoreThan"
+        countNumber   = 10
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+# ── CloudWatch log group ───────────────────────────────────────────────────
+resource "aws_cloudwatch_log_group" "api_server" {
+  name              = "/migrate4hana/api-server/${var.environment}"
+  retention_in_days = var.log_retention_days
+
+  tags = {
+    Component   = "ApiServer"
+    Environment = var.environment
+  }
+}
+
+# ── Task IAM roles ─────────────────────────────────────────────────────────
+# Execution role: ECR pull + CloudWatch log write. Task role: app-level
+# permissions (Secrets / S3 / DynamoDB / SFN / Lambda invoke).
+data "aws_iam_policy_document" "ecs_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "execution" {
+  name               = "migrate4hana-api-server-execution-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+}
+
+resource "aws_iam_role_policy_attachment" "execution_managed" {
+  role       = aws_iam_role.execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role" "task" {
+  name               = "migrate4hana-api-server-task-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+}
+
+# Same permissions surface as the Lambda role so api_server.py can do
+# everything the Lambdas can (read secrets, write artifacts, kick SFN).
+data "aws_iam_policy_document" "task_policy" {
+  statement {
+    effect  = "Allow"
+    actions = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+    resources = ["*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:DeleteObject"]
+    resources = [
+      "arn:aws:s3:::${var.staging_bucket}",
+      "arn:aws:s3:::${var.staging_bucket}/*",
+    ]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = [
+      "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem",
+      "dynamodb:Query", "dynamodb:Scan", "dynamodb:DeleteItem",
+      "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem",
+      "dynamodb:DescribeTable",
+    ]
+    resources = ["*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = [
+      "states:StartExecution", "states:StopExecution", "states:DescribeExecution",
+      "states:GetExecutionHistory", "states:ListExecutions", "states:DescribeStateMachine",
+      "states:ListStateMachines", "states:SendTaskSuccess", "states:SendTaskFailure",
+      "states:SendTaskHeartbeat",
+    ]
+    resources = ["*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["lambda:InvokeFunction", "lambda:GetFunction"]
+    resources = ["*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.api_server.arn}:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "task" {
+  name   = "migrate4hana-api-server-task-${var.environment}"
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.task_policy.json
+}
+
+# ── Security groups ────────────────────────────────────────────────────────
+resource "aws_security_group" "alb" {
+  name        = "migrate4hana-api-alb-${var.environment}"
+  description = "Public ingress for api-server ALB"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "HTTP from anywhere (CloudFront origin)"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "migrate4hana-api-alb-${var.environment}" }
+}
+
+resource "aws_security_group" "task" {
+  name        = "migrate4hana-api-task-${var.environment}"
+  description = "Fargate task — accepts ALB → 8000 only"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description     = "ALB → Fargate"
+    from_port       = 8000
+    to_port         = 8000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "migrate4hana-api-task-${var.environment}" }
+}
+
+# ── ALB ────────────────────────────────────────────────────────────────────
+resource "aws_lb" "api" {
+  name               = "m4h-api-${var.environment}"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = var.public_subnet_ids
+
+  idle_timeout = var.alb_idle_timeout
+
+  tags = {
+    Name        = "m4h-api-${var.environment}"
+    Component   = "ApiServer"
+    Environment = var.environment
+  }
+}
+
+resource "aws_lb_target_group" "api" {
+  name        = "m4h-api-tg-${var.environment}"
+  port        = 8000
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    path                = "/api/health"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 15
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  deregistration_delay = 30
+
+  tags = {
+    Component   = "ApiServer"
+    Environment = var.environment
+  }
+}
+
+resource "aws_lb_listener" "api_http" {
+  load_balancer_arn = aws_lb.api.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.api.arn
+  }
+}
+
+# ── ECS task definition + service ──────────────────────────────────────────
+resource "aws_ecs_task_definition" "api_server" {
+  family                   = "migrate4hana-api-server-${var.environment}"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.cpu
+  memory                   = var.memory
+  execution_role_arn       = aws_iam_role.execution.arn
+  task_role_arn            = aws_iam_role.task.arn
+
+  container_definitions = jsonencode([{
+    name      = "api-server"
+    image     = "${aws_ecr_repository.api_server.repository_url}:${var.image_tag}"
+    essential = true
+    portMappings = [{
+      containerPort = 8000
+      protocol      = "tcp"
+    }]
+    environment = [
+      { name = "AWS_REGION",              value = "us-east-1" },
+      { name = "M4H_EVIDENCE_BUCKET",     value = var.staging_bucket },
+      { name = "S3_STAGING_BUCKET",       value = var.staging_bucket },
+      { name = "M4H_KEYMAP_TABLE",        value = var.key_map_table },
+      { name = "M4H_ANTHROPIC_SECRET_ARN", value = var.anthropic_secret_arn },
+      { name = "PYTHONUNBUFFERED",        value = "1" },
+    ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.api_server.name
+        "awslogs-region"        = "us-east-1"
+        "awslogs-stream-prefix" = "api-server"
+      }
+    }
+    healthCheck = {
+      command     = ["CMD-SHELL", "curl -fsS http://localhost:8000/api/health || exit 1"]
+      interval    = 30
+      timeout     = 5
+      retries     = 3
+      startPeriod = 30
+    }
+  }])
+
+  tags = {
+    Component   = "ApiServer"
+    Environment = var.environment
+  }
+}
+
+resource "aws_ecs_service" "api_server" {
+  name            = "migrate4hana-api-server-${var.environment}"
+  cluster         = var.ecs_cluster_arn
+  task_definition = aws_ecs_task_definition.api_server.arn
+  desired_count   = var.desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.task.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.api.arn
+    container_name   = "api-server"
+    container_port   = 8000
+  }
+
+  health_check_grace_period_seconds = 60
+
+  # The deploy script bumps image_tag (or just `aws ecs update-service
+  # --force-new-deployment`), so don't fight terraform on rollouts.
+  lifecycle {
+    ignore_changes = [task_definition, desired_count]
+  }
+
+  depends_on = [aws_lb_listener.api_http]
+
+  tags = {
+    Component   = "ApiServer"
+    Environment = var.environment
+  }
+}
+
+# ── Outputs ────────────────────────────────────────────────────────────────
+output "alb_dns_name" {
+  description = "Public DNS of the api-server ALB. Used as the CloudFront origin."
+  value       = aws_lb.api.dns_name
+}
+
+output "alb_arn" {
+  value = aws_lb.api.arn
+}
+
+output "ecr_repository_url" {
+  description = "Where to docker-push the api-server image."
+  value       = aws_ecr_repository.api_server.repository_url
+}
+
+output "service_name" {
+  description = "ECS service name (for `update-service --force-new-deployment`)."
+  value       = aws_ecs_service.api_server.name
+}
+
+output "log_group_name" {
+  value = aws_cloudwatch_log_group.api_server.name
+}

@@ -1,13 +1,22 @@
 __pycache__
 *.pyc
 .git
+.github
+.deploy-tmp
 node_modules
 test-output
-frontend
-terraform
+local-staging
+frontend/node_modules
+frontend/dist
+terraform/**/.terraform
+terraform/**/*.tfstate*
+terraform/**/.terraform.lock.hcl
 docs
 *.md
 mock-ecc
+*.log
+*.tar.gz
+*.zip
 # (directory removed in aws-branch — entry retained as a no-op guard)
 tests
 # Battletest harness DOES go into the image (used by entrypoint.py:run_battletest_mode)
@@ -17,4 +26,5 @@ tests/battletest/fixtures/
 tests/battletest/abap-suite/
 tests/battletest/results/
 tests/battletest/*.log
-scripts
+scripts/dirty_*.csv
+scripts/load-gemini-disposition*.csv

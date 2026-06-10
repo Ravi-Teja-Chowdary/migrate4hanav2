@@ -699,6 +699,63 @@ output "start_migration_command" {
 
 
 
+# ─────────────────────────────────────────────
+# Customer-facing UI hosting (added 2026-06-11)
+# api-server (Fargate behind ALB) + ui-hosting (S3 behind CloudFront).
+# Customers reach a single CloudFront URL; CF routes /api/* to the ALB
+# and the rest to the S3-hosted React build.
+# Deploy with: scripts/deploy-ui-aws.ps1
+# ─────────────────────────────────────────────
+module "api_server" {
+  source = "../../modules/api-server"
+
+  environment          = var.environment
+  vpc_id               = module.vpc.vpc_id
+  private_subnet_ids   = module.vpc.private_subnet_ids
+  public_subnet_ids    = module.vpc.public_subnet_ids
+  ecs_cluster_arn      = module.ecs.cluster_arn
+  staging_bucket       = module.s3_staging.bucket_name
+  key_map_table        = aws_dynamodb_table.key_map.name
+  anthropic_secret_arn = aws_secretsmanager_secret.anthropic_api_key.arn
+}
+
+module "ui_hosting" {
+  source = "../../modules/ui-hosting"
+
+  environment            = var.environment
+  alb_dns_name           = module.api_server.alb_dns_name
+  custom_domain          = var.ui_custom_domain
+  acm_cert_arn_us_east_1 = var.ui_acm_cert_arn_us_east_1
+}
+
+output "ui_url" {
+  description = "Customer-facing UI URL. Open this in a browser."
+  value       = module.ui_hosting.ui_url
+}
+
+output "ui_bucket_name" {
+  description = "S3 bucket the deploy script syncs frontend/dist/ to."
+  value       = module.ui_hosting.bucket_name
+}
+
+output "ui_cloudfront_distribution_id" {
+  description = "CloudFront distribution id (for invalidations)."
+  value       = module.ui_hosting.cloudfront_distribution_id
+}
+
+output "api_server_ecr_url" {
+  description = "ECR repo the deploy script docker-pushes the api-server image to."
+  value       = module.api_server.ecr_repository_url
+}
+
+output "api_server_alb_dns" {
+  value = module.api_server.alb_dns_name
+}
+
+output "api_server_ecs_service" {
+  value = module.api_server.service_name
+}
+
 # Lift-and-Shift: target-system + gates table
 module "target_system" {
   source             = "../../modules/target-system"
