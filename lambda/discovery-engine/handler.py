@@ -61,23 +61,38 @@ def get_sap_connection(override_params=None):
         )
         raise
 
-    # Get credentials from Secrets Manager
+    # Get credentials from Secrets Manager. Allow ECC_SECRETS_ARN to override
+    # SECRETS_ARN (matches the data-migrator wiring so the same env var can
+    # point both Lambdas at the source-ECC secret regardless of which key the
+    # operator set first).
     if override_params:
         conn_params = override_params
     else:
-        secret_response = secrets.get_secret_value(SecretId=SECRETS_ARN)
+        sid = (os.environ.get("ECC_SECRETS_ARN") or SECRETS_ARN
+               or os.environ.get("SOURCE_CREDS_ARN"))
+        secret_response = secrets.get_secret_value(SecretId=sid)
         conn_params = json.loads(secret_response["SecretString"])
 
-    connection = Connection(
-        ashost=conn_params["host"],       # SAP application server hostname
-        sysnr=conn_params["sysnr"],       # System number (00, 01, etc.)
-        client=conn_params["client"],     # Client number (100, 200, etc.)
-        user=conn_params["user"],         # RFC user (should have S_RFC auth)
-        passwd=conn_params["passwd"],     # Password
-        lang="EN",                        # Login language
-    )
+    # Secret schema mirrors data-migrator's (memory ngrok-local-ecc-bridge):
+    # ashost / sysnr / client / user / passwd, plus optional gwhost / gwserv /
+    # saprouter for the TCP-forwarder (ngrok) case where the published port
+    # differs from sapgw<NN>. Fall back to legacy "host" key if the secret
+    # was written by an older handler.
+    ashost = conn_params.get("ashost") or conn_params.get("host")
+    kwargs = {
+        "ashost": ashost,
+        "sysnr":  conn_params.get("sysnr", "00"),
+        "client": conn_params["client"],
+        "user":   conn_params["user"],
+        "passwd": conn_params.get("passwd") or conn_params.get("password"),
+        "lang":   conn_params.get("lang", "EN"),
+    }
+    for opt in ("gwhost", "gwserv", "saprouter"):
+        if conn_params.get(opt):
+            kwargs[opt] = conn_params[opt]
+    connection = Connection(**kwargs)
 
-    logger.info(f"RFC connection established to {conn_params['host']} client {conn_params['client']}")
+    logger.info(f"RFC connection established to {ashost} client {conn_params['client']}")
     return connection
 
 

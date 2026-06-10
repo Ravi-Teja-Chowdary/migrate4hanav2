@@ -1036,7 +1036,10 @@ locals {
     CutoverOrchestratorArn           = lookup(var.lambda_arns, "cutover-orchestrator", local.ls_fallback_arn)
     DeltaExtractorArn                = lookup(var.lambda_arns, "delta-extractor", local.ls_fallback_arn)
     IntegrationActivatorArn          = lookup(var.lambda_arns, "integration-activator", local.ls_fallback_arn)
-    PdfReportGeneratorArn            = lookup(var.lambda_arns, "pdf_report_generator", local.ls_fallback_arn)
+    # NOTE: key MUST match the lambda module's each.key (kebab-case, not snake).
+    # 2026-06-10: was previously "pdf_report_generator" (snake), causing a silent
+    # fallback to manual-gate-prod even when the Lambda was deployed.
+    PdfReportGeneratorArn            = lookup(var.lambda_arns, "pdf-report-generator", local.ls_fallback_arn)
     RollbackManagerArn               = lookup(var.lambda_arns, "rollback-manager", local.ls_fallback_arn)
     ManualGateLambdaArn              = lookup(var.lambda_arns, "manual-gate", local.ls_fallback_arn)
   }

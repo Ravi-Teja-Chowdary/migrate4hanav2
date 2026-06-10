@@ -97,3 +97,10 @@ entity-resolution-output/
 .github/
 
 local-staging/*agent/__pycache__/
+.deploy-tmp/
+bapi-smoke-bapi-smoke-*.json
+scripts/load-gemini-disposition*.csv
+scripts/dirty_kna1.csv
+scripts/dirty_mara.csv
+terraform/modules/observability/.terraform/
+terraform/modules/ws4/.terraform/

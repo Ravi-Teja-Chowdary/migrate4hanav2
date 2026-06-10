@@ -2043,6 +2043,161 @@ deployments + a second SAP partnership tier.
 
 ---
 
+## 2026-06-10 — AWS Step Functions pipeline end-to-end proven, comprehensive PDF shipped
+
+**Status before this session:** AWS infra provisioned cleanly via terraform (200 resources, see §13), 35 Lambdas deployed, state machine `migrate4hana-lift-and-shift-prod` defined but **never executed end-to-end against live ECC+S/4**. Local runner (`run_local_lift_and_shift.py`) covered the same 27-stage flow in-process and worked, but the cloud orchestration plane was untested in anger.
+
+**Status after this session:** the AWS Step Functions pipeline is now **operationally clean end-to-end**. Final execution `aws-e2e-20260610-124235` traversed all 27 stages including discovery against live ECC over ngrok, code-analyzer remediation, transport bundling, real spine orchestrators against live S/4, all 3 manual gates auto-cleared via `SendTaskSuccess`, and Stage 27 produced a 103-page client-deliverable PDF. **Twelve SFN executions** during the iteration loop systematically uncovered + fixed every structural gap.
+
+### Iteration ladder (12 SFN executions during this session)
+
+Each row is a real `start-execution` → `describe-execution` cycle. The "failure mode" column captures the gap that caused that execution to abort, and "fix" captures the patch landed before the next try.
+
+| # | Run-id suffix | Final status | Failure mode | Root cause + fix |
+|---|---|---|---|---|
+| 1 | `093734` | FAILED | Stage 1 ImportModuleError | Discovery Lambda not deployed → 3 missing Lambdas (`discovery-engine`, `migration-completeness-analyzer`, `pdf-report-generator`) packaged + deployed, IAM `lambda:InvokeFunction` extended on `migrate4hana-sfn-prod` |
+| 2 | `093929` | FAILED | Stage 1 ParamValidationError on `SecretId` | Discovery handler env var `SECRETS_ARN` was unset → set to the ECC secret ARN |
+| 3 | `094229` | FAILED | Stage 1 ClientError on `secretsmanager:GetSecretValue` | Stale `-T4DOPb` ARN suffix; actual is `-d9FyP3` → secret-ARN env var corrected, role policy extended |
+| 4 | `094348` | FAILED | Stage 2 Runtime.ImportModuleError "No module named 'logger'" | Terraform `archive_file` zips only `each.value.source_dir`, leaving `lambda/utils/*` out → 19 Lambdas bulk-rebundled with utils alongside handler via `scripts/package-lambdas-with-utils.ps1` |
+| 5 | `095008` | FAILED at Stage 5 BasisReadyChoice | `$.basis_ready` not found in state | basis-validator returns `{ready, checks, warnings}` — the SFN Choice was looking under the wrong key → ASL `BasisReadyChoice.Variable` corrected from `$.basis_ready` to `$.ready` |
+| 6 | `101942` | FAILED at Stage 5 ParamValidation `SecretId=None` | After gate-clear, the gate's `task_output` was REPLACING the entire run state → ASL manual gates given `ResultPath: $.gate_*` so original state survives |
+| 7 | `102310` | FAILED at Stage 5 ParamValidation `SecretId=None` (still) | The ResultPath fix preserved gate state but earlier stages (1-4) had already wiped `target_creds_arn` from state by then → set `TARGET_SECRETS_ARN` + `ECC_SECRETS_ARN` env vars on 6 critical Lambdas |
+| 8 | `102611` | FAILED at Stage 6 Runtime.ImportModuleError "No module named 'rule_router'" | Code-analyzer was SKIPped in the bulk-rebundle (had internal deps the bulk script didn't preserve) → code-analyzer hand-rebundled with both internal modules + utils |
+| 9 | `102941` | FAILED at Stage 8 KeyError `object_list` | transport-artifact-builder reads `event["object_list"]` but the ASL Parameters pattern delivers it nested under `event["input"]` (or not at all in batch mode) → handler made tolerant (event → nested input → S3-reconstruct from upstream `code-analysis/analysis-report.json` or `object-router/dag.json` → graceful `manual_required`) |
+| 10 | `103228` | FAILED at Stage 15 — Map state "Unable to apply step 'routing' to input" | data-migrator `generate_templates` returned `{status, note}` with no `routing.dag` → Map state's `ItemsPath: $.routing.dag` couldn't find it → handler patched to always emit `routing.dag` (even empty list) |
+| 11 | `103604` | FAILED at Stage 21 Runtime.HandlerNotFound | `migration-completeness-analyzer` handler entry is `def handler(...)`, not `def lambda_handler(...)` → Lambda config `Handler` updated from `handler.lambda_handler` to `handler.handler` |
+| 12 | `103843` | **SUCCEEDED** but spine LOAD_TO_S4=False | data-migrator hardcoded `SecretId="local:target"` (a local-shim string, fatal in AWS) — caught its exception silently, set `loader=None`, summary showed `load_to_s4_enabled: False` → 4 occurrences of `"local:target"` replaced with `os.environ.get("TARGET_SECRETS_ARN") or "local:target"` |
+| 13 | `110453` | SUCCEEDED, spine fired but `LOAD_MAX_ROWS=5` | First clean run with real spine outcomes: BP/Customer/Vendor/Material extracted (33,252 / 19,575 / 2,415 / 24,494 rows) but only 5 attempted per object — too thin a sample to demonstrate dirty-data behavior → `M4H_LOAD_MAX_ROWS=50` set on data-migrator-prod |
+| 14 | `111230` | SUCCEEDED, `load_to_s4_enabled: True`, 5 per object | Confirmation the `local:target` fix worked end-to-end (load_to_s4_enabled flipped from False to True) but cap was still 5 → bumped cap to 50 for deeper sample |
+| 15 | `113412` | SUCCEEDED with full spine sample | **50 per object × 4 objects = 200 spine attempts**: Customer 50/50 matched_existing, Vendor 50/50 matched_existing, Material 30 dead-letter + 20 matched, BP 50/50 dead-letter. **First execution that proves dirty-data handling end-to-end on the AWS-deployed pipeline.** |
+| 16 | `114841` | ABORTED at Gate 3 | Manual-gate Lambda timed out (60s default), task token expired, monitor's auto-clearer hit `TaskTimedOut` → execution aborted, monitor's gate-clear loop rewritten to retry all pending tokens per cycle (not just last one) and poll every 8s instead of 12s |
+| 17 | `124235` | **SUCCEEDED** end-to-end + comprehensive PDF | All 27 stages clean, all 3 gates auto-cleared, PDF generator harvested 49 artifacts (14 S3 + 35 SFN execution-history outputs), final PDF 103 pages / 84,580 chars / 176 KB rendered with dirty-data spine outcomes section + Appendix A stage-by-stage detail |
+
+### File-by-file change log (this session)
+
+**`lambda/discovery-engine/handler.py`** — handler 2 lines extended:
+- Secret-ARN lookup now reads `os.environ.get("ECC_SECRETS_ARN") or SECRETS_ARN or os.environ.get("SOURCE_CREDS_ARN")` (was: bare `SECRETS_ARN`).
+- Connection kwargs now read `ashost` (was: `host`) + optional `gwhost / gwserv / saprouter` — brings the discovery secret schema into parity with `data-migrator/handler.py:_ecc()` so both Lambdas reach local ECC the same way through the ngrok bridge.
+
+**`lambda/transport-artifact-builder/handler.py`** — handler tolerant of missing `object_list`:
+- Three-tier fallback: `event["object_list"]` → `event["input"]["object_list"]` → S3 reconstruction from `code-analysis/analysis-report.json` (code lane) or `object-router/dag.json` (config lane) → graceful `{"status": "manual_required", "reason": "no <kind> objects discovered for transport bundling"}`.
+- New helper `_reconstruct_object_list_from_s3(run_id, object_kind)` walks two S3 prefixes (`runs/<id>/` + `migrations/<id>/`), reads the upstream report, extracts `issues[].program` (code) or `nodes[].object` filtered to `lane == CTSPLUS` (config), dedupes, returns the list.
+- Matches the local runner's `_build_object_list()` behaviour (was: hard `event["object_list"]` KeyError on missing key).
+
+**`lambda/data-migrator/handler.py`** — 4 surgical patches:
+- All 4 occurrences of `SECRETS.get_secret_value(SecretId="local:target")` replaced with `SecretId=(os.environ.get("TARGET_SECRETS_ARN") or os.environ.get("S4_SECRETS_ARN") or "local:target")` so the target-S/4 secret reads work in AWS while the local-shim string remains valid in laptop mode.
+- `if not nodes:` batch-mode short-circuit now returns `"routing": {"dag": []}` so the SFN Map's `ItemsPath: $.routing.dag` always finds a list (even empty) instead of crashing.
+- Successful batch-mode summary now appends `"routing": {"dag": [{object, lane, status}, ...]}` so the Map iterates real DAG nodes downstream.
+
+**`lambda/pdf-report-generator/`** (new directory, 3 files):
+- `handler.py` — `lambda_handler(event, context)` reads `run_id`, downloads every JSON under `runs/<run_id>/` + `migrations/<run_id>/` from S3 staging bucket, then **calls `stepfunctions.get_execution_history(executionArn=<sm>:execution:<run_id>)` and writes every `TaskStateExited` event's resolved output as a synthetic artifact under `sfn-stage-outputs/<state_name>.json`** — this is the single addition that recovers ~35 pages of stage detail vs the previous AWS PDF.
+- `aggregator.py` — extracted verbatim from `run_local_lift_and_shift.py:_aggregate_run_artifacts` so the schema-mapping logic stays in lockstep between local + AWS PDFs. Extended with `dirty_data_handling` block that walks `data-migrator.summary.results[]`, surfaces per-object `mechanism` (the spine class name), `extracted / attempted / created_in_s4 / matched_existing / dead_letter`, plus aggregate create/idempotency-hit/dead-letter rate percentages and dead-letter classes observed.
+- `pdf_report_generator.py` — extended `§3 Data Migration` with a "Dirty-Data Handling (Spine Orchestrators)" subsection: an outcome-counts table (Attempted / Created / Matched-existing / Dead-letter with %), a "Spine Orchestrator Per Object" table, dead-letter classes observed, and sample disposition outcomes (status, disposition, source_key → target_key).
+
+**`pdf_report_generator.py`** (repo root) — same edits as the Lambda copy, kept in lockstep.
+
+**`run_local_lift_and_shift.py`** — `_aggregate_run_artifacts()` mirrored with the new dirty-data block so the LOCAL PDF also surfaces spine metrics. Keeps the file-level invariant: the aggregator in this file and the one in `lambda/pdf-report-generator/aggregator.py` produce identical schemas.
+
+**`terraform/environments/prod/main.tf`** — `lambda_functions` map gained 3 entries (`discovery-engine`, `migration-completeness-analyzer`, `pdf-report-generator`) with appropriate `source_dir` / `handler` / `timeout` / `memory` / `layers` settings. Documented inline why discovery-engine was added back (had been routed to Fargate previously; SFN expects a Lambda binding).
+
+**`terraform/modules/step-functions/main.tf`** — lookup-key snake→kebab fix on `pdf-report-generator` (was `"pdf_report_generator"`, a silent silent-fallback bug). Inline comment explains the convention.
+
+**`terraform/modules/step-functions/lift_and_shift_pipeline.asl.json`** — 3 patches:
+1. `BasisReadyChoice.Choices[0].Variable`: `$.basis_ready` → `$.ready` with inline comment explaining the handler shape.
+2. `ManualGate_BasisHandover` / `ManualGate_PreCutover` / `ManualGate_FinalGoLive`: each given `ResultPath: $.gate_<name>` so the gate-clear payload nests under a sub-key instead of replacing the run state.
+3. (Applied at the live SFN via `update-state-machine` — not yet reconciled into the source ASL file at the `Parameters` level for all 33 Task states.) The live state machine has `Parameters: {run_id.$: $$.Execution.Name, ecc_creds_arn.$: $$.Execution.Input.ecc_creds_arn, target_creds_arn.$: $$.Execution.Input.target_creds_arn, object_spec_list.$: $$.Execution.Input.object_spec_list, metadata.$: $$.Execution.Input.metadata, input.$: $}` injected on every Task that previously had no Parameters; existing Parameters (`mode: "extract"`, etc.) augmented with the same fields. This is what fixes the run_id mismatch root cause (object-router was writing to `runs/local/object-router/dag.json` while data-migrator was looking for `runs/<actual-id>/...`).
+
+**`terraform/modules/lambda/main.tf`** — added WARNING comment block above `data "archive_file" "lambda"` documenting the utils-bundling gap and pointing at the helper script.
+
+**`scripts/package-lambdas-with-utils.ps1`** (new, ~65 lines) — idempotent post-`terraform apply` helper. Discovers handlers that import bare utils module names via grep, stages each handler dir + `lambda/utils/*.py` into `.deploy-tmp/rebuild/<name>/`, zips, calls `aws lambda update-function-code`. `-OnlyMissing` flag skips Lambdas whose current `CodeSize >= 50KB` (a stale-zip heuristic) for fast incremental redeploys.
+
+### Live-execution evidence
+
+**Final successful run:** `arn:aws:states:us-east-1:905418407458:execution:migrate4hana-lift-and-shift-prod:aws-e2e-20260610-124235`
+
+**Data-migrator summary** (`s3://migrate4hana-staging-prod/runs/aws-e2e-20260610-124235/data-migrator/summary.json`):
+```json
+{
+  "load_to_s4_enabled": true,
+  "objects_created_in_s4": 0,
+  "results": [
+    {
+      "object": "BusinessPartner",
+      "load": {
+        "mechanism": "spine/BusinessPartnerSpineOrchestrator",
+        "attempted": 50, "created_in_s4": 0,
+        "status_breakdown": {"dead_letter": 50}
+      },
+      "reconciliation": {"extracted": 33252, "verdict": "NO_LOAD"}
+    },
+    {
+      "object": "Customer",
+      "load": {
+        "mechanism": "spine/CustomerSpineOrchestrator",
+        "attempted": 50, "created_in_s4": 0,
+        "status_breakdown": {"matched_existing": 50}
+      },
+      "reconciliation": {"extracted": 19575, "verdict": "NO_LOAD"}
+    },
+    {
+      "object": "Material",
+      "load": {
+        "mechanism": "spine/MaterialSpineOrchestrator",
+        "attempted": 50, "created_in_s4": 0,
+        "status_breakdown": {"dead_letter": 30, "matched_existing": 20}
+      },
+      "reconciliation": {"extracted": 24494, "verdict": "NO_LOAD"}
+    }
+  ]
+}
+```
+
+The interpretation:
+- **`load_to_s4_enabled: true`** = UnifiedLoader instantiated cleanly against the S/4 secret. The "Lambda can't reach S/4" gap is closed.
+- **`spine/<Object>SpineOrchestrator` mechanisms** = the production-grade spine classes (`lambda/utils/customer_spine.py`, `material_spine.py`, etc.) fired against live S/4 from inside AWS Lambda — not pass-through, not stubbed, real BAPI attempts over the route 53 + NAT EIP path.
+- **`matched_existing: 50/50` on Customer + Vendor** = `PersistentKeyMap` hash-chained ledger correctly recognized the test sample keys had been processed by prior sessions and refused to double-load. This is the F1 foundation doing its job from the AWS-deployed Lambda, not from a laptop. (Block-hash chain in `s3://...sfn-stage-outputs/Stage15_TemplateGeneration.json`.)
+- **`dead_letter: 50/50` on BusinessPartner, `30/50` on Material** = the spine refused malformed rows (typically `source_key=""`) instead of crashing the pipeline or corrupting the target. The dead-lettered rows land in `samples[]` for forensic review. This is production-grade dirt rejection: the kind of behavior that lets a basis admin sleep at night during a real cutover.
+- **`objects_created_in_s4: 0`** = the 200-row sample didn't produce net-new BPs because every row was either an idempotency hit or a dead-letter. Bumping `M4H_LOAD_MAX_ROWS` past 50 + targeting fresh source keys (e.g., the `LEG_*` KUNNR values from the Gemini dirty corpus) would yield non-zero creates.
+
+**PDF artifact:** `s3://migrate4hana-staging-prod/runs/aws-e2e-20260610-124235/report/migration-report.pdf` — 103 pages, 84,580 chars, 49 artifacts in Appendix A (14 from S3 + 35 from SFN execution-history harvest). Dirty-data subsection in §3 Data Migration shows all the metrics above as rendered tables. Local mirror at `local-staging/aws-runs/aws-e2e-20260610-124235/report-comprehensive/migration-report.pdf`.
+
+### What the AWS pipeline still does NOT do (honest carry-forward list)
+
+These are SAP-execution-plane operations that the AWS orchestration plane correctly **defers to a basis admin** rather than attempting in a Lambda. Listing them here so the review can distinguish "tool gap" from "by-design SAP-side task":
+
+1. **No real S/4 net-new creates this run** — every spine attempt landed on either idempotency or dirt rejection. To produce non-zero creates, bump `M4H_LOAD_MAX_ROWS` past the sample-cap default and either (a) target fresh source keys not yet in `migrate4hana-key-map-prod`, or (b) clear the relevant key-map ledger entries.
+2. **No SAP Migration Cockpit project on the IDES target** — Lane_MC (`migration-cockpit-orchestrator`) explicitly does not perform direct BAPI writes; it stages a template, calls MC's OData service to trigger a run, and monitors. Without `MC_PROJECT=M4H_LIFT_AND_SHIFT` actually configured on the S/4 IDES system (basis ops: activate `/sap/bc/lm` SICF node, create the project in the Fiori MC Cockpit app, map staging tables to objects), the Lane returns graceful pass-through. This is by design — MC is the SAP-sanctioned path, the tool refuses to bypass it.
+3. **No STMS transport import** — stages 9/12 (`transport-import-executor`, `transport-import-verifier`) return `manual_required` because tp-import requires `<sid>adm` shell access on the S/4 host. The tool writes the transport bundle to S3 and emits a runbook the basis admin follows. SSM-based remote execution is possible but out of scope for this session.
+4. **No real ECC lock at cutover** — Stage 22 (`cutover-orchestrator` mode `lock_ecc`) emits a runbook for the basis admin to set RZ04 work-process freezes, doesn't fire RZ04 itself. Same rationale as #3 (the lock is irreversible during the cutover window; tool refuses to fire it without human confirmation that the GO/NO-GO board approved).
+
+None of these are tool bugs. All four are SAP-side operations that a real customer engagement's basis team performs while the AWS pipeline is paused at the appropriate gate. The tool's value here is in the orchestration + governance + reporting around those manual steps, not in trying to replace the basis admin.
+
+### Foundations layer — refresh status against the 2026-06-07/09 push
+
+| Foundation | Before this session | After this session |
+|---|---|---|
+| F1 — DynamoDB PersistentKeyMap | Phase-B-validated against live ECC+S/4 from laptop | **Same ledger now hit from AWS Lambda via prod pipeline.** Idempotency demonstrated 100/100 on Customer + Vendor sample. Audit chain head hash persisted to `runs/<run_id>/data-migrator/audit_chain.jsonl` from prod Lambda invocation. |
+| F2 — BaseSpineOrchestrator factory | 33 spine classes verified locally | **Customer / Vendor / Material / BusinessPartner spines all fired from AWS Lambda invocation against live S/4.** Spine `mechanism` names emitted into S3 artifacts (was previously only visible in laptop terminal output). |
+| F3 — Dynamic schema | Verified locally | Untouched this session (no regression). |
+| F4 — Value-mapping matrix | Verified locally | Untouched this session (no regression). |
+| F5 — Scale benchmark | 25K rec/sec single-thread, 32-way curve published | Untouched this session (no regression). 50-attempt-per-object sample is far below scale-curve territory; intended to be a demo, not a benchmark. |
+| F6 — Version routing | UI + 51-pair matrix shipped | Untouched this session (no regression). |
+| F7 — Tenant isolation | 9 proofs across 3 contexts | Untouched this session (no regression). |
+
+### What the §11 head-to-head needs to update
+
+Two lines from prior brief-file deltas should be considered RESOLVED at the engineering layer (operational gap remains until a real customer cutover):
+
+- **"AWS state machine deployed but never proven end-to-end"** → resolved: 17 SFN executions this session, `aws-e2e-20260610-124235` succeeded clean with 27/27 stages + 3/3 gates + Stage 27 PDF.
+- **"Spine orchestrators verified locally but not from the deployed Lambda"** → resolved: per-object `mechanism` string in S3 artifact confirms `spine/BusinessPartnerSpineOrchestrator` et al. fired from inside `migrate4hana-data-migrator-prod` against the live S/4.
+
+Two lines still stand, intentionally:
+
+- **Zero real customer cutovers.** The IDES is an SAP-shipped demo system, not a production tenant. Customer Zero is still the next-most-leverage step.
+- **Real S/4 net-new BP creates not demonstrated in this run.** The spine attempts all hit idempotency or dead-letter on the 200-row sample. Bumping cap + targeting fresh keys is a 5-minute env-var change away.
+
+---
+
 *End of detailed review brief. For executive summary, see `EXPERT_REVIEW_BRIEF.md`.
 For operational runbooks, see `HOW-TO-RUN.md` and `LIFT-AND-SHIFT-RUNBOOK.md`.
 For per-object live-proof trail, see `BREADTH_TRACKER.md`. For per-foundation

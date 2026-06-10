@@ -275,11 +275,13 @@ def _load_material(conn: Connection, row: dict) -> tuple[str, str, str, str]:
 # ─────────────────────────────────────────────────────────────────────────────
 # Main driver
 # ─────────────────────────────────────────────────────────────────────────────
-def _stream_csv(path: Path, limit: int | None):
+def _stream_csv(path: Path, limit: int | None, skip: int = 0):
     with path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         for i, row in enumerate(reader):
-            if limit is not None and i >= limit:
+            if i < skip:
+                continue
+            if limit is not None and (i - skip) >= limit:
                 return
             yield row
 
@@ -290,6 +292,12 @@ def main():
                     help="cap rows per CSV (sample run)")
     p.add_argument("--only", choices=["customers", "materials"], default=None,
                     help="restrict to one object type")
+    p.add_argument("--skip-customers", type=int, default=0,
+                    help="skip first N customer rows (resume from interruption)")
+    p.add_argument("--skip-materials", type=int, default=0,
+                    help="skip first N material rows (resume from interruption)")
+    p.add_argument("--append", action="store_true",
+                    help="append to disposition CSV instead of truncating (use with --skip-*)")
     args = p.parse_args()
 
     if not KNA1_CSV.exists() or not MARA_CSV.exists():
@@ -321,10 +329,12 @@ def main():
         print(f"[INFO] Role-BAPI probe: "
               + (f"using {_ROLE_BAPI_NAME}" if _ROLE_BAPI_NAME else "NONE available -- BP=customer under CVI"))
 
-    disp_f = DISP_CSV.open("w", encoding="utf-8", newline="")
+    disp_mode = "a" if args.append else "w"
+    disp_f = DISP_CSV.open(disp_mode, encoding="utf-8", newline="")
     disp_w = csv.writer(disp_f)
-    disp_w.writerow(["object", "source_key", "sap_target_key",
-                      "disposition", "dead_letter_code", "sap_message"])
+    if not args.append:
+        disp_w.writerow(["object", "source_key", "sap_target_key",
+                          "disposition", "dead_letter_code", "sap_message"])
 
     summary = {
         "customers": {"attempted": 0, "created": 0, "matched_existing": 0,
@@ -339,7 +349,7 @@ def main():
             print(f"\n[CUSTOMERS] streaming {KNA1_CSV.name}"
                   + (f" (limit={args.limit})" if args.limit else ""))
             t0 = time.time()
-            for i, row in enumerate(_stream_csv(KNA1_CSV, args.limit), start=1):
+            for i, row in enumerate(_stream_csv(KNA1_CSV, args.limit, skip=args.skip_customers), start=1):
                 summary["customers"]["attempted"] += 1
                 src = (row.get("KUNNR") or "").strip()
                 sap_key, disp, dl, msg = _load_customer(conn, row)
@@ -359,7 +369,7 @@ def main():
             print(f"\n[MATERIALS] streaming {MARA_CSV.name}"
                   + (f" (limit={args.limit})" if args.limit else ""))
             t0 = time.time()
-            for i, row in enumerate(_stream_csv(MARA_CSV, args.limit), start=1):
+            for i, row in enumerate(_stream_csv(MARA_CSV, args.limit, skip=args.skip_materials), start=1):
                 summary["materials"]["attempted"] += 1
                 src = (row.get("MATNR") or "").strip()
                 sap_key, disp, dl, msg = _load_material(conn, row)

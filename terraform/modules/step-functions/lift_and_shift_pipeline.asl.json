@@ -41,11 +41,12 @@
     "ManualGate_BasisHandover": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
-      "Comment": "Human gate: Basis admin confirms target S/4HANA install complete (HANA + ASCS + ERS + cluster) before automation continues.",
+      "Comment": "Human gate: Basis admin confirms target S/4HANA install complete (HANA + ASCS + ERS + cluster) before automation continues. ResultPath added 2026-06-10 so the gate output lands under $.gate_basishandover without wiping the run-level fields (run_id, target_creds_arn, etc.) needed by downstream stages.",
       "Parameters": {
         "FunctionName": "${ManualGateLambdaArn}",
         "Payload": {"gate": "basis_handover", "token.$": "$$.Task.Token", "input.$": "$"}
       },
+      "ResultPath": "$.gate_basishandover",
       "Next": "Stage5_BasisValidator"
     },
     "Stage5_BasisValidator": {
@@ -56,8 +57,9 @@
     },
     "BasisReadyChoice": {
       "Type": "Choice",
+      "Comment": "basis-validator returns {ready:bool,checks:[],warnings:[]} — the key is 'ready', not 'basis_ready' (fixed 2026-06-10 after Choice failed to find $.basis_ready)",
       "Choices": [
-        {"Variable": "$.basis_ready", "BooleanEquals": true, "Next": "Phase2_Code_Marker"}
+        {"Variable": "$.ready", "BooleanEquals": true, "Next": "Phase2_Code_Marker"}
       ],
       "Default": "RollbackManager"
     },
@@ -238,11 +240,12 @@
     "ManualGate_PreCutover": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
-      "Comment": "Human gate: GO/NO-GO board reviews scorecard before cutover begins.",
+      "Comment": "Human gate: GO/NO-GO board reviews scorecard before cutover begins. ResultPath ensures the run state survives the gate.",
       "Parameters": {
         "FunctionName": "${ManualGateLambdaArn}",
         "Payload": {"gate": "pre_cutover", "token.$": "$$.Task.Token", "input.$": "$"}
       },
+      "ResultPath": "$.gate_precutover",
       "Next": "Phase7_Cutover_Marker"
     },
 
@@ -280,11 +283,12 @@
     "ManualGate_FinalGoLive": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
-      "Comment": "Final human GO/NO-GO before integration flip. After this, switch-back is harder.",
+      "Comment": "Final human GO/NO-GO before integration flip. After this, switch-back is harder. ResultPath ensures run state survives the gate.",
       "Parameters": {
         "FunctionName": "${ManualGateLambdaArn}",
         "Payload": {"gate": "final_go_live", "token.$": "$$.Task.Token", "input.$": "$"}
       },
+      "ResultPath": "$.gate_finalgolive",
       "Next": "Stage26_IntegrationActivation"
     },
     "Stage26_IntegrationActivation": {

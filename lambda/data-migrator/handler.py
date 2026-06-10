@@ -155,7 +155,7 @@ def _where_to_dict(where_clause: str) -> dict:
 
 def _target_connection():
     """RFC connection to the TARGET S/4 (for loading data in), from local:target."""
-    sec = json.loads(SECRETS.get_secret_value(SecretId="local:target")["SecretString"])
+    sec = json.loads(SECRETS.get_secret_value(SecretId=(os.environ.get("TARGET_SECRETS_ARN") or os.environ.get("S4_SECRETS_ARN") or "local:target"))["SecretString"])
     from pyrfc import Connection
     return Connection(ashost=sec["ashost"], sysnr=sec.get("sysnr", "00"),
                       client=sec["client"], user=sec["user"],
@@ -167,7 +167,7 @@ def _target_odata():
     transaction-ready partner creation. None if requests/odata_client unavailable."""
     try:
         from odata_client import ODataClient
-        sec = json.loads(SECRETS.get_secret_value(SecretId="local:target")["SecretString"])
+        sec = json.loads(SECRETS.get_secret_value(SecretId=(os.environ.get("TARGET_SECRETS_ARN") or os.environ.get("S4_SECRETS_ARN") or "local:target"))["SecretString"])
         port = int(os.environ.get("M4H_ODATA_PORT", "44300"))
         return ODataClient(sec["ashost"], sec["user"], sec.get("passwd") or sec.get("password"),
                            client=sec.get("client", "100"), port=port)
@@ -805,10 +805,15 @@ def lambda_handler(event, context):
         dag = _load_dag(run_id)
         nodes = [n for n in dag.get("nodes", [])
                  if (n.get("lane") or "").upper() in ("MC", "IDOC", "LTMOM")]
+        # Always emit routing.dag so the Step Functions Map state can iterate
+        # cleanly (even with zero items) instead of crashing on
+        # "Unable to apply step 'routing' to input". Nodes carry whatever the
+        # downstream lane handlers need (object, lane, deps).
         if not nodes:
             return {"status": "ok", "run_id": run_id, "mode": mode,
                     "note": "no MC/IDoc/LTMOM nodes in DAG — nothing to extract",
-                    "dag_load": dag.get("_load_error")}
+                    "dag_load": dag.get("_load_error"),
+                    "routing": {"dag": []}}
         try:
             conn = _ecc(secret_id)
         except Exception as e:
@@ -820,7 +825,7 @@ def lambda_handler(event, context):
         discovered_config = None
         if LOAD_TO_S4 and UnifiedLoader is not None:
             try:
-                tsec = json.loads(SECRETS.get_secret_value(SecretId="local:target")["SecretString"])
+                tsec = json.loads(SECRETS.get_secret_value(SecretId=(os.environ.get("TARGET_SECRETS_ARN") or os.environ.get("S4_SECRETS_ARN") or "local:target"))["SecretString"])
                 tconn = _target_connection()
                 loader = UnifiedLoader(tconn, own_logical_system=OWN_LOGICAL_SYSTEM,
                                        sender=IDOC_SENDER,
@@ -1069,7 +1074,11 @@ def lambda_handler(event, context):
                    "cvi": cvi_info,
                    "ltmc_pending": ltmc_pending_info,
                    "carve_out": _carve_out_programs(run_id, results, event),
-                   "results": results}
+                   "results": results,
+                   "routing": {"dag": [{"object": r.get("object"),
+                                         "lane": (r.get("lane") or "MC").upper(),
+                                         "status": r.get("status")}
+                                        for r in results if r.get("object")]}}
         # Pillar 4 — cryptographic audit chain over this run's verifiable actions.
         # Each block (data load, key-map, reconciliation, carve-out) is SHA-256
         # hash-chained to the previous, giving auditors tamper-evident assurance.

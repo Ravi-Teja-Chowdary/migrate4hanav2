@@ -46,13 +46,75 @@ secrets = boto3.client("secretsmanager")
 STAGING_BUCKET = os.environ.get("S3_STAGING_BUCKET", "migrate4hana-staging-dev")
 
 
+def _reconstruct_object_list_from_s3(run_id, object_kind):
+    """Build object_list from upstream S3 artifacts (Step Functions doesn't
+    auto-thread it through). For object_kind='code' read code-analyzer's
+    remediation report; for 'config' read object-router's DAG."""
+    out = []
+    bucket = STAGING_BUCKET
+    if object_kind == "code":
+        for prefix in (f"runs/{run_id}/code-analysis/", f"migrations/{run_id}/code-analysis/"):
+            try:
+                resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+                for obj in resp.get("Contents", []) or []:
+                    key = obj.get("Key", "")
+                    if not key.endswith("analysis-report.json"):
+                        continue
+                    body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+                    data = json.loads(body)
+                    seen = set()
+                    for issue in (data.get("issues") or []):
+                        nm = issue.get("program") or issue.get("object_name")
+                        if nm and nm not in seen:
+                            seen.add(nm)
+                            out.append({"object_type": "PROG", "object_name": nm})
+                    if out:
+                        return out
+            except Exception:
+                pass
+    elif object_kind == "config":
+        for prefix in (f"runs/{run_id}/object-router/", f"migrations/{run_id}/object-router/"):
+            try:
+                resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+                for obj in resp.get("Contents", []) or []:
+                    key = obj.get("Key", "")
+                    if not key.endswith("dag.json"):
+                        continue
+                    body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+                    dag = json.loads(body)
+                    for n in (dag.get("nodes") or []):
+                        if (n.get("lane") or "").upper() == "CTSPLUS":
+                            out.append({"object_type": "CUS", "object_name": n.get("object", "")})
+                    if out:
+                        return out
+            except Exception:
+                pass
+    return out
+
+
 def lambda_handler(event, context):
     run_id = event.get("run_id", "local")
-    object_list = event["object_list"]
+    # The Step Functions ASL passes {object_kind, input: <prev_state>} so
+    # object_list almost never arrives at the top level. Fall back through:
+    # 1) event["object_list"], 2) event["input"]["object_list"],
+    # 3) reconstruct from S3 artifacts written by the upstream code-analyzer
+    #    (mode: remediate). If nothing is found, return manual_required
+    #    rather than crashing — matches the local-runner tolerant behaviour
+    #    (run_local_lift_and_shift._build_object_list).
+    object_kind = event.get("object_kind", "code")
+    object_list = event.get("object_list")
+    if object_list is None and isinstance(event.get("input"), dict):
+        object_list = event["input"].get("object_list")
+    if object_list is None:
+        object_list = _reconstruct_object_list_from_s3(run_id, object_kind)
+    if not object_list:
+        return {"status": "manual_required", "run_id": run_id,
+                "reason": f"no {object_kind} objects discovered for transport bundling",
+                "object_kind": object_kind, "object_count": 0}
+
     source_creds_arn = event.get("source_creds_arn") or os.environ.get("BUILD_SYSTEM_SECRETS_ARN")
     description = event.get("description", f"M4H lift-and-shift {run_id}")
     transport_type = event.get("transport_type", "K")
-    object_kind = event.get("object_kind", "code")  # code | config
 
     log_stage_event(run_id, "transport-builder", "started",
                     {"object_count": len(object_list), "type": transport_type, "kind": object_kind})

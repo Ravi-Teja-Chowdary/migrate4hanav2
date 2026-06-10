@@ -293,6 +293,15 @@ resource "aws_iam_role_policy_attachment" "telemetry_broadcast" {
 }
 
 # ── Lambda Functions ─────────────────────────
+# WARNING (2026-06-10): this archive_file zips ONLY each handler's source_dir.
+# Most handlers `from logger import ...`, `from validation import ...`, etc. —
+# those modules live in lambda/utils/. Without bundling them every freshly-
+# applied Lambda lands as ~6 KB and crashes at cold start with
+# `Runtime.ImportModuleError: No module named 'logger'`. Run
+# `scripts/package-lambdas-with-utils.ps1 -Env prod` AFTER terraform apply
+# to re-zip every affected Lambda with utils alongside the handler. A proper
+# fix (build-step that pre-stages each Lambda's source_dir with utils, or a
+# shared utils layer) is tracked separately.
 data "archive_file" "lambda" {
   for_each    = var.lambda_functions
   type        = "zip"

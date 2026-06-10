@@ -383,6 +383,66 @@ def generate_pdf(report_data, output_path):
         ss["MBullet"]
     ))
 
+    # ── Dirty-Data Handling — the real "did the spine catch the garbage?" view
+    ddh = dm.get("dirty_data_handling") or {}
+    if ddh:
+        story.append(Spacer(1, 6 * mm))
+        story.append(Paragraph("Dirty-Data Handling (Spine Orchestrators)", ss["SubH"]))
+        story.append(Paragraph(
+            f"<b>LOAD_TO_S4 path:</b> {'ENABLED' if ddh.get('load_to_s4_enabled') else 'OFF (extract-only)'}",
+            ss["Body"]
+        ))
+        ddh_table = [
+            ["Outcome", "Count", "Rate"],
+            ["Attempted rows (cap = M4H_LOAD_MAX_ROWS env)", f"{ddh.get('total_attempted', 0):,}", "—"],
+            ["Created in S/4 (BAPI succeeded)",              f"{ddh.get('total_created_in_s4', 0):,}", ddh.get('create_rate', 'n/a')],
+            ["Matched existing (idempotency / ledger hit)",  f"{ddh.get('total_matched_existing', 0):,}", ddh.get('idempotency_hit_rate', 'n/a')],
+            ["Dead-lettered (spine refused row)",            f"{ddh.get('total_dead_lettered', 0):,}", ddh.get('dead_letter_rate', 'n/a')],
+        ]
+        ddh_tbl = Table(ddh_table, colWidths=[page_w * 0.55, page_w * 0.20, page_w * 0.25])
+        ddh_tbl.setStyle(_table_style_base())
+        story.append(ddh_tbl)
+        story.append(Spacer(1, 3 * mm))
+
+        # Spine orchestrators per object
+        sos = ddh.get("spine_orchestrators") or {}
+        if sos:
+            story.append(Paragraph("Spine Orchestrator Per Object", ss["SubH"]))
+            so_table = [["Object", "Spine Used"]]
+            for obj, sname in sos.items():
+                so_table.append([obj, sname])
+            so_tbl = Table(so_table, colWidths=[page_w * 0.30, page_w * 0.70])
+            so_tbl.setStyle(_table_style_base())
+            story.append(so_tbl)
+            story.append(Spacer(1, 3 * mm))
+
+        dlc = ddh.get("dead_letter_classes") or []
+        if dlc:
+            story.append(Paragraph(
+                "<b>Dead-letter classes observed:</b> " + ", ".join(dlc),
+                ss["Body"]
+            ))
+            story.append(Spacer(1, 2 * mm))
+
+        samples_by = ddh.get("sample_outcomes") or {}
+        if any(samples_by.values()):
+            story.append(Paragraph("Sample Disposition Outcomes (per object)", ss["SubH"]))
+            samp_rows = [["Object", "Status", "Disposition", "Source Key", "Target Key"]]
+            for obj, samples in samples_by.items():
+                for s in (samples or [])[:5]:
+                    samp_rows.append([
+                        obj,
+                        s.get("status", "")[:24],
+                        s.get("disposition", "")[:40],
+                        str(s.get("source_key", "") or "")[:24],
+                        str(s.get("target_key", "") or "")[:24],
+                    ])
+            if len(samp_rows) > 1:
+                samp_tbl = Table(samp_rows, colWidths=[
+                    page_w*0.16, page_w*0.18, page_w*0.30, page_w*0.18, page_w*0.18])
+                samp_tbl.setStyle(_table_style_base())
+                story.append(samp_tbl)
+
     story.append(Spacer(1, 6 * mm))
 
     # --- 4. CONFIGURATION --------------------------------------
@@ -562,8 +622,61 @@ def generate_pdf(report_data, output_path):
     tmt.setStyle(_table_style_base())
     story.append(tmt)
 
+    # --- APPENDIX A: STAGE-BY-STAGE DEEP DIVE -------------------
+    # Walks every artifact in stages[] and renders its payload as readable
+    # tables. The 34 MB report_input.json holds the full per-stage detail —
+    # this section folds it into the PDF so the report is self-contained
+    # production-grade evidence rather than a summary brief.
+    stages_list = report_data.get("stages", []) or []
+    if stages_list:
+        story.append(PageBreak())
+        story.append(Paragraph("Appendix A — Stage-by-Stage Detail", ss["SectionH"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=NAVY))
+        story.append(Spacer(1, 3 * mm))
+        story.append(Paragraph(
+            f"Source: report_input.json ({report_data.get('stage_count', len(stages_list))} artifacts, "
+            f"{sum(s.get('size_bytes', 0) for s in stages_list):,} bytes). Each subsection is one "
+            f"artifact emitted by the pipeline; the payload is rendered as nested key/value "
+            f"tables. Long lists are truncated to the first 25 items with a count footer.",
+            ss["Body"]
+        ))
+        story.append(Spacer(1, 4 * mm))
+
+        # Group by section for readable navigation
+        from collections import defaultdict
+        by_section = defaultdict(list)
+        for s in stages_list:
+            by_section[s.get("section", "other")].append(s)
+
+        # Stable, business-meaningful ordering
+        section_order = [
+            "discovery", "sizing-advisor", "object-router", "target-provisioner",
+            "basis-validator", "code-analysis", "transports", "config", "bc-sets",
+            "data-migrator", "execution",
+        ]
+        ordered_sections = [s for s in section_order if s in by_section]
+        ordered_sections += [s for s in sorted(by_section.keys()) if s not in section_order]
+
+        for section in ordered_sections:
+            artifacts = by_section[section]
+            story.append(Paragraph(
+                f"A.{ordered_sections.index(section) + 1} {section.replace('-', ' ').title()}",
+                ss["SectionH"]
+            ))
+            story.append(HRFlowable(width="100%", thickness=0.7, color=BLUE))
+            story.append(Spacer(1, 2 * mm))
+            for a in artifacts:
+                story.append(Paragraph(
+                    f"<b>{a.get('artifact', '?')}</b> "
+                    f"<font color='{GRAY.hexval()}' size='8'>"
+                    f"({a.get('size_bytes', 0):,} bytes)</font>",
+                    ss["SubH"]
+                ))
+                _render_payload(story, ss, a.get("payload"), page_w)
+                story.append(Spacer(1, 3 * mm))
+
     # --- FOOTER -------------------------------------------------
-    story.append(Spacer(1, 20 * mm))
+    story.append(Spacer(1, 10 * mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e2e8f0")))
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(
@@ -575,6 +688,143 @@ def generate_pdf(report_data, output_path):
     # Build PDF
     doc.build(story)
     return output_path
+
+
+# ── Appendix renderer helpers ───────────────────────────────────────────────
+# These walk a JSON-like payload (dict/list/scalar) and emit ReportLab
+# flowables. The PDF generator is pure-Python and stateless so each call gets
+# a fresh _styles() inside; depth caps protect against runaway nesting.
+
+_MAX_LIST_ITEMS = 25       # truncate long lists to keep PDF readable
+_MAX_DICT_DEPTH = 4        # cap nesting; deeper structures rendered as JSON
+_MAX_CELL_CHARS = 220      # truncate single cell values
+_MAX_TABLE_ROWS = 60       # cap rows per single payload table
+
+
+def _truncate(s, limit=_MAX_CELL_CHARS):
+    s = "" if s is None else str(s)
+    return s if len(s) <= limit else (s[: limit - 3] + "...")
+
+
+def _format_value(v, depth=0):
+    """Convert a leaf value into a render-safe string."""
+    if v is None:
+        return "--"
+    if isinstance(v, bool):
+        return "Yes" if v else "No"
+    if isinstance(v, (int, float)):
+        return f"{v:,}" if isinstance(v, int) and abs(v) >= 1000 else str(v)
+    if isinstance(v, str):
+        return _truncate(_safe(v))
+    if isinstance(v, list):
+        if not v:
+            return "(empty)"
+        if all(isinstance(x, (str, int, float, bool)) for x in v[:5]):
+            preview = ", ".join(_truncate(_safe(str(x)), 60) for x in v[:5])
+            return _truncate(f"[{len(v)}] {preview}{'...' if len(v) > 5 else ''}", 220)
+        return f"[list × {len(v)}]"
+    if isinstance(v, dict):
+        return f"{{dict × {len(v)} keys}}"
+    return _truncate(_safe(str(v)))
+
+
+def _render_payload(story, ss, payload, page_w, depth=0):
+    """Recursively render a payload — dict → key/value table, list → enumerated
+    sub-payloads, scalar → paragraph. Returns nothing; appends to story."""
+    if payload is None:
+        story.append(Paragraph("(no payload)", ss["Small"]))
+        return
+
+    if isinstance(payload, dict):
+        if not payload:
+            story.append(Paragraph("(empty)", ss["Small"]))
+            return
+        # split scalar/leaf keys (render in a table) from nested keys (recurse)
+        scalar_rows = []
+        nested = []
+        for k, v in payload.items():
+            if isinstance(v, dict) and v:
+                nested.append((k, v))
+            elif isinstance(v, list) and v and any(isinstance(x, dict) for x in v):
+                nested.append((k, v))
+            else:
+                scalar_rows.append([_safe(str(k)), _format_value(v)])
+
+        if scalar_rows:
+            scalar_rows = scalar_rows[:_MAX_TABLE_ROWS]
+            tbl = Table([["Field", "Value"]] + scalar_rows,
+                        colWidths=[page_w * 0.35, page_w * 0.65])
+            tbl.setStyle(_table_style_base())
+            story.append(tbl)
+            if len(payload) > _MAX_TABLE_ROWS:
+                story.append(Paragraph(
+                    f"(...{len(payload) - _MAX_TABLE_ROWS} more fields truncated)",
+                    ss["Small"]
+                ))
+            story.append(Spacer(1, 2 * mm))
+
+        if depth >= _MAX_DICT_DEPTH:
+            if nested:
+                story.append(Paragraph(
+                    f"(depth cap reached — {len(nested)} nested key(s) omitted from PDF; "
+                    f"see report_input.json for full detail)",
+                    ss["Small"]
+                ))
+            return
+
+        for k, v in nested:
+            story.append(Paragraph(
+                f"<i>{_safe(str(k))}</i>",
+                ParagraphStyle("nestedh", parent=ss["Body"],
+                                fontSize=10, textColor=PURPLE,
+                                spaceBefore=4, spaceAfter=2)
+            ))
+            _render_payload(story, ss, v, page_w, depth=depth + 1)
+        return
+
+    if isinstance(payload, list):
+        if not payload:
+            story.append(Paragraph("(empty list)", ss["Small"]))
+            return
+        # Tabular if all items are dicts with consistent keys
+        if all(isinstance(x, dict) for x in payload):
+            keys: list = []
+            seen = set()
+            for row in payload[:5]:
+                for k in row.keys():
+                    if k not in seen and len(keys) < 6:
+                        keys.append(k); seen.add(k)
+            data = [[_safe(str(k)) for k in keys]]
+            for row in payload[:_MAX_LIST_ITEMS]:
+                data.append([_format_value(row.get(k)) for k in keys])
+            col_w = page_w / max(len(keys), 1)
+            tbl = Table(data, colWidths=[col_w] * len(keys))
+            tbl.setStyle(_table_style_base())
+            story.append(tbl)
+            if len(payload) > _MAX_LIST_ITEMS:
+                story.append(Paragraph(
+                    f"(...{len(payload) - _MAX_LIST_ITEMS} more rows truncated; "
+                    f"total {len(payload):,})",
+                    ss["Small"]
+                ))
+            story.append(Spacer(1, 2 * mm))
+            return
+
+        # Otherwise enumerated bullets
+        for i, item in enumerate(payload[:_MAX_LIST_ITEMS]):
+            story.append(Paragraph(
+                f"<b>[{i + 1}]</b> {_format_value(item)}",
+                ss["MBullet"]
+            ))
+        if len(payload) > _MAX_LIST_ITEMS:
+            story.append(Paragraph(
+                f"(...{len(payload) - _MAX_LIST_ITEMS} more items truncated; total {len(payload):,})",
+                ss["Small"]
+            ))
+        return
+
+    # Scalar
+    story.append(Paragraph(_format_value(payload), ss["Body"]))
 
 
 def generate_pdf_from_file(json_path, output_path=None):

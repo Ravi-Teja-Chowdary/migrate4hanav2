@@ -149,7 +149,44 @@ module "lambda" {
   ollama_url   = var.enable_airgapped_llm ? "http://${module.airgapped_llm[0].private_ip}:11434" : ""
 
   lambda_functions = {
-    # NOTE: discovery-engine removed — now runs on ECS Fargate (Stage 1)
+    # Stage 1 — discovery-engine. Previously routed to Fargate (heavier scans),
+    # but the lift-and-shift pipeline expects a Lambda binding so the SFN can
+    # call it directly. Re-added 2026-06-10 after a prod run showed the SFN
+    # was falling back to manual-gate-prod for Stage 1.
+    discovery-engine = {
+      description = "Stage 1: Discover custom ABAP, tables, FMs, org units, RFC dests"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 900
+      memory      = 3008
+      source_dir  = "${path.root}/../../../lambda/discovery-engine"
+      layers      = [local.pyrfc_layer_arn]
+    }
+    # Stage 21 — migration-completeness-analyzer. Added 2026-06-10 (same
+    # reason as discovery-engine: SFN was binding to fallback).
+    migration-completeness-analyzer = {
+      description = "Stage 21: Completeness scoring + go-live recommendation"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 300
+      memory      = 1024
+      source_dir  = "${path.root}/../../../lambda/migration-completeness-analyzer"
+      layers      = []
+    }
+    # Stage 27 — pdf-report-generator. Bundles reportlab; emits the
+    # client-deliverable PDF + the aggregated report_input.json to S3
+    # under runs/<run_id>/report/. Source lives at repo root so the lambda
+    # zip is built from a small wrapper dir under .deploy-tmp/ at apply time;
+    # see DEPLOY-NOTES.md for the layout.
+    pdf-report-generator = {
+      description = "Stage 27: Aggregate per-stage artifacts and render client-deliverable PDF"
+      handler     = "handler.lambda_handler"
+      runtime     = "python3.11"
+      timeout     = 600
+      memory      = 2048
+      source_dir  = "${path.root}/../../../lambda/pdf-report-generator"
+      layers      = []
+    }
 
     # NOTE: maintenance-planner not in repo — Stage 2 is handled in-pipeline via
     # the SAP Maintenance Planner web UI (manual gate) rather than a Lambda.
