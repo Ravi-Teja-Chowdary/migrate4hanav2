@@ -207,6 +207,9 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # SG descriptions must match AWS regex: only ASCII letters/digits/safe punct.
+  # No arrows, no smart quotes — caught the hard way on first deploy.
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -219,11 +222,11 @@ resource "aws_security_group" "alb" {
 
 resource "aws_security_group" "task" {
   name        = "migrate4hana-api-task-${var.environment}"
-  description = "Fargate task — accepts ALB → 8000 only"
+  description = "Fargate task - accepts ALB to port 8000 only"
   vpc_id      = var.vpc_id
 
   ingress {
-    description     = "ALB → Fargate"
+    description     = "ALB to Fargate"
     from_port       = 8000
     to_port         = 8000
     protocol        = "tcp"

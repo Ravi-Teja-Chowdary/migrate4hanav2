@@ -1,0 +1,37 @@
+# Migrate4HANA — api-server Docker image dependencies
+#
+# This is a slimmed-down sibling of requirements.txt for the cloud-deployed
+# api-server (Fargate). It deliberately omits pyrfc because:
+#
+#   - pyrfc 3.x is yanked from PyPI; the only path is build-from-source
+#     against the SAP NW RFC SDK with Cython.
+#   - Getting that to compile reliably in a slim Python container is fiddly
+#     and adds ~5 min to every deploy.
+#   - The cloud api-server doesn't NEED to make RFC calls itself — every
+#     connection test, BAPI call, and pipeline stage runs inside a Lambda
+#     that already has pyrfc bundled in its layer.
+#
+# When the api-server's /api/connections/ecc/test endpoint is called in
+# the cloud build, it invokes the test-ecc-rfc Lambda instead of trying
+# to import pyrfc directly. The local laptop build (requirements.txt)
+# still uses pyrfc directly for the same endpoint.
+
+# ── API server core ──
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0
+python-multipart>=0.0.6
+
+# ── AWS ──
+boto3>=1.34.0
+botocore>=1.34.0
+
+# ── PDF rendering (for /api/runs/{id}/pdf in the cloud) ──
+reportlab>=4.0.0
+
+# ── Auth / crypto ──
+PyJWT>=2.8.0
+
+# ── Misc ──
+requests>=2.31.0
+python-dateutil>=2.8.0
