@@ -155,8 +155,27 @@
     "Stage13_DataExtraction": {
       "Type": "Task", "Resource": "${DataMigratorArn}",
       "Parameters": {"mode": "extract", "input.$": "$"},
-      "Next": "Stage14_DataHygiene",
+      "Next": "DataQualitySloChoice",
       "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "RollbackManager"}]
+    },
+    "DataQualitySloChoice": {
+      "Type": "Choice",
+      "Comment": "Dead-letter SLO gate (added 2026-06-10). Halts the pipeline at a manual review gate when the dirty-data rate exceeds M4H_DEAD_LETTER_THRESHOLD_PCT (default 5%, threshold lives in data-migrator env). data_quality.slo_breach is computed by data-migrator's batch summary from per-object load.failed_count / load.attempted plus CVI conflicts. threshold=0 disables the gate.",
+      "Choices": [
+        {"Variable": "$.slo_breach", "BooleanEquals": true, "Next": "ManualGate_DataQuality"}
+      ],
+      "Default": "Stage14_DataHygiene"
+    },
+    "ManualGate_DataQuality": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Comment": "Human gate: data-quality steward reviews the dirty-data spike before the pipeline proceeds. Token resumes via SendTaskSuccess once the steward confirms either (a) accept the dirt and continue, (b) cleanse upstream and re-trigger run. ResultPath preserves the data-migrator summary state across the gate.",
+      "Parameters": {
+        "FunctionName": "${ManualGateLambdaArn}",
+        "Payload": {"gate": "data_quality", "token.$": "$$.Task.Token", "input.$": "$"}
+      },
+      "ResultPath": "$.gate_dataquality",
+      "Next": "Stage14_DataHygiene"
     },
     "Stage14_DataHygiene": {
       "Type": "Task", "Resource": "${DataHygieneArn}",

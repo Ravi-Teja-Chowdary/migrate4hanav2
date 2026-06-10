@@ -1052,6 +1052,33 @@ def lambda_handler(event, context):
         recon_reports = [r["reconciliation"] for r in results
                          if isinstance(r.get("reconciliation"), dict)
                          and "error" not in r["reconciliation"]]
+        # Data-quality SLO rollup: total_attempted vs total_dead_letter, and the
+        # resulting pct. The SFN Choice state (DataQualitySloChoice) branches on
+        # data_quality.slo_breach, halting at DataQualityHaltForReview when
+        # dead-letter rate exceeds M4H_DEAD_LETTER_THRESHOLD_PCT (default 5%).
+        # threshold=0 disables the gate (dirty data flows through unblocked).
+        try:
+            _dq_threshold = float(os.environ.get("M4H_DEAD_LETTER_THRESHOLD_PCT", "5.0"))
+        except Exception:
+            _dq_threshold = 5.0
+        _total_attempted = sum(int((r.get("load") or {}).get("attempted") or 0)
+                               for r in results)
+        _total_dead = sum(int((r.get("load") or {}).get("failed_count") or
+                              len((r.get("load") or {}).get("dead_letter") or []))
+                          for r in results)
+        # Also count CVI conflicts pushed into the dead-letter artifact above.
+        if cvi_info:
+            _total_dead += int(cvi_info.get("conflicts_requiring_review") or 0)
+        _dq_pct = round((_total_dead / _total_attempted * 100.0), 3) if _total_attempted else 0.0
+        _dq_breach = bool(_dq_threshold > 0 and _dq_pct > _dq_threshold)
+        data_quality = {
+            "total_attempted":   _total_attempted,
+            "total_dead_letter": _total_dead,
+            "dead_letter_pct":   _dq_pct,
+            "threshold_pct":     _dq_threshold,
+            "slo_breach":        _dq_breach,
+            "gate_disabled":     bool(_dq_threshold == 0),
+        }
         summary = {"run_id": run_id, "mode": mode, "object_count": len(results),
                    "ok_count": sum(1 for r in results if r.get("status") == "ok"),
                    "partial_count": sum(1 for r in results if r.get("status") == "partial"),
@@ -1071,6 +1098,9 @@ def lambda_handler(event, context):
                    "support_compliance": compliance.audit(results) if compliance else None,
                    "key_mapping": key_map_info,
                    "dead_letter": dead_letter_info,
+                   "data_quality": data_quality,
+                   "dead_letter_pct": data_quality["dead_letter_pct"],
+                   "slo_breach": data_quality["slo_breach"],
                    "cvi": cvi_info,
                    "ltmc_pending": ltmc_pending_info,
                    "carve_out": _carve_out_programs(run_id, results, event),

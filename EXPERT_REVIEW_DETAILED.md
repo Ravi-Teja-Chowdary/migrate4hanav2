@@ -2196,6 +2196,58 @@ Two lines still stand, intentionally:
 - **Zero real customer cutovers.** The IDES is an SAP-shipped demo system, not a production tenant. Customer Zero is still the next-most-leverage step.
 - **Real S/4 net-new BP creates not demonstrated in this run.** The spine attempts all hit idempotency or dead-letter on the 200-row sample. Bumping cap + targeting fresh keys is a 5-minute env-var change away.
 
+### 2026-06-10 follow-up — Dead-letter SLO gate (offline-shippable, validation needs no SAP)
+
+After the AWS end-to-end was proven, the carry-forward list named three "production-ready gap" items: (1) cleanse-and-retry, (2) volume profiling at 1M+, (3) dead-letter SLO gate. The user asked which were buildable without ECC/S4 connectivity. Answer: **(3) fully — pure ASL + env-var; testable by replaying the captured run.** Built and shipped in this follow-up.
+
+**What it does:** the data-migrator's batch summary now computes a top-level `data_quality` block:
+
+```json
+"data_quality": {
+    "total_attempted":   553,
+    "total_dead_letter": 331,
+    "dead_letter_pct":   59.855,
+    "threshold_pct":     5.0,
+    "slo_breach":        true,
+    "gate_disabled":     false
+}
+```
+
+with convenience copies of `dead_letter_pct` and `slo_breach` hoisted to top-level state so the SFN Choice can branch on a single key. The new SFN states (`DataQualitySloChoice` + `ManualGate_DataQuality`) sit between Stage13_DataExtraction (where UnifiedLoader→spine actually runs) and Stage14_DataHygiene. When `$.slo_breach == true`, the pipeline halts at a `waitForTaskToken` gate identical in shape to the existing 3 manual gates (basis-handover / pre-cutover / final-go-live); a data-quality steward inspects the dirt and either calls `SendTaskSuccess` (accept and continue) or `SendTaskFailure` (cleanse upstream and re-trigger). `ResultPath: $.gate_dataquality` preserves the data-migrator summary across the gate clear (same `ResultPath` pattern used for the other 3 gates per the 2026-06-10 fix).
+
+**Configuration:** `M4H_DEAD_LETTER_THRESHOLD_PCT` env var on data-migrator Lambda (terraform variable `dead_letter_threshold_pct`, default `5.0`). `0` disables the gate (useful during dirty-data validation runs where you WANT the spine's rejection path to fire end-to-end without halting). CVI conflicts (already routed into the dead-letter S3 artifact by the existing CVI mapper) are counted into `total_dead_letter` so hidden Customer/Vendor merge dirt also triggers the gate.
+
+**Validation — no SAP touched.** The replay against `aws-e2e-20260610-124235`'s captured `summary.json` confirms the math:
+
+| `threshold_pct` | `dead_letter_pct` (from captured run) | `slo_breach` | SFN routes to |
+|---|---|---|---|
+| `5.0` (default) | `59.855%` | `true` | `ManualGate_DataQuality` |
+| `0.5` | `59.855%` | `true` | `ManualGate_DataQuality` |
+| `25.0` | `59.855%` | `true` | `ManualGate_DataQuality` |
+| `50.0` | `59.855%` | `true` | `ManualGate_DataQuality` |
+| `0` (disabled) | `59.855%` | `false` | `Stage14_DataHygiene` (passthrough) |
+
+Six unit tests in `tests/test_data_quality_slo_gate.py` lock the rollup math (clean / dirty / threshold-zero-disables / below-threshold / CVI-conflicts-count / empty-results-safe) — all green offline.
+
+**Deployment status (when this section was written):** `terraform apply -target=module.step_functions -target=module.lambda` plan showed 3 to add (carry-over Lambda registrations) + 37 to change (all 36 Lambdas pick up the new env var, plus the SFN ASL definition). Apply ran while doc updates were written; the user paused work before any SFN end-to-end smoke run because their ECC/S4 VMs were down — so the gate is **deployed and unit-tested offline; live SFN execution against the new ASL is queued for the next session when connectivity returns**. The replay evidence above is the contract the smoke run will verify.
+
+**Effect on the carry-forward list:**
+
+| Carry-forward gap | Status after this follow-up |
+|---|---|
+| Cleanse-and-retry | Still pending. Buildable offline; final smoke needs ~10 min of connectivity. |
+| Volume profiling at 1M+ | Still pending. Framework buildable offline; real numbers need ECC dataset + real BAPI throughput. |
+| **Dead-letter SLO gate** | **SHIPPED.** Code + ASL + tests + terraform all merged. Live SFN proof pending connectivity return. |
+
+**Files touched (4):**
+
+| File | Change |
+|---|---|
+| `lambda/data-migrator/handler.py` | Batch summary now computes `data_quality` (total_attempted/total_dead_letter/dead_letter_pct/threshold_pct/slo_breach/gate_disabled) from per-object `load.failed_count`/`load.attempted` plus CVI conflicts; flat `dead_letter_pct` + `slo_breach` hoisted to top-level summary for SFN Choice convenience. |
+| `terraform/modules/step-functions/lift_and_shift_pipeline.asl.json` | Stage13's `Next` repointed to new `DataQualitySloChoice`. New `DataQualitySloChoice` (branches on `$.slo_breach`) + new `ManualGate_DataQuality` (waitForTaskToken with `ResultPath: $.gate_dataquality`). Choice `Default` → Stage14_DataHygiene; gate `Next` → Stage14_DataHygiene. State count 44 → 46. |
+| `terraform/modules/lambda/main.tf` | New `dead_letter_threshold_pct` variable (default 5.0). New `M4H_DEAD_LETTER_THRESHOLD_PCT` env var on all Lambdas (data-migrator reads it; rest ignore harmlessly). |
+| `tests/test_data_quality_slo_gate.py` (new) | 6 unit tests pinning the rollup math + each branch. `pytest tests/test_data_quality_slo_gate.py` → 6 passed in 0.19s. |
+
 ---
 
 *End of detailed review brief. For executive summary, see `EXPERT_REVIEW_BRIEF.md`.

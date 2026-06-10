@@ -356,6 +356,12 @@ variable "fargate_row_threshold" {
   default = 20000
 }
 
+variable "dead_letter_threshold_pct" {
+  description = "Dirty-data SLO. data-migrator computes dead_letter_pct from per-object load.failed_count / load.attempted (plus CVI conflicts). When the rate exceeds this threshold, SFN's DataQualitySloChoice halts at ManualGate_DataQuality. Set to 0 to disable the gate."
+  type        = number
+  default     = 5.0
+}
+
 resource "aws_lambda_function" "migration" {
   for_each = var.lambda_functions
 
@@ -442,6 +448,12 @@ resource "aws_lambda_function" "migration" {
         M4H_FARGATE_SUBNETS       = join(",", var.private_subnet_ids)
         M4H_FARGATE_SGS           = var.fargate_sgs
         M4H_FARGATE_ROW_THRESHOLD = tostring(var.fargate_row_threshold)
+        # Dead-letter SLO gate (added 2026-06-10). data-migrator emits
+        # data_quality.slo_breach when dirty-data rate exceeds this pct.
+        # The SFN's DataQualitySloChoice halts the pipeline at
+        # ManualGate_DataQuality when slo_breach=true. Set to "0" to
+        # disable the gate.
+        M4H_DEAD_LETTER_THRESHOLD_PCT = tostring(var.dead_letter_threshold_pct)
       }
     )
   }
