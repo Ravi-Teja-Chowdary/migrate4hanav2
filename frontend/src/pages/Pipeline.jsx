@@ -1,38 +1,33 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Search, Rocket, CheckCircle2, Circle, AlertTriangle, Activity, ListChecks,
+  Zap, Search, Activity, AlertTriangle, CheckCircle2, Circle, Clock, ListChecks,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApi, useAction } from '../lib/useApi';
 import {
-  Card, PageHeader, Badge, Spinner, ProgressBar, OfflineBanner, CommandBlock, EmptyState, ACCENT,
-} from '../components/ui';
+  Panel, PageHeader, StatusPill, MetricTile, Spinner, OfflineBanner, EmptyState, CmdLine, KVList,
+} from '../components/dd';
 import { STAGE_ENGINES, engineFor } from '../lib/stages';
 
-const PHASE_TONE = {
-  ASSESS: 'indigo', PROVISION: 'violet', CODE: 'sky', CONFIG: 'teal',
-  DATA_PREP: 'amber', DATA_LOAD: 'amber', VALIDATE: 'emerald', CUTOVER: 'rose', RUN: 'emerald',
-};
-const PHASE_HEX = {
-  indigo: '#6366f1', violet: '#8b5cf6', sky: '#0ea5e9', teal: '#14b8a6',
-  amber: '#f59e0b', emerald: '#10b981', rose: '#f43f5e',
+// Phase tone → observability color. Used for the phase ribbon dot.
+const PHASE_COLOR = {
+  ASSESS: 'var(--accent)', PROVISION: '#a78bfa', CODE: 'var(--info)',
+  CONFIG: '#14b8a6', DATA_PREP: 'var(--warn)', DATA_LOAD: 'var(--warn)',
+  VALIDATE: 'var(--ok)', CUTOVER: 'var(--err)', RUN: 'var(--ok)',
 };
 
-function pretty(handler, extra) {
+const pretty = (handler, extra) => {
   if (!handler) return extra?.gate ? `Gate · ${extra.gate.replace(/_/g, ' ')}` : 'Manual gate';
   return handler.replace('.handler', '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-function token(handler) {
-  return (handler || '').split('.')[0];
-}
-
+};
+const token = (h) => (h || '').split('.')[0];
 const STEP_TONE = (s) => {
   const u = String(s || '').toUpperCase();
-  if (u.includes('COMPLETE') || u === 'SUCCESS' || u === 'OK' || u === 'DONE') return 'completed';
-  if (u.includes('PROGRESS') || u === 'RUNNING') return 'running';
-  if (u.includes('FAIL') || u.includes('ERROR')) return 'failed';
-  return 'info';
+  if (u.includes('COMPLETE') || u === 'SUCCESS' || u === 'OK' || u === 'DONE') return 'ok';
+  if (u.includes('PROGRESS') || u === 'RUNNING') return 'info';
+  if (u.includes('FAIL') || u.includes('ERROR')) return 'err';
+  return 'muted';
 };
 
 export default function Pipeline() {
@@ -42,24 +37,24 @@ export default function Pipeline() {
 
   const assess = useAction(() => api.trigger('assess'));
   const full = useAction(() => api.trigger('full'));
+  const [selected, setSelected] = useState(null);
 
   const running = statusQ.data?.status === 'running';
   const steps = progressQ.data?.steps || [];
 
-  // best-effort live highlight from real progress steps (no fabrication)
   const { doneTokens, runningToken } = useMemo(() => {
     const done = new Set();
     let run = null;
     for (const s of steps) {
       const t = STEP_TONE(s.status);
       const key = String(s.stage || '').toLowerCase();
-      if (t === 'completed') done.add(key);
-      if (t === 'running') run = key;
+      if (t === 'ok') done.add(key);
+      if (t === 'info') run = key;
     }
     return { doneTokens: done, runningToken: run };
   }, [steps]);
 
-  function stageStatus(handler) {
+  const stageStatus = (handler) => {
     const k = token(handler).toLowerCase();
     if (!k) return 'idle';
     const matchDone = [...doneTokens].some((d) => d && (d.includes(k) || k.includes(d)));
@@ -67,169 +62,198 @@ export default function Pipeline() {
     if (matchRun) return 'running';
     if (matchDone) return 'completed';
     return running ? 'queued' : 'idle';
-  }
+  };
 
   if (stagesQ.loading) {
-    return <div className="flex items-center gap-2 text-ink-400 text-sm py-20 justify-center"><Spinner /> Loading pipeline…</div>;
+    return <div className="flex items-center gap-2 text-xs text-ink-3 py-20 justify-center"><Spinner /> Loading pipeline…</div>;
   }
   if (stagesQ.error) {
     return (
-      <div className="space-y-7">
-        <PageHeader title="Migration" accentWord="Pipeline" subtitle="SAP Activate, 28 orchestrated stages." />
+      <div className="space-y-4">
+        <PageHeader title="Pipeline" breadcrumb={['Migrate4HANA', 'Pipeline']} subtitle="27 orchestrated stages across 9 phases." />
         <OfflineBanner onRetry={stagesQ.reload} />
       </div>
     );
   }
 
   const stages = stagesQ.data?.stages || [];
-  const phases = stages.reduce((acc, s) => {
-    (acc[s.phase] = acc[s.phase] || []).push(s);
-    return acc;
-  }, {});
+  const phases = stages.reduce((acc, s) => { (acc[s.phase] = acc[s.phase] || []).push(s); return acc; }, {});
   const completedCount = stages.filter((s) => stageStatus(s.handler) === 'completed').length;
   const pct = stages.length ? Math.round((completedCount / stages.length) * 100) : 0;
-
-  const statusBadge = statusQ.error
-    ? null
-    : running
-      ? <Badge tone="running"><Spinner size={12} /> Running · {statusQ.data?.mode}</Badge>
-      : statusQ.data?.status === 'completed'
-        ? <Badge tone="ok"><CheckCircle2 size={12} /> Completed</Badge>
-        : statusQ.data?.status === 'failed'
-          ? <Badge tone="failed"><AlertTriangle size={12} /> Failed</Badge>
-          : <Badge tone="pending">Idle</Badge>;
+  const selectedStage = selected ? stages.find((s) => s.id === selected || s.handler === selected) : null;
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-4">
       <PageHeader
-        title="Migration" accentWord="Pipeline"
-        subtitle={`${stages.length} orchestrated stages across ${Object.keys(phases).length} phases — live status from the backend.`}
+        title="Pipeline"
+        breadcrumb={['Migrate4HANA', 'Pipeline']}
+        subtitle={`${stages.length} stages · ${Object.keys(phases).length} phases · live status from the orchestration plane.`}
         actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => assess.run()} disabled={running || assess.busy}
-              className="focusable inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 text-[13px] font-semibold hover:bg-indigo-100 transition disabled:opacity-50"
-            >
-              {assess.busy ? <Spinner size={14} /> : <Search size={15} />} Assess
+          <>
+            <button onClick={() => assess.run()} disabled={running || assess.busy} className="btn btn-sm">
+              {assess.busy ? <Spinner size={12} /> : <Search size={12} />} Assess
             </button>
-            <button
-              onClick={() => full.run()} disabled={running || full.busy}
-              className="focusable btn-primary inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold disabled:opacity-60"
-            >
-              {full.busy ? <Spinner size={14} className="text-white" /> : <Rocket size={15} />} Run Full Pipeline
+            <button onClick={() => full.run()} disabled={running || full.busy} className="btn btn-sm btn-primary">
+              {full.busy ? <Spinner size={12} /> : <Zap size={12} />} Run full
             </button>
-          </div>
+          </>
         }
       />
 
       {(assess.error || full.error) && (
-        <Card className="p-3 border-rose-200/60">
-          <p className="text-xs text-rose-600 flex items-center gap-2"><AlertTriangle size={13} /> {(assess.error || full.error).message}</p>
-        </Card>
+        <Panel><div className="text-xs flex items-center gap-2" style={{ color: 'var(--err)' }}><AlertTriangle size={13} /> {(assess.error || full.error).message}</div></Panel>
       )}
 
-      {/* Status + progress */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            {statusBadge}
-            {statusQ.data?.run_id && <span className="text-xs font-mono text-ink-400">{statusQ.data.run_id}</span>}
+      {/* Metric strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricTile
+          label="Run state"
+          value={running ? 'Running' : statusQ.data?.status === 'completed' ? 'Completed' : statusQ.data?.status === 'failed' ? 'Failed' : 'Idle'}
+          sub={statusQ.data?.mode}
+          tone={running ? null : statusQ.data?.status === 'completed' ? 'ok' : statusQ.data?.status === 'failed' ? 'err' : null}
+        />
+        <MetricTile label="Stages complete" value={`${completedCount}/${stages.length}`} sub={`${pct}%`} />
+        <MetricTile label="Phases" value={Object.keys(phases).length} sub="SAP Activate" />
+        <MetricTile label="Events" value={progressQ.data?.total_steps ?? steps.length} sub="lifetime" />
+      </div>
+
+      {/* Progress bar */}
+      <Panel title="Run progress" icon={Activity} subtitle={statusQ.data?.run_id || 'no active run'}>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-elev)' }}>
+            <motion.div
+              className="h-full rounded-full"
+              style={{ background: 'var(--accent)' }}
+              initial={{ width: 0 }} animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
+            />
           </div>
-          <span className="text-xs font-mono text-ink-400">{completedCount}/{stages.length} · {pct}%</span>
+          <span className="text-xs font-mono text-ink-3 tabular-nums shrink-0">{pct}%</span>
         </div>
-        <ProgressBar value={pct} />
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <CommandBlock cmd="python run_local_lift_and_shift.py --through stage21" />
-          <CommandBlock cmd="python run_local_lift_and_shift.py --run-id RUN-001" />
+          <CmdLine cmd="python run_local_lift_and_shift.py --through stage21" />
+          <CmdLine cmd="python run_local_lift_and_shift.py --run-id RUN-001" />
         </div>
-      </Card>
+      </Panel>
 
-      {/* Competitor-grade engines embedded INSIDE these stages */}
-      <Card className="p-5">
-        <p className="text-[12.5px] font-semibold text-ink-700 mb-3">Competitor-grade engines embedded in our stages</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {Object.entries(STAGE_ENGINES).map(([tok, e]) => {
-            const a = ACCENT[e.accent];
-            return (
-              <div key={tok} className={`rounded-2xl ${a.bg} p-3.5`}>
-                <p className={`text-[13px] font-bold ${a.text}`}>{e.vendor}-class</p>
-                <p className="text-[11px] text-ink-500 mt-0.5">{e.label}</p>
-                <p className="text-[10px] font-mono text-ink-400 mt-1.5">in stage · {tok}</p>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Stage timeline by phase */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {Object.entries(phases).map(([phase, list]) => {
-          const tone = PHASE_TONE[phase] || 'indigo';
-          const hex = PHASE_HEX[tone];
-          return (
-            <Card key={phase} className="p-5">
-              <div className="flex items-center gap-2.5 mb-4">
-                <span className="w-2 h-2 rounded-full" style={{ background: hex }} />
-                <h3 className="text-[13px] font-semibold uppercase tracking-wider text-ink-600">{phase.replace(/_/g, ' ')}</h3>
-                <span className="ml-auto text-[10px] font-mono text-ink-300">{list.length}</span>
-              </div>
-              <div className="space-y-1.5">
+      {/* Stage tracks by phase + drill panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-3 items-start">
+        <div className="space-y-3">
+          {Object.entries(phases).map(([phase, list]) => (
+            <Panel
+              key={phase}
+              title={phase.replace(/_/g, ' ')}
+              icon={() => <span className="w-2 h-2 rounded-full shrink-0" style={{ background: PHASE_COLOR[phase] || 'var(--accent)' }} />}
+              actions={<span className="text-[10px] text-ink-4 font-mono">{list.length} stages</span>}
+              flush
+            >
+              <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
                 {list.map((s) => {
                   const st = stageStatus(s.handler);
+                  const isSel = selected === s.id;
+                  const engine = engineFor(s.handler);
                   return (
-                    <div key={s.id} className="flex items-center gap-3 py-1.5">
-                      <span className="w-6 shrink-0 flex justify-center">
-                        {st === 'completed' ? <CheckCircle2 size={16} style={{ color: hex }} />
-                          : st === 'running' ? <Spinner size={15} className="" />
-                          : <Circle size={12} className="text-ink-300" />}
+                    <button
+                      key={s.id}
+                      onClick={() => setSelected(isSel ? null : s.id)}
+                      className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-bg-elev ${isSel ? 'bg-bg-elev' : ''}`}
+                      style={isSel ? { background: 'var(--bg-elev)' } : undefined}
+                    >
+                      <span className="shrink-0 w-5 flex justify-center">
+                        {st === 'completed' ? <CheckCircle2 size={14} style={{ color: 'var(--ok)' }} /> :
+                         st === 'running'   ? <Spinner size={14} /> :
+                         st === 'queued'    ? <Clock size={13} className="text-ink-4" /> :
+                                              <Circle size={12} className="text-ink-5" />}
                       </span>
-                      <span className="text-[10px] font-mono text-ink-300 w-12 shrink-0">{s.id}</span>
-                      <span className={`text-[13px] truncate ${st === 'completed' ? 'text-ink-700' : st === 'running' ? 'text-ink-900 font-medium' : 'text-ink-500'}`}>
+                      <span className="text-[10.5px] font-mono text-ink-4 w-9 shrink-0">{s.id}</span>
+                      <span className={`text-[12.5px] truncate flex-1 ${st === 'completed' ? 'text-ink-2' : st === 'running' ? 'text-ink-1 font-semibold' : 'text-ink-3'}`}>
                         {pretty(s.handler, s.extra)}
                       </span>
-                      <span className="ml-auto flex items-center gap-1.5 shrink-0">
-                        {engineFor(s.handler) && (
-                          <span
-                            title={engineFor(s.handler).label}
-                            className={`hidden sm:inline-flex items-center gap-1 text-[9.5px] font-semibold px-1.5 py-0.5 rounded-full ${ACCENT[engineFor(s.handler).accent].bg} ${ACCENT[engineFor(s.handler).accent].text}`}
-                          >
-                            {engineFor(s.handler).vendor}
-                          </span>
-                        )}
-                        {st === 'running' && <Badge tone="running">live</Badge>}
-                      </span>
-                    </div>
+                      {engine && (
+                        <span className="text-[9.5px] font-semibold px-1.5 py-0.5 rounded-full text-accent" style={{ background: 'var(--accent-soft)' }} title={engine.label}>
+                          {engine.vendor}
+                        </span>
+                      )}
+                      {st === 'running' && <StatusPill tone="info">live</StatusPill>}
+                    </button>
                   );
                 })}
               </div>
-            </Card>
-          );
-        })}
+            </Panel>
+          ))}
+        </div>
+
+        {/* Drill panel */}
+        <div className="sticky top-3">
+          {selectedStage ? (
+            <Panel title={pretty(selectedStage.handler, selectedStage.extra)} subtitle={`Stage ${selectedStage.id}`}>
+              <StatusPill tone={stageStatus(selectedStage.handler) === 'completed' ? 'ok' : stageStatus(selectedStage.handler) === 'running' ? 'info' : 'muted'}>
+                {stageStatus(selectedStage.handler)}
+              </StatusPill>
+              <div className="mt-3">
+                <KVList
+                  cols={2}
+                  items={[
+                    { label: 'Phase', value: selectedStage.phase?.replace(/_/g, ' ') || '—' },
+                    { label: 'Handler', value: selectedStage.handler || '—' },
+                    { label: 'Engine', value: engineFor(selectedStage.handler)?.vendor || '—' },
+                    { label: 'Class', value: engineFor(selectedStage.handler)?.label || '—' },
+                  ]}
+                />
+              </div>
+              <div className="mt-4">
+                <div className="metric-label mb-1.5">Engine description</div>
+                <p className="text-[11.5px] text-ink-2 leading-relaxed">
+                  {engineFor(selectedStage.handler)?.label || 'Standard orchestration stage. No specialised engine attached.'}
+                </p>
+              </div>
+            </Panel>
+          ) : (
+            <Panel title="Engines embedded" icon={Activity}>
+              <div className="space-y-2.5">
+                {Object.entries(STAGE_ENGINES).map(([tok, e]) => (
+                  <div key={tok} className="flex items-center gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent)' }} />
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-semibold text-ink-1">{e.vendor}-class</div>
+                      <div className="text-[10.5px] text-ink-3 truncate">{e.label}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10.5px] text-ink-4 mt-3">Click any stage to see its detail.</p>
+            </Panel>
+          )}
+        </div>
       </div>
 
       {/* Live activity feed */}
-      <Card className="p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Activity size={16} className="text-indigo-600" />
-          <h3 className="text-[13px] font-semibold text-ink-700 uppercase tracking-wider">Live Activity</h3>
-          {progressQ.data?.total_steps != null && <span className="ml-auto text-xs font-mono text-ink-400">{progressQ.data.total_steps} events</span>}
-        </div>
+      <Panel
+        title="Live activity"
+        icon={Activity}
+        actions={<span className="text-[10.5px] font-mono text-ink-4">{steps.length} events</span>}
+        flush
+      >
         {steps.length === 0 ? (
-          <EmptyState icon={ListChecks} title="No activity yet" hint="Trigger Assess or Run Full Pipeline — real progress events stream here." />
+          <EmptyState icon={ListChecks} title="No activity yet" hint="Trigger Assess or Run full pipeline — real progress events stream here." />
         ) : (
-          <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
-            {steps.slice().reverse().map((s) => (
-              <motion.div key={s.event_id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-3 py-1.5 border-b border-line/70 last:border-0">
-                <Badge tone={STEP_TONE(s.status)}>{s.status}</Badge>
-                <span className="text-[13px] text-ink-700 truncate">{s.stage}</span>
-                <span className="text-xs text-ink-400 truncate flex-1">{s.action}</span>
-                {s.duration_ms != null && <span className="text-[10px] font-mono text-ink-300">{(s.duration_ms / 1000).toFixed(1)}s</span>}
-              </motion.div>
-            ))}
+          <div className="max-h-80 overflow-y-auto">
+            <table className="dt">
+              <thead><tr><th>Status</th><th>Stage</th><th>Action</th><th>Duration</th></tr></thead>
+              <tbody>
+                {steps.slice().reverse().map((s) => (
+                  <tr key={s.event_id}>
+                    <td><StatusPill tone={STEP_TONE(s.status)}>{s.status}</StatusPill></td>
+                    <td className="font-medium text-ink-1">{s.stage}</td>
+                    <td className="text-ink-3 truncate max-w-[260px]">{s.action}</td>
+                    <td className="text-ink-4 tabular-nums">{s.duration_ms != null ? `${(s.duration_ms / 1000).toFixed(1)}s` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-      </Card>
+      </Panel>
     </div>
   );
 }

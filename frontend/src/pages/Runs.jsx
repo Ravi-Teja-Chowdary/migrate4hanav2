@@ -1,22 +1,31 @@
-import { useCallback, useState } from 'react';
-import { FileText, Download, ChevronRight, FolderOpen, Award, CheckCircle2 } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { FileText, Download, X, Award, CheckCircle2, AlertTriangle, ExternalLink } from 'lucide-react';
 import { api, authUrl } from '../lib/api';
 import { useApi } from '../lib/useApi';
-import { Card, PageHeader, Badge, Spinner, EmptyState, OfflineBanner, CommandBlock } from '../components/ui';
+import {
+  Panel, PageHeader, StatusPill, MetricTile, Spinner, EmptyState, OfflineBanner, CmdLine, KVList, SearchBox, Sparkline,
+} from '../components/dd';
+
+const fmtDate = (s) => {
+  try { return new Date(s).toLocaleString(); } catch { return s; }
+};
 
 function headline(results) {
   if (!results || typeof results !== 'object') return null;
   const sc = results.go_live_scorecard || results.validation_scorecard?.scorecard;
   const ex = results.executive_summary;
-  return {
-    grade: sc?.grade,
-    score: sc?.score,
-    recommendation: ex?.recommendation || sc?.recommendation,
-    target: ex?.target_system,
-  };
+  return { grade: sc?.grade, score: sc?.score, recommendation: ex?.recommendation || sc?.recommendation, target: ex?.target_system };
 }
 
-function RunDetail({ runId }) {
+function statusTone(status) {
+  const s = String(status || '').toLowerCase();
+  if (s === 'success' || s === 'succeeded' || s === 'completed' || s === 'ok') return 'ok';
+  if (s === 'running' || s === 'in_progress') return 'info';
+  if (s === 'failed' || s === 'error')        return 'err';
+  return 'muted';
+}
+
+function RunDetailDrawer({ runId, onClose }) {
   const { data, error, loading } = useApi(useCallback(() => api.run(runId), [runId]), { deps: [runId] });
   const [downloading, setDownloading] = useState(false);
 
@@ -25,45 +34,58 @@ function RunDetail({ runId }) {
     try { window.open(await authUrl(`/api/runs/${runId}/pdf`), '_blank'); } finally { setDownloading(false); }
   };
 
-  if (loading) return <div className="flex items-center gap-2 text-ink-400 text-sm py-12 justify-center"><Spinner /> Loading run…</div>;
-  if (error) return <p className="text-sm text-rose-600 py-6">{error.message}</p>;
-
   const h = headline(data);
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FolderOpen size={16} className="text-indigo-600" />
-          <span className="font-mono text-[13px] text-ink-700">{runId}</span>
+    <div className="fixed inset-0 z-40 flex">
+      <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="w-[640px] max-w-[92vw] flex flex-col" style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)', boxShadow: 'var(--shadow-popup)' }}>
+        <div className="flex items-center gap-2 px-5 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <FileText size={14} className="text-accent" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[12.5px] text-ink-1 truncate">{runId}</div>
+            <div className="text-[10.5px] text-ink-3">Run detail</div>
+          </div>
+          <button onClick={openPdf} disabled={downloading} className="btn btn-sm btn-primary">
+            {downloading ? <Spinner size={12} /> : <Download size={12} />} PDF
+          </button>
+          <button onClick={onClose} className="btn btn-sm btn-ghost btn-icon"><X size={13} /></button>
         </div>
-        <button onClick={openPdf} disabled={downloading}
-          className="focusable btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-60">
-          {downloading ? <Spinner size={14} className="text-white" /> : <Download size={14} />} PDF Report
-        </button>
-      </div>
 
-      {h && (h.grade || h.recommendation) && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {h.grade && (
-            <div className="rounded-2xl bg-emerald-50 p-4">
-              <div className="flex items-center gap-1.5 text-emerald-600"><Award size={14} /><span className="text-[10px] uppercase tracking-wider font-semibold">Grade</span></div>
-              <p className="text-2xl font-bold text-ink-900 mt-1">{h.grade}{h.score ? <span className="text-sm font-medium text-ink-400 ml-1">{h.score}</span> : null}</p>
-            </div>
-          )}
-          {h.recommendation && (
-            <div className="rounded-2xl bg-indigo-50 p-4 col-span-2">
-              <div className="flex items-center gap-1.5 text-indigo-600"><CheckCircle2 size={14} /><span className="text-[10px] uppercase tracking-wider font-semibold">Recommendation</span></div>
-              <p className="text-sm font-semibold text-ink-900 mt-1">{h.recommendation}</p>
-            </div>
-          )}
-        </div>
-      )}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {loading && <div className="flex items-center gap-2 text-xs text-ink-3 py-12 justify-center"><Spinner /> Loading run…</div>}
+          {error && <div className="text-xs" style={{ color: 'var(--err)' }}>{error.message}</div>}
+          {data && (
+            <>
+              {h && (h.grade || h.recommendation) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {h.grade && (
+                    <Panel title="Grade" icon={Award}>
+                      <div className="metric-num" style={{ color: 'var(--ok)' }}>{h.grade}<span className="text-sm text-ink-4 font-medium ml-1">{h.score || ''}</span></div>
+                    </Panel>
+                  )}
+                  {h.target && (
+                    <Panel title="Target system" icon={CheckCircle2}>
+                      <div className="text-[13px] font-semibold text-ink-1 mt-1">{h.target}</div>
+                    </Panel>
+                  )}
+                  {h.recommendation && (
+                    <div className="col-span-2">
+                      <Panel title="Recommendation" icon={CheckCircle2}>
+                        <p className="text-[12.5px] text-ink-2 leading-relaxed">{h.recommendation}</p>
+                      </Panel>
+                    </div>
+                  )}
+                </div>
+              )}
 
-      <div>
-        <p className="text-[11px] font-semibold text-ink-500 mb-1.5 uppercase tracking-wider">Full report (final-report.json)</p>
-        <pre className="rounded-2xl bg-ink-900 text-slate-100 text-[11.5px] font-mono p-4 overflow-auto max-h-[420px] leading-relaxed">
+              <Panel title="Final report payload" subtitle="final-report.json" flush>
+                <pre className="code-block max-h-[420px] overflow-auto text-[11px] leading-relaxed m-0" style={{ borderRadius: 0 }}>
 {JSON.stringify(data, null, 2)}
-        </pre>
+                </pre>
+              </Panel>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -72,54 +94,118 @@ function RunDetail({ runId }) {
 export default function Runs() {
   const { data, error, loading, reload } = useApi(useCallback(() => api.runs(), []));
   const [selected, setSelected] = useState(null);
+  const [filter, setFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  if (loading) return <div className="flex items-center gap-2 text-ink-400 text-sm py-20 justify-center"><Spinner /> Loading runs…</div>;
+  const runs = Array.isArray(data) ? data : [];
+  const filtered = useMemo(() => {
+    const q = filter.toLowerCase();
+    return runs.filter((r) => {
+      if (statusFilter !== 'all' && statusTone(r.status) !== statusFilter) return false;
+      if (!q) return true;
+      const idStr = (r.id || r.run_id || '').toString().toLowerCase();
+      return idStr.includes(q);
+    });
+  }, [runs, filter, statusFilter]);
+
+  const stats = useMemo(() => {
+    const total = runs.length;
+    const ok = runs.filter((r) => statusTone(r.status) === 'ok').length;
+    const err = runs.filter((r) => statusTone(r.status) === 'err').length;
+    const dqs = runs.filter((r) => r?.data_quality?.dead_letter_pct != null);
+    const avgDq = dqs.length ? (dqs.reduce((a, r) => a + Number(r.data_quality.dead_letter_pct), 0) / dqs.length) : null;
+    return { total, ok, err, avgDq };
+  }, [runs]);
+
+  if (loading) return <div className="flex items-center gap-2 text-xs text-ink-3 py-20 justify-center"><Spinner /> Loading runs…</div>;
   if (error) {
     return (
-      <div className="space-y-7">
-        <PageHeader title="Runs &" accentWord="Reports" subtitle="Completed migration runs and their reports." />
+      <div className="space-y-4">
+        <PageHeader title="Runs" breadcrumb={['Migrate4HANA', 'Runs']} subtitle="Pipeline executions and their reports." />
         <OfflineBanner onRetry={reload} />
       </div>
     );
   }
 
-  const runs = Array.isArray(data) ? data : [];
-  const active = selected || runs[0]?.id;
-
   return (
-    <div className="space-y-7">
-      <PageHeader title="Runs &" accentWord="Reports" subtitle={`${runs.length} completed run${runs.length === 1 ? '' : 's'} on disk.`} />
+    <div className="space-y-4">
+      <PageHeader
+        title="Runs"
+        breadcrumb={['Migrate4HANA', 'Runs']}
+        subtitle={`${runs.length} execution${runs.length === 1 ? '' : 's'} on disk · click a row for detail`}
+      />
 
-      {runs.length === 0 ? (
-        <Card className="p-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricTile label="Total runs" value={stats.total} sub="on disk" />
+        <MetricTile label="Succeeded" value={stats.ok} sub={stats.total ? `${Math.round(stats.ok / stats.total * 100)}%` : ''} tone="ok" />
+        <MetricTile label="Failed" value={stats.err} sub={stats.total ? `${Math.round(stats.err / stats.total * 100)}%` : ''} tone={stats.err > 0 ? 'err' : null} />
+        <MetricTile label="Avg dead-letter %" value={stats.avgDq != null ? stats.avgDq.toFixed(2) : '—'} unit={stats.avgDq != null ? '%' : ''} sub="across runs reporting DQ" />
+      </div>
+
+      <Panel
+        title="Run history"
+        actions={
+          <>
+            <div className="inline-flex items-center gap-0.5">
+              {['all', 'ok', 'info', 'err'].map((f) => (
+                <button key={f} onClick={() => setStatusFilter(f)} className={`btn btn-sm ${statusFilter === f ? 'btn-primary' : 'btn-ghost'}`}>
+                  {f === 'all' ? 'All' : f === 'ok' ? 'Succeeded' : f === 'info' ? 'Running' : 'Failed'}
+                </button>
+              ))}
+            </div>
+            <SearchBox value={filter} onChange={setFilter} placeholder="Filter run id…" />
+          </>
+        }
+        flush
+      >
+        {filtered.length === 0 ? (
           <EmptyState
             icon={FileText}
-            title="No runs yet"
-            hint="Runs appear here once a pipeline completes and writes its final report."
-            action={<CommandBlock cmd="python run_local_lift_and_shift.py --run-id RUN-001" />}
+            title="No runs match"
+            hint="Adjust the filter or trigger a new run."
+            action={<div className="w-[420px]"><CmdLine cmd="python run_local_lift_and_shift.py --run-id RUN-001" /></div>}
           />
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5">
-          <div className="space-y-2">
-            {runs.map((r) => (
-              <button key={r.id} onClick={() => setSelected(r.id)}
-                className={`focusable w-full text-left rounded-2xl p-4 transition border ${active === r.id ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-line hover:border-indigo-200'}`}>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[12.5px] text-ink-800 truncate">{r.id}</span>
-                  <ChevronRight size={14} className={active === r.id ? 'text-indigo-500' : 'text-ink-300'} />
-                </div>
-                <div className="mt-1.5">
-                  {r.has_execution ? <Badge tone="ok">executed</Badge> : <Badge tone="info">assessment</Badge>}
-                </div>
-              </button>
-            ))}
-          </div>
-          <Card className="p-6">
-            {active ? <RunDetail runId={active} /> : <EmptyState title="Select a run" hint="Pick a run from the list to see its report." />}
-          </Card>
-        </div>
-      )}
+        ) : (
+          <table className="dt">
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>DQ %</th>
+                <th>Stages</th>
+                <th>Spark</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r) => {
+                const id = r.id || r.run_id;
+                const dq = r?.data_quality?.dead_letter_pct;
+                // Synthesize a tiny sparkline from stage durations if present
+                const spark = Array.isArray(r.stage_durations) && r.stage_durations.length > 1 ? r.stage_durations : null;
+                return (
+                  <tr key={id} className="cursor-pointer" onClick={() => setSelected(id)}>
+                    <td className="font-mono text-[11.5px] text-ink-1 truncate max-w-[260px]">{id}</td>
+                    <td><StatusPill tone={statusTone(r.status)}>{r.status || (r.has_execution ? 'executed' : 'assessment')}</StatusPill></td>
+                    <td className="text-ink-3 tabular-nums">{r.created_at ? fmtDate(r.created_at) : '—'}</td>
+                    <td className="tabular-nums">
+                      {dq == null ? '—' : (
+                        <span style={{ color: dq > (r.data_quality?.threshold_pct ?? 5) ? 'var(--warn)' : 'var(--ink-2)' }}>{Number(dq).toFixed(1)}%</span>
+                      )}
+                    </td>
+                    <td className="tabular-nums text-ink-2">{r.stage_count ?? r.stages ?? '—'}</td>
+                    <td>{spark ? <Sparkline values={spark} /> : <span className="text-ink-5 text-xs">—</span>}</td>
+                    <td><button className="btn btn-sm btn-ghost btn-icon" onClick={(e) => { e.stopPropagation(); setSelected(id); }} title="Open detail"><ExternalLink size={12} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+
+      {selected && <RunDetailDrawer runId={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

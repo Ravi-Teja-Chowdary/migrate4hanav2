@@ -1,94 +1,61 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  GitCompareArrows, ArrowRight, ShieldCheck, AlertTriangle, RefreshCcw,
-  ChevronDown, Save, Server, Cloud, Cpu, Database, FileType2,
+  ArrowRight, ShieldCheck, AlertTriangle, RefreshCcw, ChevronDown, Save,
+  Server, Cloud, Cpu, Database, FileType2, GitCompareArrows,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/useApi';
-import {
-  Card, PageHeader, Badge, Spinner, OfflineBanner, ACCENT,
-} from '../components/ui';
+import { Panel, PageHeader, StatusPill, MetricTile, Spinner, OfflineBanner, KVList } from '../components/dd';
 
-function Field({ k, v, mono = true }) {
+function VersionSelect({ label, value, onChange, options, icon: Icon }) {
   return (
-    <div className="rounded-xl bg-slate-50 px-3 py-2 border border-line">
-      <p className="text-[9px] uppercase tracking-wider text-ink-400 font-semibold">{k}</p>
-      <p className={`text-[13px] ${mono ? 'font-mono' : ''} text-ink-700 truncate`}>{v || '—'}</p>
-    </div>
-  );
-}
-
-function VersionSelect({ label, value, onChange, options, icon: Icon, accent }) {
-  const a = ACCENT[accent];
-  return (
-    <Card className="p-5">
-      <div className="flex items-center gap-3 mb-4">
-        <div className={`w-10 h-10 rounded-2xl ${a.bg} flex items-center justify-center`}>
-          <Icon size={18} className={a.text} />
-        </div>
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">{label}</p>
-        </div>
-      </div>
+    <Panel title={label} icon={Icon}>
       <div className="relative">
         <select
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none rounded-xl border border-line bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-ink-800 focus:outline-none focus:ring-2 focus:ring-indigo-300/60 pr-9"
+          className="input w-full pr-9 appearance-none"
         >
           <option value="">— select —</option>
           {options.map((o) => (
             <option key={o.code} value={o.code}>{o.label}</option>
           ))}
         </select>
-        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-4 pointer-events-none" />
       </div>
-    </Card>
+    </Panel>
   );
 }
 
 function RoutingPanel({ routing }) {
   if (!routing) return null;
-  const tiles = [
-    { k: 'Extract strategy', v: routing.extract_strategy, icon: Cpu },
-    { k: 'Package size', v: routing.package_size?.toLocaleString() + ' rows', icon: Database },
-    { k: 'Template format', v: routing.template_format, icon: FileType2 },
-    { k: 'Fargate fan-out', v: routing.fargate_fan_out, icon: Server },
-    { k: 'Cluster-read safety', v: routing.cluster_read_safety, icon: ShieldCheck },
-    { k: 'MC OData supported', v: routing.odata_ltmc_supported ? 'Yes' : 'No (runbook lane)', icon: Cloud },
+  const items = [
+    { label: 'Extract strategy',     value: routing.extract_strategy },
+    { label: 'Package size',         value: `${routing.package_size?.toLocaleString()} rows` },
+    { label: 'Template format',      value: routing.template_format },
+    { label: 'Fargate fan-out',      value: routing.fargate_fan_out },
+    { label: 'Cluster-read safety',  value: routing.cluster_read_safety },
+    { label: 'MC OData supported',   value: routing.odata_ltmc_supported ? 'Yes' : 'No (runbook lane)' },
   ];
   return (
-    <Card className="p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Badge tone="ok"><ShieldCheck size={12} /> Pair is supported</Badge>
-        <span className="text-[11px] text-ink-400">
-          {routing.source.label} <ArrowRight size={11} className="inline" /> {routing.target.label}
-        </span>
-      </div>
-      <p className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-3">Runtime routing the tool will use</p>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
-        {tiles.map((t) => (
-          <div key={t.k} className="rounded-xl bg-slate-50 px-3 py-2.5 border border-line">
-            <div className="flex items-center gap-1.5">
-              <t.icon size={11} className="text-ink-400" />
-              <p className="text-[9px] uppercase tracking-wider text-ink-400 font-semibold">{t.k}</p>
-            </div>
-            <p className="text-[13px] font-mono text-ink-700 mt-1">{t.v}</p>
-          </div>
-        ))}
-      </div>
-    </Card>
+    <Panel
+      title="Runtime routing"
+      subtitle={`${routing.source.label} → ${routing.target.label}`}
+      icon={GitCompareArrows}
+      actions={<StatusPill tone="ok"><ShieldCheck size={11} /> supported</StatusPill>}
+    >
+      <KVList cols={3} items={items} />
+    </Panel>
   );
 }
 
 export default function VersionMatrix() {
-  const { data: supported, error, loading, reload } =
-    useApi(useCallback(() => api.versionsSupported(), []));
+  const { data: supported, error, loading, reload } = useApi(useCallback(() => api.versionsSupported(), []));
   const { data: selected } = useApi(useCallback(() => api.versionsSelected(), []));
 
   const [sourceCode, setSourceCode] = useState('');
   const [targetCode, setTargetCode] = useState('');
-  const [sourceDb, setSourceDb] = useState('');     // "", "HANA", "ANY_DB"
+  const [sourceDb, setSourceDb] = useState('');
   const [routing, setRouting] = useState(null);
   const [incompatErr, setIncompatErr] = useState(null);
   const [detected, setDetected] = useState(null);
@@ -96,7 +63,6 @@ export default function VersionMatrix() {
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
 
-  // Hydrate from saved selection
   useEffect(() => {
     if (selected?.selected) {
       setSourceCode(selected.selected.source_code || '');
@@ -106,27 +72,24 @@ export default function VersionMatrix() {
     }
   }, [selected]);
 
-  // Recompute routing locally whenever selection changes (cheap; just resolve from supported.valid_pairs)
   useEffect(() => {
     if (!sourceCode || !targetCode || !supported) { setRouting(null); setIncompatErr(null); return; }
     const pair = (supported.valid_pairs || []).find(
       (p) => p.source_code === sourceCode && p.target_code === targetCode,
     );
     if (!pair) {
-      setIncompatErr(`${sourceCode} -> ${targetCode} is not in the supported matrix.`);
+      setIncompatErr(`${sourceCode} → ${targetCode} is not in the supported matrix.`);
       setRouting(null);
       return;
     }
     setIncompatErr(null);
-    // For full routing fields we lean on the backend. Trigger a fetch when we save;
-    // here we render the lightweight pair info inline so the user gets instant feedback.
     setRouting({
       source: { label: pair.source_label, code: pair.source_code },
       target: { label: pair.target_label, code: pair.target_code },
       extract_strategy: sourceDb === 'HANA' ? 'MODERN_BULK' : pair.extract_strategy,
-      package_size: sourceDb === 'HANA' ? 25000 : 5000,
-      template_format: pair.template_format,
-      fargate_fan_out: sourceDb === 'HANA' ? 'HIGH' : pair.fargate_fan_out,
+      package_size:     sourceDb === 'HANA' ? 25000 : 5000,
+      template_format:  pair.template_format,
+      fargate_fan_out:  sourceDb === 'HANA' ? 'HIGH' : pair.fargate_fan_out,
       cluster_read_safety: sourceDb === 'HANA' ? 'RELAXED' : 'STRICT',
       odata_ltmc_supported: pair.target_code !== 'S4HANA_1909',
     });
@@ -137,7 +100,6 @@ export default function VersionMatrix() {
     try {
       const d = await api.versionsDetected();
       setDetected(d);
-      // auto-fill if confidently detected
       if (d?.source?.detected?.code) setSourceCode(d.source.detected.code);
       if (d?.target?.detected?.code) setTargetCode(d.target.detected.code);
       if (d?.source?.detected?.db_default) setSourceDb(d.source.detected.db_default);
@@ -152,7 +114,7 @@ export default function VersionMatrix() {
       await api.saveVersions({
         source_code: sourceCode,
         target_code: targetCode,
-        source_db:   sourceDb || null,
+        source_db: sourceDb || null,
         detected_at: detected?.source?.detected ? new Date().toISOString() : null,
       });
       setSaveOk(true);
@@ -163,70 +125,67 @@ export default function VersionMatrix() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-ink-400 text-sm py-20 justify-center">
-        <Spinner /> Loading version matrix…
-      </div>
-    );
+    return <div className="flex items-center gap-2 text-xs text-ink-3 py-20 justify-center"><Spinner /> Loading version matrix…</div>;
   }
   if (error) {
     return (
-      <div className="space-y-7">
-        <PageHeader title="Version" accentWord="Matrix" subtitle="Pick the source ECC + target S/4 pair the migration will run for." />
+      <div className="space-y-4">
+        <PageHeader title="Version matrix" breadcrumb={['Migrate4HANA', 'Versions']} subtitle="Pick the source ECC + target S/4 pair." />
         <OfflineBanner onRetry={reload} />
       </div>
     );
   }
 
+  const totalPairs = supported?.valid_pairs?.length || 0;
+
   return (
-    <div className="space-y-7">
+    <div className="space-y-4">
       <PageHeader
-        title="Version"
-        accentWord="Matrix"
-        subtitle="Pick the source ECC + target S/4 pair the migration will run for. The selection drives extract strategy, template format, BAPI version, and Fargate fan-out."
+        title="Version matrix"
+        breadcrumb={['Migrate4HANA', 'Versions']}
+        subtitle="Pick the source ECC + target S/4 pair. Selection drives extract strategy, template format, BAPI version, and Fargate fan-out."
+        actions={
+          <button onClick={runDetect} disabled={detecting} className="btn btn-sm btn-primary">
+            {detecting ? <Spinner size={12} /> : <RefreshCcw size={12} />} {detecting ? 'Detecting…' : 'Auto-detect'}
+          </button>
+        }
       />
 
-      {/* Auto-detect bar */}
-      <Card className="p-5">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold mb-1">Auto-detect</p>
-            <p className="text-sm text-ink-600">Call RFC_SYSTEM_INFO + read CVERS to determine the live versions of both systems.</p>
-          </div>
-          <button
-            onClick={runDetect}
-            disabled={detecting}
-            className="btn-primary inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {detecting ? <Spinner /> : <RefreshCcw size={14} />}
-            {detecting ? 'Detecting…' : 'Detect now'}
-          </button>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricTile label="Supported pairs" value={totalPairs} sub="in catalogue" />
+        <MetricTile label="Sources" value={supported?.sources?.length || 0} sub="ECC variants" />
+        <MetricTile label="Targets" value={supported?.targets?.length || 0} sub="S/4 variants" />
+        <MetricTile
+          label="Selection"
+          value={sourceCode && targetCode && !incompatErr ? 'Valid' : sourceCode && targetCode ? 'Invalid' : 'None'}
+          sub={sourceCode && targetCode ? `${sourceCode} → ${targetCode}` : 'pick both'}
+          tone={incompatErr ? 'err' : sourceCode && targetCode ? 'ok' : null}
+        />
+      </div>
 
-        {detected && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-            <div className="rounded-xl bg-slate-50 px-4 py-3 border border-line">
-              <p className="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Source ECC</p>
+      {detected && (
+        <Panel title="Auto-detect result" icon={RefreshCcw}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <div className="metric-label">Source ECC</div>
               {detected.source?.detected
-                ? <Field k="Detected" v={`${detected.source.detected.label}  ·  DB ${detected.source.detected.db_default}`} mono={false} />
-                : <p className="text-xs text-amber-700 mt-1.5">{detected.source?.error || 'no detection'}</p>}
+                ? <div className="text-[12.5px] text-ink-1 mt-1.5">{detected.source.detected.label} <span className="text-ink-4 font-mono ml-1">· DB {detected.source.detected.db_default}</span></div>
+                : <div className="text-[11.5px] mt-1.5" style={{ color: 'var(--warn)' }}>{detected.source?.error || 'no detection'}</div>}
             </div>
-            <div className="rounded-xl bg-slate-50 px-4 py-3 border border-line">
-              <p className="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">Target S/4</p>
+            <div>
+              <div className="metric-label">Target S/4</div>
               {detected.target?.detected
-                ? <Field k="Detected" v={detected.target.detected.label} mono={false} />
-                : <p className="text-xs text-amber-700 mt-1.5">{detected.target?.error || 'no detection'}</p>}
+                ? <div className="text-[12.5px] text-ink-1 mt-1.5">{detected.target.detected.label}</div>
+                : <div className="text-[11.5px] mt-1.5" style={{ color: 'var(--warn)' }}>{detected.target?.error || 'no detection'}</div>}
             </div>
           </div>
-        )}
-      </Card>
+        </Panel>
+      )}
 
-      {/* Selectors */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <VersionSelect
           label="Source · SAP ECC"
           icon={Server}
-          accent="indigo"
           value={sourceCode}
           onChange={setSourceCode}
           options={(supported?.sources || []).map((s) => ({ code: s.code, label: s.label }))}
@@ -234,61 +193,48 @@ export default function VersionMatrix() {
         <VersionSelect
           label="Target · SAP S/4HANA"
           icon={Cloud}
-          accent="teal"
           value={targetCode}
           onChange={setTargetCode}
           options={(supported?.targets || []).map((t) => ({ code: t.code, label: t.label }))}
         />
       </div>
 
-      {/* Source DB override */}
-      <Card className="p-5">
-        <p className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold mb-2">Source database (override)</p>
-        <p className="text-xs text-ink-500 mb-3">
-          ECC defaults assume traditional RDBMS (Oracle / MSSQL / DB2). If the source actually runs on SAP HANA, set this to enable
-          the MODERN_BULK extract path and ~5× higher Fargate fan-out.
-        </p>
-        <div className="flex gap-2">
-          {['', 'HANA', 'ANY_DB'].map((opt) => (
+      <Panel title="Source database override" icon={Database} subtitle="HANA enables MODERN_BULK extract + ~5× higher fan-out">
+        <div className="flex flex-wrap gap-2">
+          {[{ v: '', label: 'Use catalogue default' }, { v: 'HANA', label: 'HANA' }, { v: 'ANY_DB', label: 'ANY_DB' }].map((opt) => (
             <button
-              key={opt || 'none'}
-              onClick={() => setSourceDb(opt)}
-              className={`rounded-xl border px-4 py-2 text-sm font-medium ${
-                sourceDb === opt
-                  ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                  : 'border-line bg-slate-50 text-ink-600 hover:bg-white'
-              }`}
+              key={opt.v || 'none'}
+              onClick={() => setSourceDb(opt.v)}
+              className={`btn btn-sm ${sourceDb === opt.v ? 'btn-primary' : ''}`}
             >
-              {opt || 'Use catalogue default'}
+              {opt.label}
             </button>
           ))}
         </div>
-      </Card>
+      </Panel>
 
-      {/* Compatibility + routing */}
       {incompatErr && (
-        <Card className="p-5 border-amber-300 bg-amber-50/60">
+        <Panel>
           <div className="flex items-start gap-2">
-            <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" style={{ color: 'var(--warn)' }} />
             <div>
-              <p className="text-sm font-semibold text-amber-800">Pair not supported</p>
-              <p className="text-xs text-amber-700 mt-0.5">{incompatErr}</p>
+              <div className="text-[13px] font-semibold text-ink-1">Pair not supported</div>
+              <p className="text-[11.5px] text-ink-3 mt-0.5">{incompatErr}</p>
             </div>
           </div>
-        </Card>
+        </Panel>
       )}
+
       <RoutingPanel routing={routing} />
 
-      {/* Save */}
       <div className="flex items-center justify-end gap-3">
-        {saveOk && <Badge tone="ok"><ShieldCheck size={12} /> Saved</Badge>}
+        {saveOk && <StatusPill tone="ok"><ShieldCheck size={11} /> saved</StatusPill>}
         <button
           onClick={save}
           disabled={!sourceCode || !targetCode || !!incompatErr || saving}
-          className="btn-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          className="btn btn-sm btn-primary"
         >
-          {saving ? <Spinner /> : <Save size={15} />}
-          {saving ? 'Saving…' : 'Save selection'}
+          {saving ? <Spinner size={12} /> : <Save size={12} />} {saving ? 'Saving…' : 'Save selection'}
         </button>
       </div>
     </div>
