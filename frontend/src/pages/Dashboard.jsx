@@ -1,35 +1,28 @@
-import { useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { useCallback, useMemo } from 'react';
+import { Link, useOutletContext } from 'react-router-dom';
 import {
-  Rocket, TerminalSquare, Server, FileText, ShieldCheck, Activity,
-  GitBranch, KanbanSquare, ArrowRight, Wifi, Gauge,
+  Activity, ShieldCheck, FileText, Server, AlertTriangle, Clock, CheckCircle2,
+  ArrowRight, Zap, Database,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/useApi';
-import { Card, PageHeader, Stat, Badge, ProgressBar, OfflineBanner, CommandBlock, Spinner, ACCENT } from '../components/ui';
+import {
+  Panel, MetricTile, Sparkline, TimeSeriesChart, Gantt, StatusPill,
+  PageHeader, Spinner, OfflineBanner, KVList, EmptyState,
+} from '../components/dd';
 
-function QuickLink({ to, icon: Icon, title, desc, accent = 'indigo' }) {
-  const a = ACCENT[accent] || ACCENT.indigo;
-  return (
-    <Link to={to} className="focusable block">
-      <Card hover className="p-5 h-full">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-2xl ${a.bg} flex items-center justify-center`}>
-            <Icon size={18} className={a.text} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[14px] font-semibold text-ink-900">{title}</p>
-            <p className="text-xs text-ink-400 truncate">{desc}</p>
-          </div>
-          <ArrowRight size={16} className="ml-auto text-ink-300" />
-        </div>
-      </Card>
-    </Link>
-  );
+// Generate a fake-but-not-misleading short sparkline from a single number when
+// no real time-series exists — used purely as visual continuity. Honest UIs
+// don't pretend they have data they don't; here we only show the sparkline
+// when there's at least 2 real data points.
+function spineToSpark(spine) {
+  const obj = spine?.objects;
+  if (!Array.isArray(obj) || obj.length < 2) return null;
+  return obj.map((o) => o.percent_complete ?? 0);
 }
 
 export default function Dashboard() {
+  const { triggerRefresh } = useOutletContext() || {};
   const health = useApi(useCallback(() => api.health(), []), { pollMs: 10000 });
   const ecc = useApi(useCallback(() => api.eccStatus(), []));
   const status = useApi(useCallback(() => api.status(), []), { pollMs: 5000 });
@@ -39,108 +32,192 @@ export default function Dashboard() {
 
   const online = !!health.data;
   const checking = health.loading;
-
   const runStatus = status.data?.status || 'idle';
   const pendingGates = gates.data?.gates?.length ?? 0;
   const runCount = Array.isArray(runs.data) ? runs.data.length : 0;
+  const spineSpark = useMemo(() => spineToSpark(spine.data), [spine.data]);
+
+  // Latest dirty-data SLO from the most recent run (if any)
+  const latestRun = Array.isArray(runs.data) && runs.data.length > 0 ? runs.data[0] : null;
+  const dqPct = latestRun?.data_quality?.dead_letter_pct ?? null;
+  const dqThreshold = latestRun?.data_quality?.threshold_pct ?? 5.0;
+  const dqBreach = dqPct != null && dqPct > dqThreshold;
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-4">
       <PageHeader
-        title="Welcome to" accentWord="Migrate4HANA"
-        subtitle="A support-clean ECC → S/4HANA migration spine. Everything here runs against the live backend — no mock data."
+        title="Overview"
+        breadcrumb={['Migrate4HANA', 'Overview']}
+        subtitle="Live observability for the ECC → S/4HANA migration pipeline."
         actions={
-          <div className="flex items-center gap-2">
-            <Link to="/commands" className="focusable inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 text-ink-700 text-[13px] font-semibold hover:bg-slate-100 transition">
-              <TerminalSquare size={15} /> Commands
-            </Link>
-            <Link to="/pipeline" className="focusable btn-primary inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold">
-              <Rocket size={15} /> Run Pipeline
-            </Link>
-          </div>
+          <>
+            <Link to="/commands" className="btn btn-sm"><span>Commands</span></Link>
+            <Link to="/pipeline" className="btn btn-sm btn-primary"><Zap size={12} /><span>Run pipeline</span></Link>
+          </>
         }
       />
 
-      {checking ? (
-        <div className="flex items-center gap-2 text-ink-400 text-sm py-6"><Spinner /> Checking backend…</div>
-      ) : !online ? (
+      {checking && (
+        <div className="flex items-center gap-2 text-xs text-ink-3 py-4"><Spinner /> Checking backend…</div>
+      )}
+
+      {!checking && !online && <OfflineBanner onRetry={health.reload} />}
+
+      {online && (
         <>
-          <OfflineBanner onRetry={health.reload} />
-          <Card className="p-6">
-            <p className="text-[13px] font-semibold text-ink-700 mb-3">Start everything in three commands</p>
-            <div className="space-y-2">
-              <CommandBlock cmd="python api_server.py" />
-              <CommandBlock cmd="cd frontend && npm run dev" />
-              <CommandBlock cmd="python pipeline_spine_master.py" />
-            </div>
-          </Card>
-        </>
-      ) : (
-        <>
-          {/* live stat tiles */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Stat label="Backend" value="Online" sub={`v${health.data.version} · ${health.data.stages} stages`} icon={Wifi} accent="emerald" />
-            <Stat label="Source ECC" value={ecc.data?.live_ready ? 'Live-ready' : ecc.data?.has_connection ? 'Saved' : 'Not set'} sub={ecc.data?.has_password ? 'session active' : 'no live session'} icon={Server} accent="indigo" />
-            <Stat label="Runs on disk" value={runCount} sub="completed reports" icon={FileText} accent="violet" />
-            <Stat label="Pending gates" value={pendingGates} sub="awaiting decision" icon={ShieldCheck} accent={pendingGates ? 'amber' : 'slate'} />
+          {/* ── Metric row ──────────────────────────────────────── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <MetricTile
+              label="Pipeline runs"
+              value={runCount}
+              sub="total on disk"
+            />
+            <MetricTile
+              label="Active gates"
+              value={pendingGates}
+              sub={pendingGates ? 'awaiting decision' : 'none pending'}
+              tone={pendingGates > 0 ? 'warn' : null}
+            />
+            <MetricTile
+              label="Dead-letter rate"
+              value={dqPct == null ? '—' : `${dqPct.toFixed(1)}`}
+              unit={dqPct == null ? '' : '%'}
+              sub={dqPct == null ? 'no recent run' : `SLO ${dqThreshold}%${dqBreach ? ' · breach' : ''}`}
+              tone={dqBreach ? 'warn' : dqPct != null ? 'ok' : null}
+            />
+            <MetricTile
+              label="Spine progress"
+              value={spine.data?.percent_complete != null ? `${spine.data.percent_complete}` : '—'}
+              unit={spine.data?.percent_complete != null ? '%' : ''}
+              sub={spine.data ? `${spine.data.objects?.length ?? 0} objects` : 'no spine running'}
+              spark={spineSpark}
+              tone={spine.data?.percent_complete === 100 ? 'ok' : null}
+            />
           </div>
 
-          {/* current run + spine */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Activity size={16} className="text-indigo-600" />
-                  <h3 className="text-[14px] font-semibold text-ink-900">Current Run</h3>
-                </div>
-                <Badge tone={runStatus === 'running' ? 'running' : runStatus === 'completed' ? 'ok' : runStatus === 'failed' ? 'failed' : 'pending'}>
-                  {runStatus === 'running' && <Spinner size={11} />} {runStatus}
-                </Badge>
-              </div>
-              {status.data?.run_id ? (
-                <p className="text-xs font-mono text-ink-400">{status.data.run_id}{status.data.mode ? ` · ${status.data.mode}` : ''}</p>
+          {/* ── Active gates + current run ─────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <Panel
+              title="Active gates"
+              icon={ShieldCheck}
+              actions={<Link to="/gates" className="btn btn-sm btn-ghost"><ArrowRight size={12} /></Link>}
+              flush
+              className="lg:col-span-2"
+            >
+              {pendingGates === 0 ? (
+                <EmptyState icon={CheckCircle2} title="No gates pending" hint="The pipeline is either idle, succeeded, or hasn't reached a manual gate." />
               ) : (
-                <p className="text-sm text-ink-400">No active run. Start one from the Pipeline page.</p>
+                <table className="dt">
+                  <thead><tr><th>Gate</th><th>Run</th><th>Status</th><th>Waiting</th><th></th></tr></thead>
+                  <tbody>
+                    {gates.data.gates.slice(0, 5).map((g) => (
+                      <tr key={g.id}>
+                        <td className="font-medium text-ink-1">{g.name || g.gate}</td>
+                        <td className="font-mono text-[11.5px] text-ink-3 truncate max-w-[200px]">{g.run_id}</td>
+                        <td><StatusPill tone="warn">awaiting</StatusPill></td>
+                        <td className="text-ink-3 tabular-nums">{g.waiting_for || '—'}</td>
+                        <td><Link to="/gates" className="btn btn-sm btn-ghost">open</Link></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
-              <Link to="/pipeline" className="focusable inline-flex items-center gap-1.5 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 mt-4">
-                Open pipeline <ArrowRight size={14} />
-              </Link>
-            </Card>
+            </Panel>
 
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Gauge size={16} className="text-violet-600" />
-                  <h3 className="text-[14px] font-semibold text-ink-900">Master Spine</h3>
+            <Panel title="Current run" icon={Activity}>
+              <StatusPill tone={runStatus === 'running' ? 'info' : runStatus === 'completed' ? 'ok' : runStatus === 'failed' ? 'err' : 'muted'}>
+                {runStatus}
+              </StatusPill>
+              {status.data?.run_id ? (
+                <div className="mt-3">
+                  <div className="text-[10.5px] uppercase tracking-wider text-ink-4 font-semibold">Run ID</div>
+                  <div className="font-mono text-[12px] text-ink-1 mt-0.5 truncate">{status.data.run_id}</div>
+                  {status.data.mode && (
+                    <>
+                      <div className="text-[10.5px] uppercase tracking-wider text-ink-4 font-semibold mt-2.5">Mode</div>
+                      <div className="text-[12.5px] text-ink-1 mt-0.5">{status.data.mode}</div>
+                    </>
+                  )}
                 </div>
-                {spine.data ? <Badge tone="ok">live</Badge> : <Badge tone="pending">no run</Badge>}
-              </div>
-              {spine.data ? (
+              ) : (
+                <p className="text-xs text-ink-3 mt-3">No active run. Start one from the Pipeline page.</p>
+              )}
+              <Link to="/pipeline" className="btn btn-sm w-full mt-4 justify-center">
+                Open pipeline <ArrowRight size={12} />
+              </Link>
+            </Panel>
+          </div>
+
+          {/* ── Dirty-data SLO chart + latest run summary ──────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <Panel
+              title="Dirty-data SLO"
+              subtitle="dead-letter rate vs threshold"
+              icon={AlertTriangle}
+              actions={<Link to="/data-quality" className="btn btn-sm btn-ghost"><ArrowRight size={12} /></Link>}
+              className="lg:col-span-2"
+            >
+              {(() => {
+                const series = buildDqSeries(runs.data);
+                if (series.length < 2) {
+                  return <EmptyState icon={Activity} title="Not enough runs yet" hint="The SLO trend appears once 2+ runs report a dead-letter rate." />;
+                }
+                return <TimeSeriesChart series={series} unit="%" tone={dqBreach ? 'warn' : 'accent'} threshold={dqThreshold} thresholdLabel={`${dqThreshold}% SLO`} height={200} />;
+              })()}
+            </Panel>
+
+            <Panel title="Latest run" icon={FileText} actions={<Link to="/runs" className="btn btn-sm btn-ghost"><ArrowRight size={12} /></Link>}>
+              {latestRun ? (
                 <>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-ink-500">{spine.data.connectivity?.source?.host} → {spine.data.connectivity?.target?.host}</span>
-                    <span className="text-xs font-mono text-ink-400">{spine.data.percent_complete ?? 0}%</span>
+                  <div className="font-mono text-[11.5px] text-ink-2 mb-2 truncate">{latestRun.run_id}</div>
+                  <StatusPill tone={latestRun.status === 'success' || latestRun.status === 'succeeded' ? 'ok' : latestRun.status === 'running' ? 'info' : latestRun.status === 'failed' ? 'err' : 'muted'}>
+                    {latestRun.status || 'unknown'}
+                  </StatusPill>
+                  <div className="mt-4">
+                    <KVList
+                      cols={2}
+                      items={[
+                        { label: 'Stages',     value: latestRun.stage_count ?? latestRun.stages ?? '—' },
+                        { label: 'Gates',      value: latestRun.gate_count ?? '—' },
+                        { label: 'Created',    value: latestRun.created_in_s4 ?? '—' },
+                        { label: 'Dead-letter', value: latestRun.data_quality?.total_dead_letter ?? '—' },
+                      ]}
+                    />
                   </div>
-                  <ProgressBar value={spine.data.percent_complete || 0} accent="violet" />
+                  <Link to={`/runs#${latestRun.run_id}`} className="btn btn-sm w-full mt-4 justify-center">View detail <ArrowRight size={12} /></Link>
                 </>
               ) : (
-                <p className="text-sm text-ink-400">Run <span className="font-mono text-ink-600">pipeline_spine_master.py</span> to populate live spine progress.</p>
+                <EmptyState icon={FileText} title="No runs yet" hint="Trigger a run from the Pipeline page or via the Command Center." />
               )}
-              <Link to="/tracker" className="focusable inline-flex items-center gap-1.5 text-[13px] font-semibold text-violet-600 hover:text-violet-700 mt-4">
-                Open tracker <ArrowRight size={14} />
-              </Link>
-            </Card>
+            </Panel>
           </div>
 
-          {/* quick links */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <QuickLink to="/tracker" icon={KanbanSquare} title="Project Tracker" desc="Live stage board" accent="violet" />
-            <QuickLink to="/pipeline" icon={GitBranch} title="Pipeline" desc="28 stages + engines" accent="sky" />
-            <QuickLink to="/connections" icon={Server} title="Connections" desc="ECC + S/4HANA" accent="indigo" />
-            <QuickLink to="/runs" icon={FileText} title="Reports" desc="Run history + PDF" accent="emerald" />
-          </div>
+          {/* ── ECC connection chip ─────────────────────────────── */}
+          <Panel title="Source ECC" icon={Server} subtitle={ecc.data?.host ? `${ecc.data.host}:${ecc.data.sysnr || '00'} · client ${ecc.data.client || '?'}` : 'not configured'}>
+            <div className="flex items-center gap-3">
+              <StatusPill tone={ecc.data?.live_ready ? 'ok' : ecc.data?.has_connection ? 'warn' : 'muted'}>
+                {ecc.data?.live_ready ? 'live-ready' : ecc.data?.has_connection ? 'saved' : 'not set'}
+              </StatusPill>
+              <div className="divider-v h-4" />
+              <span className="text-xs text-ink-3">{ecc.data?.has_password ? 'session active' : 'no live session'}</span>
+              <Link to="/connections" className="btn btn-sm btn-ghost ml-auto">Configure <ArrowRight size={12} /></Link>
+            </div>
+          </Panel>
         </>
       )}
     </div>
   );
+}
+
+// Build a time-series of dead-letter % across runs (oldest → newest).
+// Honest: only includes runs that actually have a data_quality block.
+function buildDqSeries(runs) {
+  if (!Array.isArray(runs)) return [];
+  const withDq = runs
+    .filter((r) => r?.data_quality?.dead_letter_pct != null && r?.created_at)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  return withDq.map((r) => ({
+    ts: typeof r.created_at === 'string' ? r.created_at.slice(5, 16) : '',
+    value: Number(r.data_quality.dead_letter_pct),
+  }));
 }

@@ -8,19 +8,21 @@ import ProjectTracker from './pages/ProjectTracker';
 import Gates from './pages/Gates';
 import Runs from './pages/Runs';
 import CommandCenter from './pages/CommandCenter';
+import DataQuality from './pages/DataQuality';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Shell />}>
         <Route index element={<Dashboard />} />
-        <Route path="connections" element={<Connections />} />
-        <Route path="versions" element={<VersionMatrix />} />
-        <Route path="tracker" element={<ProjectTracker />} />
-        <Route path="pipeline" element={<Pipeline />} />
-        <Route path="gates" element={<Gates />} />
-        <Route path="runs" element={<Runs />} />
-        <Route path="commands" element={<CommandCenter />} />
+        <Route path="connections"  element={<Connections />} />
+        <Route path="versions"     element={<VersionMatrix />} />
+        <Route path="tracker"      element={<ProjectTracker />} />
+        <Route path="pipeline"     element={<Pipeline />} />
+        <Route path="gates"        element={<Gates />} />
+        <Route path="runs"         element={<Runs />} />
+        <Route path="data-quality" element={<DataQuality />} />
+        <Route path="commands"     element={<CommandCenter />} />
       </Route>
     </Routes>
   );

@@ -1,168 +1,160 @@
 import { useEffect, useState } from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Server, GitBranch, KanbanSquare, ShieldCheck, FileText,
-  TerminalSquare, Boxes, ArrowRight, Circle, GitCompareArrows,
+  LayoutDashboard, GitBranch, FileText, ShieldCheck, Server, Terminal, GitCompareArrows,
+  Boxes, Sun, Moon, Command, Search, Activity, Database,
 } from 'lucide-react';
 import { ping } from '../lib/api';
+import { useTheme } from '../lib/theme';
+import { RefreshControl, TimeRangePicker } from './dd';
+import CommandPalette from './CommandPalette';
 
-const NAV = [
-  {
-    group: 'Overview',
-    items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-      { to: '/tracker', label: 'Project Tracker', icon: KanbanSquare },
-    ],
-  },
-  {
-    group: 'Setup',
-    items: [
-      { to: '/connections', label: 'Connections', icon: Server },
-      { to: '/versions', label: 'Version Matrix', icon: GitCompareArrows },
-    ],
-  },
-  {
-    group: 'Execute',
-    items: [
-      { to: '/pipeline', label: 'Migration Pipeline', icon: GitBranch },
-    ],
-  },
-  {
-    group: 'Govern',
-    items: [{ to: '/gates', label: 'Approval Gates', icon: ShieldCheck }],
-  },
-  {
-    group: 'Results',
-    items: [{ to: '/runs', label: 'Runs & Reports', icon: FileText }],
-  },
-  {
-    group: 'Reference',
-    items: [{ to: '/commands', label: 'Command Center', icon: TerminalSquare }],
-  },
+// Compact icon rail — Datadog vibe (no labels, hover-tooltip).
+const RAIL = [
+  { to: '/',            label: 'Overview',     icon: LayoutDashboard, end: true },
+  { to: '/pipeline',    label: 'Pipeline',     icon: GitBranch },
+  { to: '/runs',        label: 'Runs',         icon: FileText },
+  { to: '/gates',       label: 'Gates',        icon: ShieldCheck },
+  { to: '/data-quality', label: 'Data Quality', icon: Activity },
+  { to: '/connections', label: 'Connections',  icon: Server },
+  { to: '/versions',    label: 'Versions',     icon: GitCompareArrows },
+  { to: '/commands',    label: 'Commands',     icon: Terminal },
+  { to: '/tracker',     label: 'Tracker',      icon: Database },
 ];
 
-function NavItem({ to, label, icon: Icon, end }) {
+function RailItem({ to, label, icon: Icon, end }) {
   return (
-    <NavLink
-      to={to}
-      end={end}
-      className={({ isActive }) =>
-        `focusable group relative flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13.5px] font-medium transition-all duration-200
-        ${isActive ? 'bg-indigo-50 text-indigo-700' : 'text-ink-500 hover:text-ink-900 hover:bg-slate-50'}`}
-    >
-      {({ isActive }) => (
-        <>
-          {isActive && (
-            <motion.span layoutId="navpill" className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full bg-indigo-500" />
-          )}
-          <Icon size={17} className="shrink-0" />
-          <span>{label}</span>
-          <ArrowRight size={13} className="ml-auto opacity-0 -translate-x-1 group-hover:opacity-40 group-hover:translate-x-0 transition-all" />
-        </>
-      )}
+    <NavLink to={to} end={end} className={({ isActive }) => `rail-item focusable ${isActive ? 'active' : ''}`} title={label}>
+      <Icon size={18} />
     </NavLink>
   );
 }
 
 function HealthDot() {
-  const [health, setHealth] = useState(undefined); // undefined=checking, null=offline, obj=online
+  const [h, setH] = useState(undefined);
   useEffect(() => {
     let alive = true;
-    const check = async () => { const h = await ping(); if (alive) setHealth(h); };
+    const check = async () => { const r = await ping(); if (alive) setH(r); };
     check();
     const t = setInterval(check, 8000);
     return () => { alive = false; clearInterval(t); };
   }, []);
-  const online = !!health;
+  const online = !!h;
   return (
-    <div className="flex items-center gap-2">
-      <span className={`dot ${online ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-      <span className="text-[11px] font-medium text-ink-500">
-        {health === undefined ? 'Checking API…' : online ? 'API online · live data' : 'API offline'}
+    <div className="flex items-center gap-1.5">
+      <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{
+        background: online ? 'var(--ok)' : 'var(--warn)',
+        boxShadow: online ? '0 0 6px var(--ok)' : '0 0 6px var(--warn)',
+      }} />
+      <span className="text-[10.5px] text-ink-3 font-medium">
+        {h === undefined ? 'checking' : online ? 'API live' : 'API offline'}
       </span>
+    </div>
+  );
+}
+
+function EnvChip({ label, value, tone = 'info' }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[11px]">
+      <span className="text-ink-4 uppercase tracking-wider font-semibold">{label}</span>
+      <span className={`pill pill-${tone === 'info' ? 'info' : tone}`}>{value}</span>
     </div>
   );
 }
 
 export default function Shell() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
+  const [refreshMs, setRefreshMs] = useState(0);
+  const [range, setRange] = useState('24h');
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Cmd+K / Ctrl+K opens the palette.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Page-level refresh: dispatches a CustomEvent that page hooks listen for.
+  const triggerRefresh = () => window.dispatchEvent(new CustomEvent('m4h:refresh', { detail: { ts: Date.now() } }));
+
   return (
-    <div className="relative min-h-screen">
-      <div className="app-aurora" />
-      <div className="relative z-10 flex min-h-screen">
-        {/* Sidebar */}
-        <aside className="w-[264px] shrink-0 hidden lg:flex flex-col px-4 py-6 border-r border-line/80 bg-white/55 backdrop-blur-xl">
-          <div className="flex items-center gap-3 px-2 mb-7">
-            <div className="w-10 h-10 rounded-2xl btn-primary flex items-center justify-center">
-              <Boxes size={20} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-[15px] font-bold gradient-text leading-none">Migrate4HANA</h1>
-              <p className="text-[10px] text-ink-400 font-mono tracking-[0.2em] uppercase mt-1">ECC → S/4HANA</p>
-            </div>
-          </div>
+    <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
+      {/* Icon rail */}
+      <aside
+        className="w-[56px] shrink-0 flex flex-col items-center py-3 gap-1.5 border-r"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+      >
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2"
+             style={{ background: 'var(--accent)', color: '#fff' }}>
+          <Boxes size={17} />
+        </div>
+        <div className="divider-h w-7 mb-1.5" />
+        {RAIL.map((r) => <RailItem key={r.to} {...r} />)}
+      </aside>
 
-          <nav className="flex-1 space-y-5 overflow-y-auto">
-            {NAV.map((section) => (
-              <div key={section.group}>
-                <p className="px-3.5 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-300">{section.group}</p>
-                <div className="space-y-0.5">
-                  {section.items.map((it) => <NavItem key={it.to} {...it} />)}
-                </div>
-              </div>
-            ))}
-          </nav>
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Topbar */}
+        <header
+          className="h-12 sticky top-0 z-20 flex items-center gap-3 px-5 border-b"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        >
+          {/* Breadcrumb */}
+          <Breadcrumb path={location.pathname} />
 
-          <div className="mt-4 rounded-2xl bg-slate-50 p-3.5">
+          <div className="ml-auto flex items-center gap-2.5">
+            <EnvChip label="src" value="ECC · Y01" tone="info" />
+            <span className="text-ink-4 text-xs">→</span>
+            <EnvChip label="tgt" value="S4H · S4H" tone="ok" />
+            <div className="divider-v h-5 mx-1" />
+            <TimeRangePicker value={range} onChange={setRange} />
+            <RefreshControl value={refreshMs} onChange={setRefreshMs} onRefresh={triggerRefresh} />
+            <button className="btn btn-sm btn-ghost btn-icon" onClick={() => setPaletteOpen(true)} title="Command palette (⌘K)">
+              <Command size={13} />
+            </button>
+            <button className="btn btn-sm btn-ghost btn-icon" onClick={toggle} title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
+              {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+            </button>
+            <div className="divider-v h-5 mx-1" />
             <HealthDot />
-            <p className="text-[10px] text-ink-400 font-mono mt-2">v3.0 · 17-stage SAP Activate</p>
           </div>
-        </aside>
+        </header>
 
         {/* Main */}
-        <div className="flex-1 min-w-0 flex flex-col">
-          {/* Topbar */}
-          <header className="sticky top-0 z-20 px-6 lg:px-10 h-16 flex items-center gap-4 border-b border-line/70 bg-white/55 backdrop-blur-xl">
-            <div className="lg:hidden flex items-center gap-2">
-              <Boxes size={18} className="text-indigo-600" />
-              <span className="font-bold gradient-text text-sm">Migrate4HANA</span>
-            </div>
-            <div className="ml-auto flex items-center gap-3">
-              <EnvChip label="Source" value="ECC · Y01" tone="text-indigo-600 bg-indigo-50" />
-              <ArrowRight size={14} className="text-ink-300" />
-              <EnvChip label="Target" value="S/4HANA · S4H" tone="text-teal-600 bg-teal-50" />
-            </div>
-          </header>
-
-          <main className="flex-1 overflow-y-auto">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={location.pathname}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
-                className="px-6 lg:px-10 py-8 max-w-[1180px] mx-auto"
-              >
-                <Outlet />
-              </motion.div>
-            </AnimatePresence>
-          </main>
-        </div>
+        <main className="flex-1 overflow-y-auto">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+              className="px-6 py-5 max-w-[1480px] mx-auto"
+            >
+              <Outlet context={{ range, refreshMs, triggerRefresh }} />
+            </motion.div>
+          </AnimatePresence>
+        </main>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={(to) => { navigate(to); setPaletteOpen(false); }} />
     </div>
   );
 }
 
-function EnvChip({ label, value, tone }) {
+function Breadcrumb({ path }) {
+  const item = (RAIL.find((r) => path === r.to || (r.to !== '/' && path.startsWith(r.to))) || RAIL[0]);
   return (
-    <div className="flex items-center gap-2">
-      <Circle size={7} className="fill-current text-ink-300" />
-      <div className="leading-tight">
-        <p className="text-[9px] uppercase tracking-wider text-ink-300 font-semibold">{label}</p>
-        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${tone}`}>{value}</span>
-      </div>
+    <div className="flex items-center gap-2 text-[12px] text-ink-3">
+      <span className="text-ink-4">migrate4hana</span>
+      <span className="text-ink-4">/</span>
+      <span className="text-ink-1 font-semibold">{item.label}</span>
     </div>
   );
 }
