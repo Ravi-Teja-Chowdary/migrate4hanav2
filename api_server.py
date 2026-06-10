@@ -1338,6 +1338,272 @@ async def download_report_volume(run_id: str, volume_number: int):
 
 
 # =============================================================================
+# ROUTES - WHITELISTED SCRIPT RUNNER
+# =============================================================================
+# Exposes a small, locked-down catalogue of server-side scripts the UI can
+# trigger without giving the user a shell. Each script is registered with:
+#   - a stable id (used by the UI)
+#   - the exact argv list to run (no shell interpolation)
+#   - optional parameter schema (UI renders form fields, server validates)
+# Output is captured (stdout/stderr/return-code) and returned synchronously
+# for short scripts, or pushed to a job log for long ones.
+import subprocess
+import threading
+import uuid
+
+# Registry: id → {description, command, params, max_seconds}
+# `command` is an argv list. Placeholders like "{user}" get substituted
+# from the validated params dict (str-cast, never shell-evaluated).
+SCRIPT_REGISTRY = {
+    # ── Connectivity tests ─────────────────────────────────────────
+    "test-ecc-rfc": {
+        "title": "Test ECC RFC connectivity",
+        "description": "Verify pyrfc against the configured ECC. Honest pass/fail.",
+        "category": "diagnostics",
+        "command": [sys.executable, "test_rfc_connectivity.py"],
+        "params": [],
+        "max_seconds": 90,
+    },
+    "diag-login": {
+        "title": "Test S/4 login",
+        "description": "Verify S/4HANA RFC + OData login.",
+        "category": "diagnostics",
+        "command": [sys.executable, "diag_login.py"],
+        "params": [],
+        "max_seconds": 60,
+    },
+    "bp-bapi-probe": {
+        "title": "BP BAPI probe",
+        "description": "Live BUPA_CREATE_FROM_DATA / role-attach probe.",
+        "category": "diagnostics",
+        "command": [sys.executable, "bp_bapi_probe.py"],
+        "params": [],
+        "max_seconds": 90,
+    },
+    "material-diag": {
+        "title": "Material BAPI diag",
+        "description": "BAPI_MATERIAL_SAVEDATA probe with field-coverage classifier.",
+        "category": "diagnostics",
+        "command": [sys.executable, "material_diag.py"],
+        "params": [],
+        "max_seconds": 120,
+    },
+    "mc-role-probe": {
+        "title": "MC role probe",
+        "description": "Migration Cockpit role membership check.",
+        "category": "diagnostics",
+        "command": [sys.executable, "mc_role_probe.py"],
+        "params": [],
+        "max_seconds": 60,
+    },
+    "idoc-prove": {
+        "title": "IDoc inbound prove",
+        "description": "IDoc inbound proof flow.",
+        "category": "diagnostics",
+        "command": [sys.executable, "idoc_prove.py"],
+        "params": [],
+        "max_seconds": 120,
+    },
+    "idoc-setup-probe": {
+        "title": "IDoc setup probe",
+        "description": "Validate SICF/WE20/SM59 wiring for IDoc inbound.",
+        "category": "diagnostics",
+        "command": [sys.executable, "idoc_setup_probe.py"],
+        "params": [],
+        "max_seconds": 60,
+    },
+    "check-partner": {
+        "title": "Check Business Partner",
+        "description": "Look up a BP by various keys to verify creates.",
+        "category": "diagnostics",
+        "command": [sys.executable, "check_partner.py", "{partner_id}"],
+        "params": [{"name": "partner_id", "label": "Partner ID", "type": "text", "required": True}],
+        "max_seconds": 30,
+    },
+    "audit-pipeline": {
+        "title": "Audit pipeline",
+        "description": "Walk the hash-chained audit ledger for a run.",
+        "category": "diagnostics",
+        "command": [sys.executable, "audit_pipeline.py", "{run_id}"],
+        "params": [{"name": "run_id", "label": "Run ID", "type": "text", "required": True}],
+        "max_seconds": 30,
+    },
+    # ── Pipeline ──
+    "list-stages": {
+        "title": "List pipeline stages",
+        "description": "Print the ordered 27-stage table.",
+        "category": "pipeline",
+        "command": [sys.executable, "run_local_lift_and_shift.py", "--list-stages"],
+        "params": [],
+        "max_seconds": 15,
+    },
+    "pipeline-assess": {
+        "title": "Run assessment (read-only)",
+        "description": "Phases 1-2: discovery + readiness + simplification + assessment.",
+        "category": "pipeline",
+        "command": [sys.executable, "run_local_lift_and_shift.py", "--through", "stage21"],
+        "params": [],
+        "max_seconds": 1800,
+    },
+    "pipeline-full": {
+        "title": "Run full lift & shift",
+        "description": "All 27 stages end-to-end. Long-running.",
+        "category": "pipeline",
+        "command": [sys.executable, "run_local_lift_and_shift.py", "--run-id", "{run_id}"],
+        "params": [{"name": "run_id", "label": "Run ID", "type": "text", "required": True, "default": "RUN-001"}],
+        "max_seconds": 7200,
+    },
+    # ── Spine ──
+    "spine-run": {
+        "title": "Run master spine",
+        "description": "Natuvion → Syniti → SmartShift → Governance. Writes progress.json.",
+        "category": "spine",
+        "command": [sys.executable, "pipeline_spine_master.py"],
+        "params": [],
+        "max_seconds": 1800,
+    },
+    "spine-self-test": {
+        "title": "Data-spine self-test",
+        "description": "FK integrity, deterministic self-heal, hash-chained idempotency.",
+        "category": "spine",
+        "command": [sys.executable, "data_spine_orchestrator.py"],
+        "params": [],
+        "max_seconds": 900,
+    },
+    # ── Reports ──
+    "pdf-local": {
+        "title": "Render PDF (local)",
+        "description": "Render a PDF from a local run artifact directory.",
+        "category": "reports",
+        "command": [sys.executable, "pdf_report_generator.py", "{run_id}"],
+        "params": [{"name": "run_id", "label": "Run ID", "type": "text", "required": True}],
+        "max_seconds": 120,
+    },
+    "pdf-multi": {
+        "title": "Render multi-volume PDF",
+        "description": "Produce the multi-volume executive report.",
+        "category": "reports",
+        "command": [sys.executable, "multi_volume_report_generator.py", "{run_id}"],
+        "params": [{"name": "run_id", "label": "Run ID", "type": "text", "required": True}],
+        "max_seconds": 180,
+    },
+}
+
+# In-memory job store: job_id → {script_id, status, started, finished, returncode, stdout, stderr}
+SCRIPT_JOBS: dict = {}
+SCRIPT_JOBS_LOCK = threading.Lock()
+
+
+class ScriptRunRequest(BaseModel):
+    script_id: str
+    params: dict = {}
+
+
+@app.get("/api/scripts/list", dependencies=[Depends(require_auth)])
+async def list_scripts():
+    """Return the catalogue of UI-runnable server-side scripts."""
+    out = []
+    for sid, s in SCRIPT_REGISTRY.items():
+        out.append({
+            "id": sid,
+            "title": s["title"],
+            "description": s["description"],
+            "category": s.get("category", "other"),
+            "params": s.get("params", []),
+            "max_seconds": s.get("max_seconds", 60),
+        })
+    return {"scripts": out}
+
+
+def _run_script_job(job_id: str, script_id: str, command: list):
+    """Background worker: runs the command, captures output, updates the job."""
+    try:
+        proc = subprocess.run(
+            command, cwd=PROJECT_DIR, capture_output=True, text=True,
+            timeout=SCRIPT_REGISTRY[script_id].get("max_seconds", 60),
+        )
+        stdout = (proc.stdout or "")[-50_000:]
+        stderr = (proc.stderr or "")[-20_000:]
+        with SCRIPT_JOBS_LOCK:
+            SCRIPT_JOBS[job_id].update({
+                "status":     "completed" if proc.returncode == 0 else "failed",
+                "finished":   datetime.now().isoformat(),
+                "returncode": proc.returncode,
+                "stdout":     stdout,
+                "stderr":     stderr,
+            })
+    except subprocess.TimeoutExpired as e:
+        with SCRIPT_JOBS_LOCK:
+            SCRIPT_JOBS[job_id].update({
+                "status":     "timeout",
+                "finished":   datetime.now().isoformat(),
+                "returncode": -1,
+                "stdout":     (e.stdout or b"").decode("utf-8", "replace")[-10_000:] if e.stdout else "",
+                "stderr":     f"Timeout after {e.timeout}s",
+            })
+    except Exception as ex:
+        with SCRIPT_JOBS_LOCK:
+            SCRIPT_JOBS[job_id].update({
+                "status":     "error",
+                "finished":   datetime.now().isoformat(),
+                "returncode": -1,
+                "stdout":     "",
+                "stderr":     f"{type(ex).__name__}: {ex}",
+            })
+
+
+@app.post("/api/scripts/run", dependencies=[Depends(require_auth)])
+async def run_script(body: ScriptRunRequest):
+    """Run a whitelisted script. Returns a job_id; poll /api/scripts/output/{job_id}."""
+    if body.script_id not in SCRIPT_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Unknown script: {body.script_id}")
+    spec = SCRIPT_REGISTRY[body.script_id]
+
+    # Validate params against schema
+    required = {p["name"] for p in spec.get("params", []) if p.get("required")}
+    provided = set(body.params.keys())
+    missing = required - provided
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing params: {sorted(missing)}")
+
+    # Substitute placeholders (str-cast, never shell-eval)
+    command = []
+    for arg in spec["command"]:
+        if arg.startswith("{") and arg.endswith("}"):
+            key = arg[1:-1]
+            command.append(str(body.params.get(key, "")))
+        else:
+            command.append(arg)
+
+    job_id = uuid.uuid4().hex[:12]
+    with SCRIPT_JOBS_LOCK:
+        SCRIPT_JOBS[job_id] = {
+            "job_id":     job_id,
+            "script_id":  body.script_id,
+            "command":    command,
+            "status":     "running",
+            "started":    datetime.now().isoformat(),
+            "finished":   None,
+            "returncode": None,
+            "stdout":     "",
+            "stderr":     "",
+        }
+    t = threading.Thread(target=_run_script_job, args=(job_id, body.script_id, command), daemon=True)
+    t.start()
+    return {"job_id": job_id, "status": "running", "script_id": body.script_id}
+
+
+@app.get("/api/scripts/output/{job_id}", dependencies=[Depends(require_auth)])
+async def get_script_output(job_id: str):
+    """Return the current state of a script job. UI polls this."""
+    with SCRIPT_JOBS_LOCK:
+        job = SCRIPT_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 def main():

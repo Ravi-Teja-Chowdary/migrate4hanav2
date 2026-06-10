@@ -54,25 +54,57 @@ export async function ping() {
 // ── typed endpoint helpers ────────────────────────────────────────────────
 export const api = {
   health: () => apiFetch('/api/health'),
+
+  // ── Connections (interactive) ──
   connections: () => apiFetch('/api/connections'),
-  eccStatus: () => apiFetch('/api/connections/ecc/status'),
-  stages: () => apiFetch('/api/pipeline/lift-and-shift/stages'),
-  status: () => apiFetch('/api/status'),
+  eccStatus:   () => apiFetch('/api/connections/ecc/status'),
+  saveEcc:     (payload) => apiFetch('/api/connections/ecc',
+                  { method: 'POST', body: JSON.stringify(payload) }),
+  testEcc:     (payload) => apiFetch('/api/connections/ecc/test',
+                  { method: 'POST', body: JSON.stringify(payload) }),
+  saveS4:      (payload) => apiFetch('/api/connections/s4hana',
+                  { method: 'POST', body: JSON.stringify(payload) }),
+  testS4:      (payload) => apiFetch('/api/connections/s4hana/test',
+                  { method: 'POST', body: JSON.stringify(payload) }),
+  saveLiftAndShiftTarget: (payload) => apiFetch('/api/connections/lift-and-shift-target',
+                  { method: 'POST', body: JSON.stringify(payload) }),
+
+  // ── Pipeline + runs ──
+  stages:   () => apiFetch('/api/pipeline/lift-and-shift/stages'),
+  status:   () => apiFetch('/api/status'),
   progress: (since = 0) => apiFetch(`/api/progress?since=${since}`),
   spineProgress: () => apiFetch('/api/spine/progress'),
-  runs: () => apiFetch('/api/runs'),
-  run: (id) => apiFetch(`/api/runs/${id}`),
-  gates: () => apiFetch('/api/gates'),
+  runs:     () => apiFetch('/api/runs'),
+  run:      (id) => apiFetch(`/api/runs/${id}`),
+
+  // ── Gates ──
+  gates:       () => apiFetch('/api/gates'),
   approveGate: (id, decided_by) =>
     apiFetch(`/api/gates/${id}/approve`, { method: 'POST', body: JSON.stringify({ decided_by }) }),
   rejectGate: (id, decided_by) =>
     apiFetch(`/api/gates/${id}/reject`, { method: 'POST', body: JSON.stringify({ decided_by }) }),
-  trigger: (mode) => apiFetch(`/api/pipeline/${mode}`, { method: 'POST' }),
 
-  // F6 — Version compatibility matrix
+  // ── Pipeline triggers ──
+  trigger: (mode) => apiFetch(`/api/pipeline/${mode}`, { method: 'POST' }),
+  triggerLiftAndShift: (payload = {}) =>
+    apiFetch('/api/pipeline/lift-and-shift', { method: 'POST', body: JSON.stringify(payload) }),
+  triggerLiftAndShiftAssess: () =>
+    apiFetch('/api/pipeline/lift-and-shift/assess', { method: 'POST' }),
+  triggerLiftAndShiftCode: () =>
+    apiFetch('/api/pipeline/lift-and-shift/code', { method: 'POST' }),
+  triggerLiftAndShiftData: () =>
+    apiFetch('/api/pipeline/lift-and-shift/data', { method: 'POST' }),
+
+  // ── F6 Version compatibility matrix ──
   versionsSupported: () => apiFetch('/api/versions/supported'),
-  versionsDetected: () => apiFetch('/api/versions/detected'),
-  versionsSelected: () => apiFetch('/api/versions/selected'),
+  versionsDetected:  () => apiFetch('/api/versions/detected'),
+  versionsSelected:  () => apiFetch('/api/versions/selected'),
   saveVersions: (payload) =>
     apiFetch('/api/versions/selected', { method: 'POST', body: JSON.stringify(payload) }),
+
+  // ── Script runner (whitelisted server-side scripts) ──
+  scriptList:  () => apiFetch('/api/scripts/list'),
+  scriptRun:   (script_id, params = {}) =>
+    apiFetch('/api/scripts/run', { method: 'POST', body: JSON.stringify({ script_id, params }) }),
+  scriptOutput: (job_id) => apiFetch(`/api/scripts/output/${job_id}`),
 };

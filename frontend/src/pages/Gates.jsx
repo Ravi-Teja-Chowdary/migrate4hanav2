@@ -2,6 +2,7 @@ import { useCallback, useState, useMemo } from 'react';
 import { ShieldCheck, Check, X, Clock, UserCheck, AlertTriangle, Activity, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/useApi';
+import { useToast } from '../lib/toast.jsx';
 import { Panel, PageHeader, StatusPill, MetricTile, Spinner, EmptyState, OfflineBanner, CmdLine, KVList, SearchBox } from '../components/dd';
 
 // Map gate names → display + tone + icon. Includes the new DataQuality gate
@@ -17,6 +18,7 @@ const GATE_KIND = {
 function tone(g) { return GATE_KIND[g]?.tone || 'muted'; }
 
 export default function Gates() {
+  const toast = useToast();
   const { data, error, loading, reload } = useApi(useCallback(() => api.gates(), []), { pollMs: 8000 });
   const [approver, setApprover] = useState(() => localStorage.getItem('m4h_approver') || '');
   const [busyId, setBusyId] = useState(null);
@@ -25,14 +27,24 @@ export default function Gates() {
   const [filter, setFilter] = useState('');
 
   const decide = async (gateId, kind) => {
+    if (!approver) {
+      toast.warn('Approver name required', 'Type your name in the topbar before deciding.');
+      return;
+    }
     setBusyId(gateId + kind); setActionErr(null);
     localStorage.setItem('m4h_approver', approver);
     try {
-      if (kind === 'approve') await api.approveGate(gateId, approver);
-      else await api.rejectGate(gateId, approver);
+      if (kind === 'approve') {
+        await api.approveGate(gateId, approver);
+        toast.success('Gate approved', `${gateId} · by ${approver}`);
+      } else {
+        await api.rejectGate(gateId, approver);
+        toast.info('Gate rejected', `${gateId} · by ${approver}`);
+      }
       await reload();
     } catch (e) {
       setActionErr(e.message);
+      toast.error(`Could not ${kind} gate`, e.message);
     } finally {
       setBusyId(null);
     }

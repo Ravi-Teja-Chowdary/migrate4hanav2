@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApi, useAction } from '../lib/useApi';
+import { useToast } from '../lib/toast.jsx';
 import {
   Panel, PageHeader, StatusPill, MetricTile, Spinner, OfflineBanner, EmptyState, CmdLine, KVList,
 } from '../components/dd';
@@ -31,12 +32,25 @@ const STEP_TONE = (s) => {
 };
 
 export default function Pipeline() {
+  const toast = useToast();
   const stagesQ = useApi(useCallback(() => api.stages(), []));
   const statusQ = useApi(useCallback(() => api.status(), []), { pollMs: 3000 });
   const progressQ = useApi(useCallback(() => api.progress(0), []), { pollMs: 3000 });
 
-  const assess = useAction(() => api.trigger('assess'));
-  const full = useAction(() => api.trigger('full'));
+  const assess = useAction(async () => {
+    try {
+      const r = await api.trigger('assess');
+      toast.success('Assessment started', r?.run_id ? `Run ${r.run_id}` : 'Pipeline kicked off');
+      return r;
+    } catch (e) { toast.error('Could not start assessment', e.message); throw e; }
+  });
+  const full = useAction(async () => {
+    try {
+      const r = await api.trigger('full');
+      toast.success('Full pipeline started', r?.run_id ? `Run ${r.run_id}` : 'Pipeline kicked off');
+      return r;
+    } catch (e) { toast.error('Could not start pipeline', e.message); throw e; }
+  });
   const [selected, setSelected] = useState(null);
 
   const running = statusQ.data?.status === 'running';
