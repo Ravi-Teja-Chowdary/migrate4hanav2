@@ -292,61 +292,11 @@ async def require_auth(
     )
 
 
-# =============================================================================
-# CLIENTS (multi-tenant)
-# =============================================================================
-# A "client" is one customer's migration context — their ECC + S/4 credentials,
-# their runs, their outputs. Most existing endpoints honor the X-Client-Id
-# header; if absent, they fall back to the "default" client (single-tenant
-# behavior, unchanged from before tenancy was added).
+# Clients (multi-tenant) endpoints — defined further below, after `app =
+# FastAPI(...)`. The data model lives up here so it's parseable before app init.
 class ClientCreate(BaseModel):
     id: str
     name: Optional[str] = None
-
-
-@app.get("/api/clients", dependencies=[Depends(require_auth)])
-async def list_clients():
-    d = _load_clients()
-    clients = list(d.get("clients", {}).values())
-    # Add a lightweight "has_ecc" / "has_s4" flag based on in-memory passwords.
-    for c in clients:
-        cid = c.get("id", "")
-        c["has_ecc_session"] = bool(_clients_passwds.get(cid, {}).get("ecc")) or (cid == "default" and bool(_ecc_passwd))
-    return {"clients": clients, "default_client_id": d.get("default_client_id", "default")}
-
-
-@app.post("/api/clients", dependencies=[Depends(require_auth)])
-async def create_client(body: ClientCreate):
-    if not body.id or not body.id.strip():
-        raise HTTPException(400, detail="Client id is required")
-    # Lock the id format so we can use it safely in S3 prefixes and file paths.
-    import re as _ree
-    if not _ree.match(r"^[a-z0-9][a-z0-9_-]{1,63}$", body.id):
-        raise HTTPException(400, detail="Client id must be lowercase a-z, 0-9, _ or -, 2-64 chars")
-    d = _load_clients()
-    if body.id in d["clients"]:
-        raise HTTPException(409, detail=f"Client '{body.id}' already exists")
-    d["clients"][body.id] = {
-        "id":   body.id,
-        "name": (body.name or body.id).strip(),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    _save_clients(d)
-    return d["clients"][body.id]
-
-
-@app.delete("/api/clients/{client_id}", dependencies=[Depends(require_auth)])
-async def delete_client(client_id: str):
-    if client_id == "default":
-        raise HTTPException(400, detail="Cannot delete the default client")
-    d = _load_clients()
-    if client_id not in d["clients"]:
-        raise HTTPException(404, detail=f"Client '{client_id}' not found")
-    d["clients"].pop(client_id, None)
-    _save_clients(d)
-    # Drop the in-memory session too.
-    _clients_passwds.pop(client_id, None)
-    return {"deleted": client_id}
 
 
 # =============================================================================
@@ -774,6 +724,56 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# =============================================================================
+# ROUTES - CLIENTS (multi-tenant)
+# =============================================================================
+# A "client" is one customer's migration context — their ECC + S/4 credentials,
+# their runs, their outputs. Most existing endpoints honor the X-Client-Id
+# header; if absent, they fall back to the "default" client (single-tenant
+# behavior, unchanged from before tenancy was added). Defined here (after the
+# `app = FastAPI(...)` block) because @app.get must run after app exists.
+@app.get("/api/clients", dependencies=[Depends(require_auth)])
+async def list_clients():
+    d = _load_clients()
+    clients = list(d.get("clients", {}).values())
+    for c in clients:
+        cid = c.get("id", "")
+        c["has_ecc_session"] = bool(_clients_passwds.get(cid, {}).get("ecc")) or (cid == "default" and bool(_ecc_passwd))
+    return {"clients": clients, "default_client_id": d.get("default_client_id", "default")}
+
+
+@app.post("/api/clients", dependencies=[Depends(require_auth)])
+async def create_client(body: ClientCreate):
+    if not body.id or not body.id.strip():
+        raise HTTPException(400, detail="Client id is required")
+    import re as _ree
+    if not _ree.match(r"^[a-z0-9][a-z0-9_-]{1,63}$", body.id):
+        raise HTTPException(400, detail="Client id must be lowercase a-z, 0-9, _ or -, 2-64 chars")
+    d = _load_clients()
+    if body.id in d["clients"]:
+        raise HTTPException(409, detail=f"Client '{body.id}' already exists")
+    d["clients"][body.id] = {
+        "id":   body.id,
+        "name": (body.name or body.id).strip(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _save_clients(d)
+    return d["clients"][body.id]
+
+
+@app.delete("/api/clients/{client_id}", dependencies=[Depends(require_auth)])
+async def delete_client(client_id: str):
+    if client_id == "default":
+        raise HTTPException(400, detail="Cannot delete the default client")
+    d = _load_clients()
+    if client_id not in d["clients"]:
+        raise HTTPException(404, detail=f"Client '{client_id}' not found")
+    d["clients"].pop(client_id, None)
+    _save_clients(d)
+    _clients_passwds.pop(client_id, None)
+    return {"deleted": client_id}
 
 
 # =============================================================================
