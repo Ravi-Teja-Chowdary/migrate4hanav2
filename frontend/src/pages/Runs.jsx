@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api, downloadFile, openInTab } from '../lib/api';
 import { useApi } from '../lib/useApi';
 import { useToast } from '../lib/toast.jsx';
+import { useActiveRun } from '../lib/activeRun.jsx';
 import {
   Panel, PageHeader, StatusPill, MetricTile, Spinner, EmptyState, OfflineBanner, CmdLine, KVList, SearchBox, Sparkline,
 } from '../components/dd';
@@ -194,9 +195,14 @@ function RunDetailDrawer({ runId, onClose }) {
 // ─────────────────────────────────────────────────────────────
 export default function Runs() {
   const { data, error, loading, reload } = useApi(useCallback(() => api.runs(), []));
+  const { activeRunId, setActiveRunId } = useActiveRun();
   const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Clicking a row should both open the drawer AND make it the active run
+  // (so the topbar picker follows the user's intent).
+  const pick = (id) => { setActiveRunId(id); setSelected(id); };
 
   const runs = Array.isArray(data) ? data : [];
   const filtered = useMemo(() => {
@@ -335,8 +341,11 @@ export default function Runs() {
                 const dq = r?.data_quality?.dead_letter_pct;
                 const spark = Array.isArray(r.stage_durations) && r.stage_durations.length > 1 ? r.stage_durations : null;
                 return (
-                  <tr key={id} className="cursor-pointer" onClick={() => setSelected(id)}>
-                    <td className="font-mono text-[11.5px] text-ink-1 truncate max-w-[260px]">{id}</td>
+                  <tr key={id} className="cursor-pointer" onClick={() => pick(id)} style={{ background: id === activeRunId ? 'var(--surface-2)' : undefined }}>
+                    <td className="font-mono text-[11.5px] text-ink-1 truncate max-w-[260px]">
+                      {id === activeRunId && <span title="Active run" className="inline-block w-1.5 h-1.5 rounded-full mr-1.5" style={{ background: 'var(--accent)', boxShadow: '0 0 4px var(--accent)' }} />}
+                      {id}
+                    </td>
                     <td><StatusPill tone={statusTone(r.status)}>{r.status || (r.has_execution ? 'executed' : 'assessment')}</StatusPill></td>
                     <td className="text-ink-3 tabular-nums">{r.created_at ? fmtDate(r.created_at) : '—'}</td>
                     <td className="tabular-nums">
@@ -347,7 +356,7 @@ export default function Runs() {
                     <td className="tabular-nums text-ink-2">{r.stage_count ?? r.stages ?? '—'}</td>
                     <td>{spark ? <Sparkline values={spark} /> : <span className="text-ink-5 text-xs">—</span>}</td>
                     <td><PdfActions runId={id} /></td>
-                    <td><button className="btn btn-sm btn-ghost btn-icon" onClick={(e) => { e.stopPropagation(); setSelected(id); }} title="Open detail"><ExternalLink size={12} /></button></td>
+                    <td><button className="btn btn-sm btn-ghost btn-icon" onClick={(e) => { e.stopPropagation(); pick(id); }} title="Open detail + set as active"><ExternalLink size={12} /></button></td>
                   </tr>
                 );
               })}

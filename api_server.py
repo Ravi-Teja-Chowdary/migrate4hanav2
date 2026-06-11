@@ -77,6 +77,57 @@ _progress_lock = asyncio.Lock()
 # In-memory ECC password (set after successful connection test, never persisted)
 _ecc_passwd = ""
 
+# ── Multi-tenant: per-client in-memory passwords + persisted client registry ──
+# Everything else in the file continues to use the single _ecc_passwd above to
+# stay backwards-compatible. New tenants live alongside; the "default" client
+# proxies the legacy single-tenant path so existing setups still work.
+CLIENTS_FILE = os.path.join(PROJECT_DIR, "clients.json")
+_clients_passwds = {}   # client_id -> {"ecc": "...", "s4": "..."}
+
+
+def _load_clients():
+    """Read clients.json or seed a default registry."""
+    if os.path.isfile(CLIENTS_FILE):
+        try:
+            with open(CLIENTS_FILE, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict) and "clients" in d:
+                return d
+        except Exception:
+            pass
+    return {"clients": {"default": {"id": "default", "name": "Default tenant",
+                                       "created_at": datetime.now(timezone.utc).isoformat()}},
+            "default_client_id": "default"}
+
+
+def _save_clients(data):
+    with open(CLIENTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def _client_id_for(request: Request) -> str:
+    """Resolve the active tenant from header > query > JWT > 'default'."""
+    cid = request.headers.get("X-Client-Id") or request.query_params.get("client_id")
+    if cid:
+        return cid.strip()
+    # Try to read it out of the JWT (set when the customer signed in to their tenant).
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        payload = verify_jwt(auth[7:]) or {}
+        if payload.get("client_id"):
+            return payload["client_id"]
+    return "default"
+
+
+def _client_outputs_dir(client_id: str) -> str:
+    """Per-tenant outputs directory. The 'default' client keeps using the
+    legacy flat layout so existing runs remain visible."""
+    if client_id == "default":
+        return OUTPUT_DIR
+    base = os.path.join(OUTPUT_DIR, "clients", client_id)
+    os.makedirs(base, exist_ok=True)
+    return base
+
 
 def _add_progress_step(stage, action, status="IN_PROGRESS", details=None, duration_ms=None):
     """Add a progress step to the real-time telemetry feed."""
@@ -242,6 +293,63 @@ async def require_auth(
 
 
 # =============================================================================
+# CLIENTS (multi-tenant)
+# =============================================================================
+# A "client" is one customer's migration context — their ECC + S/4 credentials,
+# their runs, their outputs. Most existing endpoints honor the X-Client-Id
+# header; if absent, they fall back to the "default" client (single-tenant
+# behavior, unchanged from before tenancy was added).
+class ClientCreate(BaseModel):
+    id: str
+    name: Optional[str] = None
+
+
+@app.get("/api/clients", dependencies=[Depends(require_auth)])
+async def list_clients():
+    d = _load_clients()
+    clients = list(d.get("clients", {}).values())
+    # Add a lightweight "has_ecc" / "has_s4" flag based on in-memory passwords.
+    for c in clients:
+        cid = c.get("id", "")
+        c["has_ecc_session"] = bool(_clients_passwds.get(cid, {}).get("ecc")) or (cid == "default" and bool(_ecc_passwd))
+    return {"clients": clients, "default_client_id": d.get("default_client_id", "default")}
+
+
+@app.post("/api/clients", dependencies=[Depends(require_auth)])
+async def create_client(body: ClientCreate):
+    if not body.id or not body.id.strip():
+        raise HTTPException(400, detail="Client id is required")
+    # Lock the id format so we can use it safely in S3 prefixes and file paths.
+    import re as _ree
+    if not _ree.match(r"^[a-z0-9][a-z0-9_-]{1,63}$", body.id):
+        raise HTTPException(400, detail="Client id must be lowercase a-z, 0-9, _ or -, 2-64 chars")
+    d = _load_clients()
+    if body.id in d["clients"]:
+        raise HTTPException(409, detail=f"Client '{body.id}' already exists")
+    d["clients"][body.id] = {
+        "id":   body.id,
+        "name": (body.name or body.id).strip(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _save_clients(d)
+    return d["clients"][body.id]
+
+
+@app.delete("/api/clients/{client_id}", dependencies=[Depends(require_auth)])
+async def delete_client(client_id: str):
+    if client_id == "default":
+        raise HTTPException(400, detail="Cannot delete the default client")
+    d = _load_clients()
+    if client_id not in d["clients"]:
+        raise HTTPException(404, detail=f"Client '{client_id}' not found")
+    d["clients"].pop(client_id, None)
+    _save_clients(d)
+    # Drop the in-memory session too.
+    _clients_passwds.pop(client_id, None)
+    return {"deleted": client_id}
+
+
+# =============================================================================
 # CONNECTION MANAGEMENT
 # =============================================================================
 def _load_connections():
@@ -336,23 +444,35 @@ def test_s4hana_connection(params):
 # =============================================================================
 # RUN MANAGEMENT
 # =============================================================================
-def list_runs():
+def list_runs(client_id: str = "default"):
+    """List runs scoped to one tenant. The 'default' client sees the legacy
+    flat layout (so old runs remain visible); other tenants only see runs
+    under outputs/clients/<client_id>/."""
     runs = []
-    if not os.path.isdir(OUTPUT_DIR):
+    base = _client_outputs_dir(client_id)
+    if not os.path.isdir(base):
         return runs
-    for entry in sorted(os.listdir(OUTPUT_DIR), reverse=True):
+    for entry in sorted(os.listdir(base), reverse=True):
         if entry.startswith("run_"):
-            report_path = os.path.join(OUTPUT_DIR, entry, "final-report.json")
+            report_path = os.path.join(base, entry, "final-report.json")
             if os.path.isfile(report_path):
                 with open(report_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 runs.append({"id": entry, "timestamp": entry.replace("run_", ""),
+                             "client_id": client_id,
                              "has_execution": "cutover" in data, "results": data})
     return runs
 
 
-def get_run(run_id):
-    report_path = os.path.join(OUTPUT_DIR, run_id, "final-report.json")
+def get_run(run_id, client_id: str = "default"):
+    """Read a run's final-report.json, scoped to one tenant. Falls back to the
+    legacy flat path if the tenant directory doesn't have it — useful when a
+    run was created before tenancy was introduced."""
+    base = _client_outputs_dir(client_id)
+    report_path = os.path.join(base, run_id, "final-report.json")
+    if not os.path.isfile(report_path) and client_id != "default":
+        # Legacy back-compat: look in the flat outputs dir.
+        report_path = os.path.join(OUTPUT_DIR, run_id, "final-report.json")
     if not os.path.isfile(report_path):
         return None
     with open(report_path, "r", encoding="utf-8") as f:
@@ -1263,23 +1383,25 @@ async def pipeline_progress(since: int = 0):
     }
 
 @app.get("/api/runs", dependencies=[Depends(require_auth)])
-async def get_runs():
-    return list_runs()
+async def get_runs(request: Request):
+    return list_runs(_client_id_for(request))
 
 @app.get("/api/runs/{run_id}", dependencies=[Depends(require_auth)])
-async def get_run_by_id(run_id: str):
+async def get_run_by_id(run_id: str, request: Request):
+    cid = _client_id_for(request)
     if run_id == "latest":
-        runs = list_runs()
+        runs = list_runs(cid)
         run_id = runs[0]["id"] if runs else None
-    data = get_run(run_id) if run_id else None
+    data = get_run(run_id, cid) if run_id else None
     if data:
         return data
     raise HTTPException(status_code=404, detail="Run not found")
 
 @app.get("/api/runs/{run_id}/pdf", dependencies=[Depends(require_auth)])
-async def get_run_pdf(run_id: str):
+async def get_run_pdf(run_id: str, request: Request):
+    cid = _client_id_for(request)
     if run_id == "latest":
-        runs = list_runs()
+        runs = list_runs(cid)
         run_id = runs[0]["id"] if runs else None
     if not run_id:
         raise HTTPException(status_code=404, detail="No runs found")
@@ -1288,6 +1410,91 @@ async def get_run_pdf(run_id: str):
         return FileResponse(pdf_path, media_type="application/pdf",
                             filename=f"migration-report-{run_id}.pdf")
     raise HTTPException(status_code=404, detail="Report not available for this run")
+
+
+@app.get("/api/runs/{run_id}/report", dependencies=[Depends(require_auth)])
+async def get_run_report_sections(run_id: str, request: Request):
+    cid = _client_id_for(request)
+    """Return a UI-friendly, sectioned view of the same data the PDF report
+    renders — so the Migration Report page can show it live (refresh every
+    5-10s) without waiting for the PDF to be generated at the end of the run.
+
+    Section order matches pdf_report_generator.py. Any section the run hasn't
+    populated yet is returned with empty data — the UI shows it as "pending"
+    rather than hiding it (gives the customer a sense of overall progress)."""
+    if run_id == "latest":
+        runs = list_runs(cid)
+        run_id = runs[0]["id"] if runs else None
+    data = get_run(run_id, cid) if run_id else None
+    if not data:
+        # Run may be in-flight — fall back to whatever partial files exist.
+        partial = {}
+        base = os.path.join(_client_outputs_dir(cid), run_id) if run_id else None
+        if base and os.path.isdir(base):
+            for fname in ("summary.json", "data-quality.json", "post-migration-report.json"):
+                fp = os.path.join(base, fname)
+                if os.path.isfile(fp):
+                    try:
+                        with open(fp, "r", encoding="utf-8") as fh:
+                            partial[fname.replace(".json", "").replace("-", "_")] = json.load(fh)
+                    except Exception:
+                        pass
+        data = partial or None
+
+    if not data:
+        return {"run_id": run_id, "status": "no_data", "sections": []}
+
+    # The PDF reads "post_migration_report" by convention; some older runs put
+    # the same content at the top level. Accept either.
+    pmr = data.get("post_migration_report") or data
+    ex  = pmr.get("executive_summary") or {}
+    ssa = pmr.get("source_system_assessment") or {}
+    cr  = pmr.get("code_remediation") or {}
+    dm  = pmr.get("data_migration") or {}
+    cfg = pmr.get("configuration") or {}
+    auth = pmr.get("roles_and_authorizations") or {}
+    intg = pmr.get("integrations") or {}
+    sc  = pmr.get("go_live_scorecard") or {}
+    risk = pmr.get("risk_assessment") or {}
+    roadmap = pmr.get("post_go_live_roadmap") or {}
+    tech = pmr.get("technical_metrics") or {}
+    dq  = data.get("data_quality") or pmr.get("data_quality") or {}
+
+    def _present(d):
+        return bool(d) and any(v not in (None, "", 0, [], {}) for v in d.values()) if isinstance(d, dict) else bool(d)
+
+    sections = [
+        {"id": "executive",    "title": "1. Executive Summary",
+         "ready": _present(ex) or _present(ssa), "data": {"executive_summary": ex, "source_system_assessment": ssa}},
+        {"id": "code",         "title": "2. Code Remediation",
+         "ready": _present(cr), "data": cr},
+        {"id": "data",         "title": "3. Data Migration",
+         "ready": _present(dm), "data": dm},
+        {"id": "data_quality", "title": "Dead-Letter SLO / Data Quality",
+         "ready": _present(dq), "data": dq},
+        {"id": "config",       "title": "4. Configuration",
+         "ready": _present(cfg), "data": cfg},
+        {"id": "auth",         "title": "5. Roles & Authorizations",
+         "ready": _present(auth), "data": auth},
+        {"id": "integrations", "title": "6. Integrations",
+         "ready": _present(intg), "data": intg},
+        {"id": "scorecard",    "title": "7. Go-Live Scorecard",
+         "ready": _present(sc), "data": sc},
+        {"id": "risk",         "title": "8. Risk Assessment",
+         "ready": _present(risk), "data": risk},
+        {"id": "roadmap",      "title": "9. Post Go-Live Roadmap",
+         "ready": _present(roadmap), "data": roadmap},
+        {"id": "tech",         "title": "10. Technical Metrics",
+         "ready": _present(tech), "data": tech},
+    ]
+    ready_n = sum(1 for s in sections if s["ready"])
+    return {
+        "run_id": run_id,
+        "status": data.get("status") or ("complete" if ready_n == len(sections) else "in_progress"),
+        "ready_sections": ready_n,
+        "total_sections": len(sections),
+        "sections": sections,
+    }
 
 
 @app.get("/api/v1/reports/{run_id}/volumes", dependencies=[Depends(require_auth)])
@@ -1335,6 +1542,189 @@ async def download_report_volume(run_id: str, volume_number: int):
     pdf_path = os.path.join(reports_dir, pdf_files[volume_number - 1])
     return FileResponse(pdf_path, media_type="application/pdf",
                         filename=pdf_files[volume_number - 1])
+
+
+# =============================================================================
+# ROUTES - LOGS (CloudWatch + local progress)
+# =============================================================================
+# Surfaces pipeline + Lambda + Fargate logs to the UI. In the cloud build,
+# events come from CloudWatch Logs (boto3.client("logs")). In the local
+# build (laptop dev), we fall back to the in-memory progress steps + any
+# local log files under outputs/<run_id>/.
+#
+# Retention: every Lambda + the api-server log group is created with a 30-day
+# retention policy in terraform/modules/lambda/main.tf and
+# terraform/modules/api-server/main.tf. That's the cap the UI advertises.
+import re as _re
+
+_LOG_GROUP_PREFIX = os.environ.get("M4H_LOG_GROUP_PREFIX", "/aws/lambda/migrate4hana-")
+_ECS_LOG_GROUP    = os.environ.get("M4H_ECS_LOG_GROUP",    "/ecs/migrate4hana-api-server-prod")
+_SFN_LOG_GROUP    = os.environ.get("M4H_SFN_LOG_GROUP",    "/aws/vendedlogs/states/migrate4hana-lift-and-shift-prod")
+_LOG_RETENTION_DAYS = 30  # advertised to the UI; enforced via terraform
+
+
+def _cloudwatch_client():
+    """Cached boto3 logs client. Returns None if boto3 / creds unavailable
+    (which is the case on the dev laptop without M4H_AWS=1)."""
+    if not getattr(_cloudwatch_client, "_c", None):
+        try:
+            import boto3 as _b
+            _cloudwatch_client._c = _b.client("logs")
+        except Exception:
+            _cloudwatch_client._c = None
+    return _cloudwatch_client._c
+
+
+def _list_log_groups():
+    """Return the known set of log groups for the migration platform."""
+    cw = _cloudwatch_client()
+    out = []
+    # Always advertise the ECS + SFN groups. The Lambda group list is
+    # discovered via DescribeLogGroups (so newly-added lambdas appear
+    # automatically without a code change).
+    out.append({"key": "sfn",       "name": _SFN_LOG_GROUP, "label": "Step Functions executions"})
+    out.append({"key": "api",       "name": _ECS_LOG_GROUP, "label": "API server (Fargate)"})
+    if cw:
+        try:
+            resp = cw.describe_log_groups(logGroupNamePrefix=_LOG_GROUP_PREFIX, limit=50)
+            for g in resp.get("logGroups", []):
+                name = g.get("logGroupName", "")
+                short = name.replace(_LOG_GROUP_PREFIX, "").replace("-prod", "")
+                out.append({"key": f"lambda-{short}", "name": name, "label": f"Lambda · {short}"})
+        except Exception:
+            pass
+    return out
+
+
+def _read_local_log(run_id: str, max_lines: int = 5000):
+    """Local fallback: stitch together every *.log under outputs/<run_id>/."""
+    events = []
+    base = os.path.join(OUTPUT_DIR, run_id) if run_id else OUTPUT_DIR
+    if not os.path.isdir(base):
+        return events
+    for root, _, files in os.walk(base):
+        for fn in files:
+            if not fn.endswith((".log", ".out", ".txt")):
+                continue
+            fp = os.path.join(root, fn)
+            try:
+                with open(fp, "r", encoding="utf-8", errors="replace") as fh:
+                    for line in fh:
+                        events.append({
+                            "ts": int(os.path.getmtime(fp) * 1000),
+                            "msg": line.rstrip("\n"),
+                            "src": os.path.relpath(fp, OUTPUT_DIR),
+                        })
+                        if len(events) >= max_lines:
+                            return events
+            except Exception:
+                continue
+    return events
+
+
+@app.get("/api/logs/sources", dependencies=[Depends(require_auth)])
+async def get_log_sources():
+    """List every log group the UI can tail, plus retention info."""
+    return {
+        "retention_days": _LOG_RETENTION_DAYS,
+        "sources": _list_log_groups(),
+        "has_cloudwatch": _cloudwatch_client() is not None,
+    }
+
+
+@app.get("/api/logs/tail", dependencies=[Depends(require_auth)])
+async def tail_logs(
+    source: str = "sfn",
+    run_id: Optional[str] = None,
+    next_token: Optional[str] = None,
+    start_ms: Optional[int] = None,
+    limit: int = 500,
+    q: Optional[str] = None,
+):
+    """Page through log events. If source resolves to a CloudWatch group we
+    use FilterLogEvents (server-side string match on `q`); otherwise we fall
+    back to the local outputs directory. Returns {events, next_token}."""
+    cw = _cloudwatch_client()
+    sources = {s["key"]: s["name"] for s in _list_log_groups()}
+    group = sources.get(source)
+    if cw and group:
+        kwargs = {"logGroupName": group, "limit": min(max(int(limit), 1), 1000)}
+        if next_token: kwargs["nextToken"] = next_token
+        if start_ms:   kwargs["startTime"] = int(start_ms)
+        if q:          kwargs["filterPattern"] = q
+        if run_id:
+            # If we know the run id, narrow further with it (CloudWatch will
+            # AND it with the user filter).
+            kwargs["filterPattern"] = f'"{run_id}" {q or ""}'.strip()
+        try:
+            resp = cw.filter_log_events(**kwargs)
+            events = [{
+                "ts":    e.get("timestamp", 0),
+                "msg":   e.get("message", "").rstrip(),
+                "src":   e.get("logStreamName", ""),
+                "id":    e.get("eventId", ""),
+            } for e in resp.get("events", [])]
+            return {"events": events, "next_token": resp.get("nextToken"),
+                    "source": source, "group": group, "via": "cloudwatch"}
+        except Exception as exc:
+            return {"events": [], "next_token": None, "source": source,
+                    "group": group, "via": "cloudwatch", "error": str(exc)}
+    # Local fallback
+    events = _read_local_log(run_id, max_lines=limit)
+    if q:
+        events = [e for e in events if q.lower() in e["msg"].lower()]
+    # Always splice the in-memory progress steps in too (they're not in files)
+    for s in (_progress_steps or []):
+        events.append({
+            "ts":  int((s.get("ts") or time.time()) * 1000),
+            "msg": f"[{s.get('phase','-')}] {s.get('message','')}",
+            "src": "progress",
+        })
+    events.sort(key=lambda e: e.get("ts", 0))
+    return {"events": events[-limit:], "next_token": None,
+            "source": source, "group": None, "via": "local"}
+
+
+@app.get("/api/logs/download", dependencies=[Depends(require_auth)])
+async def download_logs(source: str = "sfn", run_id: Optional[str] = None,
+                        hours: int = 24, q: Optional[str] = None):
+    """Download a window of logs as a plain-text .log file."""
+    import io
+    start_ms = int((time.time() - max(1, min(hours, 24 * _LOG_RETENTION_DAYS)) * 3600) * 1000)
+    cw = _cloudwatch_client()
+    sources = {s["key"]: s["name"] for s in _list_log_groups()}
+    group = sources.get(source)
+    buf = io.StringIO()
+    buf.write(f"# Migrate4HANA logs — source={source} group={group or '(local)'} "
+              f"run_id={run_id or '-'} window={hours}h q={q or '-'}\n")
+    if cw and group:
+        next_tok = None
+        total = 0
+        try:
+            while True:
+                kwargs = {"logGroupName": group, "limit": 1000, "startTime": start_ms}
+                if next_tok: kwargs["nextToken"] = next_tok
+                if q:        kwargs["filterPattern"] = q
+                if run_id:   kwargs["filterPattern"] = f'"{run_id}" {q or ""}'.strip()
+                resp = cw.filter_log_events(**kwargs)
+                for e in resp.get("events", []):
+                    ts = datetime.fromtimestamp(e.get("timestamp", 0) / 1000, tz=timezone.utc).isoformat()
+                    buf.write(f"{ts}  {e.get('logStreamName','-')}  {e.get('message','').rstrip()}\n")
+                    total += 1
+                next_tok = resp.get("nextToken")
+                if not next_tok or total >= 50000:
+                    break
+        except Exception as exc:
+            buf.write(f"\n# error: {exc}\n")
+    else:
+        for e in _read_local_log(run_id, max_lines=20000):
+            ts = datetime.fromtimestamp(e.get("ts", 0) / 1000, tz=timezone.utc).isoformat()
+            buf.write(f"{ts}  {e.get('src','-')}  {e.get('msg','')}\n")
+    data = buf.getvalue().encode("utf-8")
+    fname = f"migrate4hana-{source}-{run_id or 'all'}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.log"
+    from fastapi.responses import Response as _Resp
+    return _Resp(content=data, media_type="text/plain; charset=utf-8",
+                 headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 # =============================================================================

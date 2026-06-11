@@ -7,6 +7,7 @@ import {
 import { api, downloadFile, openInTab } from '../lib/api';
 import { useApi, useAction } from '../lib/useApi';
 import { useToast } from '../lib/toast.jsx';
+import { useActiveRun } from '../lib/activeRun.jsx';
 import {
   Panel, PageHeader, StatusPill, MetricTile, Spinner, OfflineBanner, EmptyState, CmdLine, KVList,
 } from '../components/dd';
@@ -34,15 +35,21 @@ const STEP_TONE = (s) => {
 
 export default function Pipeline() {
   const toast = useToast();
+  const { setActiveRunId } = useActiveRun();
   const stagesQ = useApi(useCallback(() => api.stages(), []));
   const statusQ = useApi(useCallback(() => api.status(), []), { pollMs: 3000 });
   const progressQ = useApi(useCallback(() => api.progress(0), []), { pollMs: 3000 });
   const runsQ = useApi(useCallback(() => api.runs(), []), { pollMs: 10000 });
   const [pdfBusy, setPdfBusy] = useState(null);
 
+  // When a new run starts, the api returns its id — make it the active run
+  // so every other page (Logs, Report, Runs) immediately follows the new context.
+  const adoptRun = (r) => { if (r?.run_id) setActiveRunId(r.run_id); };
+
   const assess = useAction(async () => {
     try {
       const r = await api.trigger('assess');
+      adoptRun(r);
       toast.success('Assessment started', r?.run_id ? `Run ${r.run_id}` : 'Pipeline kicked off');
       return r;
     } catch (e) { toast.error('Could not start assessment', e.message); throw e; }
@@ -50,6 +57,7 @@ export default function Pipeline() {
   const full = useAction(async () => {
     try {
       const r = await api.trigger('full');
+      adoptRun(r);
       toast.success('Full pipeline started', r?.run_id ? `Run ${r.run_id}` : 'Pipeline kicked off');
       return r;
     } catch (e) { toast.error('Could not start pipeline', e.message); throw e; }

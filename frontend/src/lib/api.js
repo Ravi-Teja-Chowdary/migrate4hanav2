@@ -17,11 +17,19 @@ async function getToken() {
   return _tokenPromise;
 }
 
-/** Authenticated fetch returning parsed JSON. Throws on network/HTTP error. */
+/** Authenticated fetch returning parsed JSON. Throws on network/HTTP error.
+ *  Automatically attaches X-Client-Id so the api-server can scope tenant data. */
 export async function apiFetch(path, opts = {}) {
   const token = await getToken();
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Lazy-import activeClient to avoid an init-order cycle when apiFetch is
+  // imported before the React provider mounts.
+  try {
+    const { getActiveClientId } = await import('./activeClient.jsx');
+    const cid = getActiveClientId();
+    if (cid) headers['X-Client-Id'] = cid;
+  } catch { /* ignore — single-tenant fallback */ }
   const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
   const text = await res.text();
   let data = null;
@@ -54,6 +62,13 @@ export async function ping() {
 // ── typed endpoint helpers ────────────────────────────────────────────────
 export const api = {
   health: () => apiFetch('/api/health'),
+
+  // ── Clients (multi-tenant) ──
+  listClients:  () => apiFetch('/api/clients'),
+  createClient: (payload) => apiFetch('/api/clients',
+                  { method: 'POST', body: JSON.stringify(payload) }),
+  deleteClient: (id) => apiFetch(`/api/clients/${encodeURIComponent(id)}`,
+                  { method: 'DELETE' }),
 
   // ── Connections (interactive) ──
   connections: () => apiFetch('/api/connections'),
@@ -110,6 +125,20 @@ export const api = {
 
   // ── PDF reports ──
   reportVolumes: (run_id) => apiFetch(`/api/v1/reports/${run_id}/volumes`),
+  reportSections: (run_id) => apiFetch(`/api/runs/${run_id}/report`),
+
+  // ── Logs (CloudWatch + local) ──
+  logSources: () => apiFetch('/api/logs/sources'),
+  logTail:    ({ source = 'sfn', run_id, next_token, start_ms, limit = 500, q } = {}) => {
+    const p = new URLSearchParams();
+    p.set('source', source);
+    if (run_id)     p.set('run_id', run_id);
+    if (next_token) p.set('next_token', next_token);
+    if (start_ms)   p.set('start_ms', start_ms);
+    if (limit)      p.set('limit', String(limit));
+    if (q)          p.set('q', q);
+    return apiFetch(`/api/logs/tail?${p.toString()}`);
+  },
 };
 
 /** Trigger a browser download of a PDF (or any file) at the given API path.

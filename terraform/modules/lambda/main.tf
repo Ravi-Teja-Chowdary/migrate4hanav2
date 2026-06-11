@@ -424,13 +424,13 @@ resource "aws_lambda_function" "migration" {
         ENTITY_RESOLUTION_WORKFLOW_ARN = var.entity_resolution_workflow_arn
       } : {},
       {
-        AST_CHANGE_THRESHOLD        = tostring(var.ast_change_threshold)
-        LLM_MODE                    = var.llm_mode
-        OLLAMA_MODEL                = var.ollama_model
+        AST_CHANGE_THRESHOLD = tostring(var.ast_change_threshold)
+        LLM_MODE             = var.llm_mode
+        OLLAMA_MODEL         = var.ollama_model
         # Direct Anthropic API (Bedrock is not used on this account)
-        M4H_ANTHROPIC_SECRET_ARN    = var.anthropic_secret_arn
-        ANTHROPIC_MODEL_ID          = var.anthropic_model_id
-        ANTHROPIC_ESCALATION_MODEL  = var.anthropic_escalation_model
+        M4H_ANTHROPIC_SECRET_ARN   = var.anthropic_secret_arn
+        ANTHROPIC_MODEL_ID         = var.anthropic_model_id
+        ANTHROPIC_ESCALATION_MODEL = var.anthropic_escalation_model
       },
       var.ollama_url != "" ? { OLLAMA_URL = var.ollama_url } : {},
       {
@@ -457,6 +457,20 @@ resource "aws_lambda_function" "migration" {
       }
     )
   }
+
+  tags = {
+    Component = "MigrationEngine"
+    Stage     = each.key
+  }
+}
+
+# Explicitly own each Lambda's log group so we can enforce 30-day retention.
+# Without this, Lambda autocreates a group with "Never expire" the first time
+# the function runs, which busts the UI's 30-day promise + costs money.
+resource "aws_cloudwatch_log_group" "lambda" {
+  for_each          = var.lambda_functions
+  name              = "/aws/lambda/migrate4hana-${each.key}-${var.environment}"
+  retention_in_days = 30
 
   tags = {
     Component = "MigrationEngine"

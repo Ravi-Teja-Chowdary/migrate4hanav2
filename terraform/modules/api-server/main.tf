@@ -19,12 +19,12 @@
 #   service_name       — for `aws ecs update-service --force-new-deployment`
 # ──────────────────────────────────────────────────────────────────────────
 
-variable "environment"          { type = string }
-variable "vpc_id"               { type = string }
-variable "private_subnet_ids"   { type = list(string) }
-variable "public_subnet_ids"    { type = list(string) }
-variable "ecs_cluster_arn"      { type = string }
-variable "staging_bucket"       { type = string }
+variable "environment" { type = string }
+variable "vpc_id" { type = string }
+variable "private_subnet_ids" { type = list(string) }
+variable "public_subnet_ids" { type = list(string) }
+variable "ecs_cluster_arn" { type = string }
+variable "staging_bucket" { type = string }
 
 variable "key_map_table" {
   type    = string
@@ -85,14 +85,14 @@ resource "aws_ecr_repository" "api_server" {
 # Lifecycle policy: keep the last 10 images; the rest are pruned on push.
 resource "aws_ecr_lifecycle_policy" "api_server" {
   repository = aws_ecr_repository.api_server.name
-  policy     = jsonencode({
+  policy = jsonencode({
     rules = [{
       rulePriority = 1
       description  = "Keep last 10 images"
       selection = {
-        tagStatus     = "any"
-        countType     = "imageCountMoreThan"
-        countNumber   = 10
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 10
       }
       action = { type = "expire" }
     }]
@@ -143,21 +143,21 @@ resource "aws_iam_role" "task" {
 # everything the Lambdas can (read secrets, write artifacts, kick SFN).
 data "aws_iam_policy_document" "task_policy" {
   statement {
-    effect  = "Allow"
-    actions = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
     resources = ["*"]
   }
   statement {
-    effect    = "Allow"
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:DeleteObject"]
+    effect  = "Allow"
+    actions = ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:DeleteObject"]
     resources = [
       "arn:aws:s3:::${var.staging_bucket}",
       "arn:aws:s3:::${var.staging_bucket}/*",
     ]
   }
   statement {
-    effect    = "Allow"
-    actions   = [
+    effect = "Allow"
+    actions = [
       "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem",
       "dynamodb:Query", "dynamodb:Scan", "dynamodb:DeleteItem",
       "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem",
@@ -166,8 +166,8 @@ data "aws_iam_policy_document" "task_policy" {
     resources = ["*"]
   }
   statement {
-    effect    = "Allow"
-    actions   = [
+    effect = "Allow"
+    actions = [
       "states:StartExecution", "states:StopExecution", "states:DescribeExecution",
       "states:GetExecutionHistory", "states:ListExecutions", "states:DescribeStateMachine",
       "states:ListStateMachines", "states:SendTaskSuccess", "states:SendTaskFailure",
@@ -184,6 +184,19 @@ data "aws_iam_policy_document" "task_policy" {
     effect    = "Allow"
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["${aws_cloudwatch_log_group.api_server.arn}:*"]
+  }
+  # The UI's Logs page reads from CloudWatch via the api-server. Allow tailing
+  # any migrate4hana-* log group (Lambdas + Step Functions + ECS).
+  statement {
+    effect = "Allow"
+    actions = [
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams",
+      "logs:FilterLogEvents",
+      "logs:GetLogEvents",
+      "logs:StartLiveTail",
+    ]
+    resources = ["*"]
   }
 }
 
@@ -317,12 +330,12 @@ resource "aws_ecs_task_definition" "api_server" {
       protocol      = "tcp"
     }]
     environment = [
-      { name = "AWS_REGION",              value = "us-east-1" },
-      { name = "M4H_EVIDENCE_BUCKET",     value = var.staging_bucket },
-      { name = "S3_STAGING_BUCKET",       value = var.staging_bucket },
-      { name = "M4H_KEYMAP_TABLE",        value = var.key_map_table },
+      { name = "AWS_REGION", value = "us-east-1" },
+      { name = "M4H_EVIDENCE_BUCKET", value = var.staging_bucket },
+      { name = "S3_STAGING_BUCKET", value = var.staging_bucket },
+      { name = "M4H_KEYMAP_TABLE", value = var.key_map_table },
       { name = "M4H_ANTHROPIC_SECRET_ARN", value = var.anthropic_secret_arn },
-      { name = "PYTHONUNBUFFERED",        value = "1" },
+      { name = "PYTHONUNBUFFERED", value = "1" },
     ]
     logConfiguration = {
       logDriver = "awslogs"
@@ -379,6 +392,56 @@ resource "aws_ecs_service" "api_server" {
   tags = {
     Component   = "ApiServer"
     Environment = var.environment
+  }
+}
+
+# ── Auto-scaling ───────────────────────────────────────────────────────────
+# Scale the Fargate service from 1 → N tasks based on average CPU. Required
+# for multi-tenant traffic: one task can comfortably serve a handful of
+# concurrent customers, but a fleet of customers hitting it simultaneously
+# saturates uvicorn's single worker. AppAutoScaling kicks new tasks in at
+# 60% CPU and scales down conservatively (5 min cooldown) so we don't
+# thrash during a long-running migration.
+variable "autoscale_min" {
+  type        = number
+  default     = 1
+  description = "Minimum running tasks for the api-server service."
+}
+
+variable "autoscale_max" {
+  type        = number
+  default     = 4
+  description = "Maximum tasks under load. Bump for production multi-tenant."
+}
+
+variable "autoscale_target_cpu" {
+  type        = number
+  default     = 60
+  description = "Target average CPU utilisation (%) that triggers scale-out."
+}
+
+resource "aws_appautoscaling_target" "api_server" {
+  max_capacity       = var.autoscale_max
+  min_capacity       = var.autoscale_min
+  resource_id        = "service/${replace(var.ecs_cluster_arn, "/^.*cluster\\//", "")}/${aws_ecs_service.api_server.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "api_server_cpu" {
+  name               = "migrate4hana-api-server-cpu-${var.environment}"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.api_server.resource_id
+  scalable_dimension = aws_appautoscaling_target.api_server.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.api_server.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = var.autoscale_target_cpu
+    scale_in_cooldown  = 300 # 5 min — don't yank capacity mid-request
+    scale_out_cooldown = 60  # 1 min — react to load fast
   }
 }
 

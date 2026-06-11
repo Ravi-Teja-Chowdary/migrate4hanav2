@@ -2,22 +2,28 @@ import { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, GitBranch, FileText, ShieldCheck, Server, Terminal, GitCompareArrows,
-  Boxes, Sun, Moon, Command, Search, Activity, Database,
+  LayoutDashboard, GitBranch, FileText, FileBarChart, ShieldCheck, Server, Terminal, GitCompareArrows,
+  Boxes, Sun, Moon, Command, Search, Activity, Database, ScrollText, Users,
 } from 'lucide-react';
 import { ping } from '../lib/api';
 import { useTheme } from '../lib/theme';
+import { useActiveRun } from '../lib/activeRun.jsx';
 import { RefreshControl, TimeRangePicker } from './dd';
 import CommandPalette from './CommandPalette';
+import RunPicker from './RunPicker';
+import ClientPicker from './ClientPicker';
 
 // Compact icon rail — Datadog vibe (no labels, hover-tooltip).
 const RAIL = [
   { to: '/',            label: 'Overview',     icon: LayoutDashboard, end: true },
   { to: '/pipeline',    label: 'Pipeline',     icon: GitBranch },
   { to: '/runs',        label: 'Runs',         icon: FileText },
+  { to: '/report',      label: 'Report',       icon: FileBarChart },
   { to: '/gates',       label: 'Gates',        icon: ShieldCheck },
   { to: '/data-quality', label: 'Data Quality', icon: Activity },
+  { to: '/logs',        label: 'Logs',         icon: ScrollText },
   { to: '/connections', label: 'Connections',  icon: Server },
+  { to: '/clients',     label: 'Clients',      icon: Users },
   { to: '/versions',    label: 'Versions',     icon: GitCompareArrows },
   { to: '/commands',    label: 'Commands',     icon: Terminal },
   { to: '/tracker',     label: 'Tracker',      icon: Database },
@@ -67,6 +73,7 @@ export default function Shell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
+  const { activeRunId } = useActiveRun();
   const [refreshMs, setRefreshMs] = useState(0);
   const [range, setRange] = useState('24h');
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -111,6 +118,9 @@ export default function Shell() {
           <Breadcrumb path={location.pathname} />
 
           <div className="ml-auto flex items-center gap-2.5">
+            <ClientPicker />
+            <RunPicker />
+            <div className="divider-v h-5 mx-1" />
             <EnvChip label="src" value="ECC · Y01" tone="info" />
             <span className="text-ink-4 text-xs">→</span>
             <EnvChip label="tgt" value="S4H · S4H" tone="ok" />
@@ -137,7 +147,7 @@ export default function Shell() {
               transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
               className="px-6 py-5 max-w-[1480px] mx-auto"
             >
-              <Outlet context={{ range, refreshMs, triggerRefresh }} />
+              <Outlet context={{ range, refreshMs, triggerRefresh, activeRunId }} />
             </motion.div>
           </AnimatePresence>
         </main>
