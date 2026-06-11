@@ -77,7 +77,16 @@ locals {
   pyrfc_layer_arn = (local.pyrfc_layer_exists
     ? aws_lambda_layer_version.pyrfc[0].arn
   : var.pyrfc_layer_arn)
+
 }
+
+# Historical note: when 30-day retention was first declared on Lambda log
+# groups, 27 of them already existed (AWS autocreates them on first invoke
+# with "Never expire"). A one-time `import` block adopted them into state.
+# That import has run; removed here so a future `terraform destroy` +
+# fresh apply doesn't fail trying to re-import groups that no longer exist.
+# If you ever need to re-import (e.g. a partial destroy that left log groups
+# orphaned), restore the block from git history at this file path.
 
 resource "aws_lambda_layer_version" "pyrfc" {
   count                    = local.pyrfc_layer_exists ? 1 : 0

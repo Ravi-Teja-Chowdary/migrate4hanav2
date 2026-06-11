@@ -478,6 +478,13 @@ resource "aws_cloudwatch_log_group" "lambda" {
   }
 }
 
+# NOTE on log-group adoption: Lambda autocreates each function's log group on
+# first invocation (with "Never expire"). Many of these already existed before
+# we declared them in terraform, so a plain apply would fail with
+# ResourceAlreadyExistsException. The `import` block that adopts the existing
+# groups lives in the root module at environments/prod/main.tf — Terraform
+# requires import blocks at the root, not inside a child module.
+
 resource "aws_security_group" "lambda" {
   name_prefix = "migrate4hana-lambda-"
   vpc_id      = var.vpc_id
