@@ -82,39 +82,92 @@ the hostname during work-process allocate, so raw-IP connects still need this en
 
 ---
 
-## PART B — ECC side: unrestricted access
+## PART B — ECC side: unrestricted access (Windows VM)
 
-Source: laptop ECC VM, `192.168.100.129`, sysnr `41`, client `800`. SID typically `NPL` (or `ABA` for IDES CAL).
+Source: laptop ECC VM running **Windows Server** (Ameerpet-style install), IP `192.168.100.129`,
+sysnr `41`, client `800`. SID typically `NPL` (or `ABA` for IDES CAL).
 
-### B.1 Boot the VM + auto-start SAP
-The VM doesn't always start SAP automatically. Inside the VM (SUSE), as `npladm`:
-```bash
-startsap all
-# verify:
-ps -ef | grep -E "(dw|ms|gw)\." | grep -v grep
-# expect to see dw.sapNPL_DVEBMGS41 + ms.sapNPL_DVEBMGS41 + gw running
+> **All ECC-side commands below are Windows-native** (PowerShell / `cmd` / SAP MMC).
+> Run them **inside the Windows VM**, logged in as the local Administrator account.
+
+### B.1 Boot the VM + start SAP
+
+#### B.1.1 Power-on the VM
+VMware Workstation / Player → power on the `ECC` VM → wait for the Windows login prompt →
+log in as **Administrator** (or whichever local Windows account was used to install SAP).
+
+#### B.1.2 Start the SAP services
+Two equivalent paths — pick whichever is easier.
+
+**Path A — SAP Management Console (recommended, visual)**
+1. Start Menu → **SAP Management Console** (`sapmmc.msc`).
+2. Tree → `<your-host>` → `NPL` (or whatever SID) → right-click the instance
+   (e.g. `41 — DVEBMGS41`) → **Start**.
+3. Wait for the traffic-light icons to all turn **green** — `MessageServer`, `Dispatcher`,
+   `IGS`, and the `Gateway` must all be green. Takes 2–5 minutes.
+
+**Path B — Windows Services (faster, scriptable)**
+Open PowerShell **as Administrator** inside the VM:
+```powershell
+# Replace NPL with your actual SID if different
+Get-Service -Name "SAP*" | Format-Table Name,Status,StartType
+Start-Service -Name "SAPNPL_41"          # the main ABAP instance
+Start-Service -Name "SAPHostControl"     # host agent
+Start-Service -Name "SAPHostExec"        # host executor
+Start-Service -Name "SAPOSCol"           # OS collector (optional)
 ```
 
-### B.2 **Kill the OS firewall inside the ECC VM** (permanent)
-As `root` in the VM:
-```bash
-# SUSE / SLES path
-systemctl stop SuSEfirewall2 2>/dev/null
-systemctl disable SuSEfirewall2 2>/dev/null
-systemctl stop firewalld 2>/dev/null
-systemctl disable firewalld 2>/dev/null
-# Belt-and-braces — flush iptables
-iptables -F; iptables -X; iptables -P INPUT ACCEPT; iptables -P FORWARD ACCEPT; iptables -P OUTPUT ACCEPT
-iptables-save > /etc/sysconfig/iptables
-# Verify nothing is listening-restricted:
-netstat -tlnp | grep -E "(3241|3341|3200|3300|8000|8041|44300)"
+#### B.1.3 Verify SAP is listening
+In the VM, PowerShell:
+```powershell
+# RFC gateway + dispatcher + message server ports (sysnr 41 → 3341/3241/3641)
+netstat -ano | findstr /R /C:"32[0-9][0-9] " /C:"33[0-9][0-9] " /C:"36[0-9][0-9] "
+# expect lines with 0.0.0.0:3341, 0.0.0.0:3241, 0.0.0.0:3641 LISTENING
 ```
-Now every port the laptop tries is wide open from the VM side.
+Or via SAP MMC: every node under the instance should be **green**.
 
-### B.3 VMware network — Bridged mode (one-time)
-1. VMware Workstation → VM Settings → **Network Adapter** → select **Bridged: Connected directly to the physical network** → **Replicate physical network connection state** = on.
-2. Inside the VM: `ip addr show` → confirm a `192.168.100.x` address (your laptop subnet).
-3. From the laptop: `ping 192.168.100.129` → must reply.
+### B.2 **Kill the Windows Firewall inside the ECC VM** (permanent)
+
+Open PowerShell **as Administrator** inside the VM and turn off all three profiles:
+```powershell
+# Disable Windows Defender Firewall for Domain, Private, Public profiles
+netsh advfirewall set allprofiles state off
+
+# Verify — all three should say "State OFF"
+netsh advfirewall show allprofiles | findstr /I "Profile State"
+
+# (Belt-and-braces) ensure the firewall service won't auto-restart it
+Set-Service -Name MpsSvc -StartupType Manual
+# Note: MpsSvc can't be fully disabled on modern Windows, but Manual + state=off is enough
+```
+
+If you prefer the GUI: **Control Panel → Windows Defender Firewall → Turn Windows Defender Firewall on or off** → choose **Turn off** for all three network locations → OK.
+
+> If a corporate antivirus (McAfee, Symantec, ESET, Defender ATP) is also installed, **add an
+> exception for ports `3200-3699` and `8000-9999`** or temporarily disable real-time protection
+> while developing. Antivirus is the silent killer for RFC throughput.
+
+### B.3 VMware network — Bridged mode + verify the IP
+
+1. VMware Workstation / Player → ECC VM → **Settings** → **Network Adapter** →
+   select **Bridged: Connected directly to the physical network** → tick **Replicate physical
+   network connection state** → OK.
+2. Inside the Windows VM, PowerShell:
+```powershell
+ipconfig | findstr /I "IPv4"
+# expect: IPv4 Address. . . . . . . . . . . : 192.168.100.x
+```
+3. From the **laptop host** (outside the VM):
+```powershell
+ping 192.168.100.129
+# expect: 4 replies, no timeouts
+Test-NetConnection 192.168.100.129 -Port 3341    # SAP dispatcher (sysnr 41)
+# expect: TcpTestSucceeded : True
+```
+
+> **If the IP drifted** (DHCP gave the VM a different address after reboot): just refresh
+> `connections.json` → `ecc.ashost` with the new value from `ipconfig`. Or set a **DHCP
+> reservation** on your home router for the VM's MAC to pin the IP permanently.
 
 ### B.4 First SAP GUI login to ECC
 - **App server:** `192.168.100.129` (or whatever ECC `ipconfig` shows)
