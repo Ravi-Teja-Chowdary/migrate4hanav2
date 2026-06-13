@@ -192,23 +192,10 @@ SAP GUI → /nSU01
 
 Or do it over RFC instantly (no GUI clicks):
 ```powershell
-$env:SAPNWRFC_HOME = "C:\Users\ajays\Downloads\migrate4hanav2\sapnwrfc"
-python -c @"
-import os
-from pyrfc import Connection
-c = Connection(ashost='192.168.100.129', sysnr='41', client='800',
-               user='sapuser', passwd=os.environ['M4H_ECC_PASSWD'], lang='EN')
-# Create or refresh the service user with SAP_ALL + SAP_NEW
-c.call('BAPI_USER_CREATE1',
-       USERNAME='M4H_ECC_ADMIN',
-       LOGONDATA={'USTYP':'S'},
-       PASSWORD={'BAPIPWD':'India123'},
-       ADDRESS={'LASTNAME':'Migration'},
-       PROFILES=[{'BAPIPROF':'SAP_ALL'},{'BAPIPROF':'SAP_NEW'}])
-c.call('BAPI_TRANSACTION_COMMIT', WAIT='X')
-print('M4H_ECC_ADMIN created with SAP_ALL+SAP_NEW')
-c.close()
-"@
+python -c "import os; from pyrfc import Connection; c = Connection(ashost='192.168.100.164', sysnr='41', client='800', user='sapuser', passwd=os.environ['M4H_ECC_PASSWD'], lang='EN'); c.call('BAPI_USER_CREATE1', USERNAME='M4H_ECC_ADMIN', LOGONDATA={'USTYP':'S'}, PASSWORD={'BAPIPWD':'India123'}, ADDRESS={'LASTNAME':'Migration'}); c.call('BAPI_USER_PROFILES_ASSIGN', USERNAME='M4H_ECC_ADMIN', PROFILES=[{'BAPIPROF':'SAP_ALL'}, {'BAPIPROF':'SAP_NEW'}]); c.call('BAPI_TRANSACTION_COMMIT', WAIT='X'); print('M4H_ECC_ADMIN created and profiles assigned successfully.'); c.close()"
+
+# the result should be like below
+# M4H_ECC_ADMIN created and profiles assigned successfully.
 ```
 
 > If user already exists, swap `BAPI_USER_CREATE1` → `BAPI_USER_CHANGE` and add a `BAPI_USER_PROFILES_ASSIGN` call.
