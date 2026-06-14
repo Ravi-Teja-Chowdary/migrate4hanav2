@@ -793,6 +793,8 @@ def lambda_handler(event, context):
         return _phase_b_validate_idempotency(event, run_id)
     if mode == "list_spines":
         return _list_spines(event, run_id)
+    if mode == "phase_b_validate_generated":
+        return _phase_b_validate_generated(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -2834,6 +2836,243 @@ def _phase_b_validate_reconcile_sweep(event, run_id):
         "count":    count,
         "per_object": per_object,
         "proof":    sweep_proof,
+    }
+
+
+def _phase_b_validate_generated(event, run_id):
+    """Live S/4 smoke for any registered spine — works equally well against
+    scaffolder-generated and hand-written orchestrators.
+
+    Why this exists: ``_phase_b_validate_f2`` hardcodes
+    ``MaterialSpineOrchestrator`` and synthesizes Material-shaped records.
+    For 107 future objects we'd need 107 nearly-identical validators. This
+    one resolves the orchestrator via ``base_spine_orchestrator.get_spine``
+    and the synthetic-row shape via the spine's own field maps + DQ gates,
+    so any new scaffolder JSON gets a live probe path for free.
+
+    Three escalating tests, all run in one invocation:
+
+      A. DQ-gate proof — push N synthetic records where ``bad_count`` of
+         them have an intentional DQ violation (sentinel value). Confirms
+         the spine's ``validate()`` rejects exactly those and the dead-letter
+         codes match the JSON definition.
+
+      B. Dry-run payload proof — push ``good_count`` valid synthetic records
+         with ``dry_run=True``. Confirms transform + value_maps + payload
+         build all execute end-to-end without calling SAP. (Required pre-
+         requisite for the live test — if dry-run fails, live will too.)
+
+      C. LIVE BAPI (skipped unless ``live: true``) — push ``live_count`` real
+         records into S/4. Caller is responsible for pre-creating any FK
+         targets the spine needs (Material before InventoryReservation,
+         Plant before SourceList, etc.). Guarded behind an explicit flag
+         because it WRITES to the target.
+
+    Payload::
+
+        { "mode":            "phase_b_validate_generated",
+          "run_id":           "irx-001",
+          "object_type":      "InventoryReservation",
+          "target_secret_id": "migrate4hana/prod/s4hana-credentials",
+          "good_count":       3,        # records for test A (clean) + test B
+          "bad_count":        2,        # records for test A (DQ-violating)
+          "live":             false,    # set true to run test C
+          "live_count":       1 }       # only used when live=true
+    """
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    object_type      = event.get("object_type", "")
+    good_count       = int(event.get("good_count", 3))
+    bad_count        = int(event.get("bad_count", 2))
+    do_live          = bool(event.get("live", False))
+    live_count       = int(event.get("live_count", 1))
+
+    if not object_type:
+        return {"status": "error", "phase": "input", "run_id": run_id,
+                "error": "object_type is required"}
+
+    # ── Resolve the orchestrator class via the central registry ────────────
+    try:
+        from base_spine_orchestrator import get_spine, LoadResult  # type: ignore
+    except Exception as e:
+        return {"status": "error", "phase": "import_base", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # Force discovery — same reason as _list_spines, in case this Lambda
+    # warm-started before the new zip's spines were imported.
+    try:
+        from spine_discovery import load_all_spines  # type: ignore
+        load_all_spines(verbose=False)
+    except Exception:
+        pass    # discovery is best-effort; falling back to whatever's registered
+
+    orch_cls = get_spine(object_type)
+    if orch_cls is None:
+        from base_spine_orchestrator import registered_spines  # type: ignore
+        return {"status": "error", "phase": "registry_lookup", "run_id": run_id,
+                "error": f"object_type {object_type!r} not in spine registry",
+                "registered_object_types": registered_spines()}
+
+    # ── Open target S/4 connection ────────────────────────────────────────
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}",
+                "object_type": object_type}
+
+    # ── Synthesize rows from the spine's FIELD_MAPS + DQ_GATES ────────────
+    # The scaffolder-generated spine exposes FIELD_MAPS / DQ_GATES at module
+    # scope; hand-written spines don't. Detect both shapes.
+    spine_module = sys.modules[orch_cls.__module__]
+    field_maps   = dict(getattr(spine_module, "FIELD_MAPS", {}) or {})
+    dq_gates     = list(getattr(spine_module, "DQ_GATES", []) or [])
+
+    # Rule -> a representative valid value for that rule. Matches the heuristic
+    # the scaffolder build.py uses to seed unit-test fixtures, kept in sync
+    # so the validator's rows pass the DQ gates the spine was generated with.
+    RULE_VALUE = {
+        "non_empty":              "VALUE",
+        "positive_number":        "1",
+        "non_negative_number":    "0",
+        "iso_date":               "20260614",
+        "sap_unit_of_measure":    "EA",
+        "currency_iso_4217":      "USD",
+        "material_number_format": "MAT_T0001",
+        "bukrs_company_code":     "1010",
+        "werks_plant":            "1710",
+        "langu_code":             "EN",
+        "sap_client_3char":       "100",
+        "decimal_max_digits":     "100.00",
+        "regex_match":            "VALUE",
+        "in_set":                 "VALUE",
+        "fk_required_when":       "VALUE",
+    }
+
+    def synth_good(i: int) -> dict:
+        row = {orch_cls.source_key_field: f"{object_type[:5].upper()}{i:04d}"}
+        for src in field_maps.keys():
+            row.setdefault(src, "X")
+        for gate in dq_gates:
+            field = gate[0] if isinstance(gate, (tuple, list)) else gate.get("field")
+            rule  = gate[1] if isinstance(gate, (tuple, list)) else gate.get("rule")
+            if field in row and row[field] != "X":
+                continue
+            val = RULE_VALUE.get(rule, "VALUE")
+            # in_set rules need a value from the configured set
+            if rule == "in_set":
+                args = gate[2] if isinstance(gate, (tuple, list)) else gate.get("rule_args", {})
+                values = (args or {}).get("values") or []
+                if values:
+                    val = values[0]
+            row[field] = val
+        # Re-stamp source_key after the DQ pass (it might be a string-format
+        # field that the source_key_field happened to share with a DQ gate).
+        row[orch_cls.source_key_field] = f"{object_type[:5].upper()}{i:04d}"
+        return row
+
+    def synth_bad(i: int) -> tuple:
+        """Return (row, expected_dead_letter_code). Pick the FIRST DQ gate
+        we can violate cleanly by setting the field to empty."""
+        good = synth_good(i)
+        if not dq_gates:
+            return good, None
+        first = dq_gates[0]
+        field = first[0] if isinstance(first, (tuple, list)) else first.get("field")
+        code  = first[3] if isinstance(first, (tuple, list)) else first.get("code")
+        good[field] = ""
+        return good, code
+
+    # ── Test A: DQ gate proof (dry-run; dead letter expected) ──────────────
+    bad_rows = [synth_bad(i) for i in range(bad_count)]
+    test_a = {"records_pushed": bad_count, "dq_rejected": 0,
+              "expected_codes": [],        "got_codes": []}
+    orch_a = orch_cls(tconn, key_map=None, dry_run=True)
+    for row, expected_code in bad_rows:
+        result = orch_a.load_one(row)
+        test_a["expected_codes"].append(expected_code)
+        if result.status == "dead_letter":
+            test_a["dq_rejected"] += 1
+            # extract the prefix code from the message (validate returns "CODE: msg")
+            head_msg = result.messages[0] if result.messages else ""
+            test_a["got_codes"].append(head_msg.split(":", 1)[0].strip() if head_msg else None)
+        else:
+            test_a["got_codes"].append(None)
+    test_a["pass"] = (test_a["dq_rejected"] == bad_count
+                      and test_a["expected_codes"] == test_a["got_codes"])
+
+    # ── Test B: dry-run BAPI proof (no SAP write) ──────────────────────────
+    good_rows = [synth_good(i) for i in range(good_count)]
+    test_b_results = orch_a.load_many(good_rows)
+    test_b = {"records_pushed":  good_count,
+              "created_dry_run": sum(1 for r in test_b_results if r.status == "created"),
+              "dead_letter":     sum(1 for r in test_b_results if r.status == "dead_letter"),
+              "stats":           orch_a.stats.to_dict(),
+              "results":         [r.to_dict() for r in test_b_results]}
+    test_b["pass"] = (test_b["created_dry_run"] == good_count
+                      and test_b["dead_letter"] == 0)
+
+    # ── Test C: live BAPI (gated) ──────────────────────────────────────────
+    test_c = {"skipped": True, "reason": "live=false (default)"}
+    if do_live:
+        try:
+            from key_map import PersistentKeyMap
+            ddb_table = os.environ.get("M4H_KEYMAP_TABLE", "migrate4hana-key-map-prod")
+            km = PersistentKeyMap(table_name=ddb_table, run_id=run_id,
+                                  target_release=os.environ.get("M4H_TARGET_RELEASE", "S4HANA_UNKNOWN"))
+        except Exception as e:
+            km = None
+            log_stage_event(run_id, "data-migrator", "phaseB_keymap_skipped",
+                            {"reason": str(e)[:160]})
+        orch_c = orch_cls(tconn, key_map=km, dry_run=False,
+                          target_release=os.environ.get("M4H_TARGET_RELEASE", "S4HANA_2022"))
+        live_rows = [synth_good(i + 1000) for i in range(live_count)]
+        live_results = orch_c.load_many(live_rows)
+        test_c = {
+            "skipped":      False,
+            "records_pushed": live_count,
+            "created":     sum(1 for r in live_results if r.status == "created"),
+            "matched":     sum(1 for r in live_results if r.status == "matched_existing"),
+            "dead_letter": sum(1 for r in live_results if r.status == "dead_letter"),
+            "stats":       orch_c.stats.to_dict(),
+            "results":     [r.to_dict() for r in live_results],
+        }
+        test_c["pass"] = (test_c["created"] + test_c["matched"]) >= 1
+
+    try:
+        tconn.close()
+    except Exception:
+        pass
+
+    overall_pass = test_a["pass"] and test_b["pass"] and (
+        test_c.get("pass", True) if not test_c.get("skipped") else True)
+
+    log_stage_event(run_id, "data-migrator", "phaseB_generated_complete",
+                    {"object_type": object_type,
+                     "A": test_a["pass"], "B": test_b["pass"],
+                     "C": test_c.get("pass", "skipped")})
+
+    return {
+        "status":     "ok" if overall_pass else "failed",
+        "phase":      "phase_b_validate_generated",
+        "run_id":     run_id,
+        "object_type": object_type,
+        "target":     {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                       "ashost": tsec.get("ashost")},
+        "spine_class": orch_cls.__name__,
+        "spine_module": orch_cls.__module__,
+        "tests": {
+            "A_dq_gate_proof":  test_a,
+            "B_dry_run_proof":  test_b,
+            "C_live_bapi":      test_c,
+        },
+        "overall_pass": overall_pass,
     }
 
 
