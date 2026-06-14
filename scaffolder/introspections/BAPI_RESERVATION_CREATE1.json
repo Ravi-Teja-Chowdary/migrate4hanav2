@@ -1,0 +1,717 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_RESERVATION_CREATE1",
+  "params": [
+    {
+      "kind": "E",
+      "name": "RESERVATION",
+      "optional": false,
+      "struct": "BAPI2093_RES_KEY",
+      "text": "BAPI Communication Structure: Delete Reservation"
+    },
+    {
+      "kind": "I",
+      "name": "ATPCHECK",
+      "optional": true,
+      "struct": "BAPI2093_ATPCHECK",
+      "text": "BAPI Communication Structure: Reservation ATP Check"
+    },
+    {
+      "kind": "I",
+      "name": "CALCHECK",
+      "optional": true,
+      "struct": "BAPI2093_CALCHECK",
+      "text": "BAPI Communication Structure: Reservation Factory Calendar"
+    },
+    {
+      "kind": "I",
+      "name": "RESERVATIONHEADER",
+      "optional": false,
+      "struct": "BAPI2093_RES_HEAD",
+      "text": "BAPI Communication Structure: Reservation Header Fields"
+    },
+    {
+      "kind": "I",
+      "name": "RESERVATION_EXTERNAL",
+      "optional": true,
+      "struct": "BAPI2093_RES_KEY",
+      "text": "Number of Reservation/Dependent Requirement"
+    },
+    {
+      "kind": "I",
+      "name": "TESTRUN",
+      "optional": true,
+      "struct": "BAPI2093_TEST",
+      "text": "Switch to Simulation Mode for Write BAPIs"
+    },
+    {
+      "kind": "T",
+      "name": "EXTENSIONIN",
+      "optional": true,
+      "struct": "BAPIPAREX",
+      "text": "Customer Enhancements of Import Interface"
+    },
+    {
+      "kind": "T",
+      "name": "PROFITABILITYSEGMENT",
+      "optional": false,
+      "struct": "BAPI_PROFITABILITY_SEGMENT",
+      "text": "BAPI Communication Structure: Reservation for Profitability Segment"
+    },
+    {
+      "kind": "T",
+      "name": "RESERVATIONITEMS",
+      "optional": false,
+      "struct": "BAPI2093_RES_ITEM",
+      "text": "BAPI Communication Structure: Reservation Item Fields"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return Messages"
+    }
+  ],
+  "structs": {
+    "BAPI2093_ATPCHECK": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ATPCHECK",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPI2093_CALCHECK": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CALCHECK",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPI2093_RES_HEAD": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RES_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CREATED_BY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MOVE_TYPE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ASSET_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SUB_NUMBER",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDERID",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SALES_ORD",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "S_ORD_ITEM",
+        "position": 9,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SCHED_LINE",
+        "position": 10,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CO_AREA",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TR_PART_BA",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RL_EST_KEY",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "COSTOBJECT",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_CTR",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "WBS_ELEM",
+        "position": 16,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROUTING_NO",
+        "position": 19,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "COUNTER",
+        "position": 20,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PART_ACCT",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "REC_IND",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FUNC_AREA",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MOVE_PLANT",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MOVE_STLOC",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CO_BUSPROC",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SPSTCK_PHY",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VENDOR_NO",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "WBS_ELEMENT",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA_LONG",
+        "position": 31,
+        "type": "C"
+      }
+    ],
+    "BAPI2093_RES_ITEM": [
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "STGE_LOC",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BATCH",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VAL_TYPE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "ENTRY_QNT",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ENTRY_UOM",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ENTRY_UOM_ISO",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REQ_DATE",
+        "position": 9,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GL_ACCOUNT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACCT_MAN",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ITEM_TEXT",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "GR_RCPT",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "UNLOAD_PT",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FIXED_QUAN",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MOVEMENT",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "CMMT_ITEM",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MOVEMENT_AUTO",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXTERNAL",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERSION",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PRIO_URGENCY",
+        "position": 25,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PRIO_REQUIREMENT",
+        "position": 26,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "STK_SEGMENT",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "REQ_SEGMENT",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STK_SEG_LONG",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "REQ_SEG_LONG",
+        "position": 32,
+        "type": "C"
+      }
+    ],
+    "BAPI2093_RES_KEY": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "RESERV_NO",
+        "position": 1,
+        "type": "N"
+      }
+    ],
+    "BAPI2093_TEST": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TESTRUN",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPIPAREX": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "STRUCTURE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART1",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART2",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART3",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART4",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_PROFITABILITY_SEGMENT": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELDNAME",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "VALUE",
+        "position": 2,
+        "type": "C"
+      }
+    ]
+  }
+}
