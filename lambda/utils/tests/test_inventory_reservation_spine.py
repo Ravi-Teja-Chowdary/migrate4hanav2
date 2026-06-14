@@ -10,7 +10,7 @@ that records `.call()` invocations so we can assert what the spine asked SAP to
 do without hitting a live system.
 
 Generator:  migrate4hana scaffolder v1.0.0
-Source SHA: 72e1524f2185201fe34040af57955b2a6d760323e6df0a7f62458c0ffc3448a7
+Source SHA: 2fe0ae544a0c234d240b9011a5dd31cea6b46c911e0f07e87fbae434ee33adb0
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class FakeKeyMap:
 
 def _sample_row():
     """Minimal row that should pass all DQ gates + FK checks."""
-    return {'AUFNR': 'X', 'BDMNG': '1', 'BDTER': '20260614', 'BSART': 'X', 'CHARG': 'X', 'LGORT': 'X', 'MATNR': 'MAT_T0001', 'MEINS': 'EA', 'RSNUM': 'RSNUM_T0001', 'WERKS': '1710'}
+    return {'BDMNG': '1', 'BDTER': '20260614', 'BSART': 'X', 'LGORT': 'X', 'MATNR': 'MAT_T0001', 'MEINS': 'EA', 'RSNUM': 'RSNUM_T0001', 'WERKS': '1710'}
 
 
 def _make(conn=None, key_map=None, dry_run=False):
@@ -89,7 +89,7 @@ def test_object_type_registered():
 def test_class_attributes_match_definition():
     assert InventoryReservationSpineOrchestrator.object_type      == 'InventoryReservation'
     assert InventoryReservationSpineOrchestrator.source_key_field == 'RSNUM'
-    assert InventoryReservationSpineOrchestrator.home_table       == 'RKPF'
+    assert InventoryReservationSpineOrchestrator.home_table       == 'RESB'
 
 
 # ── Contract: dry_run never calls SAP ───────────────────────────────────────
@@ -117,7 +117,7 @@ def test_verify_key_shape_matches_reconciler_input():
     result = spine.load_one(_sample_row())
     vk = result.verify_key
     assert vk is not None
-    assert vk["table"] == 'RKPF'
+    assert vk["table"] == 'RESB'
     assert 'RSNUM' in vk["key"]
 
 
@@ -231,20 +231,14 @@ def test_value_map_translates_in_payload():
     row = _sample_row()
     row['BSART'] = 'AR'
     row['BSART'] = 'BB'
+    row['BSART'] = 'VALUE'
     row['BSART'] = 'ZZAR'
     payload = spine.build_payload(row, [])
-    header = payload.get('RESERVATION_HEADER', {})
+    header = payload.get('RESERVATIONHEADER', {})
     # value_maps were exercised — at least one target field saw a translation
     # (we don't assert specific values because the mapping is data-driven).
     assert isinstance(header, dict)
 
 
 # ── Extension overflow guard (base contract) ───────────────────────────────
-def test_extension_rows_capped_at_100():
-    spine = _make()
-    row = dict(_sample_row())
-    # Inject 101 ZZ fields to trip the overflow guard
-    for i in range(101):
-        row[f"ZZ_TEST_{i:03d}"] = f"v{i}"
-    result = spine.load_one(row)
-    assert result.status == DISP_DEAD_LETTER
+# This object does not declare an extension_structure; no overflow test.

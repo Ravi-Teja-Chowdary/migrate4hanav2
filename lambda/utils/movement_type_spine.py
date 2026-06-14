@@ -31,7 +31,7 @@ from dq_rules.non_empty import non_empty
 # ─────────────────────────────────────────────────────────────────────────────
 # Field maps lifted from the JSON definition
 # ─────────────────────────────────────────────────────────────────────────────
-# source_field -> target_canonical_field
+# HEADER fields — populate the BAPI header struct (MVT_DATA)
 FIELD_MAPS = {
     'BLART': 'DOC_TYPE',
     'BTEXT': 'SHORT_TEXT',
@@ -41,6 +41,11 @@ FIELD_MAPS = {
     'LTEXT': 'LONG_TEXT',
     'SHKZG': 'DR_CR_INDIC',
     'SPRAS': 'LANGUAGE',
+}
+
+# ITEM fields — populate the BAPI items table ().
+# Empty for master objects whose BAPI is single-struct (no items table).
+ITEM_FIELD_MAPS = {
 }
 
 # target_field -> { source_value: target_value }
@@ -109,22 +114,32 @@ class MovementTypeSpineOrchestrator(BaseSpineOrchestrator):
         return None
 
     # ── Payload construction ────────────────────────────────────────────────
-    def build_payload(self, row: dict, ext_rows: list) -> dict:
-        header = {}
-        for src, tgt in FIELD_MAPS.items():
+    def _apply_field_map(self, row: dict, field_map: dict) -> dict:
+        out = {}
+        for src, tgt in field_map.items():
             v = row.get(src)
             if v is None:
                 continue
-            # Apply value_map if one is registered for this target field
             vmap = VALUE_MAPS.get(tgt)
             if vmap and str(v) in vmap:
                 v = vmap[str(v)]
-            header[tgt] = v
+            out[tgt] = v
+        return out
 
+    def build_payload(self, row: dict, ext_rows: list) -> dict:
+        header = self._apply_field_map(row, FIELD_MAPS)
         payload: dict = {
             'MVT_DATA': header,
             "_src_key": row.get(self.source_key_field, ""),
         }
+
+        # If the BAPI is two-struct (header + items table), build the item from
+        # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
+        # one item" pattern is the smoke-test shape; production loaders that
+        # aggregate N source rows into one parent header are out of scope here.
+        if ITEM_FIELD_MAPS:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
+            payload[''] = [item]
 
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows

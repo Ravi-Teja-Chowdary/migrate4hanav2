@@ -210,12 +210,14 @@ def _build_context(definition: dict, source_sha: str) -> dict:
     fk           = definition.get("fk", {}) or {}
     version_rt   = definition.get("version_routing", {}) or {}
 
-    field_maps   = transform.get("field_maps", {}) or {}
-    value_maps   = transform.get("value_maps", {}) or {}
-    dq_gates     = transform.get("dq_gates", []) or []
+    field_maps      = transform.get("field_maps", {}) or {}
+    item_field_maps = transform.get("item_field_maps", {}) or {}
+    value_maps      = transform.get("value_maps", {}) or {}
+    dq_gates        = transform.get("dq_gates", []) or []
 
     # Sort containers for determinism
-    field_maps_sorted = sorted(field_maps.items())
+    field_maps_sorted      = sorted(field_maps.items())
+    item_field_maps_sorted = sorted(item_field_maps.items())
     value_maps_sorted = [
         (tgt, sorted(vmap.items()))
         for tgt, vmap in sorted(value_maps.items())
@@ -267,6 +269,7 @@ def _build_context(definition: dict, source_sha: str) -> dict:
         "scaffolder_version":    SCAFFOLDER_VERSION,
 
         "field_maps_sorted":     field_maps_sorted,
+        "item_field_maps_sorted": item_field_maps_sorted,
         "value_maps_sorted":     value_maps_sorted,
         "dq_gates_sorted":       dq_gates_sorted,
         "dq_rule_imports":       dq_rule_imports,
@@ -353,9 +356,13 @@ def _synthesize_sample_row(definition: dict, value_maps_sorted: list) -> dict:
                 val = vals[0]
         row[field] = val
 
-    # Make sure every field in field_maps has a non-empty value (so build_payload
-    # produces something usable during the BAPI dispatch test).
-    for src in (definition.get("transform", {}) or {}).get("field_maps", {}).keys():
+    # Make sure every field in field_maps + item_field_maps has a non-empty
+    # value (so build_payload produces something usable during BAPI dispatch
+    # tests + the live smoke).
+    tx = definition.get("transform", {}) or {}
+    for src in tx.get("field_maps", {}).keys():
+        row.setdefault(src, "X")
+    for src in tx.get("item_field_maps", {}).keys():
         row.setdefault(src, "X")
 
     return row

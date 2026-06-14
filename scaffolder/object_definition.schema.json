@@ -76,7 +76,12 @@
         "field_maps": {
           "type": "object",
           "additionalProperties": { "type": "string" },
-          "description": "source_field -> target_canonical_field mapping."
+          "description": "source_field -> target_field mapping for the HEADER struct (load.bapi.header_struct)."
+        },
+        "item_field_maps": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "source_field -> target_field mapping for the ITEMS table parameter (load.bapi.item_struct). Omit when the BAPI is single-struct (most master-data BAPIs). When present, each source row produces one item row appended to the items table; the BAPI receives the header dict + the items list together."
         },
         "value_maps": {
           "type": "object",

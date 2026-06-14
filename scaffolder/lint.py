@@ -85,15 +85,27 @@ def lint_object_definition(definition: dict,
     elif len(primaries) > 1:
         errors.append(f"{object_type}: extract.tables has {len(primaries)} entries marked primary=true (must be exactly 1)")
 
-    # ── field_maps + value_maps cross-check ──
-    field_maps = definition.get("transform", {}).get("field_maps", {}) or {}
-    value_maps = definition.get("transform", {}).get("value_maps", {}) or {}
-    target_fields = set(field_maps.values())
+    # ── field_maps + item_field_maps + value_maps cross-check ──
+    field_maps      = definition.get("transform", {}).get("field_maps", {}) or {}
+    item_field_maps = definition.get("transform", {}).get("item_field_maps", {}) or {}
+    value_maps      = definition.get("transform", {}).get("value_maps", {}) or {}
+
+    # No source field can be in both maps (it would be unclear whether it
+    # belongs in header or items).
+    overlap = set(field_maps.keys()) & set(item_field_maps.keys())
+    if overlap:
+        errors.append(
+            f"{object_type}: source field(s) {sorted(overlap)} appear in BOTH "
+            f"field_maps and item_field_maps — pick one placement."
+        )
+
+    target_fields = set(field_maps.values()) | set(item_field_maps.values())
     for tgt_field in value_maps:
         if tgt_field not in target_fields:
             errors.append(
                 f"{object_type}: value_maps key {tgt_field!r} does not appear "
-                f"as a target in field_maps (typo? available targets: {sorted(target_fields)})"
+                f"as a target in field_maps OR item_field_maps "
+                f"(typo? available targets: {sorted(target_fields)})"
             )
 
     # ── DQ rules registered ──

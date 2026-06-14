@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/InventoryReservation.json",
-  "_source_sha":     "72e1524f2185201fe34040af57955b2a6d760323e6df0a7f62458c0ffc3448a7",
+  "_source_sha":     "2fe0ae544a0c234d240b9011a5dd31cea6b46c911e0f07e87fbae434ee33adb0",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM source-structure definition for InventoryReservation.",
 
@@ -8,5 +8,5 @@
   "primary_table": "RKPF",
   "source_key_field": "RSNUM",
 
-  "fields": [    { "name": "AUFNR", "type": "CHAR", "comment": "ORDER_NUMBER" },    { "name": "BDMNG", "type": "CHAR", "comment": "QUANTITY" },    { "name": "BDTER", "type": "CHAR", "comment": "REQUIREMENT_DATE" },    { "name": "BSART", "type": "CHAR", "comment": "DOC_TYPE" },    { "name": "CHARG", "type": "CHAR", "comment": "BATCH" },    { "name": "LGORT", "type": "CHAR", "comment": "STGE_LOC" },    { "name": "MATNR", "type": "CHAR", "comment": "MATERIAL" },    { "name": "MEINS", "type": "CHAR", "comment": "BASE_UOM" },    { "name": "RSNUM", "type": "CHAR", "comment": "RESERVATION_NUMBER" },    { "name": "WERKS", "type": "CHAR", "comment": "PLANT" }  ]
+  "fields": [    { "name": "BDTER", "type": "CHAR", "comment": "RES_DATE" },    { "name": "BSART", "type": "CHAR", "comment": "MOVE_TYPE" }  ]
 }

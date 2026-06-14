@@ -14,7 +14,7 @@ Used by the nightly breadth-grind job + the phase_b_validate_<n> Lambda modes
 to verify the generated spine loads at least one real record end-to-end.
 
 Generator:  migrate4hana scaffolder v1.0.0
-Source SHA: 72e1524f2185201fe34040af57955b2a6d760323e6df0a7f62458c0ffc3448a7
+Source SHA: 2fe0ae544a0c234d240b9011a5dd31cea6b46c911e0f07e87fbae434ee33adb0
 """
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def test_load_one_real_record(s4_conn):
         target_release="S4HANA_2022",
     )
 
-    sample = {'AUFNR': 'X', 'BDMNG': '1', 'BDTER': '20260614', 'BSART': 'X', 'CHARG': 'X', 'LGORT': 'X', 'MATNR': 'MAT_T0001', 'MEINS': 'EA', 'RSNUM': 'RSNUM_T0001', 'WERKS': '1710'}
+    sample = {'BDMNG': '1', 'BDTER': '20260614', 'BSART': 'X', 'LGORT': 'X', 'MATNR': 'MAT_T0001', 'MEINS': 'EA', 'RSNUM': 'RSNUM_T0001', 'WERKS': '1710'}
     result = spine.load_one(sample)
 
     # Either the BAPI fully accepted the synthetic record (created or matched_existing)

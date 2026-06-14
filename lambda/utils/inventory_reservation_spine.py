@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build InventoryReservation` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   72e1524f2185201fe34040af57955b2a6d760323e6df0a7f62458c0ffc3448a7
+Source SHA:   2fe0ae544a0c234d240b9011a5dd31cea6b46c911e0f07e87fbae434ee33adb0
 Object type:  InventoryReservation
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -34,26 +34,29 @@ from dq_rules.werks_plant import werks_plant
 # ─────────────────────────────────────────────────────────────────────────────
 # Field maps lifted from the JSON definition
 # ─────────────────────────────────────────────────────────────────────────────
-# source_field -> target_canonical_field
+# HEADER fields — populate the BAPI header struct (RESERVATIONHEADER)
 FIELD_MAPS = {
-    'AUFNR': 'ORDER_NUMBER',
-    'BDMNG': 'QUANTITY',
-    'BDTER': 'REQUIREMENT_DATE',
-    'BSART': 'DOC_TYPE',
-    'CHARG': 'BATCH',
+    'BDTER': 'RES_DATE',
+    'BSART': 'MOVE_TYPE',
+}
+
+# ITEM fields — populate the BAPI items table (RESERVATIONITEMS).
+# Empty for master objects whose BAPI is single-struct (no items table).
+ITEM_FIELD_MAPS = {
+    'BDMNG': 'ENTRY_QNT',
     'LGORT': 'STGE_LOC',
     'MATNR': 'MATERIAL',
-    'MEINS': 'BASE_UOM',
-    'RSNUM': 'RESERVATION_NUMBER',
+    'MEINS': 'ENTRY_UOM',
     'WERKS': 'PLANT',
 }
 
 # target_field -> { source_value: target_value }
 VALUE_MAPS = {
-    'DOC_TYPE': {
-        'AR': 'AR',
-        'BB': 'BB',
-        'ZZAR': 'AR',
+    'MOVE_TYPE': {
+        'AR': '201',
+        'BB': '261',
+        'VALUE': '101',
+        'ZZAR': '201',
     },
 }
 
@@ -75,7 +78,7 @@ FK_FIELDS = {
 
 # Verify key contract for the post-load Reconciler
 VERIFY_KEY_FIELD = 'RSNUM'
-VERIFY_VALUE_FIELDS = ['MATNR', 'BDMNG', 'WERKS', 'BDTER']
+VERIFY_VALUE_FIELDS = ['MATNR', 'BDMNG', 'WERKS']
 
 # Resolved at runtime from version_matrix.py; falls back to default_bapi.
 DEFAULT_BAPI = 'BAPI_RESERVATION_CREATE1'
@@ -109,9 +112,9 @@ class InventoryReservationSpineOrchestrator(BaseSpineOrchestrator):
 
     object_type           = 'InventoryReservation'
     source_key_field      = 'RSNUM'
-    extension_structure   = 'BAPI_TE_RESB'
+    extension_structure   = ''
     fk_fields             = FK_FIELDS
-    home_table            = 'RKPF'
+    home_table            = 'RESB'
 
     # ── DQ gates ─────────────────────────────────────────────────────────────
     def validate(self, row: dict) -> Optional[str]:
@@ -125,22 +128,32 @@ class InventoryReservationSpineOrchestrator(BaseSpineOrchestrator):
         return None
 
     # ── Payload construction ────────────────────────────────────────────────
-    def build_payload(self, row: dict, ext_rows: list) -> dict:
-        header = {}
-        for src, tgt in FIELD_MAPS.items():
+    def _apply_field_map(self, row: dict, field_map: dict) -> dict:
+        out = {}
+        for src, tgt in field_map.items():
             v = row.get(src)
             if v is None:
                 continue
-            # Apply value_map if one is registered for this target field
             vmap = VALUE_MAPS.get(tgt)
             if vmap and str(v) in vmap:
                 v = vmap[str(v)]
-            header[tgt] = v
+            out[tgt] = v
+        return out
 
+    def build_payload(self, row: dict, ext_rows: list) -> dict:
+        header = self._apply_field_map(row, FIELD_MAPS)
         payload: dict = {
-            'RESERVATION_HEADER': header,
+            'RESERVATIONHEADER': header,
             "_src_key": row.get(self.source_key_field, ""),
         }
+
+        # If the BAPI is two-struct (header + items table), build the item from
+        # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
+        # one item" pattern is the smoke-test shape; production loaders that
+        # aggregate N source rows into one parent header are out of scope here.
+        if ITEM_FIELD_MAPS:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
+            payload['RESERVATIONITEMS'] = [item]
 
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows
@@ -190,7 +203,7 @@ class InventoryReservationSpineOrchestrator(BaseSpineOrchestrator):
         verify_key = {
             "table": self.home_table,
             "key":   {VERIFY_KEY_FIELD: target_key},
-            "values": {fld: payload.get('RESERVATION_HEADER', {}).get(fld, "")
+            "values": {fld: payload.get('RESERVATIONHEADER', {}).get(fld, "")
                        for fld in VERIFY_VALUE_FIELDS},
         }
         return target_key, msgs, DISP_CREATED, verify_key

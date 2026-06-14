@@ -1,7 +1,7 @@
 {
   "object_type":      "InventoryReservation",
   "source_key_field": "RSNUM",
-  "home_table":       "RKPF",
+  "home_table":       "RESB",
   "category":         "Transactional",
   "phase":            "explore",
 
@@ -27,27 +27,26 @@
 
   "transform": {
     "field_maps": {
-      "RSNUM": "RESERVATION_NUMBER",
-      "BSART": "DOC_TYPE",
-      "BDTER": "REQUIREMENT_DATE",
-      "AUFNR": "ORDER_NUMBER",
+      "BDTER": "RES_DATE",
+      "BSART": "MOVE_TYPE"
+    },
+    "item_field_maps": {
       "MATNR": "MATERIAL",
       "WERKS": "PLANT",
-      "BDMNG": "QUANTITY",
-      "MEINS": "BASE_UOM",
-      "LGORT": "STGE_LOC",
-      "CHARG": "BATCH"
+      "BDMNG": "ENTRY_QNT",
+      "MEINS": "ENTRY_UOM",
+      "LGORT": "STGE_LOC"
     },
     "value_maps": {
-      "DOC_TYPE": { "AR": "AR", "BB": "BB", "ZZAR": "AR" }
+      "MOVE_TYPE": { "AR": "201", "BB": "261", "ZZAR": "201", "VALUE": "101" }
     },
     "dq_gates": [
-      { "field": "RSNUM",    "rule": "non_empty",           "on_fail": "dead_letter", "code": "MISSING_RES_NUMBER" },
+      { "field": "RSNUM",    "rule": "non_empty",              "on_fail": "dead_letter", "code": "MISSING_RES_NUMBER" },
       { "field": "MATNR",    "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_MATERIAL" },
-      { "field": "BDMNG",    "rule": "positive_number",     "on_fail": "dead_letter", "code": "INVALID_QUANTITY" },
-      { "field": "MEINS",    "rule": "sap_unit_of_measure", "on_fail": "dead_letter", "code": "INVALID_UOM" },
-      { "field": "WERKS",    "rule": "werks_plant",         "on_fail": "dead_letter", "code": "INVALID_PLANT" },
-      { "field": "BDTER",    "rule": "iso_date",            "on_fail": "dead_letter", "code": "INVALID_REQ_DATE" }
+      { "field": "BDMNG",    "rule": "positive_number",        "on_fail": "dead_letter", "code": "INVALID_QUANTITY" },
+      { "field": "MEINS",    "rule": "sap_unit_of_measure",    "on_fail": "dead_letter", "code": "INVALID_UOM" },
+      { "field": "WERKS",    "rule": "werks_plant",            "on_fail": "dead_letter", "code": "INVALID_PLANT" },
+      { "field": "BDTER",    "rule": "iso_date",               "on_fail": "dead_letter", "code": "INVALID_REQ_DATE" }
     ]
   },
 
@@ -61,9 +60,9 @@
     "fallback_lane": "MC",
     "bapi": {
       "function":            "BAPI_RESERVATION_CREATE1",
-      "header_struct":       "RESERVATION_HEADER",
-      "item_struct":         "RESERVATION_ITEMS",
-      "extension_structure": "BAPI_TE_RESB",
+      "header_struct":       "RESERVATIONHEADER",
+      "item_struct":         "RESERVATIONITEMS",
+      "extension_structure": "",
       "commit_with_wait":    true,
       "return_key_field":    "RESERVATION"
     },
@@ -83,11 +82,11 @@
 
   "verify": {
     "key_field":    "RSNUM",
-    "value_fields": ["MATNR", "BDMNG", "WERKS", "BDTER"]
+    "value_fields": ["MATNR", "BDMNG", "WERKS"]
   },
 
   "extensions": {
-    "supports_ZZ_fields":  true,
+    "supports_ZZ_fields":  false,
     "supports_partners":   false,
     "supports_conditions": false,
     "supports_longtexts":  false

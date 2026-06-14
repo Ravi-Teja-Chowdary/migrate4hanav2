@@ -2930,6 +2930,52 @@ def _apply_fk_substitution(rows: list, candidates: dict) -> list:
     return new_rows
 
 
+def _fetch_joined_mard_triples(tconn, limit: int = 10) -> list:
+    """Return up to ``limit`` consistent (MATNR, WERKS, LGORT) triples from
+    MARD on the live target.
+
+    Independent FK substitution gives one MATNR from MARA + one WERKS from
+    T001W — but the combination may not exist in MARD (storage data), so the
+    BAPI fails with "material not maintained in plant". Pulling the join
+    directly from MARD avoids that whole class of failure for any
+    transactional object that touches material/plant/storage."""
+    try:
+        r = tconn.call("RFC_READ_TABLE", QUERY_TABLE="MARD", DELIMITER="|",
+                       FIELDS=[{"FIELDNAME": "MATNR"},
+                               {"FIELDNAME": "WERKS"},
+                               {"FIELDNAME": "LGORT"}],
+                       ROWCOUNT=limit)
+        out = []
+        for row in r.get("DATA", []):
+            parts = [p.strip() for p in row.get("WA", "").split("|")]
+            if len(parts) >= 3 and all(parts[:3]):
+                out.append({"MATNR": parts[0], "WERKS": parts[1], "LGORT": parts[2]})
+        return out
+    except Exception:
+        return []
+
+
+def _apply_mard_joined_pairs(rows: list, mard_triples: list, fk_fields: dict) -> int:
+    """Override MATNR/WERKS (and LGORT if present) with joined-valid triples.
+    Returns the number of rows whose triples were overridden."""
+    if not mard_triples:
+        return 0
+    has_material = any(v == "Material" for v in (fk_fields or {}).values())
+    has_plant    = any(v == "Plant"    for v in (fk_fields or {}).values())
+    if not (has_material and has_plant):
+        return 0
+    n = 0
+    for i, row in enumerate(rows):
+        triple = mard_triples[i % len(mard_triples)]
+        # Overwrite by source-field name (MATNR/WERKS/LGORT are the canonical
+        # ECC names; if the row already had them, we now have a consistent set).
+        row["MATNR"] = triple["MATNR"]
+        row["WERKS"] = triple["WERKS"]
+        row["LGORT"] = triple["LGORT"]
+        n += 1
+    return n
+
+
 def _phase_b_validate_generated(event, run_id):
     """Live S/4 smoke for any registered spine — works equally well against
     scaffolder-generated and hand-written orchestrators.
@@ -3131,19 +3177,47 @@ def _phase_b_validate_generated(event, run_id):
         if fk_resolution:
             live_rows = _apply_fk_substitution(live_rows, fk_resolution)
 
-        # Pre-seed the ledger with IDENTITY mappings for the live FK targets so
-        # the spine's resolve_fk() (which looks up source->target via the ledger)
-        # finds the values we just substituted. In a real migration the ledger
-        # is populated by an earlier object's spine (Material before Reservation);
-        # the identity-seed simulates that without needing to chain spines for
-        # a smoke test.
+        # When the spine references BOTH Material AND Plant, the independent FK
+        # lookups above can pair a MATNR with a WERKS where (MATNR, WERKS) has
+        # no MARD entry — the BAPI then rejects with "material not maintained
+        # in plant". Override with joined-valid triples from MARD so the row
+        # references a real stocked material+plant+storage combination.
+        mard_triples = _fetch_joined_mard_triples(tconn, limit=live_count * 2)
+        mard_pairs_used = _apply_mard_joined_pairs(live_rows, mard_triples, fk_fields)
+
+        # Caller-supplied per-field overrides. Used to inject known-valid coded
+        # values (movement types, document types, etc.) that the scaffolder's
+        # rule-default-based synthesis can't produce. ``null`` removes the
+        # field entirely from the row so the spine skips it in build_payload.
+        live_overrides = event.get("live_overrides", {}) or {}
+        for src_field, override_val in live_overrides.items():
+            for row in live_rows:
+                if override_val is None:
+                    row.pop(src_field, None)
+                else:
+                    row[src_field] = override_val
+
+        # Pre-seed the ledger with IDENTITY mappings for every (FK target, FK
+        # value) pair that ends up in the rows AFTER all substitutions. In a
+        # real migration the ledger is populated by an earlier object's spine
+        # (Material before Reservation); the identity-seed simulates that
+        # without chaining. Must run AFTER MARD/override changes so the seed
+        # covers the actual values the BAPI will see, not the discarded
+        # intermediate ones.
         fk_seeded = 0
-        if km is not None:
-            for src_field, info in (fk_resolution or {}).items():
-                target_obj = info.get("target_obj")
-                for val in info.get("values") or []:
+        if km is not None and fk_fields:
+            seen_pairs = set()
+            for row in live_rows:
+                for src_field, target_obj in fk_fields.items():
+                    val = row.get(src_field)
+                    if val is None or val == "":
+                        continue
+                    key = (target_obj, str(val))
+                    if key in seen_pairs:
+                        continue
+                    seen_pairs.add(key)
                     try:
-                        km.add(target_obj, val, val, "live_smoke_identity")
+                        km.add(target_obj, str(val), str(val), "live_smoke_identity")
                         fk_seeded += 1
                     except Exception:
                         pass
@@ -3178,7 +3252,10 @@ def _phase_b_validate_generated(event, run_id):
                                     "first_3":        v["values"][:3],
                                     "error":          v["error"]}
                                 for k, v in fk_resolution.items()},
-            "fk_identity_seeded": fk_seeded,
+            "fk_identity_seeded":    fk_seeded,
+            "mard_pairs_used":       mard_pairs_used,
+            "mard_triple_pool_size": len(mard_triples),
+            "live_overrides_applied": dict(live_overrides),
             "first_dead_letter_messages": dead_letter_messages,
         }
         test_c["pass"] = (test_c["created"] + test_c["matched"]) >= 1
