@@ -215,6 +215,32 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 > | **SOX gates** (human by design) | 4 |
 >
 > **Expert-reviewer takeaway:** The infrastructure side of "promote scaffolder spines to Tier-1" is now demonstrably solved. The four new scaffolder features (constants_header/_item/_extra + headerx_struct) cover every shape pattern we encountered. Remaining Tier-1 gaps are partitioned cleanly: BAPI doesn't exist, customer basis hasn't configured the surface, real source data is needed, or the BAPI has a multi-table shape the scaffolder doesn't yet model. None of these are dead ends; each has a specific named owner (basis ops, customer data, or scaffolder roadmap).
+>
+> ### Afternoon update — +2 more Tier-1 + 5th scaffolder feature: `extra_payload` (35 → 37)
+>
+> Closed the "multi-table BAPI shape" carry-forward item. New `transform.extra_payload` scaffolder feature: schema/build/template-coordinated, sends additional BAPI struct (object value) or table (array value) params beyond header/items. Multi-struct / multi-table BAPIs no longer need scaffolder-roadmap work.
+>
+> | New Tier-1 spine | Doc # / outcome | Multi-struct payload (extra_payload) |
+> |---|---|---|
+> | **BOMItem** | **BOMGroup 00000218/1710/1** | BOMGROUP + ITEMS + VARIANTS + MATERIALRELATIONS + ITEMASSIGNMENTS (5 coordinated tables, all threaded through BOM_GROUP_IDENTIFICATION) |
+> | **AccountingDocument** | **FI doc 0100000238/2025** | DOCUMENTHEADER + ACCOUNTGL + CURRENCYAMOUNT (header + 2 balanced tables); real GL accounts 0064002000 / 0064040000 + cost center 0017101601 discovered via SKB1/CSKS queries |
+>
+> Plus 5 more multi-struct candidates explored and shipped definitionally (FixedAssetOvertake, ServiceMaster, Requirement, ProjectDefinition, BatchClassification, SubcontractingPO) — each surfaces a specific named per-system gap (closed AA-overtake phase, missing T362 service categories, empty period indicator customizing, missing project profile, batch internal CHARG_OBJNR discovery, missing subcontracting BOM). All are now Tier-2-BAPI with full live-discovered constants pinned; future Customer-Zero sessions with real customizing or source data can promote each to Tier-1 in a single re-probe.
+>
+> **All 5 scaffolder features shipped today (full list):** `constants_header` · `constants_item` · `constants_extra` · `headerx_struct` + `itemx_struct` (with NUMC-key carve-out) · **`extra_payload` (new this afternoon)**. Plus the `query_target_table` Lambda mode for live customizing discovery.
+>
+> **Updated tier table:**
+>
+> | Tier | Count (today start → now) |
+> |---|---|
+> | Tier 1 — Live creates on real S/4 | **27 → 37** (+10) |
+> | Tier 2-BAPI — Reaches live BAPI, gated on basis customizing or data | ~33 (steady; promotions offset by deeper-probed Tier-3) |
+> | Tier 2-MC — auto-trigger | 99 |
+> | SOX gates | 4 |
+>
+> Tier-1 promotions today (in order): HRMaster, RequisitionLegacy (PR# 0010001624), ScheduleAgreementMM (SAG# 5500000038), StockTransferOrder (STO# 4500002140), HandlingUnit, DocumentInfoRecord, IncomingInvoice, Notification, **BOMItem (BOMGroup 00000218/1710/1)**, **AccountingDocument (FI doc 0100000238/2025)**.
+>
+> The architectural picture is now: every Tier-2 spine on this CAL S/4 reaches the live BAPI cleanly; every Tier-2-BAPI gap is partitioned into one of (basis customizing missing, real source data missing, BAPI doesn't exist on this release). Zero infrastructure gaps remain on the scaffolder side.
 
 ---
 

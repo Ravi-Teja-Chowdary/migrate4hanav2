@@ -245,4 +245,31 @@ Plus a new `query_target_table` Lambda handler mode for live RFC_READ_TABLE disc
 
 Tier-1 total: **35** (was 27). Total scaffolder-generated spines unchanged at 54 (no new objects added in this push — only promotions).
 
+## 2026-06-15 (afternoon) — +2 more Tier-1 (BOMItem, AccountingDocument), extra_payload scaffolder feature (27 → 37)
+
+Two more Tier-1 promotions via a single new scaffolder feature that unlocks multi-struct / multi-table BAPIs:
+
+| New Tier-1 | Live S/4 outcome | Multi-struct payload coordinated |
+|---|---|---|
+| BOMItem | **BOMGroup 00000218/1710/1** | BOMGROUP + ITEMS + VARIANTS + MATERIALRELATIONS + ITEMASSIGNMENTS (5 tables) |
+| AccountingDocument | **FI doc 0100000238/2025** | DOCUMENTHEADER + ACCOUNTGL + CURRENCYAMOUNT (header + 2 balanced tables) |
+
+### New scaffolder feature: `transform.extra_payload`
+
+Schema/build/template. Sends additional BAPI struct (object value) or table (array value) parameters beyond header/items. Merged AFTER `constants_extra` so it overrides. Required for BAPIs whose shape goes beyond the header+items dichotomy — every multi-table FI/CO/PP/QM/PM master/transactional BAPI uses this pattern.
+
+### Live-S/4 discoveries used as constants
+
+- **GL accounts assigned to BUKRS 1710** via SKB1 query: `0064002000`, `0064040000` (real, non-X-test accounts that satisfy chart-of-accounts YCOA + cost-accounting requirements).
+- **Cost center on KOKRS A000** via CSKS: `0017101601` (real cost-relevant CO assignment to satisfy the GL account's "requires CO assignment" rule).
+- **Open posting period for BUKRS 1710**: November 2025 → PSTNG_DATE='20251115'.
+
+### Three additional candidates explored (Tier-2 status, gated on basis or data)
+
+- **FixedAssetOvertake**: full multi-struct payload (KEY + GENERALDATA + GENERALDATAX + POSTINGINFORMATION + POSTINGINFORMATIONX) shipped; real S/4 returns "Legacy data transfer completed in co. code 1710; display only is possible" — basis-level AA-overtake phase is closed on this IDES.
+- **ServiceMaster**: IM_SERVICE_DATA + IM_SERVICE_DATAX + SERVICE_DESCRIPTION items table shipped with real field names; real S/4: T362 service-category customizing empty on this S/4 (no service categories defined).
+- **Requirement / ProjectDefinition / BatchClassification / SubcontractingPO**: each got real-introspected struct shapes pinned via extra_payload; each surfaced a specific customizing or data-discovery gap that's customer-side, not infra.
+
+**Cumulative session Tier-1 count: 35 → 37.** Total reusable scaffolder features added today: **5** (constants_header, constants_item, constants_extra, headerx_struct/itemx_struct, extra_payload).
+
 
