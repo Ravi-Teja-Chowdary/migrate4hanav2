@@ -35,6 +35,25 @@
       "ITEM_AMOUNT":      "ITEM_AMOUNT",
       "TAX_CODE":         "TAX_CODE"
     },
+    "constants_header": {
+      "COMP_CODE":   "1710",
+      "CURRENCY":    "USD",
+      "DOC_DATE":    "20251115",
+      "PSTNG_DATE":  "20251115",
+      "GROSS_AMOUNT": "100",
+      "REF_DOC_NO":  "MIG-IV-1000",
+      "INVOICE_IND": "X"
+    },
+    "constants_item": {
+      "INVOICE_DOC_ITEM": "000001",
+      "PO_NUMBER":   "4500000004",
+      "PO_ITEM":     "00001",
+      "TAX_CODE":    "I0",
+      "ITEM_AMOUNT": "100",
+      "QUANTITY":    "1",
+      "PO_PR_QNT":   "1",
+      "PO_UNIT":     "ST"
+    },
     "dq_gates": [
       { "field": "BELNR",       "rule": "non_empty",          "on_fail": "dead_letter", "code": "MISSING_INVOICE_DOC" },
       { "field": "BUKRS",       "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },
