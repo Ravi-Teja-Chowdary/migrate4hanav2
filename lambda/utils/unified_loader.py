@@ -35,48 +35,28 @@ except Exception:  # pragma: no cover
 # (decorator @register_spine on the class definition). UnifiedLoader.load_object
 # consults the registry first; objects without a spine orchestrator stay on the
 # legacy BapiLoader/IDocLoader path so this is purely additive.
+#
+# Spine modules used to live in a hand-curated tuple here. As of the v1
+# scaffolder (design/SCAFFOLDER_SPEC.md) the tuple is replaced with directory
+# discovery: any *_spine.py file shipped in the Lambda zip is imported and
+# its @register_spine decorator runs. The hand-curated list survives as a
+# *priority* order (Material first, then masters, then transactional, etc.)
+# so dependency-sensitive spines load before the things that reference them.
+# Anything the scaffolder emits next is picked up by the filesystem sweep
+# without code changes here.
 try:
     from base_spine_orchestrator import get_spine, registered_spines  # type: ignore
-    # Import all spine modules so their @register_spine decorators execute at
-    # import time. Each import is wrapped individually so a single missing
-    # module doesn't disable the entire spine path -- the loader transparently
-    # falls back to the legacy BapiLoader for unregistered objects.
-    for _spine_module in (
-        "material_spine",
-        # Batch 1: masters
-        "bank_spine", "cost_center_spine", "profit_center_spine", "equipment_spine",
-        # Batch 2: tricky-shape masters
-        "internal_order_spine", "funcloc_spine", "fixed_asset_spine", "project_spine",
-        # Batch 3: classification + hierarchies
-        "characteristic_spine", "class_spine",
-        "cost_element_group_spine", "profit_center_group_spine",
-        # Batch 4: transactional documents
-        "purchase_requisition_spine", "purchase_order_spine",
-        "purchase_contract_spine", "sales_order_spine",
-        # Batch 5: balance + FI postings
-        "open_ar_spine", "open_ap_spine", "batch_spine", "inventory_balance_spine",
-        # Batch 6: CVI + exchange rates (closes the live-25 sweep)
-        "business_partner_spine", "customer_spine", "vendor_spine",
-        "exchange_rates_spine",
-        # Batch 7: PP + MM + SD extension (beyond live-25)
-        "work_center_spine", "info_record_spine", "quotation_spine",
-        "outbound_delivery_spine",
-        # Batch 8: SD docs + PP planning
-        "inquiry_spine", "billing_document_spine", "planned_order_spine",
-        "production_bom_spine",
-        # MC file lane: 20 catalog objects under one framework
-        "mc_file_exporter",
-    ):
-        try:
-            __import__(_spine_module)
-        except Exception:
-            # Missing module -> that object stays on the legacy path; not fatal
-            pass
+    try:
+        from spine_discovery import load_all_spines  # type: ignore
+        _SPINE_DISCOVERY = load_all_spines(verbose=False)
+    except Exception as _e:                       # pragma: no cover
+        _SPINE_DISCOVERY = {"loaded": [], "skipped": [], "failures": [("spine_discovery", str(_e))]}
     _SPINE_AVAILABLE = True
 except Exception:  # pragma: no cover
     def get_spine(_obj): return None
     def registered_spines(): return []
     _SPINE_AVAILABLE = False
+    _SPINE_DISCOVERY = {"loaded": [], "skipped": [], "failures": []}
 
 try:
     import bp_odata   # OData path: create TRANSACTION-READY customers/suppliers (BP-led)

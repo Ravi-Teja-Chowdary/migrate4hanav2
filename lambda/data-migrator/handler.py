@@ -791,6 +791,8 @@ def lambda_handler(event, context):
         return _phase_b_validate_reconcile_sweep(event, run_id)
     if mode == "phase_b_validate_idempotency":
         return _phase_b_validate_idempotency(event, run_id)
+    if mode == "list_spines":
+        return _list_spines(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -2832,6 +2834,88 @@ def _phase_b_validate_reconcile_sweep(event, run_id):
         "count":    count,
         "per_object": per_object,
         "proof":    sweep_proof,
+    }
+
+
+def _list_spines(event, run_id):
+    """Return a snapshot of the current spine registry.
+
+    Used to verify that auto-discovery saw newly-scaffolded spines AFTER a
+    deploy. No SAP calls, no S3, no DynamoDB — just an in-process registry
+    read. Payload::
+
+        { "mode": "list_spines", "run_id": "discovery-smoke-001" }
+
+    Response shape::
+
+        { "status":              "ok",
+          "run_id":               "<echo>",
+          "registered_count":     int,
+          "object_types":         [<sorted list of registered object_type strings>],
+          "scaffolder_generated": [<object_types whose spine file claims scaffolder origin>],
+          "priority_modules":     [<author-controlled priority order>],
+          "discovered_modules":   [<everything found by filesystem sweep>],
+          "load_summary":         { "loaded": [...], "skipped": [...], "failures": [...] } }
+    """
+    # Import here so an import-time failure becomes a structured response
+    # instead of a Lambda-runtime crash.
+    try:
+        from spine_discovery import registry_snapshot, load_all_spines  # type: ignore
+    except Exception as e:
+        log_stage_event(run_id, "data-migrator", "list_spines_failed", {"error": str(e)})
+        return {"status": "error", "phase": "import_spine_discovery", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # Force re-discovery so this endpoint reports the LIVE filesystem, not a
+    # cached unified_loader snapshot taken at module-import time (which would
+    # mask a missing-module bug post-deploy).
+    load_summary = load_all_spines(verbose=False)
+    snap = registry_snapshot()
+
+    # Cross-check: which registered object_types correspond to scaffolder-
+    # generated spine files? Read the head of each candidate file and look
+    # for the "GENERATED FROM definitions/" marker the spine.py.j2 emits.
+    scaffolder_generated = []
+    try:
+        import os as _os
+        here = _os.path.dirname(_os.path.abspath(__file__))
+        for fname in _os.listdir(here):
+            if not fname.endswith("_spine.py") or fname.startswith("test_"):
+                continue
+            if fname == "base_spine_orchestrator.py":
+                continue
+            try:
+                with open(_os.path.join(here, fname), "r", encoding="utf-8") as f:
+                    head = f.read(800)
+                if "GENERATED FROM definitions/" in head:
+                    # Pull the object_type from the second line of the marker.
+                    for line in head.splitlines():
+                        if "definitions/" in line:
+                            tail = line.split("definitions/", 1)[1]
+                            obj = tail.split(".json", 1)[0].strip()
+                            if obj:
+                                scaffolder_generated.append(obj)
+                                break
+            except Exception:
+                continue
+    except Exception:
+        pass
+    scaffolder_generated.sort()
+
+    log_stage_event(run_id, "data-migrator", "list_spines",
+                    {"registered_count": snap.get("registered_count"),
+                     "scaffolder_count": len(scaffolder_generated)})
+
+    return {
+        "status":               "ok",
+        "phase":                "list_spines",
+        "run_id":               run_id,
+        "registered_count":     snap.get("registered_count", 0),
+        "object_types":         snap.get("object_types", []),
+        "scaffolder_generated": scaffolder_generated,
+        "priority_modules":     snap.get("priority_modules", []),
+        "discovered_modules":   snap.get("discovered_modules", []),
+        "load_summary":         load_summary,
     }
 
 

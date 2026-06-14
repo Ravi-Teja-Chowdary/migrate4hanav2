@@ -21,6 +21,17 @@ if (Test-Path lambda\utils\local_aws_shim.py) {
     Copy-Item lambda\utils\local_aws_shim.py $build\ -Force
 }
 
+# Scaffolder runtime: dq_rules/ package. The generated spines import from
+# `dq_rules.<rule>` so this subpackage MUST ship with the zip. Without it
+# the spine's "from dq_rules.X import X" line raises ModuleNotFoundError
+# at cold start and the spine fails to register.
+if (Test-Path lambda\utils\dq_rules) {
+    Copy-Item -Recurse -Force lambda\utils\dq_rules $build\
+    Write-Host "==> dq_rules/ subpackage included" -ForegroundColor DarkCyan
+} else {
+    Write-Host "==> WARNING: lambda\utils\dq_rules not found. Generated spines that reference DQ rules will fail at import. Run: python -m scaffolder.build --sync-rules" -ForegroundColor Yellow
+}
+
 Write-Host "==> Files staged for zip:" -ForegroundColor Cyan
 Get-ChildItem $build | Select-Object Name | Format-Table | Out-String | Write-Host
 
