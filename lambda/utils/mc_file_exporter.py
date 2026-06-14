@@ -766,9 +766,22 @@ for _obj, _spec in MC_TEMPLATES.items():
     _REGISTERED_MC_OBJECTS.append(_obj)
 
 
-def flush_all(s3_client, bucket: str, run_id: str, tenant_slug: str = "default") -> list:
+def flush_all(s3_client, bucket: str, run_id: str, tenant_slug: str = "default",
+              target_conn=None, project_id: str = "", auto_trigger: bool = False,
+              wait_for_complete: bool = False, timeout_secs: int = 600) -> list:
     """Flush every MC-file pseudo-spine that has accumulated rows. Returns a
-    list of per-object results (uri + row count + template name)."""
+    list of per-object results (uri + row count + template name).
+
+    When ``auto_trigger=True`` and ``target_conn`` is provided, each
+    successful S3 flush is immediately followed by a Migration Cockpit
+    job trigger on S/4 via :func:`mc_job_trigger.trigger_mc_load`. This
+    turns the MC lane into a fire-and-forget pipeline equivalent to the
+    BAPI lane — no human MC operator required.
+
+    Each result dict gains a ``trigger`` sub-dict when auto_trigger is on:
+      {"mechanism": "...", "job_id": "...", "status": "DONE"/"FAILED"/...,
+       "rows_loaded": N, "log_lines": [...], "errors": [...]}
+    """
     from base_spine_orchestrator import _SPINE_REGISTRY
     results = []
     for obj in _REGISTERED_MC_OBJECTS:
@@ -777,6 +790,17 @@ def flush_all(s3_client, bucket: str, run_id: str, tenant_slug: str = "default")
             continue
         r = cls.flush_to_s3(s3_client, bucket, run_id, tenant_slug)
         if r["rows"] > 0:
+            if auto_trigger and target_conn is not None and project_id:
+                from mc_job_trigger import trigger_mc_load
+                r["trigger"] = trigger_mc_load(
+                    target_conn       = target_conn,
+                    project_id        = project_id,
+                    object_id         = obj,
+                    file_s3_uri       = r["uri"],
+                    correlation_id    = run_id,
+                    wait_for_complete = wait_for_complete,
+                    timeout_secs      = timeout_secs,
+                )
             results.append(r)
     return results
 

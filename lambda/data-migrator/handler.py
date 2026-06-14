@@ -795,6 +795,8 @@ def lambda_handler(event, context):
         return _list_spines(event, run_id)
     if mode == "phase_b_validate_generated":
         return _phase_b_validate_generated(event, run_id)
+    if mode == "phase_c_mc_trigger":
+        return _phase_c_mc_trigger(event, run_id)
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")
@@ -3292,6 +3294,158 @@ def _phase_b_validate_generated(event, run_id):
         },
         "overall_pass": overall_pass,
     }
+
+
+def _phase_c_mc_trigger(event, run_id):
+    """Live test the MC job-trigger lane against the target S/4.
+
+    Without an object_id: returns a strategy availability probe (does
+    LTMC_API exist on this S/4? does the OData service answer? does XBP
+    work?). With an object_id + a (small) sample dataset, generates a
+    file via mc_file_exporter, uploads to S3, and chains into
+    trigger_mc_load() to confirm end-to-end fire-and-forget on the MC
+    lane.
+
+    Payload::
+
+        { "mode":          "phase_c_mc_trigger",
+          "object_id":     "GLAccount",        # optional; omit for probe
+          "project_id":    "M4H_PROD_001",     # required when object_id given
+          "wait":          true,               # wait for job completion
+          "timeout_secs":  600,
+          "sample_rows":   [ { "KTOPL": "YIKR", "SAKNR": "0000100001", ... }, ... ]
+        }
+    """
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    object_id        = (event.get("object_id") or "").strip()
+    project_id       = (event.get("project_id") or "").strip()
+    wait_flag        = bool(event.get("wait", True))
+    timeout_secs     = int(event.get("timeout_secs", 600))
+    sample_rows      = event.get("sample_rows") or []
+
+    # ── Open target S/4 connection ────────────────────────────────────────
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection   # type: ignore
+        tconn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec.get("sysnr", "00"),
+            client=tsec["client"], user=tsec["user"],
+            passwd=tsec.get("passwd") or tsec.get("password"),
+            lang=tsec.get("lang", "EN"),
+        )
+    except Exception as e:
+        return {"status": "error", "phase": "connect_s4", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
+
+    # ── Strategy availability probe (object_id absent) ────────────────────
+    if not object_id:
+        availability = {}
+        # Probe LTMC_API
+        try:
+            tconn.call("LTMC_API_OBJ_GET_STATUS", IV_JOB_ID="__probe__")
+            availability["ltmc_api"] = {"available": True, "note": "FM exists"}
+        except Exception as e:
+            msg = str(e)[:200]
+            # FU_NOT_FOUND means LTMC_API isn't exposed; any other error
+            # means the FM is there but the test job ID doesn't exist
+            if "FU_NOT_FOUND" in msg or "not exist" in msg.lower():
+                availability["ltmc_api"] = {"available": False, "note": "FM not exposed"}
+            else:
+                availability["ltmc_api"] = {"available": True, "note": f"present but probe rejected: {msg[:100]}"}
+        # Probe XBP
+        try:
+            tconn.call("BAPI_XBP_JOB_OPEN", JOBNAME="__M4H_PROBE__", JOBCLASS="C",
+                        EXTERNAL_USER_NAME="MIG_PROBE")
+            availability["xbp_job"] = {"available": True, "note": "XBP open accepted"}
+        except Exception as e:
+            msg = str(e)[:200]
+            if "FU_NOT_FOUND" in msg:
+                availability["xbp_job"] = {"available": False, "note": "BAPI_XBP_JOB_OPEN not exposed"}
+            elif "EXTERNAL_USER" in msg or "not authorized" in msg.lower():
+                availability["xbp_job"] = {"available": True, "note": "XBP exposed; needs external-scheduler logon"}
+            else:
+                availability["xbp_job"] = {"available": False, "note": msg[:160]}
+        try:
+            tconn.close()
+        except Exception:
+            pass
+        return {
+            "status":       "ok",
+            "phase":        "phase_c_mc_trigger:probe",
+            "run_id":       run_id,
+            "target":       {"sid": tsec.get("sid"), "client": tsec.get("client"),
+                              "ashost": tsec.get("ashost")},
+            "availability": availability,
+            "recommended_strategy": ("ltmc_api" if availability.get("ltmc_api", {}).get("available")
+                                      else ("xbp_job" if availability.get("xbp_job", {}).get("available")
+                                            else "none")),
+        }
+
+    # ── Full trigger flow (object_id supplied) ────────────────────────────
+    if not project_id:
+        return {"status": "error", "phase": "input", "run_id": run_id,
+                "error": "project_id required when object_id is supplied"}
+
+    # Write sample rows into the MC pseudo-spine, flush to S3, trigger
+    bucket = os.environ.get("M4H_STAGING_BUCKET", "migrate4hana-staging-prod")
+    try:
+        from mc_file_exporter import _REGISTERED_MC_OBJECTS, _make_mc_file_class, MC_TEMPLATES
+        from base_spine_orchestrator import _SPINE_REGISTRY
+        if object_id not in MC_TEMPLATES:
+            return {"status": "error", "phase": "lookup", "run_id": run_id,
+                    "error": f"object_id {object_id!r} not in MC_TEMPLATES",
+                    "available_objects": list(MC_TEMPLATES.keys())[:30]}
+        cls = _SPINE_REGISTRY.get(object_id)
+        if cls is None:
+            return {"status": "error", "phase": "lookup", "run_id": run_id,
+                    "error": f"{object_id} not registered (mc spine missing?)"}
+
+        # Build payloads through the spine's pseudo-call so the buffer fills
+        spec = MC_TEMPLATES[object_id]
+        if not sample_rows:
+            # Synthesize one row from mandatory columns
+            sample_rows = [{c: f"M4H_{c[:4]}" for c in spec["mandatory"]}]
+        for row in sample_rows:
+            payload = {"record": {c: (row.get(c) or "") for c in spec["csv_columns"]},
+                       "customs": {},
+                       "_src": (row.get(spec["mandatory"][0]) or "M4H_DEFAULT")}
+            cls._row_buffer.append({"record": payload["record"],
+                                     "customs": payload["customs"]})
+
+        s3_client = boto3.client("s3")
+        flush_res = cls.flush_to_s3(s3_client, bucket, run_id, "default")
+
+        from mc_job_trigger import trigger_mc_load
+        trigger_res = trigger_mc_load(
+            target_conn       = tconn,
+            project_id        = project_id,
+            object_id         = object_id,
+            file_s3_uri       = flush_res["uri"],
+            correlation_id    = run_id,
+            wait_for_complete = wait_flag,
+            timeout_secs      = timeout_secs,
+        )
+
+        try:
+            tconn.close()
+        except Exception:
+            pass
+
+        return {
+            "status":  "ok" if trigger_res["status"] in ("DONE", "RUNNING") else "failed",
+            "phase":   "phase_c_mc_trigger:trigger",
+            "run_id":  run_id,
+            "object":  object_id,
+            "flush":   flush_res,
+            "trigger": trigger_res,
+        }
+    except Exception as e:
+        try:
+            tconn.close()
+        except Exception:
+            pass
+        return {"status": "error", "phase": "trigger", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:240]}"}
 
 
 def _list_spines(event, run_id):
