@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/IncomingInvoice.json",
-  "_source_sha":     "bab8577a3b97217565367f8847fc19be25fb2d791068f262de8da1700459609b",
+  "_source_sha":     "ff73607070254cfd2d4585d1c469762391ffcc267abeccc897f8463f421e06ba",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "Migration Cockpit (MC) staging-table layout for IncomingInvoice. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
 

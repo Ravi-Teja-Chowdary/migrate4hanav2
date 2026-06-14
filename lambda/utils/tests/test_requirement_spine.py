@@ -10,7 +10,7 @@ that records `.call()` invocations so we can assert what the spine asked SAP to
 do without hitting a live system.
 
 Generator:  migrate4hana scaffolder v1.0.0
-Source SHA: 25750850a414a98dacec0fd91337436b97dcf8c0ea403f120bd1ef2d8968fcd4
+Source SHA: 57efdccd1699c0e2637966c63bc0604b42a234c27265f0d767c22b3e51089dd2
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class FakeKeyMap:
 
 def _sample_row():
     """Minimal row that should pass all DQ gates + FK checks."""
-    return {'BDZEI': 'X', 'MATNR': 'MATNR_T0001', 'MEINS': 'EA', 'PLNMG': '1', 'VERSB': 'X', 'WERKS': '1710'}
+    return {'MATNR': 'MATNR_T0001', 'PLNMG': '1', 'VERSB': 'X', 'WERKS': '1710'}
 
 
 def _make(conn=None, key_map=None, dry_run=False):
@@ -159,15 +159,6 @@ def test_dq_gate_matnr_invalid_material_dead_letters():
     assert result.status == DISP_DEAD_LETTER
     assert result.dead_letter == DEAD_LETTER_DQ
     assert any('INVALID_MATERIAL' in m for m in result.messages)
-
-def test_dq_gate_meins_invalid_uom_dead_letters():
-    row = _sample_row()
-    row['MEINS'] = ""        # force the DQ gate to trip
-    spine = _make()
-    result = spine.load_one(row)
-    assert result.status == DISP_DEAD_LETTER
-    assert result.dead_letter == DEAD_LETTER_DQ
-    assert any('INVALID_UOM' in m for m in result.messages)
 
 def test_dq_gate_plnmg_invalid_quantity_dead_letters():
     row = _sample_row()

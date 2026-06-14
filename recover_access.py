@@ -8,15 +8,38 @@ key admin users, unlocks them, and optionally converts MIGRATE_ADMI back to a
 Dialog user.
 """
 from __future__ import annotations
-import argparse, json, os, sys
+import argparse
+import json
+import os
+import sys
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parent
 os.environ.setdefault("SAPNWRFC_HOME", str(ROOT / "sapnwrfc"))
 from pyrfc import Connection
 
+# Parse the configuration file dynamically
 conns = json.loads((ROOT / "connections.json").read_text())
-t = conns["lift_and_shift_target"]
-HOST, SYSNR, CLIENT = t["target_ashost"], t["target_sysnr"], t["target_client"]
+
+# Robust Fallback Check: Safely catch either connection structure variant
+if "lift_and_shift_target" in conns:
+    t = conns["lift_and_shift_target"]
+    HOST = t.get("target_ashost") or t.get("ashost")
+    SYSNR = str(t.get("target_sysnr") or t.get("sysnr", "00"))
+    CLIENT = str(t.get("target_client") or t.get("client", "100"))
+elif "ecc" in conns:
+    t = conns["ecc"]
+    HOST = t.get("ashost")
+    SYSNR = str(t.get("sysnr", "00"))
+    CLIENT = str(t.get("client", "100"))
+else:
+    # Manual extraction fallback if structure is top-level flat
+    HOST = conns.get("target_ashost") or conns.get("ashost")
+    SYSNR = str(conns.get("target_sysnr") or conns.get("sysnr", "00"))
+    CLIENT = str(conns.get("target_client") or conns.get("client", "100"))
+
+# Ensure no hidden whitespace or trailing line breaks ruin connection properties
+HOST = HOST.strip() if HOST else ""
 NEWPW = os.environ.get("M4H_TARGET_PASSWD", "Parupalliajayteja@2020")
 ADMINPW = "Parupallitejaajay#92"
 USERS = ["SAP*", "MIGRATE_ADMI", "DDIC"]
@@ -25,11 +48,12 @@ USERS = ["SAP*", "MIGRATE_ADMI", "DDIC"]
 def connect():
     for user, pw in [("MIGRATE_ADMI", NEWPW), ("SAP*", ADMINPW), ("DDIC", ADMINPW)]:
         try:
+            # Using absolute lowercase standard connection tags required by pyrfc core
             c = Connection(ashost=HOST, sysnr=SYSNR, client=CLIENT, user=user, passwd=pw, lang="EN")
             print(f"connected over RFC as {user}")
             return c, user
         except Exception as e:
-            print(f"  cannot connect as {user}: {getattr(e, 'key', type(e).__name__)}")
+            print(f"   cannot connect as {user}: {getattr(e, 'key', type(e).__name__)}")
     return None, None
 
 
@@ -81,6 +105,7 @@ def main():
                     help="convert MIGRATE_ADMI back to Dialog (enables GUI; first logon forces pwd change)")
     args = ap.parse_args()
 
+    print(f"Target system metrics derived -> Host: {HOST}, Sysnr: {SYSNR}, Client: {CLIENT}")
     c, who = connect()
     if not c:
         print("\nERROR: no RFC login works. Recovery needs OS-level access (SSH) instead.")

@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/Shipment.json",
-  "_source_sha":     "d8543555fd81993d1841f4ec98240264a04ba979e2369a23610b30473c0b829c",
+  "_source_sha":     "ed43b20c46fc19483a227b1be93d5670d1b4dd8ae9abc9dcc0d9e9287c68eb13",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "Migration Cockpit (MC) staging-table layout for Shipment. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
 

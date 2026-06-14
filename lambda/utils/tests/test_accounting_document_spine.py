@@ -10,7 +10,7 @@ that records `.call()` invocations so we can assert what the spine asked SAP to
 do without hitting a live system.
 
 Generator:  migrate4hana scaffolder v1.0.0
-Source SHA: cf01a77373666231b2c33c05167111ad811dd2d2492ef9714ca56084581f7728
+Source SHA: 5088a2374f766b8e93e4724636baac9f1673b1908f2ed33e3bcc3ac7a71c3fe2
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class FakeKeyMap:
 
 def _sample_row():
     """Minimal row that should pass all DQ gates + FK checks."""
-    return {'BELNR': 'BELNR_T0001', 'BKTXT': 'X', 'BLART': 'X', 'BLDAT': '20260614', 'BUDAT': '20260614', 'BUKRS': '1010', 'USNAM': 'X'}
+    return {'AMT_DOCCUR': '1', 'BELNR': 'BELNR_T0001', 'BKTXT': 'value', 'BLART': 'X', 'BLDAT': '20260614', 'BUDAT': '20260614', 'BUKRS': '1010', 'CURRENCY': 'USD', 'ITEMNO_ACC': '1', 'USNAM': 'value'}
 
 
 def _make(conn=None, key_map=None, dry_run=False):
@@ -151,6 +151,15 @@ def test_idempotent_replay_hits_ledger_short_circuit():
 
 
 # ── Definition-specific: DQ gates ──────────────────────────────────────────
+def test_dq_gate_amt_doccur_invalid_amount_dead_letters():
+    row = _sample_row()
+    row['AMT_DOCCUR'] = ""        # force the DQ gate to trip
+    spine = _make()
+    result = spine.load_one(row)
+    assert result.status == DISP_DEAD_LETTER
+    assert result.dead_letter == DEAD_LETTER_DQ
+    assert any('INVALID_AMOUNT' in m for m in result.messages)
+
 def test_dq_gate_belnr_missing_doc_number_dead_letters():
     row = _sample_row()
     row['BELNR'] = ""        # force the DQ gate to trip
@@ -159,6 +168,15 @@ def test_dq_gate_belnr_missing_doc_number_dead_letters():
     assert result.status == DISP_DEAD_LETTER
     assert result.dead_letter == DEAD_LETTER_DQ
     assert any('MISSING_DOC_NUMBER' in m for m in result.messages)
+
+def test_dq_gate_bktxt_missing_header_txt_dead_letters():
+    row = _sample_row()
+    row['BKTXT'] = ""        # force the DQ gate to trip
+    spine = _make()
+    result = spine.load_one(row)
+    assert result.status == DISP_DEAD_LETTER
+    assert result.dead_letter == DEAD_LETTER_DQ
+    assert any('MISSING_HEADER_TXT' in m for m in result.messages)
 
 def test_dq_gate_bldat_invalid_doc_date_dead_letters():
     row = _sample_row()
@@ -186,6 +204,33 @@ def test_dq_gate_bukrs_invalid_company_code_dead_letters():
     assert result.status == DISP_DEAD_LETTER
     assert result.dead_letter == DEAD_LETTER_DQ
     assert any('INVALID_COMPANY_CODE' in m for m in result.messages)
+
+def test_dq_gate_currency_invalid_currency_dead_letters():
+    row = _sample_row()
+    row['CURRENCY'] = ""        # force the DQ gate to trip
+    spine = _make()
+    result = spine.load_one(row)
+    assert result.status == DISP_DEAD_LETTER
+    assert result.dead_letter == DEAD_LETTER_DQ
+    assert any('INVALID_CURRENCY' in m for m in result.messages)
+
+def test_dq_gate_itemno_acc_missing_item_no_dead_letters():
+    row = _sample_row()
+    row['ITEMNO_ACC'] = ""        # force the DQ gate to trip
+    spine = _make()
+    result = spine.load_one(row)
+    assert result.status == DISP_DEAD_LETTER
+    assert result.dead_letter == DEAD_LETTER_DQ
+    assert any('MISSING_ITEM_NO' in m for m in result.messages)
+
+def test_dq_gate_usnam_missing_username_dead_letters():
+    row = _sample_row()
+    row['USNAM'] = ""        # force the DQ gate to trip
+    spine = _make()
+    result = spine.load_one(row)
+    assert result.status == DISP_DEAD_LETTER
+    assert result.dead_letter == DEAD_LETTER_DQ
+    assert any('MISSING_USERNAME' in m for m in result.messages)
 
 
 # ── Definition-specific: FK resolution ──────────────────────────────────────

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated from definitions/ScheduleAgreementMM.json
-     Source SHA:  e999ac28217b5ead9f41247ab83e858eb106991daa9b7a382211b5f7c7b4e436
+     Source SHA:  aa2b19d4ddbd898c7bcb77fc2bda548a19a661342631ef1c34636c18f898aa84
      Generator:   migrate4hana scaffolder v1.0.0
      Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
 -->

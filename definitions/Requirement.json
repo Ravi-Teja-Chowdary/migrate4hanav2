@@ -23,9 +23,14 @@
     "field_maps": {
       "MATNR": "MATERIAL",
       "WERKS": "PLANT",
-      "BDZEI": "REQUIREMENTSTYPE",
-      "VERSB": "VERSION",
-      "PLNMG": "REQUIREMENT_QUANTITY"
+      "VERSB": "VERSION"
+    },
+    "constants_header": {
+      "MATERIAL":     "TG0013",
+      "PLANT":        "1710",
+      "VERSION":      "00",
+      "REQU_TYPE":    "VSF",
+      "VERS_ACTIV":   "X"
     },
     "dq_gates": [
       { "field": "MATNR", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_MATERIAL" },

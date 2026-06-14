@@ -10,7 +10,7 @@ that records `.call()` invocations so we can assert what the spine asked SAP to
 do without hitting a live system.
 
 Generator:  migrate4hana scaffolder v1.0.0
-Source SHA: f57cb950c8be5453546aeaddba530dce6f503eb1b9dedaad47cc52e951e1d043
+Source SHA: ff73607070254cfd2d4585d1c469762391ffcc267abeccc897f8463f421e06ba
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class FakeKeyMap:
 
 def _sample_row():
     """Minimal row that should pass all DQ gates + FK checks."""
-    return {'BELNR': 'BELNR_T0001', 'BLART': 'X', 'BLDAT': '20260614', 'BUDAT': '20260614', 'BUKRS': '1010', 'RMWWR': '1', 'WAERS': 'USD', 'XBLNR': 'X'}
+    return {'BELNR': 'BELNR_T0001', 'BLART': 'X', 'BLDAT': '20260614', 'BUDAT': '20260614', 'BUKRS': '1010', 'INVOICE_DOC_ITEM': '1', 'ITEM_AMOUNT': '1', 'RMWWR': '1', 'TAX_CODE': 'X', 'WAERS': 'USD', 'XBLNR': 'X'}
 
 
 def _make(conn=None, key_map=None, dry_run=False):
@@ -186,6 +186,24 @@ def test_dq_gate_bukrs_invalid_company_code_dead_letters():
     assert result.status == DISP_DEAD_LETTER
     assert result.dead_letter == DEAD_LETTER_DQ
     assert any('INVALID_COMPANY_CODE' in m for m in result.messages)
+
+def test_dq_gate_invoice_doc_item_missing_item_no_dead_letters():
+    row = _sample_row()
+    row['INVOICE_DOC_ITEM'] = ""        # force the DQ gate to trip
+    spine = _make()
+    result = spine.load_one(row)
+    assert result.status == DISP_DEAD_LETTER
+    assert result.dead_letter == DEAD_LETTER_DQ
+    assert any('MISSING_ITEM_NO' in m for m in result.messages)
+
+def test_dq_gate_item_amount_invalid_item_amount_dead_letters():
+    row = _sample_row()
+    row['ITEM_AMOUNT'] = ""        # force the DQ gate to trip
+    spine = _make()
+    result = spine.load_one(row)
+    assert result.status == DISP_DEAD_LETTER
+    assert result.dead_letter == DEAD_LETTER_DQ
+    assert any('INVALID_ITEM_AMOUNT' in m for m in result.messages)
 
 def test_dq_gate_rmwwr_invalid_amount_dead_letters():
     row = _sample_row()

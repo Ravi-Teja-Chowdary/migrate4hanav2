@@ -10,7 +10,7 @@ that records `.call()` invocations so we can assert what the spine asked SAP to
 do without hitting a live system.
 
 Generator:  migrate4hana scaffolder v1.0.0
-Source SHA: c39439cdcec1bfac5d899ea4573be1273875fa1151db7aeb44ed3000fe02e237
+Source SHA: 19e0ad75eb9958537e637a45ae0dc47376b353ab6440e3b95b225404ae8a627d
 """
 from __future__ import annotations
 

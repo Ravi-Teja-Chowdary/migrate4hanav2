@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/ScheduleAgreementMM.json",
-  "_source_sha":     "e999ac28217b5ead9f41247ab83e858eb106991daa9b7a382211b5f7c7b4e436",
+  "_source_sha":     "aa2b19d4ddbd898c7bcb77fc2bda548a19a661342631ef1c34636c18f898aa84",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "Migration Cockpit (MC) staging-table layout for ScheduleAgreementMM. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
 

@@ -10,7 +10,7 @@ that records `.call()` invocations so we can assert what the spine asked SAP to
 do without hitting a live system.
 
 Generator:  migrate4hana scaffolder v1.0.0
-Source SHA: aff3bba9da2b0a29d230d7801f8ba2adc16ff9e30495570df3528b6068cf9536
+Source SHA: 514623141957192902b359a57cc2d1af4aa9f95d94217aba5ebbf3c8d0f87ea5
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class FakeKeyMap:
 
 def _sample_row():
     """Minimal row that should pass all DQ gates + FK checks."""
-    return {'BSART': 'value', 'EBELN': 'EBELN_T0001', 'EKGRP': 'X', 'EKORG': 'value', 'WAERS': 'X'}
+    return {'BSART': 'NB', 'EBELN': 'EBELN_T0001', 'EKGRP': 'X', 'EKORG': 'value', 'WAERS': 'X'}
 
 
 def _make(conn=None, key_map=None, dry_run=False):
@@ -151,14 +151,14 @@ def test_idempotent_replay_hits_ledger_short_circuit():
 
 
 # ── Definition-specific: DQ gates ──────────────────────────────────────────
-def test_dq_gate_bsart_missing_doc_type_dead_letters():
+def test_dq_gate_bsart_invalid_doc_type_dead_letters():
     row = _sample_row()
     row['BSART'] = ""        # force the DQ gate to trip
     spine = _make()
     result = spine.load_one(row)
     assert result.status == DISP_DEAD_LETTER
     assert result.dead_letter == DEAD_LETTER_DQ
-    assert any('MISSING_DOC_TYPE' in m for m in result.messages)
+    assert any('INVALID_DOC_TYPE' in m for m in result.messages)
 
 def test_dq_gate_ebeln_missing_po_number_dead_letters():
     row = _sample_row()

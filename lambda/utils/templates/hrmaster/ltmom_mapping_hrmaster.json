@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/HRMaster.json",
-  "_source_sha":     "73c4ee349e9396aa6bc4f7d80641c382d50a2cfe96251140373a63ff61822b04",
+  "_source_sha":     "d09e090c4dd1c05cb295f7fa9d43a51e48ce2e78639aef54b5cca69fd4e4d2cf",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM field-mapping spec for HRMaster. Used by lambda/ltmom-orchestrator to drive SLT.",
 

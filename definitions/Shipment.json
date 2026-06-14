@@ -27,6 +27,11 @@
       "ROUTE": "SHIPMENT_ROUTE",
       "TPLST": "TRANS_PLAN_PT"
     },
+    "constants_header": {
+      "TRANS_PLAN_PT":  "1710",
+      "SHIPMENT_TYPE":  "0001",
+      "SHIPPING_TYPE":  "01"
+    },
     "dq_gates": [
       { "field": "TKNUM", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_SHIPMENT_NO" },
       { "field": "SHTYP", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_SHIPMENT_TYPE" },

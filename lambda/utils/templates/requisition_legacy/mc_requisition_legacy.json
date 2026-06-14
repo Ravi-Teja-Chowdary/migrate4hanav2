@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/RequisitionLegacy.json",
-  "_source_sha":     "fd682fc3820722c7fb893d9f76b667c8f1c8f9f71e2675dcc6a517957ff26bdb",
+  "_source_sha":     "e50c90d11d8e5d78acd8da91ecf2f3d77700883dd3452a0499b10d23792ba4e9",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "Migration Cockpit (MC) staging-table layout for RequisitionLegacy. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
 

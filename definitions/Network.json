@@ -27,6 +27,12 @@
       "WERKS": "PLANT",
       "KTEXT": "SHORT_TEXT"
     },
+    "constants_header": {
+      "NETWORK_TYPE":      "PS04",
+      "PLANT":             "1710",
+      "SHORT_TEXT":        "Migrated network",
+      "PROFILE":           "PSNETZ01"
+    },
     "dq_gates": [
       { "field": "AUFNR", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_NETWORK_NO" },
       { "field": "AUART", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_NETWORK_TYPE" },

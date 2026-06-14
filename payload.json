@@ -1,1 +1,1 @@
-{"ecc_secret_id":"migrate4hana/prod/sap-credentials","object_spec":{"object":"Customer","source_table":"KNA1","fields":["KUNNR","NAME1","LAND1","ORT01","STRAS"],"lane":"MC"},"run_id":"ngrok-smoke-001"}
+{"mode":"phase_b_validate_generated","object_type":"Requirement","live":true}
