@@ -26,6 +26,9 @@
       "BASME": "BASE_UOM",
       "MEINS": "BASE_UOM_ISO"
     },
+    "constants_header": {
+      "BASE_UOM":   "EA"
+    },
     "dq_gates": [
       { "field": "ASNUM", "rule": "non_empty",            "on_fail": "dead_letter", "code": "MISSING_SERVICE_NUMBER" },
       { "field": "BASME", "rule": "sap_unit_of_measure",  "on_fail": "dead_letter", "code": "INVALID_BASE_UOM" }

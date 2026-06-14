@@ -26,6 +26,13 @@
       "BRGEW": "TOTAL_WGHT",
       "GEWEI": "UNIT_OF_WT"
     },
+    "constants_header": {
+      "PACK_MAT":    "EWMS4-CAR00",
+      "PLANT":       "1710",
+      "STGE_LOC":    "171A",
+      "UNIT_OF_WT":  "KG",
+      "HU_EXID":     ""
+    },
     "dq_gates": [
       { "field": "EXIDV", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_HU_EXID" },
       { "field": "VHILM", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_PACK_MAT" },

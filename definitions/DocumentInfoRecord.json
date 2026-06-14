@@ -28,6 +28,13 @@
       "DKTXT": "DESCRIPTION",
       "DWNAM": "USERNAME"
     },
+    "constants_header": {
+      "DOCUMENTTYPE":    "DRW",
+      "DOCUMENTNUMBER":  "",
+      "DOCUMENTVERSION": "00",
+      "DOCUMENTPART":    "000",
+      "DESCRIPTION":     "Migrated document"
+    },
     "dq_gates": [
       { "field": "DOKAR", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DOCTYPE" },
       { "field": "DOKNR", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DOCNUM" },
