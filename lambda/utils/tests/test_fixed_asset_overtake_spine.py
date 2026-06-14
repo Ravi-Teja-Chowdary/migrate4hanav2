@@ -10,7 +10,7 @@ that records `.call()` invocations so we can assert what the spine asked SAP to
 do without hitting a live system.
 
 Generator:  migrate4hana scaffolder v1.0.0
-Source SHA: 7d11064adf0f19b68fe9e25937b87b1ed3760fac9ef5845a4323b013525fe4f6
+Source SHA: a09df886561034345ce21b55b34e2b30af8e5ec177b39437eefee1a365d34955
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class FakeKeyMap:
 
 def _sample_row():
     """Minimal row that should pass all DQ gates + FK checks."""
-    return {'ANLKL': 'value', 'ANLN1': 'ANLN1_T0001', 'ANLN2': 'X', 'BUKRS': '1010'}
+    return {'ANLN1': 'ANLN1_T0001', 'ANLN2': 'X', 'BUKRS': '1010'}
 
 
 def _make(conn=None, key_map=None, dry_run=False):
@@ -151,15 +151,6 @@ def test_idempotent_replay_hits_ledger_short_circuit():
 
 
 # ── Definition-specific: DQ gates ──────────────────────────────────────────
-def test_dq_gate_anlkl_missing_asset_class_dead_letters():
-    row = _sample_row()
-    row['ANLKL'] = ""        # force the DQ gate to trip
-    spine = _make()
-    result = spine.load_one(row)
-    assert result.status == DISP_DEAD_LETTER
-    assert result.dead_letter == DEAD_LETTER_DQ
-    assert any('MISSING_ASSET_CLASS' in m for m in result.messages)
-
 def test_dq_gate_anln1_missing_asset_main_number_dead_letters():
     row = _sample_row()
     row['ANLN1'] = ""        # force the DQ gate to trip

@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build BatchClassification` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   b2d65b1ae5102aa8d8774eee0793c7b605ef9803db3dea448e4f99606188069a
+Source SHA:   a7968bfa20cb956c6909a6e0d2e14dbaa212bd68cdb3fecef2c97cd954922615
 Object type:  BatchClassification
 Category:     Master
 Lane:         BAPI (fallback: MC)"""
@@ -44,6 +44,34 @@ ITEM_FIELD_MAPS = {
 
 # target_field -> { source_value: target_value }
 VALUE_MAPS = {
+}
+
+# Per-spine constants injected into header / items regardless of source row.
+# Used for fields the source ECC table doesn't carry (PURCH_ORG defaults,
+# BAPI operator flags, doc-type pins) but the target BAPI demands.
+CONSTANTS_HEADER = {
+}
+
+CONSTANTS_ITEM = {
+    'CHARACT': 'WARRANTY_TIME',
+    'VALUE_CHAR': '12',
+}
+
+# Top-level scalar BAPI imports — sent as named params in the BAPI call,
+# outside the header / items structures. Use for BAPIs that take scalar
+# imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
+CONSTANTS_EXTRA = {
+    'CLASSNUMNEW': 'YB_BATCH',
+    'CLASSTYPENEW': '023',
+    'KEYDATE': '20251115',
+    'OBJECTKEYNEW': 'TG22                              0000000020',
+    'OBJECTTABLENEW': 'MCH1',
+}
+
+# Additional struct / table params for multi-struct BAPIs (BAPI_FIXEDASSET_OVRTAKE_CREATE,
+# BAPI_ACC_DOCUMENT_POST, BAPI_MATERIAL_BOM_GROUP_CREATE). Object values are
+# sent as struct payloads; list values are sent as table payloads.
+EXTRA_PAYLOAD = {
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -132,8 +160,10 @@ class BatchClassificationSpineOrchestrator(BaseSpineOrchestrator):
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
         # one item" pattern is the smoke-test shape; production loaders that
         # aggregate N source rows into one parent header are out of scope here.
-        if ITEM_FIELD_MAPS:
-            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
+        if ITEM_FIELD_MAPS or CONSTANTS_ITEM:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS) if ITEM_FIELD_MAPS else {}
+            if CONSTANTS_ITEM:
+                item = {**item, **CONSTANTS_ITEM}
             payload['ALLOCVALUESCHAR'] = [item]
 
         if ext_rows:
@@ -142,6 +172,10 @@ class BatchClassificationSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(
                 self.extension_structure, field_names
             )
+        if CONSTANTS_EXTRA:
+            payload.update(CONSTANTS_EXTRA)
+        if EXTRA_PAYLOAD:
+            payload.update(EXTRA_PAYLOAD)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────

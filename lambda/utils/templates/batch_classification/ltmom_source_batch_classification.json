@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/BatchClassification.json",
-  "_source_sha":     "b2d65b1ae5102aa8d8774eee0793c7b605ef9803db3dea448e4f99606188069a",
+  "_source_sha":     "a7968bfa20cb956c6909a6e0d2e14dbaa212bd68cdb3fecef2c97cd954922615",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM source-structure definition for BatchClassification.",
 

@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build Requirement` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   57efdccd1699c0e2637966c63bc0604b42a234c27265f0d767c22b3e51089dd2
+Source SHA:   b45196f549d7e4139bb2976ca94dac80fc5c9a3cb52b60899a639795f1af2231
 Object type:  Requirement
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -65,6 +65,15 @@ CONSTANTS_ITEM = {
 # outside the header / items structures. Use for BAPIs that take scalar
 # imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
 CONSTANTS_EXTRA = {
+    'DO_COMMIT': 'X',
+    'REQUIREMENT_PARAM': {'TRTYP': 'I', 'STATUS': 'AKT', 'UPDDC': 'X', 'COMMI': 'X'},
+}
+
+# Additional struct / table params for multi-struct BAPIs (BAPI_FIXEDASSET_OVRTAKE_CREATE,
+# BAPI_ACC_DOCUMENT_POST, BAPI_MATERIAL_BOM_GROUP_CREATE). Object values are
+# sent as struct payloads; list values are sent as table payloads.
+EXTRA_PAYLOAD = {
+    'REQUIREMENTS_SCHEDULE_IN': [{'REQ_DATE': '20251215', 'REQ_QTY': '1', 'UNIT': 'ST', 'DATE_TYPE': 'T'}],
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -174,6 +183,8 @@ class RequirementSpineOrchestrator(BaseSpineOrchestrator):
             )
         if CONSTANTS_EXTRA:
             payload.update(CONSTANTS_EXTRA)
+        if EXTRA_PAYLOAD:
+            payload.update(EXTRA_PAYLOAD)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────

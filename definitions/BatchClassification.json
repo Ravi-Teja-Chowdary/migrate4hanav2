@@ -27,6 +27,17 @@
       "ATINN": "CHARACT",
       "ATWRT": "VALUE_CHAR"
     },
+    "constants_item": {
+      "CHARACT":     "WARRANTY_TIME",
+      "VALUE_CHAR":  "12"
+    },
+    "constants_extra": {
+      "OBJECTKEYNEW":   "TG22                              0000000020",
+      "CLASSNUMNEW":    "YB_BATCH",
+      "CLASSTYPENEW":   "023",
+      "OBJECTTABLENEW": "MCH1",
+      "KEYDATE":        "20251115"
+    },
     "dq_gates": [
       { "field": "OBJEK", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_OBJECT_KEY" },
       { "field": "ATINN", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_CHARACTERISTIC" },

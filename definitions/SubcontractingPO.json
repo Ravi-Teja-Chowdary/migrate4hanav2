@@ -40,8 +40,9 @@
       "PO_ITEM":     "00010",
       "MATERIAL":    "TG0013",
       "PLANT":       "1710",
+      "STGE_LOC":    "171A",
       "QUANTITY":    "1",
-      "PO_UNIT":     "PC",
+      "PO_UNIT":     "ST",
       "NET_PRICE":   "10",
       "PRICE_UNIT":  "1",
       "ITEM_CAT":    "L"

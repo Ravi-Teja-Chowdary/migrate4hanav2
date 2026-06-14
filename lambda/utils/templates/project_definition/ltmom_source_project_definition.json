@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/ProjectDefinition.json",
-  "_source_sha":     "a52365654ccd6970225576e6b06ac16a95f7a845f4d4dd019b2c125b88b5f8eb",
+  "_source_sha":     "7ed142d62a9a46d1dfd6d473213361cd5c43465ba0256c4db4671ae53c0e3397",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM source-structure definition for ProjectDefinition.",
 

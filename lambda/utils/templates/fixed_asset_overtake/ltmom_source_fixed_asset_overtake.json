@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/FixedAssetOvertake.json",
-  "_source_sha":     "7d11064adf0f19b68fe9e25937b87b1ed3760fac9ef5845a4323b013525fe4f6",
+  "_source_sha":     "a09df886561034345ce21b55b34e2b30af8e5ec177b39437eefee1a365d34955",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM source-structure definition for FixedAssetOvertake.",
 

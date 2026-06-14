@@ -27,6 +27,15 @@
       "WERKS": "PLANT",
       "PRCTR": "PROFIT_CTR"
     },
+    "constants_header": {
+      "PROJECT_PROFILE":  "YB01",
+      "PLANT":            "1710",
+      "COMP_CODE":        "1710",
+      "CONTROLLING_AREA": "A000",
+      "DESCRIPTION":      "Migrated project",
+      "START":            "20251115",
+      "FINISH":           "20271231"
+    },
     "dq_gates": [
       { "field": "PSPID", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_PROJECT_ID" },
       { "field": "POST1", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DESCRIPTION" }

@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build SubcontractingPO` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   514623141957192902b359a57cc2d1af4aa9f95d94217aba5ebbf3c8d0f87ea5
+Source SHA:   1e0aff9f4fc20e5d2b0c6e1193540c718a88f85dba144a9128988136bcc70975
 Object type:  SubcontractingPO
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -66,9 +66,22 @@ CONSTANTS_ITEM = {
     'NET_PRICE': '10',
     'PLANT': '1710',
     'PO_ITEM': '00010',
-    'PO_UNIT': 'PC',
+    'PO_UNIT': 'ST',
     'PRICE_UNIT': '1',
     'QUANTITY': '1',
+    'STGE_LOC': '171A',
+}
+
+# Top-level scalar BAPI imports — sent as named params in the BAPI call,
+# outside the header / items structures. Use for BAPIs that take scalar
+# imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
+CONSTANTS_EXTRA = {
+}
+
+# Additional struct / table params for multi-struct BAPIs (BAPI_FIXEDASSET_OVRTAKE_CREATE,
+# BAPI_ACC_DOCUMENT_POST, BAPI_MATERIAL_BOM_GROUP_CREATE). Object values are
+# sent as struct payloads; list values are sent as table payloads.
+EXTRA_PAYLOAD = {
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -188,6 +201,10 @@ class SubcontractingPOSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(
                 self.extension_structure, field_names
             )
+        if CONSTANTS_EXTRA:
+            payload.update(CONSTANTS_EXTRA)
+        if EXTRA_PAYLOAD:
+            payload.update(EXTRA_PAYLOAD)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────

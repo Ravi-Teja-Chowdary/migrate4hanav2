@@ -32,6 +32,23 @@
       "REQU_TYPE":    "VSF",
       "VERS_ACTIV":   "X"
     },
+    "constants_extra": {
+      "REQUIREMENT_PARAM": {
+        "TRTYP":   "I",
+        "STATUS":  "AKT",
+        "UPDDC":   "X",
+        "COMMI":   "X"
+      },
+      "DO_COMMIT": "X"
+    },
+    "extra_payload": {
+      "REQUIREMENTS_SCHEDULE_IN": [{
+        "REQ_DATE":  "20251215",
+        "REQ_QTY":   "1",
+        "UNIT":      "ST",
+        "DATE_TYPE": "T"
+      }]
+    },
     "dq_gates": [
       { "field": "MATNR", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_MATERIAL" },
       { "field": "WERKS", "rule": "werks_plant",            "on_fail": "dead_letter", "code": "INVALID_PLANT" },

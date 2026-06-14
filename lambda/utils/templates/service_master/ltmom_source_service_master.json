@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/ServiceMaster.json",
-  "_source_sha":     "de340bdef23761c9f46eae985cd831ed7b1a07bbe3dbdb2fa53ab6984f9bfff6",
+  "_source_sha":     "987f390056e29b1ff7f2124c9302aa62f318c203bc97b0a6302db8bf8dd32301",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM source-structure definition for ServiceMaster.",
 
