@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/FixedAssetOvertake.json
+     Source SHA:  b32e66ccdad6a4df437806f1fdaf6b46eee33a4067c81465bee90a4873519021
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="FixedAssetOvertake"
+               basic_type="FIXEDASSETOVERTAKE01"
+               message_type="FIXEDASSETOVERTAKE">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>FIXEDASSETOVERTAKE</MESTYP>
+    <IDOCTYP>FIXEDASSETOVERTAKE01</IDOCTYP>
+  </control>
+  <segments>    <field source="ANLN1" target_segment="E1FIXED" target_field="ASSETMAINO"/>    <field source="ANLN2" target_segment="E1FIXED" target_field="ASSETSUBNO"/>    <field source="BUKRS" target_segment="E1FIXED" target_field="COMPANYCODE"/>  </segments>
+</idoc_template>

@@ -1,0 +1,3174 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_INCOMINGINVOICE_CREATE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "FISCALYEAR",
+      "optional": false,
+      "struct": "BAPI_INCINV_FLD",
+      "text": "Fiscal Year"
+    },
+    {
+      "kind": "E",
+      "name": "INVOICEDOCNUMBER",
+      "optional": false,
+      "struct": "BAPI_INCINV_FLD",
+      "text": "Document Number of an Invoice Document"
+    },
+    {
+      "kind": "I",
+      "name": "ADDRESSDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_CREATE_ADDRESSDATA",
+      "text": "Transfer Structure: Address Data Incoming Invoice (Create)"
+    },
+    {
+      "kind": "I",
+      "name": "HEADERDATA",
+      "optional": false,
+      "struct": "BAPI_INCINV_CREATE_HEADER",
+      "text": "Header Data in Incoming Invoice (Create)"
+    },
+    {
+      "kind": "T",
+      "name": "ACCOUNTINGDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_CREATE_ACCOUNT",
+      "text": "Account Assignment Data in Incoming Invoice"
+    },
+    {
+      "kind": "T",
+      "name": "ASSETDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_DETAIL_ASSET",
+      "text": "Transfer Structure for Invoice Asset Data (GetDetail)"
+    },
+    {
+      "kind": "T",
+      "name": "EXTENSIONIN",
+      "optional": true,
+      "struct": "BAPIPAREX",
+      "text": "Enhancement Fields (Import Parameter)"
+    },
+    {
+      "kind": "T",
+      "name": "GLACCOUNTDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_CREATE_GL_ACCOUNT",
+      "text": "G/L Account Data at Invoice Receipt"
+    },
+    {
+      "kind": "T",
+      "name": "ITEMDATA",
+      "optional": false,
+      "struct": "BAPI_INCINV_CREATE_ITEM",
+      "text": "Item Data in Incoming Invoice"
+    },
+    {
+      "kind": "T",
+      "name": "LEAN_TM_ITEMDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_CREATE_LEAN_TM_ITM",
+      "text": "Transfer Structure Lean TM Item Data Inc. Invoice (Create)"
+    },
+    {
+      "kind": "T",
+      "name": "MATERIALDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_CREATE_MATERIAL",
+      "text": "Material Account Data in Incoming Invoice"
+    },
+    {
+      "kind": "T",
+      "name": "NFMETALLITMS",
+      "optional": true,
+      "struct": "/NFM/BAPIDOCITM",
+      "text": "/NFM/: BAPI Communication Structure NF Document Item Data"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return Messages"
+    },
+    {
+      "kind": "T",
+      "name": "TAXDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_CREATE_TAX",
+      "text": "Tax Code in Incoming Invoice"
+    },
+    {
+      "kind": "T",
+      "name": "TM_ITEMDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_CREATE_TM_ITEM",
+      "text": "Transfer Structure: Item Data Incoming Invoice for Transportation Management"
+    },
+    {
+      "kind": "T",
+      "name": "VENDORITEMSPLITDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_CREATE_VENDORSPLIT",
+      "text": "Vendor Split in Incoming Invoice"
+    },
+    {
+      "kind": "T",
+      "name": "WITHTAXDATA",
+      "optional": true,
+      "struct": "BAPI_INCINV_CREATE_WITHTAX",
+      "text": "Withholding Tax Data in Incoming Invoice"
+    }
+  ],
+  "structs": {
+    "/NFM/BAPIDOCITM": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DATA_INDEX",
+        "position": 1,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DOC_NUMBER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ITM_NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMPCODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FISCYEAR",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NFMKEY",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "RATEDETKEY",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "BASEKEY",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "EXCHANGEKEY",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RATEDETDAT",
+        "position": 10,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "RATEMONTH",
+        "position": 11,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ACTRATEDAT",
+        "position": 12,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "RATE",
+        "position": 13,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "RATECURKY",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "RATECURKYISO",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "RATEDOCCUR",
+        "position": 16,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "INVOICEBL",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "BVALDOCCUR",
+        "position": 18,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "BVALCURKYD",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BVALCURKYDISO",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "NETRATE",
+        "position": 21,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROVIDER",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VENDORCOV",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COVERAGEKY",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "POSTINGDAYS",
+        "position": 25,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "UPDTYPE",
+        "position": 26,
+        "type": "C"
+      }
+    ],
+    "BAPIPAREX": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "STRUCTURE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART1",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART2",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART3",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART4",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_INCINV_CREATE_ACCOUNT": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "INVOICE_DOC_ITEM",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "XUNPL",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "SERIAL_NO",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ITEM_AMOUNT",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PO_UNIT",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PO_UNIT_ISO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "PO_PR_QNT",
+        "position": 10,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PO_PR_UOM",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PO_PR_UOM_ISO",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GL_ACCOUNT",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SD_DOC",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SDOC_ITEM",
+        "position": 16,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ASSET_NO",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SUB_NUMBER",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDERID",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REF_DATE",
+        "position": 20,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CMMT_ITEM",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FUNC_AREA",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RL_EST_KEY",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CO_AREA",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "COSTOBJECT",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_SEGM_NO",
+        "position": 31,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_CTR",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "WBS_ELEM",
+        "position": 33,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "CMMT_ITEM_LONG",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA_LONG",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DEL_CREATE_DATE",
+        "position": 38,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ITEM_TEXT",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "STLMNT_PER",
+        "position": 40,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TAX_COUNTRY",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_SEGM_NO_ALPHA",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PERSON_NO",
+        "position": 43,
+        "type": "N"
+      }
+    ],
+    "BAPI_INCINV_CREATE_ADDRESSDATA": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACC_1_TIME",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "NAME",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "NAME_2",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "NAME_3",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "NAME_4",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "POSTL_CODE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "CITY",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "STREET",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PO_BOX",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "POBX_PCD",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "POBK_CURAC",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "BANK_ACCT",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "BANK_NO",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BANK_CTRY",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "TAX_NO_1",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TAX_NO_2",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SLS_PUR_TX",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EQUAL_TAX",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "REGION",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "CTRL_KEY",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "INSTR_KEY",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DME_IND",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "ENCR_PAYM_RECIP",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CATEGORY",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_NO_TY",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SOLE_PROP",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "TAX_NO_3",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "TAX_NO_4",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "BANK_REF",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "REP_NAME",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "BUS_TYPE",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "IND_TYPE",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "FORM_OF_ADDR",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "VAT_REG_NO",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 34,
+        "name": "IBAN",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "SWIFT_CODE",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 140,
+        "name": "GLO_RE1_OT",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 130,
+        "name": "INTERNET",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "TAX_NO_5",
+        "position": 41,
+        "type": "C"
+      }
+    ],
+    "BAPI_INCINV_CREATE_GL_ACCOUNT": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "INVOICE_DOC_ITEM",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GL_ACCOUNT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ITEM_AMOUNT",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DB_CR_IND",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NEG_POSTNG",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMP_CODE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ITEM_TEXT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SD_DOC",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SDOC_ITEM",
+        "position": 12,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDERID",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REF_DATE",
+        "position": 14,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CMMT_ITEM",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FUNC_AREA",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_CTR",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TR_PART_BA",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "COSTOBJECT",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "WBS_ELEM",
+        "position": 25,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RL_EST_KEY",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PERSON_NO",
+        "position": 28,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CO_BUSPROC",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "CMMT_ITEM_LONG",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA_LONG",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 33,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "ALLOC_NMBR",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CSHDIS_IND",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "TAX_BASE_AMOUNT",
+        "position": 37,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_SEGM_NO",
+        "position": 38,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CO_AREA",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "RECID",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "WORK_ITEM_ID",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TAX_COUNTRY",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CS_TRANS_T",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUNDS_RES",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "RES_ITEM",
+        "position": 47,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_SEGM_NO_ALPHA",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "TOR_NUMBER",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "CHARGE_TYPE",
+        "position": 50,
+        "type": "C"
+      }
+    ],
+    "BAPI_INCINV_CREATE_HEADER": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INVOICE_IND",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOC_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DOC_DATE",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PSTNG_DATE",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "REF_DOC_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMP_CODE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DIFF_INV",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "EXCH_RATE",
+        "position": 10,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "EXCH_RATE_V",
+        "position": 11,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "GROSS_AMOUNT",
+        "position": 12,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CALC_TAX_IND",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PMNTTRMS",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "BLINE_DATE",
+        "position": 15,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DSCT_DAYS1",
+        "position": 16,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DSCT_DAYS2",
+        "position": 17,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NETTERMS",
+        "position": 18,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "DSCT_PCT1",
+        "position": 19,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "DSCT_PCT2",
+        "position": 20,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IV_CATEGORY",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "HEADER_TXT",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PMNT_BLOCK",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "DEL_COSTS",
+        "position": 24,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DEL_COSTS_TAXC",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "DEL_COSTS_TAXJ",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "PERSON_EXT",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PYMT_METH",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PMTMTHSUPL",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INV_DOC_NO",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SCBANK_IND",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SUPCOUNTRY",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BLLSRV_IND",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "REF_DOC_NO_LONG",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "DSCT_AMOUNT",
+        "position": 35,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "PO_SUB_NO",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PO_CHECKDG",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 27,
+        "name": "PO_REF_NO",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PAYEE_PAYER",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PARTNER_BK",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "HOUSEBANKID",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "ALLOC_NMBR",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "PAYMT_REF",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INV_REF_NO",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "INV_YEAR",
+        "position": 45,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "INV_REC_DATE",
+        "position": 46,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PLANNING_LEVEL",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PLANNING_DATE",
+        "position": 48,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FIXEDTERMS",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 50,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LOT_NUMBER",
+        "position": 51,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ITEM_TEXT",
+        "position": 52,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "J_1BNFTYPE",
+        "position": 53,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EU_TRIANG_DEAL",
+        "position": 54,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "REPCOUNTRY",
+        "position": 55,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "VAT_REG_NO",
+        "position": 56,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUSINESS_PLACE",
+        "position": 57,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "TAX_EXCH_RATE",
+        "position": 58,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GOODS_AFFECTED",
+        "position": 59,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RET_DUE_PROP",
+        "position": 60,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELIV_POSTING",
+        "position": 61,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RETURN_POSTING",
+        "position": 62,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INV_TRAN",
+        "position": 63,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SIMULATION",
+        "position": 64,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "J_1TPBUPL",
+        "position": 65,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SECCO",
+        "position": 66,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VATDATE",
+        "position": 67,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DE_CRE_IND",
+        "position": 68,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TRANS_DATE",
+        "position": 69,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TAX_CALC_DATE",
+        "position": 70,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "HOUSEBANKACCTID",
+        "position": 71,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DEL_COSTS_TAX_COUNTRY",
+        "position": 72,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GST_PART",
+        "position": 73,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PLC_SUP",
+        "position": 74,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 64,
+        "name": "IRN",
+        "position": 75,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "FULFILLDATE",
+        "position": 76,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 80,
+        "name": "GLO_REF1_HD",
+        "position": 77,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "GLO_DAT1_HD",
+        "position": 78,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "GLO_REF2_HD",
+        "position": 79,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "GLO_DAT2_HD",
+        "position": 80,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "GLO_REF3_HD",
+        "position": 81,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "GLO_DAT3_HD",
+        "position": 82,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "GLO_REF4_HD",
+        "position": 83,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "GLO_DAT4_HD",
+        "position": 84,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "GLO_REF5_HD",
+        "position": 85,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "GLO_DAT5_HD",
+        "position": 86,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GLO_BP1_HD",
+        "position": 87,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GLO_BP2_HD",
+        "position": 88,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PAYT_RSN",
+        "position": 89,
+        "type": "C"
+      }
+    ],
+    "BAPI_INCINV_CREATE_ITEM": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "INVOICE_DOC_ITEM",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PO_NUMBER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "PO_ITEM",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "REF_DOC",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "REF_DOC_YEAR",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "REF_DOC_IT",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DE_CRE_IND",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ITEM_AMOUNT",
+        "position": 10,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 11,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PO_UNIT",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PO_UNIT_ISO",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "PO_PR_QNT",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PO_PR_UOM",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PO_PR_UOM_ISO",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COND_TYPE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COND_ST_NO",
+        "position": 18,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COND_COUNT",
+        "position": 19,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SHEET_NO",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ITEM_TEXT",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FINAL_INV",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SHEET_ITEM",
+        "position": 23,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GRIR_CLEAR_SRV",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FREIGHT_VEN",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CSHDIS_IND",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "RETENTION_DOCU_CURRENCY",
+        "position": 27,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "RETENTION_PERCENTAGE",
+        "position": 28,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RETENTION_DUE_DATE",
+        "position": 29,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_RETENTION",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VALUATION_TYPE",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "INV_RELATION",
+        "position": 32,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INV_ITM_ORIGIN",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COND_COUNT_LONG",
+        "position": 34,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DEL_CREATE_DATE",
+        "position": 35,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TAX_COUNTRY",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "HSN_SAC",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "CUSTOMS_VAL",
+        "position": 38,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TAX_CALC_DATE",
+        "position": 39,
+        "type": "D"
+      }
+    ],
+    "BAPI_INCINV_CREATE_LEAN_TM_ITM": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "INVOICE_DOC_ITEM",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "TOR_NUMBER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TOR_ITEM",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LOG_SYSTEM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PO_NUMBER",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "PO_ITEM",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "CHARGE_TYPE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "STAGE_ID",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "AMT_DOCCUR",
+        "position": 9,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 10,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM_ISO",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_INCINV_CREATE_MATERIAL": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "INVOICE_DOC_ITEM",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "VAL_AREA",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VALUATION_TYPE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DB_CR_IND",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ITEM_AMOUNT",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM_ISO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXTERNAL",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERSION",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TAX_COUNTRY",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CSHDIS_IND",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TAX_CALC_DATE",
+        "position": 18,
+        "type": "D"
+      }
+    ],
+    "BAPI_INCINV_CREATE_TAX": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "TAX_AMOUNT",
+        "position": 2,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "TAX_BASE_AMOUNT",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COND_TYPE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE_DEEP",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ITEMNO_TAX",
+        "position": 7,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "TAX_AMOUNT_LOCAL",
+        "position": 8,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "TAX_BASE_AMOUNT_LOCAL",
+        "position": 9,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TAX_COUNTRY",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TAX_CALC_DATE",
+        "position": 11,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TAX_RT_VALID_FROM",
+        "position": 12,
+        "type": "D"
+      }
+    ],
+    "BAPI_INCINV_CREATE_TM_ITEM": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "INVOICE_DOC_ITEM",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "TOR_NUMBER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TOR_ITEM",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LOG_SYSTEM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PO_NUMBER",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "PO_ITEM",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "AMT_DOCCUR",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DE_CRE_IND",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ITEM_TEXT",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FINAL_INV",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CSHDIS_IND",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TAX_COUNTRY",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_INCINV_CREATE_VENDORSPLIT": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SPLIT_KEY",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "SPLIT_AMOUNT",
+        "position": 2,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PYMT_METH",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PMTMTHSUPL",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PMNTTRMS",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "BAPI_INCINV_CREATE_WITHTAX": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SPLIT_KEY",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "WI_TAX_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "WI_TAX_CODE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "WI_TAX_BASE",
+        "position": 4,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "WI_TAX_AMT",
+        "position": 5,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "WI_TAX_WITHHELD_AMT",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WI_TAX_BASE_MANUAL",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WI_TAX_AMT_MANUAL",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI_INCINV_DETAIL_ASSET": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "INVOICE_DOC_ITEM",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ASSET_NO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SUB_NUMBER",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GL_ACCOUNT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ITEM_AMOUNT",
+        "position": 5,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DB_CR_IND",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NEG_POSTNG",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMP_CODE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ITEM_TEXT",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SD_DOC",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SDOC_ITEM",
+        "position": 14,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDERID",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REF_DATE",
+        "position": 16,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CMMT_ITEM",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FUNC_AREA",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_CTR",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TR_PART_BA",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "COSTOBJECT",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "WBS_ELEM",
+        "position": 27,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RL_EST_KEY",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PERSON_NO",
+        "position": 30,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CO_BUSPROC",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "CMMT_ITEM_LONG",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA_LONG",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_SEGM_NO",
+        "position": 35,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CO_AREA",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 38,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "ALLOC_NMBR",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CSHDIS_IND",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ASVAL_DATE",
+        "position": 42,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TAX_COUNTRY",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TAX_CALC_DATE",
+        "position": 44,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_SEGM_NO_ALPHA",
+        "position": 45,
+        "type": "C"
+      }
+    ],
+    "BAPI_INCINV_FLD": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INV_DOC_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FISC_YEAR",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PSTNG_DATE",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "REASON_REV",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DISC_SHIFT",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "REF_DOC_CATEGORY",
+        "position": 6,
+        "type": "C"
+      }
+    ]
+  }
+}

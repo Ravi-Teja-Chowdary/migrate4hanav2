@@ -1,0 +1,89 @@
+{
+  "object_type":      "AccountingDocument",
+  "source_key_field": "BELNR",
+  "home_table":       "BKPF",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "BKPF",
+        "fields":  ["BELNR", "GJAHR", "BUKRS", "BLART", "BLDAT", "BUDAT", "BKTXT", "USNAM"],
+        "where":   "STBLG = ''",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "delta_field":           "BUDAT",
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {
+      "BUKRS": "COMP_CODE",
+      "BLART": "DOC_TYPE",
+      "BLDAT": "DOC_DATE",
+      "BUDAT": "PSTNG_DATE",
+      "BKTXT": "HEADER_TXT",
+      "USNAM": "USERNAME"
+    },
+    "dq_gates": [
+      { "field": "BELNR", "rule": "non_empty",     "on_fail": "dead_letter", "code": "MISSING_DOC_NUMBER" },
+      { "field": "BUKRS", "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },
+      { "field": "BLDAT", "rule": "iso_date",      "on_fail": "dead_letter", "code": "INVALID_DOC_DATE" },
+      { "field": "BUDAT", "rule": "iso_date",      "on_fail": "dead_letter", "code": "INVALID_PSTNG_DATE" }
+    ]
+  },
+
+  "fk": {
+    "BUKRS": "CompanyCode"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_ACC_DOCUMENT_POST",
+      "header_struct":    "DOCUMENTHEADER",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "OBJ_KEY"
+    },
+    "mc": {
+      "object_id":        "ACCOUNTING_DOCUMENT",
+      "staging_template": "S_ACCOUNTING_DOCUMENT"
+    },
+    "idoc": {
+      "basic_type":   "ACC_DOCUMENT03",
+      "message_type": "ACC_DOCUMENT"
+    },
+    "ltmom": {
+      "source_object": "S_ACC_DOC_HEADER",
+      "target_object": "BELNR"
+    }
+  },
+
+  "verify": {
+    "key_field":    "BELNR",
+    "value_fields": ["BUKRS", "BUDAT"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "FinanceReadiness",
+    "affects":  ["AccountingDocument"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_ACC_DOCUMENT_POST" },
+    "S4HANA_2022": { "use_bapi": "BAPI_ACC_DOCUMENT_POST" }
+  }
+}

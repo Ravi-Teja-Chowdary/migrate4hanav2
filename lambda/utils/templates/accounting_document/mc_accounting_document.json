@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/AccountingDocument.json",
+  "_source_sha":     "cf01a77373666231b2c33c05167111ad811dd2d2492ef9714ca56084581f7728",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for AccountingDocument. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "ACCOUNTING_DOCUMENT",
+  "staging_template": "S_ACCOUNTING_DOCUMENT",
+  "source_key_field": "BELNR",
+
+  "columns": [    {"source_field": "BKTXT", "target_column": "HEADER_TXT", "required": false },    {"source_field": "BLART", "target_column": "DOC_TYPE", "required": false },    {"source_field": "BLDAT", "target_column": "DOC_DATE", "required": false },    {"source_field": "BUDAT", "target_column": "PSTNG_DATE", "required": false },    {"source_field": "BUKRS", "target_column": "COMP_CODE", "required": false },    {"source_field": "USNAM", "target_column": "USERNAME", "required": false }  ],
+
+  "primary_table":  "BKPF",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 10000
+}

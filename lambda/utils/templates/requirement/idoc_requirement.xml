@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/Requirement.json
+     Source SHA:  25750850a414a98dacec0fd91337436b97dcf8c0ea403f120bd1ef2d8968fcd4
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="Requirement"
+               basic_type="REQUIREMENT01"
+               message_type="REQUIREMENT">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>REQUIREMENT</MESTYP>
+    <IDOCTYP>REQUIREMENT01</IDOCTYP>
+  </control>
+  <segments>    <field source="BDZEI" target_segment="E1REQUI" target_field="REQUIREMENTSTYPE"/>    <field source="MATNR" target_segment="E1REQUI" target_field="MATERIAL"/>    <field source="MEINS" target_segment="E1REQUI" target_field="BASE_UOM"/>    <field source="PLNMG" target_segment="E1REQUI" target_field="REQUIREMENT_QUANTITY"/>    <field source="VERSB" target_segment="E1REQUI" target_field="VERSION"/>    <field source="WERKS" target_segment="E1REQUI" target_field="PLANT"/>  </segments>
+</idoc_template>

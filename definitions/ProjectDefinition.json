@@ -1,0 +1,81 @@
+{
+  "object_type":      "ProjectDefinition",
+  "source_key_field": "PSPID",
+  "home_table":       "PROJ",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "PROJ",
+        "fields":  ["PSPID", "POST1", "VERNA", "WERKS", "PRCTR"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {
+      "PSPID": "PROJECT_DEFINITION",
+      "POST1": "DESCRIPTION",
+      "VERNA": "RESPONSIBLE_NO",
+      "WERKS": "PLANT",
+      "PRCTR": "PROFIT_CTR"
+    },
+    "dq_gates": [
+      { "field": "PSPID", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_PROJECT_ID" },
+      { "field": "POST1", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DESCRIPTION" }
+    ]
+  },
+
+  "fk": {
+    "WERKS": "Plant"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_PROJECTDEF_CREATE",
+      "header_struct":    "PROJECT_DEFINITION_STRU",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "PROJECT_DEFINITION"
+    },
+    "mc": {
+      "object_id":        "PROJECT_DEFINITION",
+      "staging_template": "S_PROJECT_DEFINITION"
+    },
+    "ltmom": {
+      "source_object": "S_PROJ_DEF_HEADER",
+      "target_object": "PSPID"
+    }
+  },
+
+  "verify": {
+    "key_field":    "PSPID",
+    "value_fields": ["POST1", "WERKS"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  true
+  },
+
+  "telemetry": {
+    "category": "ProjectSystemReadiness",
+    "affects":  ["ProjectDefinition"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_PROJECTDEF_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_PROJECTDEF_CREATE" }
+  }
+}

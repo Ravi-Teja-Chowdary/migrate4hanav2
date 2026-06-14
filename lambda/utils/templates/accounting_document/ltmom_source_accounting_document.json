@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/AccountingDocument.json",
+  "_source_sha":     "cf01a77373666231b2c33c05167111ad811dd2d2492ef9714ca56084581f7728",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for AccountingDocument.",
+
+  "source_object": "S_ACC_DOC_HEADER",
+  "primary_table": "BKPF",
+  "source_key_field": "BELNR",
+
+  "fields": [    { "name": "BKTXT", "type": "CHAR", "comment": "HEADER_TXT" },    { "name": "BLART", "type": "CHAR", "comment": "DOC_TYPE" },    { "name": "BLDAT", "type": "CHAR", "comment": "DOC_DATE" },    { "name": "BUDAT", "type": "CHAR", "comment": "PSTNG_DATE" },    { "name": "BUKRS", "type": "CHAR", "comment": "COMP_CODE" },    { "name": "USNAM", "type": "CHAR", "comment": "USERNAME" }  ]
+}

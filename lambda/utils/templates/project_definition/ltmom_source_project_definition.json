@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ProjectDefinition.json",
+  "_source_sha":     "a52365654ccd6970225576e6b06ac16a95f7a845f4d4dd019b2c125b88b5f8eb",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ProjectDefinition.",
+
+  "source_object": "S_PROJ_DEF_HEADER",
+  "primary_table": "PROJ",
+  "source_key_field": "PSPID",
+
+  "fields": [    { "name": "POST1", "type": "CHAR", "comment": "DESCRIPTION" },    { "name": "PRCTR", "type": "CHAR", "comment": "PROFIT_CTR" },    { "name": "PSPID", "type": "CHAR", "comment": "PROJECT_DEFINITION" },    { "name": "VERNA", "type": "CHAR", "comment": "RESPONSIBLE_NO" },    { "name": "WERKS", "type": "CHAR", "comment": "PLANT" }  ]
+}

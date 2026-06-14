@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ProjectDefinition.json
+     Source SHA:  a52365654ccd6970225576e6b06ac16a95f7a845f4d4dd019b2c125b88b5f8eb
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ProjectDefinition"
+               basic_type="PROJECTDEFINITION01"
+               message_type="PROJECTDEFINITION">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>PROJECTDEFINITION</MESTYP>
+    <IDOCTYP>PROJECTDEFINITION01</IDOCTYP>
+  </control>
+  <segments>    <field source="POST1" target_segment="E1PROJE" target_field="DESCRIPTION"/>    <field source="PRCTR" target_segment="E1PROJE" target_field="PROFIT_CTR"/>    <field source="PSPID" target_segment="E1PROJE" target_field="PROJECT_DEFINITION"/>    <field source="VERNA" target_segment="E1PROJE" target_field="RESPONSIBLE_NO"/>    <field source="WERKS" target_segment="E1PROJE" target_field="PLANT"/>  </segments>
+</idoc_template>

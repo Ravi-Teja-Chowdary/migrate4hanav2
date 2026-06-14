@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/Requirement.json",
+  "_source_sha":     "25750850a414a98dacec0fd91337436b97dcf8c0ea403f120bd1ef2d8968fcd4",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for Requirement.",
+
+  "source_object": "S_REQ_HEADER",
+  "primary_table": "PBIM",
+  "source_key_field": "MATNR",
+
+  "fields": [    { "name": "BDZEI", "type": "CHAR", "comment": "REQUIREMENTSTYPE" },    { "name": "MATNR", "type": "CHAR", "comment": "MATERIAL" },    { "name": "MEINS", "type": "CHAR", "comment": "BASE_UOM" },    { "name": "PLNMG", "type": "CHAR", "comment": "REQUIREMENT_QUANTITY" },    { "name": "VERSB", "type": "CHAR", "comment": "VERSION" },    { "name": "WERKS", "type": "CHAR", "comment": "PLANT" }  ]
+}

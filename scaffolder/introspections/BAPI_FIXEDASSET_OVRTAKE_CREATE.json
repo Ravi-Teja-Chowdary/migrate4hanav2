@@ -1,0 +1,5415 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_FIXEDASSET_OVRTAKE_CREATE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "ASSET",
+      "optional": false,
+      "struct": "BAPI1022_1",
+      "text": "Main Number of Asset Created"
+    },
+    {
+      "kind": "E",
+      "name": "ASSETCREATED",
+      "optional": false,
+      "struct": "BAPI1022_REFERENCE",
+      "text": "Asset Created"
+    },
+    {
+      "kind": "E",
+      "name": "COMPANYCODE",
+      "optional": false,
+      "struct": "BAPI1022_1",
+      "text": "Company Code of Asset Created"
+    },
+    {
+      "kind": "E",
+      "name": "SUBNUMBER",
+      "optional": false,
+      "struct": "BAPI1022_1",
+      "text": "Subnumber of Created Asset"
+    },
+    {
+      "kind": "I",
+      "name": "ALLOCATIONS",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG004",
+      "text": "Allocations"
+    },
+    {
+      "kind": "I",
+      "name": "ALLOCATIONSX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG004X",
+      "text": "Change Parameters for Allocations"
+    },
+    {
+      "kind": "I",
+      "name": "CREATEGROUPASSET",
+      "optional": true,
+      "struct": "BAPI1022_MISC",
+      "text": "Indicator: Asset is a group asset"
+    },
+    {
+      "kind": "I",
+      "name": "CREATESUBNUMBER",
+      "optional": true,
+      "struct": "BAPI1022_MISC",
+      "text": "Create Asset Subnumber?"
+    },
+    {
+      "kind": "I",
+      "name": "GENERALDATA",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG001",
+      "text": "General Data"
+    },
+    {
+      "kind": "I",
+      "name": "GENERALDATAX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG001X",
+      "text": "Change Parameters for General Data"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_IN_GEN",
+      "optional": true,
+      "struct": "BAPI1022_GLO_IN_GEN",
+      "text": "India - Time-Independent General Data (BAPI-struc.)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_IN_GENX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_IN_GENX",
+      "text": "Update Flags: India - Time-Independent General Data (BAPI-struc.)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_JP_ANN16",
+      "optional": true,
+      "struct": "BAPI1022_GLO_JP_ANN16",
+      "text": "Japan - Time-Independent Data for Annex 16"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_JP_ANN16X",
+      "optional": true,
+      "struct": "BAPI1022_GLO_JP_ANN16X",
+      "text": "Update Flags: Japan - Time-Independent Data for Annex 16"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_JP_IMPTD",
+      "optional": true,
+      "struct": "BAPI1022_GLO_JP_IMPTD",
+      "text": "Japan - Time-Dependent Impairment Data (BAPI)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_JP_IMPTDX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_JP_IMPTDX",
+      "text": "Update Flags: Japan - Time Dependent Impairment Data (BAPI)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_JP_PTX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_JP_PTX",
+      "text": "Japan - Time-Independent Data for Property Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_JP_PTXX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_JP_PTXX",
+      "text": "Update Flags: Japan - Time-Independent Data for Property Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_KR_BUS_PLACE",
+      "optional": true,
+      "struct": "BAPI1022_GLO_KR_BUS_PLACE",
+      "text": "South Korea - Time-Independent Impairment Data (BAPI)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_KR_BUS_PLACEX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_KR_BUS_PLACEX",
+      "text": "Update Flags: South Korea - Time-Independent Impairment Data (BAPI)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_NATL_CLFN_CODE",
+      "optional": true,
+      "struct": "BAPI1022_GLO_NATL_CLFN",
+      "text": "Time-Independent National Classification Code"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_NATL_CLFN_CODEX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_NATL_CLFNX",
+      "text": "Change Parameters: Time-Independent National Classification Code"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_PT_FSCL_MAPS",
+      "optional": true,
+      "struct": "BAPI1022_GLO_PT_FSCL_MAPS",
+      "text": "Portugal - Fiscal Maps"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_PT_FSCL_MAPSX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_PT_FSCL_MAPSX",
+      "text": "Change Parameters: Portugal - Fiscal Maps"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_GEN",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_GEN",
+      "text": "Russia - General Data (Time-Independent)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_GENTD",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_GENTD",
+      "text": "Russia - General Data (Time-Dependent)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_GENTDX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_GENTDX",
+      "text": "Change Parameters: Russia - General Data (Time-Dependent)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_GENX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_GENX",
+      "text": "Change Parameters: Russia - General Data (Time-Independent)"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_LTX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_LTX",
+      "text": "Russia - Time-Independent Data - Property Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_LTXTD",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_LTXTD",
+      "text": "Russia - Time-Dependent Data - Property Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_LTXTDX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_LTXTDX",
+      "text": "Change Parameters: Russia - Time-Dependent Data - Property Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_LTXX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_LTXX",
+      "text": "Change Parameters: Russia - Time-Independent Data - Property Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_PTX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_PTX",
+      "text": "Russia - Time-Independent Data - Net Worth Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_PTXTD",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_PTXTD",
+      "text": "Russia - Time-Dependent Data - Net Worth Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_PTXTDX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_PTXTDX",
+      "text": "Change Parameters: Russia - Time-Dependent Data - Net Worth Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_PTXX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_PTXX",
+      "text": "Change Parameters: Russia - Time-Independent Data - Net Worth Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_TRC",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_TRC",
+      "text": "Russia - Traceability"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_TRCX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_TRCX",
+      "text": "Change Parameters: Russia - Traceability"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_TTX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_TTX",
+      "text": "Russia - Time-Independent Data - Transport Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_TTXTD",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_TTXTD",
+      "text": "Russia - Time-Dependent Data - Transport Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_TTXTDX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_TTXTDX",
+      "text": "Change Parameters: Russia - Time-Dependent Data - Transport Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_RUS_TTXX",
+      "optional": true,
+      "struct": "BAPI1022_GLO_RUS_TTXX",
+      "text": "Change Parameters: Russia - Time-Independent Data - Transport Tax"
+    },
+    {
+      "kind": "I",
+      "name": "GLO_TIME_DEP",
+      "optional": true,
+      "struct": "BAPI1022_GLO_TIME_DEP",
+      "text": "Globalization Fields: Date Interval of Time-Dependent Data"
+    },
+    {
+      "kind": "I",
+      "name": "INSURANCE",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG008",
+      "text": "Insurance"
+    },
+    {
+      "kind": "I",
+      "name": "INSURANCEX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG008X",
+      "text": "Change Parameters for Insurance"
+    },
+    {
+      "kind": "I",
+      "name": "INVENTORY",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG011",
+      "text": "Inventory"
+    },
+    {
+      "kind": "I",
+      "name": "INVENTORYX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG011X",
+      "text": "Change Parameters for Inventory"
+    },
+    {
+      "kind": "I",
+      "name": "INVESTACCTASSIGNMNT",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG010",
+      "text": "Account Assignment for Investment"
+    },
+    {
+      "kind": "I",
+      "name": "INVESTACCTASSIGNMNTX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG010X",
+      "text": "Change Parameters for Investment Account Assignments"
+    },
+    {
+      "kind": "I",
+      "name": "KEY",
+      "optional": false,
+      "struct": "BAPI1022_KEY",
+      "text": "Key of Asset Being Created"
+    },
+    {
+      "kind": "I",
+      "name": "LEASING",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG005",
+      "text": "Leasing"
+    },
+    {
+      "kind": "I",
+      "name": "LEASINGX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG005X",
+      "text": "Change Parameters for Leasing"
+    },
+    {
+      "kind": "I",
+      "name": "NETWORTHVALUATION",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG006",
+      "text": "Net worth valuation"
+    },
+    {
+      "kind": "I",
+      "name": "NETWORTHVALUATIONX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG006X",
+      "text": "Change Parameters for Net Worth Valuation"
+    },
+    {
+      "kind": "I",
+      "name": "ORIGIN",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG009",
+      "text": "Origin"
+    },
+    {
+      "kind": "I",
+      "name": "ORIGINX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG009X",
+      "text": "Change Parameters for Origin"
+    },
+    {
+      "kind": "I",
+      "name": "POSTINGINFORMATION",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG002",
+      "text": "Posting Information"
+    },
+    {
+      "kind": "I",
+      "name": "POSTINGINFORMATIONX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG002X",
+      "text": "Change Parameters for Posting Information"
+    },
+    {
+      "kind": "I",
+      "name": "REALESTATE",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG007",
+      "text": "Real Estate and Similar Rights"
+    },
+    {
+      "kind": "I",
+      "name": "REALESTATEX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG007X",
+      "text": "Change Parameters for Real Estate"
+    },
+    {
+      "kind": "I",
+      "name": "REFERENCE",
+      "optional": true,
+      "struct": "BAPI1022_REFERENCE",
+      "text": "Reference for Creating Using Reference"
+    },
+    {
+      "kind": "I",
+      "name": "TESTRUN",
+      "optional": true,
+      "struct": "BAPI1022_MISC",
+      "text": "Test Run"
+    },
+    {
+      "kind": "I",
+      "name": "TIMEDEPENDENTDATA",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG003",
+      "text": "Time-Dependent Data"
+    },
+    {
+      "kind": "I",
+      "name": "TIMEDEPENDENTDATAX",
+      "optional": true,
+      "struct": "BAPI1022_FEGLG003X",
+      "text": "Change Parameters for Time-Dependent Data"
+    },
+    {
+      "kind": "T",
+      "name": "CUMULATEDVALUES",
+      "optional": true,
+      "struct": "BAPI1022_CUMVAL",
+      "text": "Cumulative Values"
+    },
+    {
+      "kind": "T",
+      "name": "DEPRECIATIONAREAS",
+      "optional": true,
+      "struct": "BAPI1022_DEP_AREAS",
+      "text": "Depreciation Areas"
+    },
+    {
+      "kind": "T",
+      "name": "DEPRECIATIONAREASX",
+      "optional": true,
+      "struct": "BAPI1022_DEP_AREASX",
+      "text": "Change Parameters for Depreciation Areas"
+    },
+    {
+      "kind": "T",
+      "name": "EXTENSIONIN",
+      "optional": true,
+      "struct": "BAPIPAREX",
+      "text": "Customer Enhancements"
+    },
+    {
+      "kind": "T",
+      "name": "INVESTMENT_SUPPORT",
+      "optional": true,
+      "struct": "BAPI1022_INV_SUPPORT",
+      "text": "Investment Support Key"
+    },
+    {
+      "kind": "T",
+      "name": "POSTEDVALUES",
+      "optional": true,
+      "struct": "BAPI1022_POSTVAL",
+      "text": "Posted values"
+    },
+    {
+      "kind": "T",
+      "name": "POSTINGHEADERS",
+      "optional": true,
+      "struct": "BAPI1022_POSTINGHEADER",
+      "text": "Header Info for Postings During Year - Legacy Data Transfer"
+    },
+    {
+      "kind": "T",
+      "name": "PROPORTIONALVALUES",
+      "optional": true,
+      "struct": "BAPI1022_PROPVAL",
+      "text": "Proportional Values on Transactions"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": true,
+      "struct": "BAPIRET2",
+      "text": "BAPI Return Table"
+    },
+    {
+      "kind": "T",
+      "name": "TRANSACTIONS",
+      "optional": true,
+      "struct": "BAPI1022_TRTYPE",
+      "text": "Transactions for Transfer during Fiscal Year"
+    }
+  ],
+  "structs": {
+    "BAPI1022_1": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMP_CODE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ASSETMAINO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ASSETSUBNO",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_CUMVAL": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FISC_YEAR",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "AREA",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ACQ_VALUE",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REV_REPL",
+        "position": 4,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "INV_GRANT",
+        "position": 5,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ORD_DEP",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "SPE_DEP",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "UNP_DEP",
+        "position": 8,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "TRANS_RES",
+        "position": 9,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "INTEREST",
+        "position": 10,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REV_ORD_DEP",
+        "position": 11,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "DOWN_PAYMENT",
+        "position": 12,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_DEP_AREAS": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "AREA",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "DESCRIPT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEACTIVATE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DEP_KEY",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ULIFE_YRS",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ULIFE_PRDS",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "EXP_ULIFE_YRS",
+        "position": 7,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "EXP_ULIFE_PRDS",
+        "position": 8,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "EXP_ULIFE_SDEP_YRS",
+        "position": 9,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "EXP_ULIFE_SDEP_PRDS",
+        "position": 10,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ORIG_ULIFE_YRS",
+        "position": 11,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ORIG_ULIFE_PRDS",
+        "position": 12,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CHANGE_YR",
+        "position": 13,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "DEP_UNITS",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ODEP_START_DATE",
+        "position": 15,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "SDEP_START_DATE",
+        "position": 16,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "INTEREST_START_DATE",
+        "position": 17,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "READINESS",
+        "position": 18,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "INDEX",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "AGE_INDEX",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "VAR_DEP_PORTION",
+        "position": 21,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "SCRAPVALUE",
+        "position": 22,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NEG_VALUES",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "GRP_ASSET",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "GRP_ASSET_SUBNO",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACQ_YR",
+        "position": 28,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ACQ_PRD",
+        "position": 29,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "SCRAPVALUE_PRCTG",
+        "position": 30,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "FROM_DATE",
+        "position": 31,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TO_DATE",
+        "position": 32,
+        "type": "D"
+      }
+    ],
+    "BAPI1022_DEP_AREASX": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "AREA",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DESCRIPT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEACTIVATE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEP_KEY",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ULIFE_YRS",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ULIFE_PRDS",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EXP_ULIFE_YRS",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EXP_ULIFE_PRDS",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EXP_ULIFE_SDEP_YRS",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EXP_ULIFE_SDEP_PRDS",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ORIG_ULIFE_YRS",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ORIG_ULIFE_PRDS",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHANGE_YR",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEP_UNITS",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ODEP_START_DATE",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SDEP_START_DATE",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INTEREST_START_DATE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "READINESS",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INDEX",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AGE_INDEX",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VAR_DEP_PORTION",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SCRAPVALUE",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY_ISO",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NEG_VALUES",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GRP_ASSET",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GRP_ASSET_SUBNO",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACQ_YR",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACQ_PRD",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SCRAPVALUE_PRCTG",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FROM_DATE",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TO_DATE",
+        "position": 32,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG001": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ASSETCLASS",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "DESCRIPT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "DESCRIPT2",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ACCT_DETRM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "SERIAL_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "INVENT_NO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM_ISO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HISTORY",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MAIN_DESCRIPT",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG001X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ASSETCLASS",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DESCRIPT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DESCRIPT2",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACCT_DETRM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SERIAL_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INVENT_NO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "QUANTITY",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BASE_UOM",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BASE_UOM_ISO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HISTORY",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MAIN_DESCRIPT",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG002": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CAP_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DEACT_DATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "INITIAL_ACQ",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "INITIAL_ACQ_YR",
+        "position": 4,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "INITIAL_ACQ_PRD",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PLRET_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PO_DATE",
+        "position": 7,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "CAP_KEY",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG002X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAP_DATE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEACT_DATE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INITIAL_ACQ",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INITIAL_ACQ_YR",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INITIAL_ACQ_PRD",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PLRET_DATE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PURCH_ORD_DATE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAP_KEY",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG003": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "FROM_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TO_DATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "RESP_CCTR",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "INTERN_ORD",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "MAINT_ORD",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LOCATION",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ROOM",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "PLATE_NO",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PERSON_NO",
+        "position": 13,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SHIFT_FACT",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHUTDOWN",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FUNC_AREA",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA_LONG",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND_APC",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA_APC",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR_APC",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR_APC",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "WBS_ELEMENT_COST",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RL_EST_KEY",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "RL_EST_KEY_EXT",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD_APC",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SEGMENT",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_CTR",
+        "position": 32,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG003X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FROM_DATE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TO_DATE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BUS_AREA",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "COSTCENTER",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RESP_CCTR",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACTTYPE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INTERN_ORD",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MAINT_ORD",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PLANT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LOCATION",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ROOM",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LICENSE_PLATE_NO",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PERSON_NO",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHIFT_FACT",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHUTDOWN",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FUND",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FUNC_AREA",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GRANT_NBR",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FUNC_AREA_LONG",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FUNDS_CTR",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FUND_APC",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FUNC_AREA_APC",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GRANT_NBR_APC",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FUNDS_CTR_APC",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WBS_ELEMENT_COST",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAXJURCODE",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RL_EST_KEY",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RL_EST_KEY_EXT",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BUDGET_PERIOD",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BUDGET_PERIOD_APC",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SEGMENT",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PROFIT_CTR",
+        "position": 32,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG004": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "EVALGROUP1",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "EVALGROUP2",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "EVALGROUP3",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "EVALGROUP4",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "EVALGROUP5",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "INV_REASON",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "ENVIR_INVEST",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ASSETSUPNO",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG004X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EVALGROUP1",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EVALGROUP2",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EVALGROUP3",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EVALGROUP4",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EVALGROUP5",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INV_REASON",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ENVIR_INVEST",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ASSETSUPNO",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG005": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COMPANY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "AGRMNT_NO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "AGRMNTDATE",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "NOTICEDATE",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "START_DATE",
+        "position": 5,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LNGTH_YRS",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LNGTH_PRDS",
+        "position": 7,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TYPE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "BASE_VALUE",
+        "position": 9,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "PURCHPRICE",
+        "position": 12,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "TEXT",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "NO_PAYMNTS",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CYCLE",
+        "position": 15,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IN_ADVANCE",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "PAYMENT",
+        "position": 17,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "INTEREST",
+        "position": 18,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "VALUE",
+        "position": 19,
+        "type": "P"
+      }
+    ],
+    "BAPI1022_FEGLG005X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "COMPANY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AGRMNT_NO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AGRMNTDATE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NOTICEDATE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "START_DATE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNGTH_YRS",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNGTH_PRDS",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BASE_VALUE",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY_ISO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PURCHPRICE",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TEXT",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_PAYMNTS",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CYCLE",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IN_ADVANCE",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PAYMENT",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INTEREST",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VALUE",
+        "position": 19,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG006": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CLASS_KEY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PROP_IND",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MAN_PROP_VAL_REASON",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "MAN_PROP_VAL",
+        "position": 4,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MAN_PROP_VAL_IND",
+        "position": 7,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG006X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CLASS_KEY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PROP_IND",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MAN_PROP_VAL_REASON",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MAN_PROP_VAL",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY_ISO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MAN_PROP_VAL_IND",
+        "position": 7,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG007": [
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "TAX_OFFICE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "TAX_NO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ASSESSMENT_NOTICE_DATE",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "MUNICIPALITY",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LNDREG_DATE",
+        "position": 5,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LNDREG_ENTRY_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "LNDREG_VOL",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "LNDREG_PG",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "LNDREG_NO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "LNDREG_MAP_NO",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LNDREG_PLOT_NO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CONVEYANCE_DATE",
+        "position": 12,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "AREA",
+        "position": 13,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "AREA_UOM",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "AREA_UOM_ISO",
+        "position": 15,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG007X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_OFFICE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_NO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ASSESSMENT_NOTICE_DATE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MUNICIPALITY",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDREG_DATE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDREG_ENTRY_DATE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDREG_VOL",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDREG_PG",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDREG_NO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDREG_MAP_NO",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDREG_PLOT_NO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CONVEYANCE_DATE",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AREA",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AREA_UOM",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AREA_UOM_ISO",
+        "position": 15,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG008": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COMPANY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "POLICY_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "TEXT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "START_DATE",
+        "position": 5,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "PREMIUM",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "INDEX",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "BASE_VALUE",
+        "position": 8,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BASE_VAL_MAN_UPD",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "MAN_INS_VAL",
+        "position": 12,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MAN_INS_VAL_MAINT_YR",
+        "position": 13,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "CUR_INS_VALUE",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CUR_INS_VALUE_MAINT_YR",
+        "position": 15,
+        "type": "N"
+      }
+    ],
+    "BAPI1022_FEGLG008X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "COMPANY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "POLICY_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TEXT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "START_DATE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PREMIUM",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INDEX",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BASE_VALUE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY_ISO",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BASE_VAL_MAN_UPD",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MAN_INS_VAL",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MAN_INS_VAL_MAINT_YR",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CRNT_INS_VALUE",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CRNT_INS_VALUE_MAINT_YR",
+        "position": 15,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG009": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VENDOR_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VENDOR",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "MANUFACTURER",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PURCH_NEW",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "TRADE_ID",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COUNTRY_ISO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TYPE_NAME",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORIG_ASSET",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ORIG_ASSET_SUBNO",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ORIG_ACQ_DATE",
+        "position": 11,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ORIG_ACQ_YR",
+        "position": 12,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ORIG_VALUE",
+        "position": 13,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "INHOUSE_PROD_PERCENTAGE",
+        "position": 16,
+        "type": "P"
+      }
+    ],
+    "BAPI1022_FEGLG009X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VENDOR_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VENDOR",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MANUFACTURER",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PURCH_NEW",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRADE_ID",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "COUNTRY",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE_NAME",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ORIG_ASSET",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ORIG_ASSET_SUBNO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ORIG_ACQ_DATE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ORIG_ACQ_YEAR",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ORIG_VALUE",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENCY_ISO",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INHOUSE_PROD_PERCENTAGE",
+        "position": 15,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG010": [
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "INVEST_ORD",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "WBS_ELEM",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "WBS_ELEMENT",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG010X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INVEST_ORD",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WBS_ELEM",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WBS_ELEMENT",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG011": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "NOTE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INCLUDE_IN_LIST",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_FEGLG011X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DATE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NOTE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INCLUDE_IN_LIST",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_IN_GEN": [
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "BLOCK_KEY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "SUB_BLOCK_KEY",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADD_DEPR",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "BL_KEY_ADD_DEPR",
+        "position": 4,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RES_DEV_ASSET",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PUT_TO_USE_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRIOR_YEAR_TRAN",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "ADDNL_BLOCK_KEY",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_IN_GENX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BLOCK_KEY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SUB_BLOCK_KEY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADD_DEPR",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BL_KEY_ADD_DEPR",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RES_DEV_ASSET",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PUT_TO_USE_DATE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRIOR_YEAR_TRAN",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADDNL_BLOCK_KEY",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_JP_ANN16": [
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "ASSET_STRUCTURE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "ASSET_ITEM",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_JP_ANN16X": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ASSET_STRUCTURE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ASSET_ITEM",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_JP_IMPTD": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "IMPAIR_POST_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_APC",
+        "position": 2,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_BOOK_VAL",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_APC2",
+        "position": 4,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_BOOK_VAL2",
+        "position": 5,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_APC3",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_BOOK_VAL3",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_APC4",
+        "position": 8,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_BOOK_VAL4",
+        "position": 9,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_APC5",
+        "position": 10,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_BOOK_VAL5",
+        "position": 11,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_APC6",
+        "position": 12,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_BOOK_VAL6",
+        "position": 13,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_APC7",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_BOOK_VAL7",
+        "position": 15,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_APC8",
+        "position": 16,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_BOOK_VAL8",
+        "position": 17,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_APC9",
+        "position": 18,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "IMPAIR_BOOK_VAL9",
+        "position": 19,
+        "type": "P"
+      }
+    ],
+    "BAPI1022_GLO_JP_IMPTDX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_POST_DATE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_APC",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_BOOK_VAL",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_APC2",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_BOOK_VAL2",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_APC3",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_BOOK_VAL3",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_APC4",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_BOOK_VAL4",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_APC5",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_BOOK_VAL5",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_APC6",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_BOOK_VAL6",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_APC7",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_BOOK_VAL7",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_APC8",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_BOOK_VAL8",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_APC9",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IMPAIR_BOOK_VAL9",
+        "position": 19,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_JP_PTX": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ADD_DEPR_CODE",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_JP_PTXX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADD_DEPR_CODE",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_KR_BUS_PLACE": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_PLACE",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_KR_BUS_PLACEX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BUS_PLACE",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_NATL_CLFN": [
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NATL_CLFN_CODE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TAX_DEPR_GRP",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_NATL_CLFNX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NATL_CLFN_CODE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_DEPR_GRP",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_PT_FSCL_MAPS": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "VEHICLETYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ISVEHICLEWOLIMIT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REPAIRASSETLINK",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LANDASSETLINK",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ASSETREPFORMCAT",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ISAMASSETREVAL",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_PT_FSCL_MAPSX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VEHICLETYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ISVEHICLEWOLIMIT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "REPAIRASSETLINK",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANDASSETLINK",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ASSETREPFORMCAT",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ISAMASSETREVAL",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_GEN": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DEPR_GROUP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "OKOF_CODE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "SERIAL_NUM_LONG",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "PREC_MAT_CODES",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "PREC_MAT_QUANTS",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "PREC_MAT_WEIGHTS",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL",
+        "position": 7,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_GENTD": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SHUTDOWN_REASON",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "SHUTDOWN_DOCUM",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PLEDGED_ASSET",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "PLEDGE_AMOUNT",
+        "position": 4,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PLEDGEE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PLEDGE_DOC_NUM",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "INV_CARD_NUMBER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "OKOF_CODE_NEW",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DEPR_GROUP_NEW",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TAX_OFFICE_CODE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SZPK_APPLIED",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_GENTDX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHUTDOWN_REASON",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHUTDOWN_DOCUM",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PLEDGED_ASSET",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PLEDGE_AMOUNT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PLEDGEE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PLEDGE_DOC_NUM",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INV_CARD_NUMBER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "OKOF_CODE_NEW",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEPR_GROUP_NEW",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_OFFICE_CODE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SZPK_APPLIED",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_GENX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEPR_GROUP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "OKOF_CODE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SERIAL_NUM_LONG",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PREC_MAT_CODES",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PREC_MAT_QUANTS",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PREC_MAT_WEIGHTS",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MATERIAL",
+        "position": 7,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_LTX": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LNDT_OWN_REGN_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LNDT_OWN_TERM_DATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_FOR_HOUSING",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LNDT_HS_REGN_DATE",
+        "position": 4,
+        "type": "D"
+      }
+    ],
+    "BAPI1022_GLO_RUS_LTXTD": [
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "LNDT_OKTMO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LNDT_SPEC_CAT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LNDT_RATE_RED",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LNDT_AMRED_CODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LNDT_BSRED_CODE",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_LTXTDX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_OKTMO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_SPEC_CAT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_RATE_RED",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_AMRED_CODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_BSRED_CODE",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_LTXX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_OWN_REGN_DATE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_OWN_TERM_DATE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_FOR_HOUSING",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LNDT_HS_REGN_DATE",
+        "position": 4,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_PTX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PROPERTY_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROPERTY_ADDRESS",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_PTXTD": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PRT_TERR_CODE1",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PRT_TERR_CODE2",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PRT_TERR_CODE3",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PRT_TERR_CODE4",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PRT_EX_CODE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PRT_RED_CODE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PRT_AMRED_CODE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_EX_REASON",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PRT_PROP_TYPEN",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PRT_SPEC_CAT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "PRT_OKTMO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PRT_SPEC_CATN",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PRT_RATE_RED",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PRT_AMRED_CODEN",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PRT_EX_CODEN",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 80,
+        "name": "PRT_PROP_NUM",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_PROP_NUM_CD",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "PRT_CAD_VAL",
+        "position": 18,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 21,
+        "name": "PRT_PROP_SHARE",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PRT_ROOM_FL_AREA",
+        "position": 20,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PRT_BLD_TOT_AREA",
+        "position": 21,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_IS_REAL_ESTATE",
+        "position": 22,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_PTXTDX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_TERR_CODE1",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_TERR_CODE2",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_TERR_CODE3",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_TERR_CODE4",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_EX_CODE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_RED_CODE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_AMRED_CODE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_EX_REASON",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_PROP_TYPEN",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_SPEC_CAT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_OKTMO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_SPEC_CATN",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_RATE_RED",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_AMRED_CODEN",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_EX_CODEN",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_PROP_NUM",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_PROP_NUM_CD",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_CAD_VAL",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_PROP_SHARE",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_ROOM_FL_AREA",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_BLD_TOT_AREA",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_IS_REAL_ESTATE",
+        "position": 22,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_PTXX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PROPERTY_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PROPERTY_ADDRESS",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_TRC": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TRACEAB_START",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TRACEAB_END",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 17,
+        "name": "TNVED_CODE",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_TRCX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRACEAB_START",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRACEAB_END",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TNVED_CODE",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_TTX": [
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "TRANSP_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VIN_NUMBER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "MANUFACT_DATE",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ECO_CLASS",
+        "position": 4,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ECO_CLASSN",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_TTXTD": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "POWER_UNIT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "POWER_UNIT_ISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "TR_TAX_BASE_UNIT",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "TRTAX_EXEM_CODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "TRTAX_RED_CODE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "THEFT_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RETURN_DATE",
+        "position": 7,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REG_DATE",
+        "position": 8,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CANCEL_DATE",
+        "position": 9,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TRT_TERR_CODE1",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TRT_TERR_CODE2",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TRT_TERR_CODE3",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TRT_TERR_CODE4",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "LICENSE_NUM",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "TRT_AMRED_CODE",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VEH_PRICE_CATEG",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_PLATON_REG",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TRT_OKTMO",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRT_RATE_RED",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRT_AMRED_CODEN",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRT_EX_CODEN",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 21,
+        "name": "TRT_OWN_SHARE",
+        "position": 22,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_TTXTDX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "POWER_UNIT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "POWER_UNIT_ISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TR_TAX_BASE_UNIT",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRTAX_EXEM_CODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRTAX_RED_CODE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "THEFT_DATE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RETURN_DATE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "REG_DATE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CANCEL_DATE",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_TERR_CODE1",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_TERR_CODE2",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_TERR_CODE3",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_TERR_CODE4",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LICENSE_NUM",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_AMRED_CODE",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VEH_PRICE_CATEG",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_PLATON_REG",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_OKTMO",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_RATE_RED",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_AMRED_CODEN",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_EX_CODEN",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRT_OWN_SHARE",
+        "position": 22,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_RUS_TTXX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRANSP_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VIN_NUMBER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MANUFACT_DATE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ECO_CLASS",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ECO_CLASSN",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_GLO_TIME_DEP": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "FROM_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TO_DATE",
+        "position": 2,
+        "type": "D"
+      }
+    ],
+    "BAPI1022_INV_SUPPORT": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "INV_SUPPORT_KEY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHANGE_IND",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_KEY": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMPANYCODE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ASSET",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SUBNUMBER",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_MISC": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "XSUBNO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MAXENTRIES",
+        "position": 2,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TESTRUN",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "POSTCAP",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "XANLGR",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_POSTINGHEADER": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FISC_YEAR",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENT_NO",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "ALLOC_NMBR",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ITEM_TEXT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "REF_DOC_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM_ISO",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PSTNG_DATE",
+        "position": 9,
+        "type": "D"
+      }
+    ],
+    "BAPI1022_POSTVAL": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FISC_YEAR",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "AREA",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REV_REPL",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ORD_DEP",
+        "position": 4,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "SPE_DEP",
+        "position": 5,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "UNP_DEP",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "TRANS_RES",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "INTEREST",
+        "position": 8,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REV_CUM_ORD_DEP",
+        "position": 9,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LAST_POSTED_DEPR_PERIOD",
+        "position": 12,
+        "type": "N"
+      }
+    ],
+    "BAPI1022_PROPVAL": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FISC_YEAR",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": true,
+        "len": 5,
+        "name": "CURRENT_NO",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "AREA",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REV_REPL_CU",
+        "position": 4,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "INV_GRANT_CU",
+        "position": 5,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ORD_DEP_CU",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "SPE_DEP_CU",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "UNP_DEP_CU",
+        "position": 8,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "TRANS_RES_CU",
+        "position": 9,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REV_ORD_DEP_CU",
+        "position": 10,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REV_REPL_CY",
+        "position": 11,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "INV_GRANT_CY",
+        "position": 12,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ORD_DEP_CY",
+        "position": 13,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "SPE_DEP_CY",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "UNP_DEP_CY",
+        "position": 15,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "TRANS_RES_CY",
+        "position": 16,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REV_ORD_DEP_CY",
+        "position": 17,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REVENUE_ON_RET",
+        "position": 18,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "RET_COSTS",
+        "position": 19,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 21,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_REFERENCE": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMPANYCODE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ASSET",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SUBNUMBER",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1022_TRTYPE": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FISC_YEAR",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": true,
+        "len": 5,
+        "name": "CURRENT_NO",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": true,
+        "len": 2,
+        "name": "AREA",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALUEDATE",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ASSETTRTYP",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "AMOUNT",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPIPAREX": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "STRUCTURE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART1",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART2",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART3",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART4",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/AccountingDocument.json",
+  "_source_sha":     "cf01a77373666231b2c33c05167111ad811dd2d2492ef9714ca56084581f7728",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for AccountingDocument. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "BELNR",
+  "source_object":   "S_ACC_DOC_HEADER",
+  "primary_table":   "BKPF",
+
+  "mappings": [    { "source": "BKTXT", "target": "HEADER_TXT", "rule": "MOVE" },    { "source": "BLART", "target": "DOC_TYPE", "rule": "MOVE" },    { "source": "BLDAT", "target": "DOC_DATE", "rule": "MOVE" },    { "source": "BUDAT", "target": "PSTNG_DATE", "rule": "MOVE" },    { "source": "BUKRS", "target": "COMP_CODE", "rule": "MOVE" },    { "source": "USNAM", "target": "USERNAME", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

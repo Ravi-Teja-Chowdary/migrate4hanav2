@@ -1,0 +1,92 @@
+{
+  "object_type":      "IncomingInvoice",
+  "source_key_field": "BELNR",
+  "home_table":       "RBKP",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "RBKP",
+        "fields":  ["BELNR", "GJAHR", "BLART", "BLDAT", "BUDAT", "XBLNR", "BUKRS", "WAERS", "RMWWR"],
+        "where":   "STBLG = '' AND XRECH = 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "delta_field":           "BUDAT",
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {
+      "BLART": "DOC_TYPE",
+      "BLDAT": "DOC_DATE",
+      "BUDAT": "PSTNG_DATE",
+      "XBLNR": "REF_DOC_NO",
+      "BUKRS": "COMP_CODE",
+      "WAERS": "CURRENCY",
+      "RMWWR": "GROSS_AMOUNT"
+    },
+    "dq_gates": [
+      { "field": "BELNR", "rule": "non_empty",       "on_fail": "dead_letter", "code": "MISSING_INVOICE_DOC" },
+      { "field": "BUKRS", "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },
+      { "field": "WAERS", "rule": "currency_iso_4217",  "on_fail": "dead_letter", "code": "INVALID_CURRENCY" },
+      { "field": "BLDAT", "rule": "iso_date",        "on_fail": "dead_letter", "code": "INVALID_DOC_DATE" },
+      { "field": "BUDAT", "rule": "iso_date",        "on_fail": "dead_letter", "code": "INVALID_PSTNG_DATE" },
+      { "field": "RMWWR", "rule": "positive_number", "on_fail": "dead_letter", "code": "INVALID_AMOUNT" }
+    ]
+  },
+
+  "fk": {
+    "BUKRS": "CompanyCode"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_INCOMINGINVOICE_CREATE",
+      "header_struct":    "HEADERDATA",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "INVOICEDOCNUMBER"
+    },
+    "mc": {
+      "object_id":        "INCOMING_INVOICE",
+      "staging_template": "S_INCOMING_INVOICE"
+    },
+    "idoc": {
+      "basic_type":   "INVOIC02",
+      "message_type": "INVOIC"
+    },
+    "ltmom": {
+      "source_object": "S_INVOICE_HEADER",
+      "target_object": "BELNR"
+    }
+  },
+
+  "verify": {
+    "key_field":    "BELNR",
+    "value_fields": ["BUKRS", "BUDAT", "RMWWR"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "FinanceReadiness",
+    "affects":  ["IncomingInvoice"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_INCOMINGINVOICE_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_INCOMINGINVOICE_CREATE" }
+  }
+}

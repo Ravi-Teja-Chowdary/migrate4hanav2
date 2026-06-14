@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/IncomingInvoice.json",
+  "_source_sha":     "f57cb950c8be5453546aeaddba530dce6f503eb1b9dedaad47cc52e951e1d043",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for IncomingInvoice. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "BELNR",
+  "source_object":   "S_INVOICE_HEADER",
+  "primary_table":   "RBKP",
+
+  "mappings": [    { "source": "BLART", "target": "DOC_TYPE", "rule": "MOVE" },    { "source": "BLDAT", "target": "DOC_DATE", "rule": "MOVE" },    { "source": "BUDAT", "target": "PSTNG_DATE", "rule": "MOVE" },    { "source": "BUKRS", "target": "COMP_CODE", "rule": "MOVE" },    { "source": "RMWWR", "target": "GROSS_AMOUNT", "rule": "MOVE" },    { "source": "WAERS", "target": "CURRENCY", "rule": "MOVE" },    { "source": "XBLNR", "target": "REF_DOC_NO", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

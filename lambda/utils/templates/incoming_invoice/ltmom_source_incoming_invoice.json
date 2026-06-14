@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/IncomingInvoice.json",
+  "_source_sha":     "f57cb950c8be5453546aeaddba530dce6f503eb1b9dedaad47cc52e951e1d043",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for IncomingInvoice.",
+
+  "source_object": "S_INVOICE_HEADER",
+  "primary_table": "RBKP",
+  "source_key_field": "BELNR",
+
+  "fields": [    { "name": "BLART", "type": "CHAR", "comment": "DOC_TYPE" },    { "name": "BLDAT", "type": "CHAR", "comment": "DOC_DATE" },    { "name": "BUDAT", "type": "CHAR", "comment": "PSTNG_DATE" },    { "name": "BUKRS", "type": "CHAR", "comment": "COMP_CODE" },    { "name": "RMWWR", "type": "CHAR", "comment": "GROSS_AMOUNT" },    { "name": "WAERS", "type": "CHAR", "comment": "CURRENCY" },    { "name": "XBLNR", "type": "CHAR", "comment": "REF_DOC_NO" }  ]
+}

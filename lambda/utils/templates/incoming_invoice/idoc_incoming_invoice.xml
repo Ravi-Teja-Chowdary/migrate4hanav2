@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/IncomingInvoice.json
+     Source SHA:  f57cb950c8be5453546aeaddba530dce6f503eb1b9dedaad47cc52e951e1d043
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="IncomingInvoice"
+               basic_type="INVOIC02"
+               message_type="INVOIC">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>INVOIC</MESTYP>
+    <IDOCTYP>INVOIC02</IDOCTYP>
+  </control>
+  <segments>    <field source="BLART" target_segment="E1INCOM" target_field="DOC_TYPE"/>    <field source="BLDAT" target_segment="E1INCOM" target_field="DOC_DATE"/>    <field source="BUDAT" target_segment="E1INCOM" target_field="PSTNG_DATE"/>    <field source="BUKRS" target_segment="E1INCOM" target_field="COMP_CODE"/>    <field source="RMWWR" target_segment="E1INCOM" target_field="GROSS_AMOUNT"/>    <field source="WAERS" target_segment="E1INCOM" target_field="CURRENCY"/>    <field source="XBLNR" target_segment="E1INCOM" target_field="REF_DOC_NO"/>  </segments>
+</idoc_template>

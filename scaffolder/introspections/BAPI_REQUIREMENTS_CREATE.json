@@ -1,0 +1,608 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_REQUIREMENTS_CREATE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "MATERIAL",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": ""
+    },
+    {
+      "kind": "E",
+      "name": "MATERIAL_EVG",
+      "optional": false,
+      "struct": "BAPIMGVMATNR",
+      "text": "Long Material Number"
+    },
+    {
+      "kind": "E",
+      "name": "MATERIAL_LONG",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": ""
+    },
+    {
+      "kind": "E",
+      "name": "MRP_AREA",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": "MRP Area"
+    },
+    {
+      "kind": "E",
+      "name": "PLANT",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": ""
+    },
+    {
+      "kind": "E",
+      "name": "REQMTSPLANNUMBER",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": ""
+    },
+    {
+      "kind": "E",
+      "name": "REQUIREMENTSTYPE",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": ""
+    },
+    {
+      "kind": "E",
+      "name": "REQ_PLAN_ID_EXT",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": ""
+    },
+    {
+      "kind": "E",
+      "name": "REQ_SEGMENT",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": ""
+    },
+    {
+      "kind": "E",
+      "name": "REQ_SEG_LONG",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": "Requirement Segment"
+    },
+    {
+      "kind": "E",
+      "name": "VERSION",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": ""
+    },
+    {
+      "kind": "I",
+      "name": "DO_COMMIT",
+      "optional": true,
+      "struct": "BAPISPARAM",
+      "text": "Control Parameters for Planned Independent Requirements"
+    },
+    {
+      "kind": "I",
+      "name": "PROFILID",
+      "optional": true,
+      "struct": "BAPISPARAM",
+      "text": "Name of planning profile"
+    },
+    {
+      "kind": "I",
+      "name": "REFER_TYPE",
+      "optional": true,
+      "struct": "BAPISPARAM",
+      "text": "Control Parameters for Planned Independent Requirements"
+    },
+    {
+      "kind": "I",
+      "name": "REQUIREMENTS_ITEM",
+      "optional": false,
+      "struct": "BAPISITEMR",
+      "text": "Item Data"
+    },
+    {
+      "kind": "I",
+      "name": "REQUIREMENT_PARAM",
+      "optional": true,
+      "struct": "CM60R",
+      "text": "Requirements parameters"
+    },
+    {
+      "kind": "I",
+      "name": "UPDATE_MODE",
+      "optional": true,
+      "struct": "BAPISPARAM",
+      "text": "Control Parameters for Planned Independent Requirements"
+    },
+    {
+      "kind": "T",
+      "name": "REQUIREMENTS_CHAR_IN",
+      "optional": true,
+      "struct": "BAPISCHARR",
+      "text": "Configuration data input"
+    },
+    {
+      "kind": "T",
+      "name": "REQUIREMENTS_SCHEDULE_IN",
+      "optional": false,
+      "struct": "BAPISSHDIN",
+      "text": "Schedule line data input"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRETURN1",
+      "text": "Return parameter"
+    }
+  ],
+  "structs": {
+    "BAPIMGVMATNR": [
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERS",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPIRETURN1": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      }
+    ],
+    "BAPISCHARR": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REQU_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INT_CHAR",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHAR_VALUE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "CH_QTY",
+        "position": 4,
+        "type": "F"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FIXING",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "COPY_FRMED",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLAG_USAGE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PT_NUMBER",
+        "position": 8,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "PT_LINE",
+        "position": 9,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "CHAR_VALUE_LONG",
+        "position": 10,
+        "type": "C"
+      }
+    ],
+    "BAPISITEMR": [
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "REQU_TYPE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "VERSION",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VERS_ACTIV",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "REQ_NUMBER",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXTERNAL",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERSION",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MRP_AREA",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "REQ_PLAN_ID_EXT",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "REQ_SEGMENT",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "REQ_SEG_LONG",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPISPARAM": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DO_COMMIT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "UPDATE_MODE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETE_OLD",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_WITHDR",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "REFER_TYPE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "PROFILID",
+        "position": 6,
+        "type": "N"
+      }
+    ],
+    "BAPISSHDIN": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DATE_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REQ_DATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "REQ_QTY",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "BOMEXPL",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PROD_VES",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "CM60R": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRTYP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CONFL",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "COMMI",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "UPDDC",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELKZ",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BEDAB",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SYNCRON",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INNUM",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "APROG",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NOENTMG",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MDVM_BUFFER",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADDUP",
+        "position": 14,
+        "type": "C"
+      }
+    ]
+  }
+}

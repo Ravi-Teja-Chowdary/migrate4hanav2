@@ -1,0 +1,80 @@
+{
+  "object_type":      "FixedAssetOvertake",
+  "source_key_field": "ANLN1",
+  "home_table":       "ANLA",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "ANLA",
+        "fields":  ["BUKRS", "ANLN1", "ANLN2", "ANLKL"],
+        "where":   "DEAKT = '00000000'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {
+      "BUKRS": "COMPANYCODE",
+      "ANLN1": "ASSETMAINO",
+      "ANLN2": "ASSETSUBNO"
+    },
+    "dq_gates": [
+      { "field": "BUKRS", "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },
+      { "field": "ANLN1", "rule": "non_empty",    "on_fail": "dead_letter", "code": "MISSING_ASSET_MAIN_NUMBER" },
+      { "field": "ANLKL", "rule": "non_empty",    "on_fail": "dead_letter", "code": "MISSING_ASSET_CLASS" }
+    ]
+  },
+
+  "fk": {
+    "BUKRS": "CompanyCode"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_FIXEDASSET_OVRTAKE_CREATE",
+      "header_struct":    "KEY",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "ASSET"
+    },
+    "mc": {
+      "object_id":        "FIXED_ASSET",
+      "staging_template": "S_FIXED_ASSET"
+    },
+    "ltmom": {
+      "source_object": "S_FIXED_ASSET_HEADER",
+      "target_object": "ANLN1"
+    }
+  },
+
+  "verify": {
+    "key_field":    "ANLN1",
+    "value_fields": ["BUKRS", "ANLN2"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "FinanceReadiness",
+    "affects":  ["FixedAssetOvertake"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_FIXEDASSET_OVRTAKE_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_FIXEDASSET_OVRTAKE_CREATE" }
+  }
+}

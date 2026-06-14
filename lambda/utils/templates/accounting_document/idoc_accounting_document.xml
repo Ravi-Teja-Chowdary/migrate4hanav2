@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/AccountingDocument.json
+     Source SHA:  cf01a77373666231b2c33c05167111ad811dd2d2492ef9714ca56084581f7728
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="AccountingDocument"
+               basic_type="ACC_DOCUMENT03"
+               message_type="ACC_DOCUMENT">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>ACC_DOCUMENT</MESTYP>
+    <IDOCTYP>ACC_DOCUMENT03</IDOCTYP>
+  </control>
+  <segments>    <field source="BKTXT" target_segment="E1ACCOU" target_field="HEADER_TXT"/>    <field source="BLART" target_segment="E1ACCOU" target_field="DOC_TYPE"/>    <field source="BLDAT" target_segment="E1ACCOU" target_field="DOC_DATE"/>    <field source="BUDAT" target_segment="E1ACCOU" target_field="PSTNG_DATE"/>    <field source="BUKRS" target_segment="E1ACCOU" target_field="COMP_CODE"/>    <field source="USNAM" target_segment="E1ACCOU" target_field="USERNAME"/>  </segments>
+</idoc_template>

@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/Requirement.json",
+  "_source_sha":     "25750850a414a98dacec0fd91337436b97dcf8c0ea403f120bd1ef2d8968fcd4",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for Requirement. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "MATNR",
+  "source_object":   "S_REQ_HEADER",
+  "primary_table":   "PBIM",
+
+  "mappings": [    { "source": "BDZEI", "target": "REQUIREMENTSTYPE", "rule": "MOVE" },    { "source": "MATNR", "target": "MATERIAL", "rule": "MOVE" },    { "source": "MEINS", "target": "BASE_UOM", "rule": "MOVE" },    { "source": "PLNMG", "target": "REQUIREMENT_QUANTITY", "rule": "MOVE" },    { "source": "VERSB", "target": "VERSION", "rule": "MOVE" },    { "source": "WERKS", "target": "PLANT", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}
