@@ -40,6 +40,25 @@
       "MENGE": "ENTRY_QNT",
       "MEINS": "ENTRY_UOM"
     },
+    "constants_header": {
+      "PSTNG_DATE": "20251115",
+      "DOC_DATE":   "20251115",
+      "PR_UNAME":   "MIGRATE_ADMI",
+      "HEADER_TXT": "Migrated GR"
+    },
+    "constants_item": {
+      "MATERIAL":   "TG0013",
+      "PLANT":      "1710",
+      "STGE_LOC":   "171A",
+      "MOVE_TYPE":  "101",
+      "ENTRY_QNT":  "1",
+      "ENTRY_UOM":  "ST",
+      "PO_NUMBER":  "4500000663",
+      "PO_ITEM":    "00001"
+    },
+    "constants_extra": {
+      "GOODSMVT_CODE": {"GM_CODE": "01"}
+    },
     "dq_gates": [
       { "field": "MBLNR", "rule": "non_empty",              "on_fail": "dead_letter", "code": "MISSING_DOC_NUMBER" },
       { "field": "BUDAT", "rule": "iso_date",               "on_fail": "dead_letter", "code": "INVALID_PSTNG_DATE" },

@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build Notification` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   d44d826814c4e045df281877f1841dc0722513d4ebc783c9d433d6babe1609f0
+Source SHA:   3ab14463e2353a212fbc05911d0c3a730675b5332a353d81d24d7fc2eb883cf7
 Object type:  Notification
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -49,9 +49,17 @@ VALUE_MAPS = {
 # BAPI operator flags, doc-type pins) but the target BAPI demands.
 CONSTANTS_HEADER = {
     'REPORTEDBY': 'MIGRATE_ADMI',
+    'SHORT_TEXT': 'Migrated notification',
 }
 
 CONSTANTS_ITEM = {
+}
+
+# Top-level scalar BAPI imports — sent as named params in the BAPI call,
+# outside the header / items structures. Use for BAPIs that take scalar
+# imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
+CONSTANTS_EXTRA = {
+    'NOTIF_TYPE': 'M1',
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -154,6 +162,8 @@ class NotificationSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(
                 self.extension_structure, field_names
             )
+        if CONSTANTS_EXTRA:
+            payload.update(CONSTANTS_EXTRA)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────

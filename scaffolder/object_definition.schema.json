@@ -101,6 +101,10 @@
           "additionalProperties": { "type": "string" },
           "description": "target_field -> fixed value, injected into every items-table row. Use for per-row constants like OPERATION='I' on HR records, PLAN_TYPE='M' on master recipes, etc."
         },
+        "constants_extra": {
+          "type": "object",
+          "description": "param_name -> fixed value, injected into the BAPI call as a top-level parameter (NOT inside header/items). String values become scalar imports; object values become struct-import dicts. Use for scalar imports like BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE='M1' or struct imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE={'GM_CODE':'01'}."
+        },
         "dq_gates": {
           "type": "array",
           "items": {

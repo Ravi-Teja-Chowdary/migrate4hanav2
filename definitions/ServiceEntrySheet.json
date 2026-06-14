@@ -29,6 +29,14 @@
       "BLDAT": "BEGDATE",
       "PACKNO": "PCKG_NO"
     },
+    "constants_header": {
+      "PO_NUMBER":  "4500000004",
+      "PO_ITEM":    "00001",
+      "PCKG_NO":    "0000000001",
+      "SHORT_TEXT": "Migrated SES",
+      "REF_DATE":   "20251115",
+      "BEGDATE":    "20251115"
+    },
     "dq_gates": [
       { "field": "LBLNI", "rule": "non_empty",  "on_fail": "dead_letter", "code": "MISSING_SHEET_NO" },
       { "field": "EBELN", "rule": "non_empty",  "on_fail": "dead_letter", "code": "MISSING_PO_REF" },

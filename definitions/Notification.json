@@ -26,7 +26,11 @@
     },
     "item_field_maps": {},
     "constants_header": {
-      "REPORTEDBY": "MIGRATE_ADMI"
+      "REPORTEDBY":   "MIGRATE_ADMI",
+      "SHORT_TEXT":  "Migrated notification"
+    },
+    "constants_extra": {
+      "NOTIF_TYPE": "M1"
     },
     "dq_gates": [
       { "field": "QMART", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_NOTIF_TYPE" },

@@ -73,6 +73,15 @@ CONSTANTS_ITEM = {
 {% endfor %}
 }
 
+# Top-level scalar BAPI imports — sent as named params in the BAPI call,
+# outside the header / items structures. Use for BAPIs that take scalar
+# imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
+CONSTANTS_EXTRA = {
+{% for tgt, val in constants_extra_sorted %}
+    {{ tgt|repr }}: {{ val|repr }},
+{% endfor %}
+}
+
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
 DQ_GATES = [
 {% for gate in dq_gates_sorted %}
@@ -203,6 +212,8 @@ class {{ class_name }}(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(
                 self.extension_structure, field_names
             )
+        if CONSTANTS_EXTRA:
+            payload.update(CONSTANTS_EXTRA)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────
