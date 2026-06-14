@@ -216,6 +216,7 @@ def _build_context(definition: dict, source_sha: str) -> dict:
     constants_header = transform.get("constants_header", {}) or {}
     constants_item   = transform.get("constants_item", {}) or {}
     constants_extra  = transform.get("constants_extra", {}) or {}
+    extra_payload    = transform.get("extra_payload", {}) or {}
     dq_gates        = transform.get("dq_gates", []) or []
 
     # Sort containers for determinism
@@ -277,6 +278,7 @@ def _build_context(definition: dict, source_sha: str) -> dict:
         "constants_header_sorted": sorted(constants_header.items()),
         "constants_item_sorted":   sorted(constants_item.items()),
         "constants_extra_sorted":  sorted(constants_extra.items(), key=lambda kv: kv[0]),
+        "extra_payload_sorted":    sorted(extra_payload.items(), key=lambda kv: kv[0]),
         "dq_gates_sorted":       dq_gates_sorted,
         "dq_rule_imports":       dq_rule_imports,
         "fk_fields_sorted":      fk_fields_sorted,

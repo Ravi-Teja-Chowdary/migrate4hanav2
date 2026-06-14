@@ -105,6 +105,10 @@
           "type": "object",
           "description": "param_name -> fixed value, injected into the BAPI call as a top-level parameter (NOT inside header/items). String values become scalar imports; object values become struct-import dicts. Use for scalar imports like BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE='M1' or struct imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE={'GM_CODE':'01'}."
         },
+        "extra_payload": {
+          "type": "object",
+          "description": "param_name -> struct dict OR list-of-dicts table. Sent as additional BAPI parameters beyond header/items. Required for multi-struct BAPIs like BAPI_FIXEDASSET_OVRTAKE_CREATE (needs KEY + GENERALDATA + POSTINGINFORMATION + DEPRECIATIONAREAS table coordinated) and BAPI_ACC_DOCUMENT_POST (needs ACCOUNTGL + CURRENCYAMOUNT + DOCUMENTHEADER). Object values become struct payloads; array values become table payloads. Merged AFTER constants_extra so it overrides."
+        },
         "dq_gates": {
           "type": "array",
           "items": {

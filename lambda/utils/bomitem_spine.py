@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build BOMItem` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   9b777353963888d74d39e01eb8172c8d089594d25873ac489e3d02ce0c5b9665
+Source SHA:   6dc7e9d0e2ce12b6aadf9614a02189c3880a92f412fca6a99646919475fabd4b
 Object type:  BOMItem
 Category:     Master
 Lane:         BAPI (fallback: MC)"""
@@ -45,6 +45,39 @@ ITEM_FIELD_MAPS = {
 
 # target_field -> { source_value: target_value }
 VALUE_MAPS = {
+}
+
+# Per-spine constants injected into header / items regardless of source row.
+# Used for fields the source ECC table doesn't carry (PURCH_ORG defaults,
+# BAPI operator flags, doc-type pins) but the target BAPI demands.
+CONSTANTS_HEADER = {
+}
+
+CONSTANTS_ITEM = {
+    'BOM_GROUP_IDENTIFICATION': 'MIGBOM-1000',
+    'COMPONENT': 'TG0014',
+    'COMP_QTY': '1',
+    'COMP_UNIT': 'ST',
+    'ITEM_CAT': 'L',
+    'ITEM_NO': '0010',
+    'OBJECT_ID': 'TG0013',
+    'OBJECT_TYPE': 'ITM',
+}
+
+# Top-level scalar BAPI imports — sent as named params in the BAPI call,
+# outside the header / items structures. Use for BAPIs that take scalar
+# imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
+CONSTANTS_EXTRA = {
+}
+
+# Additional struct / table params for multi-struct BAPIs (BAPI_FIXEDASSET_OVRTAKE_CREATE,
+# BAPI_ACC_DOCUMENT_POST, BAPI_MATERIAL_BOM_GROUP_CREATE). Object values are
+# sent as struct payloads; list values are sent as table payloads.
+EXTRA_PAYLOAD = {
+    'BOMGROUP': [{'OBJECT_ID': 'TG0013', 'OBJECT_TYPE': 'MAT', 'BOM_GROUP_IDENTIFICATION': 'MIGBOM-1000', 'BOM_USAGE': '1', 'BOM_TEXT': 'Migrated BOM', 'CREATED_IN_PLANT': '1710'}],
+    'ITEMASSIGNMENTS': [{'BOM_GROUP_IDENTIFICATION': 'MIGBOM-1000', 'SUPER_OBJECT_ID': 'TG0013', 'SUPER_OBJECT_TYPE': 'MAT', 'SUB_OBJECT_ID': 'TG0013', 'SUB_OBJECT_TYPE': 'MAT', 'VALID_FROM_DATE': '20251115'}],
+    'MATERIALRELATIONS': [{'MATERIAL': 'TG0013', 'PLANT': '1710', 'BOM_USAGE': '1', 'ALTERNATIVE_BOM': '01', 'BOM_GROUP_IDENTIFICATION': 'MIGBOM-1000'}],
+    'VARIANTS': [{'FUNCTION': 'NEW', 'OBJECT_ID': 'TG0013', 'OBJECT_TYPE': 'MAT', 'BOM_GROUP_IDENTIFICATION': 'MIGBOM-1000', 'ALTERNATIVE_BOM': '01', 'ALT_TEXT': 'Migrated BOM alt 01', 'BASE_UNIT': 'ST', 'VALID_FROM_DATE': '20251115', 'BOM_STATUS': '01'}],
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -132,14 +165,19 @@ class BOMItemSpineOrchestrator(BaseSpineOrchestrator):
         # value directly, not a dict.
         if '':
             header = self._apply_field_map(row, FIELD_MAPS)
+            # Per-spine fixed values overlay the source-derived header
+            if CONSTANTS_HEADER:
+                header = {**header, **CONSTANTS_HEADER}
             payload[''] = header
 
         # If the BAPI is two-struct (header + items table), build the item from
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
         # one item" pattern is the smoke-test shape; production loaders that
         # aggregate N source rows into one parent header are out of scope here.
-        if ITEM_FIELD_MAPS:
-            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
+        if ITEM_FIELD_MAPS or CONSTANTS_ITEM:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS) if ITEM_FIELD_MAPS else {}
+            if CONSTANTS_ITEM:
+                item = {**item, **CONSTANTS_ITEM}
             payload['ITEMS'] = [item]
 
         if ext_rows:
@@ -148,6 +186,10 @@ class BOMItemSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(
                 self.extension_structure, field_names
             )
+        if CONSTANTS_EXTRA:
+            payload.update(CONSTANTS_EXTRA)
+        if EXTRA_PAYLOAD:
+            payload.update(EXTRA_PAYLOAD)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────

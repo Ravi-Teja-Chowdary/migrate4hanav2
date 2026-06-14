@@ -82,6 +82,15 @@ CONSTANTS_EXTRA = {
 {% endfor %}
 }
 
+# Additional struct / table params for multi-struct BAPIs (BAPI_FIXEDASSET_OVRTAKE_CREATE,
+# BAPI_ACC_DOCUMENT_POST, BAPI_MATERIAL_BOM_GROUP_CREATE). Object values are
+# sent as struct payloads; list values are sent as table payloads.
+EXTRA_PAYLOAD = {
+{% for tgt, val in extra_payload_sorted %}
+    {{ tgt|repr }}: {{ val|repr }},
+{% endfor %}
+}
+
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
 DQ_GATES = [
 {% for gate in dq_gates_sorted %}
@@ -214,6 +223,8 @@ class {{ class_name }}(BaseSpineOrchestrator):
             )
         if CONSTANTS_EXTRA:
             payload.update(CONSTANTS_EXTRA)
+        if EXTRA_PAYLOAD:
+            payload.update(EXTRA_PAYLOAD)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────

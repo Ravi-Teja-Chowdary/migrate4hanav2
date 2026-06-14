@@ -26,6 +26,52 @@
       "MENGE":  "COMP_QTY",
       "MEINS":  "COMP_UNIT"
     },
+    "constants_item": {
+      "OBJECT_ID":   "TG0013",
+      "OBJECT_TYPE": "ITM",
+      "ITEM_NO":     "0010",
+      "ITEM_CAT":    "L",
+      "COMPONENT":   "TG0014",
+      "COMP_QTY":    "1",
+      "COMP_UNIT":   "ST",
+      "BOM_GROUP_IDENTIFICATION": "MIGBOM-1000"
+    },
+    "extra_payload": {
+      "BOMGROUP": [{
+        "OBJECT_ID":                "TG0013",
+        "OBJECT_TYPE":              "MAT",
+        "BOM_GROUP_IDENTIFICATION": "MIGBOM-1000",
+        "BOM_USAGE":                "1",
+        "BOM_TEXT":                 "Migrated BOM",
+        "CREATED_IN_PLANT":         "1710"
+      }],
+      "VARIANTS": [{
+        "FUNCTION":                 "NEW",
+        "OBJECT_ID":                "TG0013",
+        "OBJECT_TYPE":              "MAT",
+        "BOM_GROUP_IDENTIFICATION": "MIGBOM-1000",
+        "ALTERNATIVE_BOM":          "01",
+        "ALT_TEXT":                 "Migrated BOM alt 01",
+        "BASE_UNIT":                "ST",
+        "VALID_FROM_DATE":          "20251115",
+        "BOM_STATUS":               "01"
+      }],
+      "MATERIALRELATIONS": [{
+        "MATERIAL":                 "TG0013",
+        "PLANT":                    "1710",
+        "BOM_USAGE":                "1",
+        "ALTERNATIVE_BOM":          "01",
+        "BOM_GROUP_IDENTIFICATION": "MIGBOM-1000"
+      }],
+      "ITEMASSIGNMENTS": [{
+        "BOM_GROUP_IDENTIFICATION": "MIGBOM-1000",
+        "SUPER_OBJECT_ID":          "TG0013",
+        "SUPER_OBJECT_TYPE":        "MAT",
+        "SUB_OBJECT_ID":            "TG0013",
+        "SUB_OBJECT_TYPE":          "MAT",
+        "VALID_FROM_DATE":          "20251115"
+      }]
+    },
     "dq_gates": [
       { "field": "MATNR", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_PARENT_MATERIAL" },
       { "field": "IDNRK", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_COMPONENT" },

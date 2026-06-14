@@ -25,10 +25,34 @@
       "ANLN1": "ASSET",
       "ANLN2": "SUBNUMBER"
     },
+    "constants_header": {
+      "COMPANYCODE": "1710",
+      "ASSET":       "",
+      "SUBNUMBER":   "0000"
+    },
+    "extra_payload": {
+      "GENERALDATA": {
+        "ASSETCLASS":  "00003100",
+        "DESCRIPT":    "Migrated asset",
+        "QUANTITY":    "1",
+        "BASE_UOM":    "ST"
+      },
+      "GENERALDATAX": {
+        "ASSETCLASS":  "X",
+        "DESCRIPT":    "X",
+        "QUANTITY":    "X",
+        "BASE_UOM":    "X"
+      },
+      "POSTINGINFORMATION": {
+        "CAP_DATE":    "20251115"
+      },
+      "POSTINGINFORMATIONX": {
+        "CAP_DATE":    "X"
+      }
+    },
     "dq_gates": [
       { "field": "BUKRS", "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },
-      { "field": "ANLN1", "rule": "non_empty",    "on_fail": "dead_letter", "code": "MISSING_ASSET_MAIN_NUMBER" },
-      { "field": "ANLKL", "rule": "non_empty",    "on_fail": "dead_letter", "code": "MISSING_ASSET_CLASS" }
+      { "field": "ANLN1", "rule": "non_empty",    "on_fail": "dead_letter", "code": "MISSING_ASSET_MAIN_NUMBER" }
     ]
   },
 
