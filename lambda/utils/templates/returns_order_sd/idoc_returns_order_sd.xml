@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ReturnsOrderSD.json
+     Source SHA:  1ebede6c9e5d6e80d4c6955af501d4cf831084fd1529efcbc248f994dd14a175
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ReturnsOrderSD"
+               basic_type="RETURNSORDERSD01"
+               message_type="RETURNSORDERSD">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>RETURNSORDERSD</MESTYP>
+    <IDOCTYP>RETURNSORDERSD01</IDOCTYP>
+  </control>
+  <segments>    <field source="AUART" target_segment="E1RETUR" target_field="DOC_TYPE"/>    <field source="SPART" target_segment="E1RETUR" target_field="DIVISION"/>    <field source="VKORG" target_segment="E1RETUR" target_field="SALES_ORG"/>    <field source="VTWEG" target_segment="E1RETUR" target_field="DISTR_CHAN"/>    <field source="WAERK" target_segment="E1RETUR" target_field="CURRENCY"/>  </segments>
+</idoc_template>

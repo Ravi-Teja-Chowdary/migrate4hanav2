@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/MeasurementDocument.json
+     Source SHA:  332cdfa2231d703291581225344f59f701d4ed14124cc8e07b7831cb2f1304f4
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="MeasurementDocument"
+               basic_type="MEASUREMENTDOCUMENT01"
+               message_type="MEASUREMENTDOCUMENT">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>MEASUREMENTDOCUMENT</MESTYP>
+    <IDOCTYP>MEASUREMENTDOCUMENT01</IDOCTYP>
+  </control>
+  <segments>    <field source="MRMRD" target_segment="E1MEASU" target_field="READ_DATE"/>    <field source="POINT" target_segment="E1MEASU" target_field="POINT"/>    <field source="READG" target_segment="E1MEASU" target_field="READING"/>  </segments>
+</idoc_template>

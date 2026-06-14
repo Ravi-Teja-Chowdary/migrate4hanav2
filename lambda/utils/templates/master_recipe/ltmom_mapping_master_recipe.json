@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/MasterRecipe.json",
+  "_source_sha":     "6e0e974d278ea0538ef4e8b6f8b77ec4cf8026deecef0f442e94f5653f1e4110",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for MasterRecipe. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "PLNNR",
+  "source_object":   "S_MASTER_RECIPE_HEADER",
+  "primary_table":   "PLKO",
+
+  "mappings": [    { "source": "PLNAL", "target": "GROUP_COUNTER", "rule": "MOVE" },    { "source": "PLNTY", "target": "PLAN_TYPE", "rule": "MOVE" },    { "source": "TEXT1", "target": "DESCRIPTION", "rule": "MOVE" },    { "source": "WERKS", "target": "PLANT", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

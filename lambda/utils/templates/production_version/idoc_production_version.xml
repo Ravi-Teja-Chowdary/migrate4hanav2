@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ProductionVersion.json
+     Source SHA:  2d5aeba11c3ec4d5b8ddae9ab763454dab1ecdd062d4b422296fc3d40fce8cbb
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ProductionVersion"
+               basic_type="PRODUCTIONVERSION01"
+               message_type="PRODUCTIONVERSION">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>PRODUCTIONVERSION</MESTYP>
+    <IDOCTYP>PRODUCTIONVERSION01</IDOCTYP>
+  </control>
+  <segments>    <field source="ADATUM" target_segment="E1PRODU" target_field="VALID_FROM"/>    <field source="BDATUM" target_segment="E1PRODU" target_field="VALID_TO"/>    <field source="MATNR" target_segment="E1PRODU" target_field="MATERIAL"/>    <field source="TEXT1" target_segment="E1PRODU" target_field="DESCRIPTION"/>    <field source="WERKS" target_segment="E1PRODU" target_field="PLANT"/>  </segments>
+</idoc_template>

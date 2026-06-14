@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/WarrantyClaim.json
+     Source SHA:  432cc6d4f49457f1d215b2cc59e141b592f945752e599d1ea6f91f6e304b3c51
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="WarrantyClaim"
+               basic_type="WARRANTYCLAIM01"
+               message_type="WARRANTYCLAIM">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>WARRANTYCLAIM</MESTYP>
+    <IDOCTYP>WARRANTYCLAIM01</IDOCTYP>
+  </control>
+  <segments>    <field source="EQUNR" target_segment="E1WARRA" target_field="EQUIPMENT"/>    <field source="MATNR" target_segment="E1WARRA" target_field="MATERIAL"/>    <field source="WTYTP" target_segment="E1WARRA" target_field="CLAIM_TYPE"/>  </segments>
+</idoc_template>

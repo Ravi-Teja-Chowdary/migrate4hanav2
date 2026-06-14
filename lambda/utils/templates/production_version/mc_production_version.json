@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/ProductionVersion.json",
+  "_source_sha":     "2d5aeba11c3ec4d5b8ddae9ab763454dab1ecdd062d4b422296fc3d40fce8cbb",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for ProductionVersion. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "PRODUCTION_VERSION",
+  "staging_template": "S_PRODUCTION_VERSION",
+  "source_key_field": "VERID",
+
+  "columns": [    {"source_field": "ADATUM", "target_column": "VALID_FROM", "required": false },    {"source_field": "BDATUM", "target_column": "VALID_TO", "required": false },    {"source_field": "MATNR", "target_column": "MATERIAL", "required": false },    {"source_field": "TEXT1", "target_column": "DESCRIPTION", "required": false },    {"source_field": "WERKS", "target_column": "PLANT", "required": false }  ],
+
+  "primary_table":  "MKAL",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

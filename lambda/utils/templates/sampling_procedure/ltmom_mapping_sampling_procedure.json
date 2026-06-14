@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/SamplingProcedure.json",
+  "_source_sha":     "bcae6a230239cc36eb569248579962c6a4bfbd7cb8bc8182e7e220a4d9507e59",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for SamplingProcedure. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "PROBENART",
+  "source_object":   "S_SMPL_PROC_HEADER",
+  "primary_table":   "QPRS",
+
+  "mappings": [    { "source": "BEWERTART", "target": "VALUATION_TYPE", "rule": "MOVE" },    { "source": "PROBENART_TXT", "target": "DESCRIPTION", "rule": "MOVE" },    { "source": "STICHPRART", "target": "SAMPLE_TYPE", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

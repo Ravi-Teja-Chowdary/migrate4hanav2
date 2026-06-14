@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/MeasurementPoint.json",
+  "_source_sha":     "2d095db91161a1e1ec3020cb6ce33f8fcbd7fee32ca5885582492a152da62231",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for MeasurementPoint. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "MEASUREMENT_POINT",
+  "staging_template": "S_MEASUREMENT_POINT",
+  "source_key_field": "POINT",
+
+  "columns": [    {"source_field": "MPOBJ", "target_column": "OBJECT_NUMBER", "required": false },    {"source_field": "PSORT", "target_column": "SORT_FIELD", "required": false },    {"source_field": "PTEXT", "target_column": "DESCRIPTION", "required": false },    {"source_field": "PTTYP", "target_column": "POINT_TYPE", "required": false }  ],
+
+  "primary_table":  "IMPT",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

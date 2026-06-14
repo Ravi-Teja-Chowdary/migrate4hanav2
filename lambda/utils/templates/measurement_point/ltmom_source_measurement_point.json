@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/MeasurementPoint.json",
+  "_source_sha":     "2d095db91161a1e1ec3020cb6ce33f8fcbd7fee32ca5885582492a152da62231",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for MeasurementPoint.",
+
+  "source_object": "S_MEAS_POINT_HEADER",
+  "primary_table": "IMPT",
+  "source_key_field": "POINT",
+
+  "fields": [    { "name": "MPOBJ", "type": "CHAR", "comment": "OBJECT_NUMBER" },    { "name": "PSORT", "type": "CHAR", "comment": "SORT_FIELD" },    { "name": "PTEXT", "type": "CHAR", "comment": "DESCRIPTION" },    { "name": "PTTYP", "type": "CHAR", "comment": "POINT_TYPE" }  ]
+}

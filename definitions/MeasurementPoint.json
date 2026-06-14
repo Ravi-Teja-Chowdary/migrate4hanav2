@@ -1,0 +1,68 @@
+{
+  "object_type":      "MeasurementPoint",
+  "source_key_field": "POINT",
+  "home_table":       "IMPT",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "IMPT",
+        "fields":  ["POINT", "MPOBJ", "PSORT", "PTTYP", "PTEXT"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "MPOBJ": "OBJECT_NUMBER",
+      "PSORT": "SORT_FIELD",
+      "PTTYP": "POINT_TYPE",
+      "PTEXT": "DESCRIPTION"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "POINT", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_POINT_ID" },
+      { "field": "MPOBJ", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_OBJECT_NO" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_MEASUREMPOINT_CREATE",
+      "header_struct":    "MEASUREMPOINT",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "MEASUREMPOINT"
+    },
+    "mc": {
+      "object_id":        "MEASUREMENT_POINT",
+      "staging_template": "S_MEASUREMENT_POINT"
+    },
+    "ltmom": {
+      "source_object": "S_MEAS_POINT_HEADER",
+      "target_object": "POINT"
+    }
+  },
+
+  "verify": {
+    "key_field":    "POINT",
+    "value_fields": ["MPOBJ", "PTEXT"]
+  },
+
+  "extensions": { "supports_ZZ_fields": false, "supports_partners": false, "supports_conditions": false, "supports_longtexts": false },
+  "telemetry": { "category": "PlantMaintenanceReadiness", "affects": ["MeasurementPoint"] },
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_MEASUREMPOINT_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_MEASUREMPOINT_CREATE" }
+  }
+}

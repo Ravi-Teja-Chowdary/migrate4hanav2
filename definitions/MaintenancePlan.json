@@ -1,0 +1,77 @@
+{
+  "object_type":      "MaintenancePlan",
+  "source_key_field": "WARPL",
+  "home_table":       "MPLA",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "MPLA",
+        "fields":  ["WARPL", "MPTYP", "WAART", "STRAT", "MPSTA"],
+        "where":   "MPSTA <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "MPTYP": "MAINT_PLAN_TYPE",
+      "WAART": "MAINT_ACT_TYPE",
+      "STRAT": "STRATEGY"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "WARPL", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_PLAN_NO" },
+      { "field": "MPTYP", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_PLAN_TYPE" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_ALM_PLAN_CREATE",
+      "header_struct":    "MAINT_PLAN",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "MAINT_PLAN"
+    },
+    "mc": {
+      "object_id":        "MAINTENANCE_PLAN",
+      "staging_template": "S_MAINTENANCE_PLAN"
+    },
+    "ltmom": {
+      "source_object": "S_MAINT_PLAN_HEADER",
+      "target_object": "WARPL"
+    }
+  },
+
+  "verify": {
+    "key_field":    "WARPL",
+    "value_fields": ["MPTYP", "WAART"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "PlantMaintenanceReadiness",
+    "affects":  ["MaintenancePlan"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_ALM_PLAN_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_ALM_PLAN_CREATE" }
+  }
+}

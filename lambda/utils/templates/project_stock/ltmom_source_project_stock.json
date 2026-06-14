@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ProjectStock.json",
+  "_source_sha":     "5f5fe1d8f2bfd627b34d1988205adb9400fd2649f8f083c6a01127ddb9746d6b",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ProjectStock.",
+
+  "source_object": "S_PROJECT_STOCK_HEADER",
+  "primary_table": "MSPR",
+  "source_key_field": "PSPNR",
+
+  "fields": [    { "name": "MATNR", "type": "CHAR", "comment": "MATERIAL" },    { "name": "PSPEL", "type": "CHAR", "comment": "WBS_ELEMENT" },    { "name": "WERKS", "type": "CHAR", "comment": "PLANT" }  ]
+}

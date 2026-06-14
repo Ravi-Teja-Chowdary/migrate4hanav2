@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/RebateAgreement.json",
+  "_source_sha":     "a4bb4c513876c3f7c6ebd823d95bf79d6f3dd168917b8825288345938c3fc9d5",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for RebateAgreement.",
+
+  "source_object": "S_REBATE_HEADER",
+  "primary_table": "KONA",
+  "source_key_field": "KNUMA",
+
+  "fields": [    { "name": "BOART", "type": "CHAR", "comment": "AGREEMENT_TYPE" },    { "name": "SPART", "type": "CHAR", "comment": "DIVISION" },    { "name": "VKORG", "type": "CHAR", "comment": "SALES_ORG" },    { "name": "VTWEG", "type": "CHAR", "comment": "DISTR_CHAN" },    { "name": "WAERK", "type": "CHAR", "comment": "CURRENCY" }  ]
+}

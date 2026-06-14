@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/MaintenanceItem.json
+     Source SHA:  51cf463816570595f37af079b52fc9a91c5261aa7351d5aa649eef2c672f2831
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="MaintenanceItem"
+               basic_type="MAINTENANCEITEM01"
+               message_type="MAINTENANCEITEM">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>MAINTENANCEITEM</MESTYP>
+    <IDOCTYP>MAINTENANCEITEM01</IDOCTYP>
+  </control>
+  <segments>    <field source="AUART" target_segment="E1MAINT" target_field="ORDER_TYPE"/>    <field source="INGRP" target_segment="E1MAINT" target_field="PLNNGGROUP"/>    <field source="PSTXT" target_segment="E1MAINT" target_field="DESCRIPTION"/>    <field source="WARPL" target_segment="E1MAINT" target_field="MAINT_PLAN"/>  </segments>
+</idoc_template>

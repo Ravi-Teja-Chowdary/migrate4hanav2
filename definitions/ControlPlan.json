@@ -1,0 +1,67 @@
+{
+  "object_type":      "ControlPlan",
+  "source_key_field": "PLNNR",
+  "home_table":       "PLKO",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "PLKO",
+        "fields":  ["PLNNR", "PLNTY", "PLNAL", "PLNAW", "WERKS"],
+        "where":   "PLNTY = 'Q' AND LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "PLNTY": "PLAN_TYPE",
+      "PLNAL": "GROUP_COUNTER",
+      "WERKS": "PLANT"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "PLNNR", "rule": "non_empty",  "on_fail": "dead_letter", "code": "MISSING_PLAN_GROUP" },
+      { "field": "WERKS", "rule": "werks_plant", "on_fail": "dead_letter", "code": "INVALID_PLANT" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_CTRL_PLAN_CREATE",
+      "header_struct":    "CTRL_PLAN_HEADER",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "PLNNR"
+    },
+    "mc": {
+      "object_id":        "CONTROL_PLAN",
+      "staging_template": "S_CONTROL_PLAN"
+    },
+    "ltmom": {
+      "source_object": "S_CTRL_PLAN_HEADER",
+      "target_object": "PLNNR"
+    }
+  },
+
+  "verify": {
+    "key_field":    "PLNNR",
+    "value_fields": ["PLNTY", "WERKS"]
+  },
+
+  "extensions": { "supports_ZZ_fields": false, "supports_partners": false, "supports_conditions": false, "supports_longtexts": false },
+  "telemetry": { "category": "QMReadiness", "affects": ["ControlPlan"] },
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_CTRL_PLAN_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_CTRL_PLAN_CREATE" }
+  }
+}

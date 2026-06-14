@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ControlPlan.json",
+  "_source_sha":     "27453ba761954e342132c4d021efae617902917743400611aec65948865900a4",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ControlPlan.",
+
+  "source_object": "S_CTRL_PLAN_HEADER",
+  "primary_table": "PLKO",
+  "source_key_field": "PLNNR",
+
+  "fields": [    { "name": "PLNAL", "type": "CHAR", "comment": "GROUP_COUNTER" },    { "name": "PLNTY", "type": "CHAR", "comment": "PLAN_TYPE" },    { "name": "WERKS", "type": "CHAR", "comment": "PLANT" }  ]
+}

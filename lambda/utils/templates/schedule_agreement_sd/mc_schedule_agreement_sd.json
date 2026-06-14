@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/ScheduleAgreementSD.json",
+  "_source_sha":     "ef7df293e573e9bd2c712fb79105f0afcdb4938b47039ecb5517c84eca19d711",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for ScheduleAgreementSD. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "SCHEDULE_AGREEMENT_SD",
+  "staging_template": "S_SCHEDULE_AGREEMENT_SD",
+  "source_key_field": "VBELN",
+
+  "columns": [    {"source_field": "AUART", "target_column": "DOC_TYPE", "required": false },    {"source_field": "SPART", "target_column": "DIVISION", "required": false },    {"source_field": "VKORG", "target_column": "SALES_ORG", "required": false },    {"source_field": "VTWEG", "target_column": "DISTR_CHAN", "required": false },    {"source_field": "WAERK", "target_column": "CURRENCY", "required": false }  ],
+
+  "primary_table":  "VBAK",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

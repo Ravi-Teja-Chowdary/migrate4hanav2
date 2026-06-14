@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/MaintenancePlan.json",
+  "_source_sha":     "7f89630bebaa47f4cf0fec537fa21929703b43196fd416d0e628d1954b529d52",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for MaintenancePlan. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "WARPL",
+  "source_object":   "S_MAINT_PLAN_HEADER",
+  "primary_table":   "MPLA",
+
+  "mappings": [    { "source": "MPTYP", "target": "MAINT_PLAN_TYPE", "rule": "MOVE" },    { "source": "STRAT", "target": "STRATEGY", "rule": "MOVE" },    { "source": "WAART", "target": "MAINT_ACT_TYPE", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

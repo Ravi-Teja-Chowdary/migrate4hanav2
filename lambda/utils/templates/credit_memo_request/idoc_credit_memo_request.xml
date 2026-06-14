@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/CreditMemoRequest.json
+     Source SHA:  8ab5619efdb79ee5a6c76f6d5416714d5b0a274234a32026b0cbbb1f13bf8fbd
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="CreditMemoRequest"
+               basic_type="CREDITMEMOREQUEST01"
+               message_type="CREDITMEMOREQUEST">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>CREDITMEMOREQUEST</MESTYP>
+    <IDOCTYP>CREDITMEMOREQUEST01</IDOCTYP>
+  </control>
+  <segments>    <field source="AUART" target_segment="E1CREDI" target_field="DOC_TYPE"/>    <field source="SPART" target_segment="E1CREDI" target_field="DIVISION"/>    <field source="VKORG" target_segment="E1CREDI" target_field="SALES_ORG"/>    <field source="VTWEG" target_segment="E1CREDI" target_field="DISTR_CHAN"/>    <field source="WAERK" target_segment="E1CREDI" target_field="CURRENCY"/>  </segments>
+</idoc_template>

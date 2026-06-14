@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ProjectStock.json
+     Source SHA:  5f5fe1d8f2bfd627b34d1988205adb9400fd2649f8f083c6a01127ddb9746d6b
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ProjectStock"
+               basic_type="PROJECTSTOCK01"
+               message_type="PROJECTSTOCK">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>PROJECTSTOCK</MESTYP>
+    <IDOCTYP>PROJECTSTOCK01</IDOCTYP>
+  </control>
+  <segments>    <field source="MATNR" target_segment="E1PROJE" target_field="MATERIAL"/>    <field source="PSPEL" target_segment="E1PROJE" target_field="WBS_ELEMENT"/>    <field source="WERKS" target_segment="E1PROJE" target_field="PLANT"/>  </segments>
+</idoc_template>

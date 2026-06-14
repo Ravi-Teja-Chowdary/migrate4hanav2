@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/WarrantyClaim.json",
+  "_source_sha":     "432cc6d4f49457f1d215b2cc59e141b592f945752e599d1ea6f91f6e304b3c51",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for WarrantyClaim.",
+
+  "source_object": "S_WARRANTY_HEADER",
+  "primary_table": "PWTY",
+  "source_key_field": "QMNUM",
+
+  "fields": [    { "name": "EQUNR", "type": "CHAR", "comment": "EQUIPMENT" },    { "name": "MATNR", "type": "CHAR", "comment": "MATERIAL" },    { "name": "WTYTP", "type": "CHAR", "comment": "CLAIM_TYPE" }  ]
+}

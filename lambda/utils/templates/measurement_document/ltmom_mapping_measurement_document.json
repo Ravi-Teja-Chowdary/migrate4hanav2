@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/MeasurementDocument.json",
+  "_source_sha":     "332cdfa2231d703291581225344f59f701d4ed14124cc8e07b7831cb2f1304f4",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for MeasurementDocument. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "MDOCM",
+  "source_object":   "S_MEAS_DOC_HEADER",
+  "primary_table":   "IMRG",
+
+  "mappings": [    { "source": "MRMRD", "target": "READ_DATE", "rule": "MOVE" },    { "source": "POINT", "target": "POINT", "rule": "MOVE" },    { "source": "READG", "target": "READING", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

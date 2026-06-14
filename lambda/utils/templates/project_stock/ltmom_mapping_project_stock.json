@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/ProjectStock.json",
+  "_source_sha":     "5f5fe1d8f2bfd627b34d1988205adb9400fd2649f8f083c6a01127ddb9746d6b",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for ProjectStock. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "PSPNR",
+  "source_object":   "S_PROJECT_STOCK_HEADER",
+  "primary_table":   "MSPR",
+
+  "mappings": [    { "source": "MATNR", "target": "MATERIAL", "rule": "MOVE" },    { "source": "PSPEL", "target": "WBS_ELEMENT", "rule": "MOVE" },    { "source": "WERKS", "target": "PLANT", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

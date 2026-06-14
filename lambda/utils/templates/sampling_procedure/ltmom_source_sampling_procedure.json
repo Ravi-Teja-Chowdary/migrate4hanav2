@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/SamplingProcedure.json",
+  "_source_sha":     "bcae6a230239cc36eb569248579962c6a4bfbd7cb8bc8182e7e220a4d9507e59",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for SamplingProcedure.",
+
+  "source_object": "S_SMPL_PROC_HEADER",
+  "primary_table": "QPRS",
+  "source_key_field": "PROBENART",
+
+  "fields": [    { "name": "BEWERTART", "type": "CHAR", "comment": "VALUATION_TYPE" },    { "name": "PROBENART_TXT", "type": "CHAR", "comment": "DESCRIPTION" },    { "name": "STICHPRART", "type": "CHAR", "comment": "SAMPLE_TYPE" }  ]
+}

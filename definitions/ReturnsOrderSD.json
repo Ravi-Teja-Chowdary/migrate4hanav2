@@ -1,0 +1,81 @@
+{
+  "object_type":      "ReturnsOrderSD",
+  "source_key_field": "VBELN",
+  "home_table":       "VBAK",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "VBAK",
+        "fields":  ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "WAERK"],
+        "where":   "AUART = 'RE' AND ABSTK <> 'C'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "AUART": "DOC_TYPE",
+      "VKORG": "SALES_ORG",
+      "VTWEG": "DISTR_CHAN",
+      "SPART": "DIVISION",
+      "WAERK": "CURRENCY"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "VBELN", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DOC_NO" },
+      { "field": "AUART", "rule": "in_set", "rule_args": {"values": ["RE"]}, "on_fail": "dead_letter", "code": "INVALID_DOC_TYPE" },
+      { "field": "VKORG", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_SALES_ORG" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_SALESORDER_CREATEFROMDAT2",
+      "header_struct":    "ORDER_HEADER_IN",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "SALESDOCUMENT"
+    },
+    "mc": {
+      "object_id":        "RETURNS_ORDER_SD",
+      "staging_template": "S_RETURNS_ORDER_SD"
+    },
+    "ltmom": {
+      "source_object": "S_RETURNS_HEADER",
+      "target_object": "VBELN"
+    }
+  },
+
+  "verify": {
+    "key_field":    "VBELN",
+    "value_fields": ["AUART", "VKORG"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   true,
+    "supports_conditions": true,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "SDReadiness",
+    "affects":  ["ReturnsOrderSD"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_SALESORDER_CREATEFROMDAT2" },
+    "S4HANA_2022": { "use_bapi": "BAPI_SALESORDER_CREATEFROMDAT2" }
+  }
+}

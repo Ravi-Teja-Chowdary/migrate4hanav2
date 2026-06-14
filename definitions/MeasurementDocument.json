@@ -1,0 +1,68 @@
+{
+  "object_type":      "MeasurementDocument",
+  "source_key_field": "MDOCM",
+  "home_table":       "IMRG",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "IMRG",
+        "fields":  ["MDOCM", "POINT", "READG", "MRMRD", "MRMTI"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "POINT": "POINT",
+      "READG": "READING",
+      "MRMRD": "READ_DATE"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "MDOCM", "rule": "non_empty",  "on_fail": "dead_letter", "code": "MISSING_DOC_NO" },
+      { "field": "POINT", "rule": "non_empty",  "on_fail": "dead_letter", "code": "MISSING_POINT_ID" },
+      { "field": "READG", "rule": "positive_number", "on_fail": "dead_letter", "code": "INVALID_READING" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_MEASUREMDOCUM_CREATE",
+      "header_struct":    "MEASUREMDOCUM",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "MEASUREMDOCUM"
+    },
+    "mc": {
+      "object_id":        "MEASUREMENT_DOCUMENT",
+      "staging_template": "S_MEASUREMENT_DOCUMENT"
+    },
+    "ltmom": {
+      "source_object": "S_MEAS_DOC_HEADER",
+      "target_object": "MDOCM"
+    }
+  },
+
+  "verify": {
+    "key_field":    "MDOCM",
+    "value_fields": ["POINT", "READG"]
+  },
+
+  "extensions": { "supports_ZZ_fields": false, "supports_partners": false, "supports_conditions": false, "supports_longtexts": false },
+  "telemetry": { "category": "PlantMaintenanceReadiness", "affects": ["MeasurementDocument"] },
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_MEASUREMDOCUM_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_MEASUREMDOCUM_CREATE" }
+  }
+}

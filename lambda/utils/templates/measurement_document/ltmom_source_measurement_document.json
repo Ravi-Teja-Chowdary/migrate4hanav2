@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/MeasurementDocument.json",
+  "_source_sha":     "332cdfa2231d703291581225344f59f701d4ed14124cc8e07b7831cb2f1304f4",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for MeasurementDocument.",
+
+  "source_object": "S_MEAS_DOC_HEADER",
+  "primary_table": "IMRG",
+  "source_key_field": "MDOCM",
+
+  "fields": [    { "name": "MRMRD", "type": "CHAR", "comment": "READ_DATE" },    { "name": "POINT", "type": "CHAR", "comment": "POINT" },    { "name": "READG", "type": "CHAR", "comment": "READING" }  ]
+}

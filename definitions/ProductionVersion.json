@@ -1,0 +1,70 @@
+{
+  "object_type":      "ProductionVersion",
+  "source_key_field": "VERID",
+  "home_table":       "MKAL",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "MKAL",
+        "fields":  ["VERID", "MATNR", "WERKS", "TEXT1", "ADATUM", "BDATUM"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "MATNR":  "MATERIAL",
+      "WERKS":  "PLANT",
+      "TEXT1":  "DESCRIPTION",
+      "ADATUM": "VALID_FROM",
+      "BDATUM": "VALID_TO"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "VERID", "rule": "non_empty",              "on_fail": "dead_letter", "code": "MISSING_VERSION" },
+      { "field": "MATNR", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_MATERIAL" },
+      { "field": "WERKS", "rule": "werks_plant",            "on_fail": "dead_letter", "code": "INVALID_PLANT" }
+    ]
+  },
+
+  "fk": { "MATNR": "Material" },
+
+  "load": {
+    "primary_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_PRODVERSION_CREATE",
+      "header_struct":    "PROD_VERSION",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "VERID"
+    },
+    "mc": {
+      "object_id":        "PRODUCTION_VERSION",
+      "staging_template": "S_PRODUCTION_VERSION"
+    },
+    "ltmom": {
+      "source_object": "S_PRODVERS_HEADER",
+      "target_object": "VERID"
+    }
+  },
+
+  "verify": {
+    "key_field":    "VERID",
+    "value_fields": ["MATNR", "WERKS"]
+  },
+
+  "extensions": { "supports_ZZ_fields": false, "supports_partners": false, "supports_conditions": false, "supports_longtexts": false },
+  "telemetry": { "category": "ManufacturingReadiness", "affects": ["ProductionVersion"] },
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_PRODVERSION_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_PRODVERSION_CREATE" }
+  }
+}

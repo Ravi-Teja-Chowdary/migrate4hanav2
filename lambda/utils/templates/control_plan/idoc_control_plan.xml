@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ControlPlan.json
+     Source SHA:  27453ba761954e342132c4d021efae617902917743400611aec65948865900a4
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ControlPlan"
+               basic_type="CONTROLPLAN01"
+               message_type="CONTROLPLAN">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>CONTROLPLAN</MESTYP>
+    <IDOCTYP>CONTROLPLAN01</IDOCTYP>
+  </control>
+  <segments>    <field source="PLNAL" target_segment="E1CONTR" target_field="GROUP_COUNTER"/>    <field source="PLNTY" target_segment="E1CONTR" target_field="PLAN_TYPE"/>    <field source="WERKS" target_segment="E1CONTR" target_field="PLANT"/>  </segments>
+</idoc_template>

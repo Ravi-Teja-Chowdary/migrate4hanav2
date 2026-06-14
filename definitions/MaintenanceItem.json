@@ -1,0 +1,78 @@
+{
+  "object_type":      "MaintenanceItem",
+  "source_key_field": "WAPOS",
+  "home_table":       "MPOS",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "MPOS",
+        "fields":  ["WAPOS", "WARPL", "PSTXT", "AUART", "INGRP"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "WARPL": "MAINT_PLAN",
+      "PSTXT": "DESCRIPTION",
+      "AUART": "ORDER_TYPE",
+      "INGRP": "PLNNGGROUP"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "WAPOS", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_ITEM_NO" },
+      { "field": "WARPL", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_PLAN_NO" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_ALM_ITEM_CREATE",
+      "header_struct":    "MAINT_ITEM",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "MAINT_ITEM"
+    },
+    "mc": {
+      "object_id":        "MAINTENANCE_ITEM",
+      "staging_template": "S_MAINTENANCE_ITEM"
+    },
+    "ltmom": {
+      "source_object": "S_MAINT_ITEM_HEADER",
+      "target_object": "WAPOS"
+    }
+  },
+
+  "verify": {
+    "key_field":    "WAPOS",
+    "value_fields": ["WARPL", "PSTXT"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "PlantMaintenanceReadiness",
+    "affects":  ["MaintenanceItem"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_ALM_ITEM_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_ALM_ITEM_CREATE" }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/SalesContract.json",
+  "_source_sha":     "6d78d9df98e6155a1effec4e4287f8e3f0a92a83104fb6d2eca7346a28f1e3ec",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for SalesContract. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "SALES_CONTRACT",
+  "staging_template": "S_SALES_CONTRACT",
+  "source_key_field": "VBELN",
+
+  "columns": [    {"source_field": "AUART", "target_column": "DOC_TYPE", "required": false },    {"source_field": "SPART", "target_column": "DIVISION", "required": false },    {"source_field": "VKORG", "target_column": "SALES_ORG", "required": false },    {"source_field": "VTWEG", "target_column": "DISTR_CHAN", "required": false },    {"source_field": "WAERK", "target_column": "CURRENCY", "required": false }  ],
+
+  "primary_table":  "VBAK",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

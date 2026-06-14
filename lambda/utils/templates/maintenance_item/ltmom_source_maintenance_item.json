@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/MaintenanceItem.json",
+  "_source_sha":     "51cf463816570595f37af079b52fc9a91c5261aa7351d5aa649eef2c672f2831",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for MaintenanceItem.",
+
+  "source_object": "S_MAINT_ITEM_HEADER",
+  "primary_table": "MPOS",
+  "source_key_field": "WAPOS",
+
+  "fields": [    { "name": "AUART", "type": "CHAR", "comment": "ORDER_TYPE" },    { "name": "INGRP", "type": "CHAR", "comment": "PLNNGGROUP" },    { "name": "PSTXT", "type": "CHAR", "comment": "DESCRIPTION" },    { "name": "WARPL", "type": "CHAR", "comment": "MAINT_PLAN" }  ]
+}

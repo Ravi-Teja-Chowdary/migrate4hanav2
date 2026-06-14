@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ProductionVersion.json",
+  "_source_sha":     "2d5aeba11c3ec4d5b8ddae9ab763454dab1ecdd062d4b422296fc3d40fce8cbb",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ProductionVersion.",
+
+  "source_object": "S_PRODVERS_HEADER",
+  "primary_table": "MKAL",
+  "source_key_field": "VERID",
+
+  "fields": [    { "name": "ADATUM", "type": "CHAR", "comment": "VALID_FROM" },    { "name": "BDATUM", "type": "CHAR", "comment": "VALID_TO" },    { "name": "MATNR", "type": "CHAR", "comment": "MATERIAL" },    { "name": "TEXT1", "type": "CHAR", "comment": "DESCRIPTION" },    { "name": "WERKS", "type": "CHAR", "comment": "PLANT" }  ]
+}

@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/MeasurementPoint.json",
+  "_source_sha":     "2d095db91161a1e1ec3020cb6ce33f8fcbd7fee32ca5885582492a152da62231",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for MeasurementPoint. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "POINT",
+  "source_object":   "S_MEAS_POINT_HEADER",
+  "primary_table":   "IMPT",
+
+  "mappings": [    { "source": "MPOBJ", "target": "OBJECT_NUMBER", "rule": "MOVE" },    { "source": "PSORT", "target": "SORT_FIELD", "rule": "MOVE" },    { "source": "PTEXT", "target": "DESCRIPTION", "rule": "MOVE" },    { "source": "PTTYP", "target": "POINT_TYPE", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

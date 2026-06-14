@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/MaintenancePlan.json
+     Source SHA:  7f89630bebaa47f4cf0fec537fa21929703b43196fd416d0e628d1954b529d52
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="MaintenancePlan"
+               basic_type="MAINTENANCEPLAN01"
+               message_type="MAINTENANCEPLAN">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>MAINTENANCEPLAN</MESTYP>
+    <IDOCTYP>MAINTENANCEPLAN01</IDOCTYP>
+  </control>
+  <segments>    <field source="MPTYP" target_segment="E1MAINT" target_field="MAINT_PLAN_TYPE"/>    <field source="STRAT" target_segment="E1MAINT" target_field="STRATEGY"/>    <field source="WAART" target_segment="E1MAINT" target_field="MAINT_ACT_TYPE"/>  </segments>
+</idoc_template>

@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/MaintenancePlan.json",
+  "_source_sha":     "7f89630bebaa47f4cf0fec537fa21929703b43196fd416d0e628d1954b529d52",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for MaintenancePlan.",
+
+  "source_object": "S_MAINT_PLAN_HEADER",
+  "primary_table": "MPLA",
+  "source_key_field": "WARPL",
+
+  "fields": [    { "name": "MPTYP", "type": "CHAR", "comment": "MAINT_PLAN_TYPE" },    { "name": "STRAT", "type": "CHAR", "comment": "STRATEGY" },    { "name": "WAART", "type": "CHAR", "comment": "MAINT_ACT_TYPE" }  ]
+}

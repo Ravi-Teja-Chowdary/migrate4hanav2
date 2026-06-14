@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ScheduleAgreementSD.json",
+  "_source_sha":     "ef7df293e573e9bd2c712fb79105f0afcdb4938b47039ecb5517c84eca19d711",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ScheduleAgreementSD.",
+
+  "source_object": "S_SAG_SD_HEADER",
+  "primary_table": "VBAK",
+  "source_key_field": "VBELN",
+
+  "fields": [    { "name": "AUART", "type": "CHAR", "comment": "DOC_TYPE" },    { "name": "SPART", "type": "CHAR", "comment": "DIVISION" },    { "name": "VKORG", "type": "CHAR", "comment": "SALES_ORG" },    { "name": "VTWEG", "type": "CHAR", "comment": "DISTR_CHAN" },    { "name": "WAERK", "type": "CHAR", "comment": "CURRENCY" }  ]
+}

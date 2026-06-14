@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/MaintenancePlan.json",
+  "_source_sha":     "7f89630bebaa47f4cf0fec537fa21929703b43196fd416d0e628d1954b529d52",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for MaintenancePlan. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "MAINTENANCE_PLAN",
+  "staging_template": "S_MAINTENANCE_PLAN",
+  "source_key_field": "WARPL",
+
+  "columns": [    {"source_field": "MPTYP", "target_column": "MAINT_PLAN_TYPE", "required": false },    {"source_field": "STRAT", "target_column": "STRATEGY", "required": false },    {"source_field": "WAART", "target_column": "MAINT_ACT_TYPE", "required": false }  ],
+
+  "primary_table":  "MPLA",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

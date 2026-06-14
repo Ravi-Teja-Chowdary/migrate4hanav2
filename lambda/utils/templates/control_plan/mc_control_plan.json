@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/ControlPlan.json",
+  "_source_sha":     "27453ba761954e342132c4d021efae617902917743400611aec65948865900a4",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for ControlPlan. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "CONTROL_PLAN",
+  "staging_template": "S_CONTROL_PLAN",
+  "source_key_field": "PLNNR",
+
+  "columns": [    {"source_field": "PLNAL", "target_column": "GROUP_COUNTER", "required": false },    {"source_field": "PLNTY", "target_column": "PLAN_TYPE", "required": false },    {"source_field": "WERKS", "target_column": "PLANT", "required": false }  ],
+
+  "primary_table":  "PLKO",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

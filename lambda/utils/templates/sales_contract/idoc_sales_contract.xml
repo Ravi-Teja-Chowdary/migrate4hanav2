@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/SalesContract.json
+     Source SHA:  6d78d9df98e6155a1effec4e4287f8e3f0a92a83104fb6d2eca7346a28f1e3ec
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="SalesContract"
+               basic_type="SALESCONTRACT01"
+               message_type="SALESCONTRACT">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>SALESCONTRACT</MESTYP>
+    <IDOCTYP>SALESCONTRACT01</IDOCTYP>
+  </control>
+  <segments>    <field source="AUART" target_segment="E1SALES" target_field="DOC_TYPE"/>    <field source="SPART" target_segment="E1SALES" target_field="DIVISION"/>    <field source="VKORG" target_segment="E1SALES" target_field="SALES_ORG"/>    <field source="VTWEG" target_segment="E1SALES" target_field="DISTR_CHAN"/>    <field source="WAERK" target_segment="E1SALES" target_field="CURRENCY"/>  </segments>
+</idoc_template>

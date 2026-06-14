@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/ProductionVersion.json",
+  "_source_sha":     "2d5aeba11c3ec4d5b8ddae9ab763454dab1ecdd062d4b422296fc3d40fce8cbb",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for ProductionVersion. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "VERID",
+  "source_object":   "S_PRODVERS_HEADER",
+  "primary_table":   "MKAL",
+
+  "mappings": [    { "source": "ADATUM", "target": "VALID_FROM", "rule": "MOVE" },    { "source": "BDATUM", "target": "VALID_TO", "rule": "MOVE" },    { "source": "MATNR", "target": "MATERIAL", "rule": "MOVE" },    { "source": "TEXT1", "target": "DESCRIPTION", "rule": "MOVE" },    { "source": "WERKS", "target": "PLANT", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

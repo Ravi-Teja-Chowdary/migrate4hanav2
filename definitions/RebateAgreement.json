@@ -1,0 +1,69 @@
+{
+  "object_type":      "RebateAgreement",
+  "source_key_field": "KNUMA",
+  "home_table":       "KONA",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "KONA",
+        "fields":  ["KNUMA", "VKORG", "VTWEG", "SPART", "BOART", "WAERK"],
+        "where":   "ABRDT IS NULL",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "VKORG": "SALES_ORG",
+      "VTWEG": "DISTR_CHAN",
+      "SPART": "DIVISION",
+      "BOART": "AGREEMENT_TYPE",
+      "WAERK": "CURRENCY"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "KNUMA", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_AGREEMENT_NO" },
+      { "field": "BOART", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_AGREEMENT_TYPE" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_AGREEMENTS_CREATE",
+      "header_struct":    "AGREEMENT_HEADER",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "KNUMA"
+    },
+    "mc": {
+      "object_id":        "REBATE_AGREEMENT",
+      "staging_template": "S_REBATE_AGREEMENT"
+    },
+    "ltmom": {
+      "source_object": "S_REBATE_HEADER",
+      "target_object": "KNUMA"
+    }
+  },
+
+  "verify": {
+    "key_field":    "KNUMA",
+    "value_fields": ["BOART", "VKORG"]
+  },
+
+  "extensions": { "supports_ZZ_fields": false, "supports_partners": false, "supports_conditions": true, "supports_longtexts": false },
+  "telemetry": { "category": "SDReadiness", "affects": ["RebateAgreement"] },
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_AGREEMENTS_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_AGREEMENTS_CREATE" }
+  }
+}

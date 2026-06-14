@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/SamplingProcedure.json
+     Source SHA:  bcae6a230239cc36eb569248579962c6a4bfbd7cb8bc8182e7e220a4d9507e59
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="SamplingProcedure"
+               basic_type="SAMPLINGPROCEDURE01"
+               message_type="SAMPLINGPROCEDURE">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>SAMPLINGPROCEDURE</MESTYP>
+    <IDOCTYP>SAMPLINGPROCEDURE01</IDOCTYP>
+  </control>
+  <segments>    <field source="BEWERTART" target_segment="E1SAMPL" target_field="VALUATION_TYPE"/>    <field source="PROBENART_TXT" target_segment="E1SAMPL" target_field="DESCRIPTION"/>    <field source="STICHPRART" target_segment="E1SAMPL" target_field="SAMPLE_TYPE"/>  </segments>
+</idoc_template>

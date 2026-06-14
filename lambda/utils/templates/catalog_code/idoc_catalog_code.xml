@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/CatalogCode.json
+     Source SHA:  ba206a833a76c321a4e7df2cf1f1496471f2d25468105d449b89c557c0c02e06
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="CatalogCode"
+               basic_type="CATALOGCODE01"
+               message_type="CATALOGCODE">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>CATALOGCODE</MESTYP>
+    <IDOCTYP>CATALOGCODE01</IDOCTYP>
+  </control>
+  <segments>    <field source="KATALOGART" target_segment="E1CATAL" target_field="CATALOG"/>    <field source="KURZTEXT" target_segment="E1CATAL" target_field="DESCRIPTION"/>    <field source="STATUS" target_segment="E1CATAL" target_field="STATUS"/>  </segments>
+</idoc_template>

@@ -1,0 +1,67 @@
+{
+  "object_type":      "WarrantyClaim",
+  "source_key_field": "QMNUM",
+  "home_table":       "PWTY",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "PWTY",
+        "fields":  ["QMNUM", "WTYTP", "EQUNR", "MATNR", "SERNR"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "WTYTP": "CLAIM_TYPE",
+      "EQUNR": "EQUIPMENT",
+      "MATNR": "MATERIAL"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "QMNUM", "rule": "non_empty",  "on_fail": "dead_letter", "code": "MISSING_CLAIM_NO" },
+      { "field": "WTYTP", "rule": "non_empty",  "on_fail": "dead_letter", "code": "MISSING_CLAIM_TYPE" }
+    ]
+  },
+
+  "fk": { "MATNR": "Material" },
+
+  "load": {
+    "primary_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_WARRANTY_CREATE",
+      "header_struct":    "CLAIM_HEADER",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "CLAIM_NO"
+    },
+    "mc": {
+      "object_id":        "WARRANTY_CLAIM",
+      "staging_template": "S_WARRANTY_CLAIM"
+    },
+    "ltmom": {
+      "source_object": "S_WARRANTY_HEADER",
+      "target_object": "QMNUM"
+    }
+  },
+
+  "verify": {
+    "key_field":    "QMNUM",
+    "value_fields": ["WTYTP", "EQUNR"]
+  },
+
+  "extensions": { "supports_ZZ_fields": false, "supports_partners": false, "supports_conditions": false, "supports_longtexts": false },
+  "telemetry": { "category": "PlantMaintenanceReadiness", "affects": ["WarrantyClaim"] },
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_WARRANTY_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_WARRANTY_CREATE" }
+  }
+}
