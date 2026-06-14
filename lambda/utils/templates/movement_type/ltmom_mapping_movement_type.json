@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/MovementType.json",
+  "_source_sha":     "74dd3b3e8b92b750674a7f0db61930cdb99be0d2208049e0cfe4fcdb8cb0c7f1",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for MovementType. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "BWART",
+  "source_object":   "S_MVT_HEADER",
+  "primary_table":   "T156",
+
+  "mappings": [    { "source": "BLART", "target": "DOC_TYPE", "rule": "MOVE" },    { "source": "BTEXT", "target": "SHORT_TEXT", "rule": "MOVE" },    { "source": "BWART", "target": "MVT_TYPE", "rule": "MOVE" },    { "source": "KZBEW", "target": "MVT_INDICATOR", "rule": "MOVE" },    { "source": "KZVBR", "target": "CONSUMPTION_INDIC", "rule": "MOVE" },    { "source": "LTEXT", "target": "LONG_TEXT", "rule": "MOVE" },    { "source": "SHKZG", "target": "DR_CR_INDIC", "rule": "MOVE" },    { "source": "SPRAS", "target": "LANGUAGE", "rule": "MOVE" }  ],
+
+  "value_translations": [    { "target": "DR_CR_INDIC", "map": {      "H": "H",      "S": "S"    } }  ]
+}

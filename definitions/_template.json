@@ -1,0 +1,80 @@
+{
+  "_doc": "ANNOTATED STARTER TEMPLATE. Copy this to definitions/<YourObject>.json and edit. Remove all _doc / _comment lines and any block you don't need before running scaffolder/build.py. The schema is at scaffolder/object_definition.schema.json.",
+
+  "object_type":      "ExampleObject",
+  "_object_type_doc": "PascalCase identity. Becomes the spine class name (+ 'SpineOrchestrator') and registry key. Must NOT collide with an existing object.",
+
+  "source_key_field": "EXKEY",
+  "_source_key_field_doc": "ECC primary key column (e.g., MATNR for Material, KUNNR for Customer, BANFN for PurchaseRequisition). Always uppercase.",
+
+  "home_table": "EXAMPL",
+  "_home_table_doc": "S/4 system-of-record table — the Reconciler reads target keys back from here to prove persistence.",
+
+  "category": "Master",
+  "phase":    "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "EXAMPL",
+        "fields":  ["EXKEY", "NAME1", "MATKL", "MEINS"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          1000,
+    "max_rows_per_template": 50000
+  },
+
+  "transform": {
+    "field_maps": {
+      "EXKEY": "OBJECT_KEY",
+      "NAME1": "DESCRIPTION",
+      "MATKL": "MATL_GROUP",
+      "MEINS": "BASE_UOM"
+    },
+    "value_maps": {
+      "BASE_UOM": { "ST": "EA", "KG": "KG" }
+    },
+    "dq_gates": [
+      { "field": "EXKEY",   "rule": "non_empty",            "on_fail": "dead_letter", "code": "MISSING_KEY" },
+      { "field": "MEINS",   "rule": "sap_unit_of_measure",  "on_fail": "dead_letter", "code": "INVALID_UOM" }
+    ]
+  },
+
+  "fk": {
+    "_doc":  "Source-field -> target object_type. Resolves via PersistentKeyMap at load time.",
+    "MATKL": "Material"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "bapi": {
+      "function":            "BAPI_EXAMPLE_CREATE",
+      "header_struct":       "EXAMPLE_DATA",
+      "extension_structure": "BAPI_TE_EXAMPL",
+      "commit_with_wait":    true,
+      "return_key_field":    "OBJECT_KEY"
+    }
+  },
+
+  "verify": {
+    "key_field":   "EXKEY",
+    "value_fields": ["NAME1", "MATKL"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields": true
+  },
+
+  "telemetry": {
+    "category": "MasterDataReadiness",
+    "affects":  ["ExampleObject"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_EXAMPLE_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_EXAMPLE_CREATE" }
+  }
+}

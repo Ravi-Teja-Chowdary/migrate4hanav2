@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/SourceList.json",
+  "_source_sha":     "1918c724106d42568aa28dbf03ceb161fe3f15ad2e2aff3d416d795b978e1d94",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for SourceList. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "SOURCE_LIST",
+  "staging_template": "S_SOURCE_LIST",
+  "source_key_field": "MATNR",
+
+  "columns": [    {"source_field": "BDATU", "target_column": "VALID_TO", "required": false },    {"source_field": "EBELN", "target_column": "AGREEMENT", "required": false },    {"source_field": "EKORG", "target_column": "PURCH_ORG", "required": false },    {"source_field": "FLIFN", "target_column": "FIX_VENDOR", "required": false },    {"source_field": "LIFNR", "target_column": "VENDOR", "required": false },    {"source_field": "MATNR", "target_column": "MATERIAL", "required": true },    {"source_field": "VDATU", "target_column": "VALID_FROM", "required": false },    {"source_field": "WERKS", "target_column": "PLANT", "required": false }  ],
+
+  "primary_table":  "EORD",
+  "join_tables": [  ],
+
+  "package_size":          1000,
+  "max_rows_per_template": 50000
+}

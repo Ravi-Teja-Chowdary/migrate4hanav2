@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/MovementType.json",
+  "_source_sha":     "74dd3b3e8b92b750674a7f0db61930cdb99be0d2208049e0cfe4fcdb8cb0c7f1",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for MovementType. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "MOVEMENT_TYPE",
+  "staging_template": "S_MOVEMENT_TYPE",
+  "source_key_field": "BWART",
+
+  "columns": [    {"source_field": "BLART", "target_column": "DOC_TYPE", "required": false },    {"source_field": "BTEXT", "target_column": "SHORT_TEXT", "required": false },    {"source_field": "BWART", "target_column": "MVT_TYPE", "required": true },    {"source_field": "KZBEW", "target_column": "MVT_INDICATOR", "required": false },    {"source_field": "KZVBR", "target_column": "CONSUMPTION_INDIC", "required": false },    {"source_field": "LTEXT", "target_column": "LONG_TEXT", "required": false },    {"source_field": "SHKZG", "target_column": "DR_CR_INDIC", "required": false },    {"source_field": "SPRAS", "target_column": "LANGUAGE", "required": false }  ],
+
+  "primary_table":  "T156",
+  "join_tables": [    {"name": "T156T", "join_on": ["BWART"], "fields": ["BWART","SPRAS","BTEXT","LTEXT"] }  ],
+
+  "package_size":          1000,
+  "max_rows_per_template": 5000
+}

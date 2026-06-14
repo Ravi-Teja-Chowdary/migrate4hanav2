@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/MovementType.json
+     Source SHA:  74dd3b3e8b92b750674a7f0db61930cdb99be0d2208049e0cfe4fcdb8cb0c7f1
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="MovementType"
+               basic_type="MOVEMENTTYPE01"
+               message_type="MOVEMENTTYPE">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>MOVEMENTTYPE</MESTYP>
+    <IDOCTYP>MOVEMENTTYPE01</IDOCTYP>
+  </control>
+  <segments>    <field source="BLART" target_segment="E1MOVEM" target_field="DOC_TYPE"/>    <field source="BTEXT" target_segment="E1MOVEM" target_field="SHORT_TEXT"/>    <field source="BWART" target_segment="E1MOVEM" target_field="MVT_TYPE"/>    <field source="KZBEW" target_segment="E1MOVEM" target_field="MVT_INDICATOR"/>    <field source="KZVBR" target_segment="E1MOVEM" target_field="CONSUMPTION_INDIC"/>    <field source="LTEXT" target_segment="E1MOVEM" target_field="LONG_TEXT"/>    <field source="SHKZG" target_segment="E1MOVEM" target_field="DR_CR_INDIC"/>    <field source="SPRAS" target_segment="E1MOVEM" target_field="LANGUAGE"/>  </segments>
+</idoc_template>

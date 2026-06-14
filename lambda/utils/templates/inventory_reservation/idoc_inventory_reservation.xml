@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/InventoryReservation.json
+     Source SHA:  72e1524f2185201fe34040af57955b2a6d760323e6df0a7f62458c0ffc3448a7
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="InventoryReservation"
+               basic_type="RESCR01"
+               message_type="RESCR">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>RESCR</MESTYP>
+    <IDOCTYP>RESCR01</IDOCTYP>
+  </control>
+  <segments>    <field source="AUFNR" target_segment="E1INVEN" target_field="ORDER_NUMBER"/>    <field source="BDMNG" target_segment="E1INVEN" target_field="QUANTITY"/>    <field source="BDTER" target_segment="E1INVEN" target_field="REQUIREMENT_DATE"/>    <field source="BSART" target_segment="E1INVEN" target_field="DOC_TYPE"/>    <field source="CHARG" target_segment="E1INVEN" target_field="BATCH"/>    <field source="LGORT" target_segment="E1INVEN" target_field="STGE_LOC"/>    <field source="MATNR" target_segment="E1INVEN" target_field="MATERIAL"/>    <field source="MEINS" target_segment="E1INVEN" target_field="BASE_UOM"/>    <field source="RSNUM" target_segment="E1INVEN" target_field="RESERVATION_NUMBER"/>    <field source="WERKS" target_segment="E1INVEN" target_field="PLANT"/>  </segments>
+</idoc_template>

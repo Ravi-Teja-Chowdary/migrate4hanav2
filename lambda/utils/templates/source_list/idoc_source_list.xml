@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/SourceList.json
+     Source SHA:  1918c724106d42568aa28dbf03ceb161fe3f15ad2e2aff3d416d795b978e1d94
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="SourceList"
+               basic_type="SRCLIST01"
+               message_type="SRCLIST">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>SRCLIST</MESTYP>
+    <IDOCTYP>SRCLIST01</IDOCTYP>
+  </control>
+  <segments>    <field source="BDATU" target_segment="E1SOURC" target_field="VALID_TO"/>    <field source="EBELN" target_segment="E1SOURC" target_field="AGREEMENT"/>    <field source="EKORG" target_segment="E1SOURC" target_field="PURCH_ORG"/>    <field source="FLIFN" target_segment="E1SOURC" target_field="FIX_VENDOR"/>    <field source="LIFNR" target_segment="E1SOURC" target_field="VENDOR"/>    <field source="MATNR" target_segment="E1SOURC" target_field="MATERIAL"/>    <field source="VDATU" target_segment="E1SOURC" target_field="VALID_FROM"/>    <field source="WERKS" target_segment="E1SOURC" target_field="PLANT"/>  </segments>
+</idoc_template>

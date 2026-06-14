@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/SourceList.json",
+  "_source_sha":     "1918c724106d42568aa28dbf03ceb161fe3f15ad2e2aff3d416d795b978e1d94",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for SourceList.",
+
+  "source_object": "S_EORD_HEADER",
+  "primary_table": "EORD",
+  "source_key_field": "MATNR",
+
+  "fields": [    { "name": "BDATU", "type": "CHAR", "comment": "VALID_TO" },    { "name": "EBELN", "type": "CHAR", "comment": "AGREEMENT" },    { "name": "EKORG", "type": "CHAR", "comment": "PURCH_ORG" },    { "name": "FLIFN", "type": "CHAR", "comment": "FIX_VENDOR" },    { "name": "LIFNR", "type": "CHAR", "comment": "VENDOR" },    { "name": "MATNR", "type": "CHAR", "comment": "MATERIAL" },    { "name": "VDATU", "type": "CHAR", "comment": "VALID_FROM" },    { "name": "WERKS", "type": "CHAR", "comment": "PLANT" }  ]
+}

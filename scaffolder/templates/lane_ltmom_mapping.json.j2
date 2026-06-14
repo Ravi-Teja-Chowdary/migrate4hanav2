@@ -1,0 +1,26 @@
+{
+  "_generated_from": "definitions/{{ object_type }}.json",
+  "_source_sha":     "{{ source_sha }}",
+  "_generator":      "migrate4hana scaffolder v{{ scaffolder_version }}",
+  "_doc":            "LTMOM field-mapping spec for {{ object_type }}. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "{{ ltmom_target_object }}",
+  "source_object":   "{{ ltmom_source_object }}",
+  "primary_table":   "{{ primary_table_name }}",
+
+  "mappings": [
+{%- for src, tgt in field_maps_sorted %}
+    { "source": "{{ src }}", "target": "{{ tgt }}", "rule": "MOVE" }{% if not loop.last %},{% endif %}
+{%- endfor %}
+  ],
+
+  "value_translations": [
+{%- for tgt, vmap in value_maps_sorted %}
+    { "target": "{{ tgt }}", "map": {
+    {%- for sv, tv in vmap %}
+      "{{ sv }}": "{{ tv }}"{% if not loop.last %},{% endif %}
+    {%- endfor %}
+    } }{% if not loop.last %},{% endif %}
+{%- endfor %}
+  ]
+}

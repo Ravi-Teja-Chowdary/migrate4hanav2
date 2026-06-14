@@ -1,0 +1,183 @@
+"""
+{{ snake_name }}_spine — GENERATED FROM definitions/{{ object_type }}.json
+======================================================================
+
+DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build {{ object_type }}` to
+regenerate after editing the JSON definition.
+
+Generator:    migrate4hana scaffolder v{{ scaffolder_version }}
+Source SHA:   {{ source_sha }}
+Object type:  {{ object_type }}
+Category:     {{ category }}
+Lane:         {{ load_primary_lane }}{% if load_fallback_lane %} (fallback: {{ load_fallback_lane }}){% endif %}
+"""
+from __future__ import annotations
+
+from typing import Optional
+
+from base_spine_orchestrator import (
+    BaseSpineOrchestrator,
+    register_spine,
+    DISP_CREATED,
+    DISP_MATCHED_EXISTING,
+    DISP_REMAPPED,
+    build_extensioninx,
+)
+
+# DQ rules — pure functions, sourced from lambda/utils/dq_rules/ at runtime.
+{% for rule_name in dq_rule_imports %}
+from dq_rules.{{ rule_name }} import {{ rule_name }}
+{% endfor %}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Field maps lifted from the JSON definition
+# ─────────────────────────────────────────────────────────────────────────────
+# source_field -> target_canonical_field
+FIELD_MAPS = {
+{% for src, tgt in field_maps_sorted %}
+    {{ src|repr }}: {{ tgt|repr }},
+{% endfor %}
+}
+
+# target_field -> { source_value: target_value }
+VALUE_MAPS = {
+{% for tgt, vmap in value_maps_sorted %}
+    {{ tgt|repr }}: {
+{% for sv, tv in vmap %}
+        {{ sv|repr }}: {{ tv|repr }},
+{% endfor %}
+    },
+{% endfor %}
+}
+
+# DQ gates — (field, rule_name, rule_args, dead_letter_code)
+DQ_GATES = [
+{% for gate in dq_gates_sorted %}
+    ({{ gate.field|repr }}, {{ gate.rule|repr }}, {{ gate.rule_args|reprdict }}, {{ gate.code|repr }}),
+{% endfor %}
+]
+
+# Foreign keys — source_field -> registry object_type
+FK_FIELDS = {
+{% for src, obj in fk_fields_sorted %}
+    {{ src|repr }}: {{ obj|repr }},
+{% endfor %}
+}
+
+# Verify key contract for the post-load Reconciler
+VERIFY_KEY_FIELD = {{ verify_key_field|repr }}
+VERIFY_VALUE_FIELDS = {{ verify_value_fields|repr }}
+
+# Resolved at runtime from version_matrix.py; falls back to default_bapi.
+DEFAULT_BAPI = {{ default_bapi|repr }}
+VERSION_BAPI_MAP = {
+{% for ver, bapi in version_bapi_map_sorted %}
+    {{ ver|repr }}: {{ bapi|repr }},
+{% endfor %}
+}
+
+
+# Dispatch table for DQ rules — built once at import time.
+_RULE_FNS = {
+{% for rule_name in dq_rule_imports %}
+    {{ rule_name|repr }}: {{ rule_name }},
+{% endfor %}
+}
+
+
+@register_spine
+class {{ class_name }}(BaseSpineOrchestrator):
+    """{{ category }} object spine for {{ object_type }}.
+
+    Generated from definitions/{{ object_type }}.json. Honours the
+    BaseSpineOrchestrator lifecycle: transform -> validate -> resolve_fk
+    -> build_payload -> call_bapi -> register_key -> fan_out_to_sinks.
+    """
+
+    object_type           = {{ object_type|repr }}
+    source_key_field      = {{ source_key_field|repr }}
+    extension_structure   = {{ extension_structure|repr }}
+    fk_fields             = FK_FIELDS
+    home_table            = {{ home_table|repr }}
+
+    # ── DQ gates ─────────────────────────────────────────────────────────────
+    def validate(self, row: dict) -> Optional[str]:
+        for field, rule_name, rule_args, code in DQ_GATES:
+            rule_fn = _RULE_FNS.get(rule_name)
+            if rule_fn is None:
+                return f"{code}: rule {rule_name!r} not registered"
+            err = rule_fn(row, field, **rule_args)
+            if err:
+                return f"{code}: {err}"
+        return None
+
+    # ── Payload construction ────────────────────────────────────────────────
+    def build_payload(self, row: dict, ext_rows: list) -> dict:
+        header = {}
+        for src, tgt in FIELD_MAPS.items():
+            v = row.get(src)
+            if v is None:
+                continue
+            # Apply value_map if one is registered for this target field
+            vmap = VALUE_MAPS.get(tgt)
+            if vmap and str(v) in vmap:
+                v = vmap[str(v)]
+            header[tgt] = v
+
+        payload: dict = {
+            {{ bapi_header_struct|repr }}: header,
+            "_src_key": row.get(self.source_key_field, ""),
+        }
+
+        if ext_rows:
+            payload["EXTENSIONIN"] = ext_rows
+            field_names = [(r.get("VALUEPART1") or "")[:30].strip() for r in ext_rows]
+            payload["EXTENSIONINX"] = build_extensioninx(
+                self.extension_structure, field_names
+            )
+        return payload
+
+    # ── BAPI invocation ─────────────────────────────────────────────────────
+    def call_bapi(self, payload: dict) -> tuple:
+        src_key = payload.pop("_src_key", "")
+
+        # Version routing: pick the BAPI per the target release.
+        bapi_fn = VERSION_BAPI_MAP.get(self.target_release, DEFAULT_BAPI)
+
+        resp = self.c.call(bapi_fn, **payload)
+
+        # Normalize RETURN to a list (BAPIs send either a single struct or a tbl)
+        ret = resp.get("RETURN") or []
+        if isinstance(ret, dict):
+            ret_list = [ret] if ret.get("TYPE") else []
+        else:
+            ret_list = list(ret)
+
+        hard = [m for m in ret_list if m.get("TYPE") in ("E", "A")]
+        msgs = [(m.get("MESSAGE") or "").strip() for m in ret_list if m.get("MESSAGE")]
+
+        target_key = (resp.get({{ bapi_return_key|repr }}) or "").strip()
+
+        if hard or not target_key:
+            try:
+                self.c.call("BAPI_TRANSACTION_ROLLBACK")
+            except Exception:
+                pass
+            return None, msgs, None, None
+
+        # Commit. WAIT="X" is included when load.bapi.commit_with_wait is true
+        # (default). A commit failure is surfaced as a BAPI failure so the
+        # Reconciler still reports the gap when it cannot find the target_key
+        # in home_table.
+        try:
+            self.c.call("BAPI_TRANSACTION_COMMIT"{% if bapi_commit_with_wait %}, WAIT="X"{% endif %})
+        except Exception:
+            return None, msgs + ["BAPI_TRANSACTION_COMMIT failed"], None, None
+
+        verify_key = {
+            "table": self.home_table,
+            "key":   {VERIFY_KEY_FIELD: target_key},
+            "values": {fld: payload.get({{ bapi_header_struct|repr }}, {}).get(fld, "")
+                       for fld in VERIFY_VALUE_FIELDS},
+        }
+        return target_key, msgs, DISP_CREATED, verify_key

@@ -1,0 +1,26 @@
+{
+  "_generated_from": "definitions/{{ object_type }}.json",
+  "_source_sha":     "{{ source_sha }}",
+  "_generator":      "migrate4hana scaffolder v{{ scaffolder_version }}",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for {{ object_type }}. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "{{ mc_object_id }}",
+  "staging_template": "{{ mc_staging_template }}",
+  "source_key_field": "{{ source_key_field }}",
+
+  "columns": [
+{%- for src, tgt in field_maps_sorted %}
+    {"source_field": "{{ src }}", "target_column": "{{ tgt }}", "required": {{ 'true' if src == source_key_field else 'false' }} }{% if not loop.last %},{% endif %}
+{%- endfor %}
+  ],
+
+  "primary_table":  "{{ primary_table_name }}",
+  "join_tables": [
+{%- for tbl in non_primary_tables %}
+    {"name": "{{ tbl.name }}", "join_on": {{ tbl.join_on|tojson }}, "fields": {{ tbl.fields|tojson }} }{% if not loop.last %},{% endif %}
+{%- endfor %}
+  ],
+
+  "package_size":          {{ extract_package_size }},
+  "max_rows_per_template": {{ extract_max_rows_per_template }}
+}

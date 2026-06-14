@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/{{ object_type }}.json
+     Source SHA:  {{ source_sha }}
+     Generator:   migrate4hana scaffolder v{{ scaffolder_version }}
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="{{ object_type }}"
+               basic_type="{{ idoc_basic_type }}"
+               message_type="{{ idoc_message_type }}">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>{{ idoc_receiver_logsys }}</RCVPRN>
+    <MESTYP>{{ idoc_message_type }}</MESTYP>
+    <IDOCTYP>{{ idoc_basic_type }}</IDOCTYP>
+  </control>
+  <segments>
+{%- for src, tgt in field_maps_sorted %}
+    <field source="{{ src }}" target_segment="{{ idoc_header_segment }}" target_field="{{ tgt }}"/>
+{%- endfor %}
+  </segments>
+</idoc_template>

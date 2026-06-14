@@ -1,0 +1,16 @@
+{
+  "_generated_from": "definitions/{{ object_type }}.json",
+  "_source_sha":     "{{ source_sha }}",
+  "_generator":      "migrate4hana scaffolder v{{ scaffolder_version }}",
+  "_doc":            "LTMOM source-structure definition for {{ object_type }}.",
+
+  "source_object": "{{ ltmom_source_object }}",
+  "primary_table": "{{ primary_table_name }}",
+  "source_key_field": "{{ source_key_field }}",
+
+  "fields": [
+{%- for src, tgt in field_maps_sorted %}
+    { "name": "{{ src }}", "type": "CHAR", "comment": "{{ tgt }}" }{% if not loop.last %},{% endif %}
+{%- endfor %}
+  ]
+}

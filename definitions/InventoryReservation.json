@@ -1,0 +1,107 @@
+{
+  "object_type":      "InventoryReservation",
+  "source_key_field": "RSNUM",
+  "home_table":       "RKPF",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "RKPF",
+        "fields":  ["RSNUM", "BSART", "BDTER", "AUFNR", "FLGNG", "MWERT"],
+        "where":   "FLGNG <> 'X'",
+        "primary": true
+      },
+      {
+        "name":    "RESB",
+        "fields":  ["RSNUM", "RSPOS", "MATNR", "WERKS", "BDMNG", "MEINS", "LGORT", "CHARG"],
+        "join_on": ["RSNUM"]
+      }
+    ],
+    "package_size":          500,
+    "delta_field":           "AEDAT",
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "RSNUM": "RESERVATION_NUMBER",
+      "BSART": "DOC_TYPE",
+      "BDTER": "REQUIREMENT_DATE",
+      "AUFNR": "ORDER_NUMBER",
+      "MATNR": "MATERIAL",
+      "WERKS": "PLANT",
+      "BDMNG": "QUANTITY",
+      "MEINS": "BASE_UOM",
+      "LGORT": "STGE_LOC",
+      "CHARG": "BATCH"
+    },
+    "value_maps": {
+      "DOC_TYPE": { "AR": "AR", "BB": "BB", "ZZAR": "AR" }
+    },
+    "dq_gates": [
+      { "field": "RSNUM",    "rule": "non_empty",           "on_fail": "dead_letter", "code": "MISSING_RES_NUMBER" },
+      { "field": "MATNR",    "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_MATERIAL" },
+      { "field": "BDMNG",    "rule": "positive_number",     "on_fail": "dead_letter", "code": "INVALID_QUANTITY" },
+      { "field": "MEINS",    "rule": "sap_unit_of_measure", "on_fail": "dead_letter", "code": "INVALID_UOM" },
+      { "field": "WERKS",    "rule": "werks_plant",         "on_fail": "dead_letter", "code": "INVALID_PLANT" },
+      { "field": "BDTER",    "rule": "iso_date",            "on_fail": "dead_letter", "code": "INVALID_REQ_DATE" }
+    ]
+  },
+
+  "fk": {
+    "MATNR": "Material",
+    "WERKS": "Plant"
+  },
+
+  "load": {
+    "primary_lane":  "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":            "BAPI_RESERVATION_CREATE1",
+      "header_struct":       "RESERVATION_HEADER",
+      "item_struct":         "RESERVATION_ITEMS",
+      "extension_structure": "BAPI_TE_RESB",
+      "commit_with_wait":    true,
+      "return_key_field":    "RESERVATION"
+    },
+    "mc": {
+      "object_id":        "INVENTORY_RESERVATION",
+      "staging_template": "S_INVENTORY_RESERVATION"
+    },
+    "idoc": {
+      "basic_type":   "RESCR01",
+      "message_type": "RESCR"
+    },
+    "ltmom": {
+      "source_object": "S_RESV_HEADER",
+      "target_object": "RSNUM"
+    }
+  },
+
+  "verify": {
+    "key_field":    "RSNUM",
+    "value_fields": ["MATNR", "BDMNG", "WERKS", "BDTER"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  true,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "InventoryReadiness",
+    "affects":  ["InventoryReservation", "ProductionOrder"]
+  },
+
+  "version_routing": {
+    "ECC60_EHP1":  { "use_bapi": "BAPI_RESERVATION_CREATE1" },
+    "ECC60_EHP6":  { "use_bapi": "BAPI_RESERVATION_CREATE1" },
+    "S4HANA_2020": { "use_bapi": "BAPI_RESERVATION_CREATE1" },
+    "S4HANA_2022": { "use_bapi": "BAPI_RESERVATION_CREATE1" }
+  }
+}

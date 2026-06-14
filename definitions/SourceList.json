@@ -1,0 +1,93 @@
+{
+  "object_type":      "SourceList",
+  "source_key_field": "MATNR",
+  "home_table":       "EORD",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "EORD",
+        "fields":  ["MATNR", "WERKS", "VDATU", "BDATU", "LIFNR", "EBELN", "EBELP", "EKORG", "FLIFN"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          1000,
+    "max_rows_per_template": 50000
+  },
+
+  "transform": {
+    "field_maps": {
+      "MATNR": "MATERIAL",
+      "WERKS": "PLANT",
+      "VDATU": "VALID_FROM",
+      "BDATU": "VALID_TO",
+      "LIFNR": "VENDOR",
+      "EBELN": "AGREEMENT",
+      "EKORG": "PURCH_ORG",
+      "FLIFN": "FIX_VENDOR"
+    },
+    "value_maps": {
+      "FIX_VENDOR": { "X": "X", "": " " }
+    },
+    "dq_gates": [
+      { "field": "MATNR", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_MATERIAL" },
+      { "field": "WERKS", "rule": "werks_plant",           "on_fail": "dead_letter", "code": "INVALID_PLANT" },
+      { "field": "VDATU", "rule": "iso_date",              "on_fail": "dead_letter", "code": "INVALID_FROM_DATE" },
+      { "field": "BDATU", "rule": "iso_date",              "on_fail": "dead_letter", "code": "INVALID_TO_DATE" },
+      { "field": "LIFNR", "rule": "non_empty",             "on_fail": "dead_letter", "code": "MISSING_VENDOR" }
+    ]
+  },
+
+  "fk": {
+    "MATNR": "Material",
+    "WERKS": "Plant",
+    "LIFNR": "Vendor"
+  },
+
+  "load": {
+    "primary_lane":  "MC",
+    "fallback_lane": "LTMOM",
+    "bapi": {
+      "function":            "BAPI_SRCLIST_CHANGE_MULTI",
+      "header_struct":       "SRCLIST_DATA",
+      "extension_structure": "BAPI_TE_EORD",
+      "commit_with_wait":    true,
+      "return_key_field":    "MATNR"
+    },
+    "mc": {
+      "object_id":        "SOURCE_LIST",
+      "staging_template": "S_SOURCE_LIST"
+    },
+    "idoc": {
+      "basic_type":   "SRCLIST01",
+      "message_type": "SRCLIST"
+    },
+    "ltmom": {
+      "source_object": "S_EORD_HEADER",
+      "target_object": "MATNR"
+    }
+  },
+
+  "verify": {
+    "key_field":    "MATNR",
+    "value_fields": ["WERKS", "LIFNR", "VDATU", "BDATU"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields": true
+  },
+
+  "telemetry": {
+    "category": "PurchasingReadiness",
+    "affects":  ["SourceList", "PurchaseRequisition", "PurchaseOrder"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_SRCLIST_CHANGE_MULTI" },
+    "S4HANA_2022": { "use_bapi": "BAPI_SRCLIST_CHANGE_MULTI" }
+  }
+}

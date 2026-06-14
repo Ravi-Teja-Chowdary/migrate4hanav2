@@ -1,0 +1,89 @@
+{
+  "object_type":      "MovementType",
+  "source_key_field": "BWART",
+  "home_table":       "T156",
+  "category":         "Configuration",
+  "phase":            "prepare",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "T156",
+        "fields":  ["BWART", "SHKZG", "KZBEW", "KZVBR", "KZZUG", "BLART", "XSTBW", "XBWAU"],
+        "primary": true
+      },
+      {
+        "name":    "T156T",
+        "fields":  ["BWART", "SPRAS", "BTEXT", "LTEXT"],
+        "join_on": ["BWART"]
+      }
+    ],
+    "package_size":          1000,
+    "max_rows_per_template": 5000
+  },
+
+  "transform": {
+    "field_maps": {
+      "BWART": "MVT_TYPE",
+      "SHKZG": "DR_CR_INDIC",
+      "KZBEW": "MVT_INDICATOR",
+      "KZVBR": "CONSUMPTION_INDIC",
+      "BLART": "DOC_TYPE",
+      "BTEXT": "SHORT_TEXT",
+      "LTEXT": "LONG_TEXT",
+      "SPRAS": "LANGUAGE"
+    },
+    "value_maps": {
+      "DR_CR_INDIC": { "S": "S", "H": "H" }
+    },
+    "dq_gates": [
+      { "field": "BWART",       "rule": "non_empty",   "on_fail": "dead_letter", "code": "MISSING_MVT_TYPE" },
+      { "field": "DR_CR_INDIC", "rule": "in_set",
+        "rule_args": { "values": ["S", "H"] },
+        "on_fail": "dead_letter", "code": "INVALID_DR_CR" },
+      { "field": "LANGUAGE",    "rule": "langu_code",  "on_fail": "dead_letter", "code": "INVALID_LANGUAGE" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane":  "MC",
+    "fallback_lane": "LTMOM",
+    "bapi": {
+      "function":            "BAPI_MOVEMENT_TYPE_CREATE",
+      "header_struct":       "MVT_DATA",
+      "extension_structure": "",
+      "commit_with_wait":    true,
+      "return_key_field":    "MVT_TYPE"
+    },
+    "mc": {
+      "object_id":        "MOVEMENT_TYPE",
+      "staging_template": "S_MOVEMENT_TYPE"
+    },
+    "ltmom": {
+      "source_object": "S_MVT_HEADER",
+      "target_object": "BWART"
+    }
+  },
+
+  "verify": {
+    "key_field":    "BWART",
+    "value_fields": ["DR_CR_INDIC", "MVT_INDICATOR", "DOC_TYPE"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields": false
+  },
+
+  "telemetry": {
+    "category": "ConfigurationReadiness",
+    "affects":  ["MovementType", "InventoryBalance", "InventoryReservation"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_MOVEMENT_TYPE_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_MOVEMENT_TYPE_CREATE" }
+  }
+}
