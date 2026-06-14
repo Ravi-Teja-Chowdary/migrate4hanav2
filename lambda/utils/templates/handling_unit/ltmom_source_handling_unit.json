@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/HandlingUnit.json",
+  "_source_sha":     "1d66fd2508c9e051bd247b0a612235d9ae95dead61ebe467764847442d388d3a",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for HandlingUnit.",
+
+  "source_object": "S_HANDLING_UNIT_HEADER",
+  "primary_table": "VEKP",
+  "source_key_field": "EXIDV",
+
+  "fields": [    { "name": "BRGEW", "type": "CHAR", "comment": "TOTAL_WGHT" },    { "name": "EXIDV", "type": "CHAR", "comment": "HU_EXID" },    { "name": "GEWEI", "type": "CHAR", "comment": "UNIT_OF_WT" },    { "name": "VHILM", "type": "CHAR", "comment": "PACK_MAT" }  ]
+}

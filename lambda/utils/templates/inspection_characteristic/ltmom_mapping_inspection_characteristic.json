@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/InspectionCharacteristic.json",
+  "_source_sha":     "7b23f7b8f82e4bf987456fc484d3d964b1299701e9b5aa224c771eedf6f5b106",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for InspectionCharacteristic. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "MKMNR",
+  "source_object":   "S_INSP_CHAR_HEADER",
+  "primary_table":   "QPMK",
+
+  "mappings": [  ],
+
+  "value_translations": [  ]
+}

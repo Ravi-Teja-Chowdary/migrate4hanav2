@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/HandlingUnit.json
+     Source SHA:  1d66fd2508c9e051bd247b0a612235d9ae95dead61ebe467764847442d388d3a
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="HandlingUnit"
+               basic_type="HANDLINGUNIT01"
+               message_type="HANDLINGUNIT">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>HANDLINGUNIT</MESTYP>
+    <IDOCTYP>HANDLINGUNIT01</IDOCTYP>
+  </control>
+  <segments>    <field source="BRGEW" target_segment="E1HANDL" target_field="TOTAL_WGHT"/>    <field source="EXIDV" target_segment="E1HANDL" target_field="HU_EXID"/>    <field source="GEWEI" target_segment="E1HANDL" target_field="UNIT_OF_WT"/>    <field source="VHILM" target_segment="E1HANDL" target_field="PACK_MAT"/>  </segments>
+</idoc_template>

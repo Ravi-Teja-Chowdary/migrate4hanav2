@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/Shipment.json
+     Source SHA:  d8543555fd81993d1841f4ec98240264a04ba979e2369a23610b30473c0b829c
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="Shipment"
+               basic_type="SHIPMENT01"
+               message_type="SHIPMENT">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>SHIPMENT</MESTYP>
+    <IDOCTYP>SHIPMENT01</IDOCTYP>
+  </control>
+  <segments>    <field source="ROUTE" target_segment="E1SHIPM" target_field="SHIPMENT_ROUTE"/>    <field source="SHTYP" target_segment="E1SHIPM" target_field="SHIPMENT_TYPE"/>    <field source="TPLST" target_segment="E1SHIPM" target_field="TRANS_PLAN_PT"/>    <field source="VSART" target_segment="E1SHIPM" target_field="SHIPPING_TYPE"/>  </segments>
+</idoc_template>

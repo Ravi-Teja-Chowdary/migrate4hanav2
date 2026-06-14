@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/Network.json",
+  "_source_sha":     "aa150582078ca35c6db7c75c78b270f8475d64b493b23e6afecb3ca7e20fa196",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for Network. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "AUFNR",
+  "source_object":   "S_NETWORK_HEADER",
+  "primary_table":   "AUFK",
+
+  "mappings": [    { "source": "AUART", "target": "NETWORK_TYPE", "rule": "MOVE" },    { "source": "AUFNR", "target": "NETWORK", "rule": "MOVE" },    { "source": "KTEXT", "target": "SHORT_TEXT", "rule": "MOVE" },    { "source": "WERKS", "target": "PLANT", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

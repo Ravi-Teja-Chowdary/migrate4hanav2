@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/InspectionCharacteristic.json",
+  "_source_sha":     "7b23f7b8f82e4bf987456fc484d3d964b1299701e9b5aa224c771eedf6f5b106",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for InspectionCharacteristic. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "INSPECTION_CHARACTERISTIC",
+  "staging_template": "S_INSPECTION_CHARACTERISTIC",
+  "source_key_field": "MKMNR",
+
+  "columns": [  ],
+
+  "primary_table":  "QPMK",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 10000
+}

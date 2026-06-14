@@ -1,0 +1,439 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_BUS2002_CREATE",
+  "params": [
+    {
+      "kind": "I",
+      "name": "I_NETWORK",
+      "optional": false,
+      "struct": "BAPI_BUS2002_NEW",
+      "text": "BAPI Structure Network: Create"
+    },
+    {
+      "kind": "T",
+      "name": "ET_RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return Parameter"
+    },
+    {
+      "kind": "T",
+      "name": "EXTENSIONIN",
+      "optional": true,
+      "struct": "BAPIPAREX",
+      "text": "Reference Structure for BAPI Parameters EXTENSIONIN/EXTENSIONOUT"
+    },
+    {
+      "kind": "T",
+      "name": "EXTENSIONOUT",
+      "optional": true,
+      "struct": "BAPIPAREX",
+      "text": "Reference Structure for BAPI Parameters EXTENSIONIN/EXTENSIONOUT"
+    }
+  ],
+  "structs": {
+    "BAPIPAREX": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "STRUCTURE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART1",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART2",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART3",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART4",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_BUS2002_NEW": [
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "NETWORK_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "PROFILE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MRP_CONTROLLER",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SHORT_TEXT",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "START_DATE",
+        "position": 7,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "FINISH_DATE",
+        "position": 8,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SCHED_TYPE",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "START_DATE_FCST",
+        "position": 10,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "FINISH_DATE_FCST",
+        "position": 11,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SCHED_TYPE_FCST",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NOT_AUTO_SCHEDULE",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NOT_AUTO_COSTING",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NOT_MRP_APPLICABLE",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "PROJECT_DEFINITION",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "WBS_ELEMENT",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SALES_DOC",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SALES_DOC_ITEM",
+        "position": 19,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "SUPERIOR_NETW",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SUPERIOR_NETW_ACT",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_CTR",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "OBJECTCLASS",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PLANNER_GROUP",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRIORITY",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "EXEC_FACTOR",
+        "position": 29,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "COST_SHEET",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COST_VAR_PLAN",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COST_VAR_ACTUAL",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "OVERHEAD_KEY",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SCHEDULING_EXACT_BREAK_TIMES",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_CAP_REQUIREMENTS",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA",
+        "position": 37,
+        "type": "C"
+      }
+    ]
+  }
+}

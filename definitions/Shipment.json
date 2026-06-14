@@ -1,0 +1,80 @@
+{
+  "object_type":      "Shipment",
+  "source_key_field": "TKNUM",
+  "home_table":       "VTTK",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "VTTK",
+        "fields":  ["TKNUM", "SHTYP", "VSART", "ROUTE", "TPLST", "ERDAT"],
+        "where":   "STTRG = ''",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "delta_field":           "ERDAT",
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {
+      "SHTYP": "SHIPMENT_TYPE",
+      "VSART": "SHIPPING_TYPE",
+      "ROUTE": "SHIPMENT_ROUTE",
+      "TPLST": "TRANS_PLAN_PT"
+    },
+    "dq_gates": [
+      { "field": "TKNUM", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_SHIPMENT_NO" },
+      { "field": "SHTYP", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_SHIPMENT_TYPE" },
+      { "field": "TPLST", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_TRANS_PLAN_PT" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_SHIPMENT_CREATE",
+      "header_struct":    "HEADERDATA",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "TRANSPORT"
+    },
+    "mc": {
+      "object_id":        "SHIPMENT",
+      "staging_template": "S_SHIPMENT"
+    },
+    "ltmom": {
+      "source_object": "S_SHIPMENT_HEADER",
+      "target_object": "TKNUM"
+    }
+  },
+
+  "verify": {
+    "key_field":    "TKNUM",
+    "value_fields": ["SHTYP", "TPLST"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   true,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "LogisticsReadiness",
+    "affects":  ["Shipment"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_SHIPMENT_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_SHIPMENT_CREATE" }
+  }
+}

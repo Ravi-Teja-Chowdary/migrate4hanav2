@@ -1,0 +1,83 @@
+{
+  "object_type":      "Network",
+  "source_key_field": "AUFNR",
+  "home_table":       "AUFK",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "AUFK",
+        "fields":  ["AUFNR", "AUART", "WERKS", "KTEXT", "ERDAT"],
+        "where":   "AUART LIKE 'NET%'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "delta_field":           "ERDAT",
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {
+      "AUFNR": "NETWORK",
+      "AUART": "NETWORK_TYPE",
+      "WERKS": "PLANT",
+      "KTEXT": "SHORT_TEXT"
+    },
+    "dq_gates": [
+      { "field": "AUFNR", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_NETWORK_NO" },
+      { "field": "AUART", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_NETWORK_TYPE" },
+      { "field": "WERKS", "rule": "werks_plant", "on_fail": "dead_letter", "code": "INVALID_PLANT" },
+      { "field": "KTEXT", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_SHORT_TEXT" }
+    ]
+  },
+
+  "fk": {
+    "WERKS": "Plant"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_BUS2002_CREATE",
+      "header_struct":    "I_NETWORK",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "NETWORK"
+    },
+    "mc": {
+      "object_id":        "NETWORK",
+      "staging_template": "S_NETWORK"
+    },
+    "ltmom": {
+      "source_object": "S_NETWORK_HEADER",
+      "target_object": "AUFNR"
+    }
+  },
+
+  "verify": {
+    "key_field":    "AUFNR",
+    "value_fields": ["AUART", "WERKS"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  true
+  },
+
+  "telemetry": {
+    "category": "ProjectSystemReadiness",
+    "affects":  ["Network"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_BUS2002_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_BUS2002_CREATE" }
+  }
+}

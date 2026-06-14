@@ -133,11 +133,14 @@ class ProductionOrderSpineOrchestrator(BaseSpineOrchestrator):
         return out
 
     def build_payload(self, row: dict, ext_rows: list) -> dict:
-        header = self._apply_field_map(row, FIELD_MAPS)
-        payload: dict = {
-            'ORDERDATA': header,
-            "_src_key": row.get(self.source_key_field, ""),
-        }
+        payload: dict = {"_src_key": row.get(self.source_key_field, "")}
+
+        # Header struct: when header_struct is empty (items-only BAPI like
+        # BAPI_QPMK_SAVEREPLICA or BAPI_INSPECTIONPLAN_CREATE), skip the
+        # header path entirely — the spine sends only the items table.
+        if 'ORDERDATA':
+            header = self._apply_field_map(row, FIELD_MAPS)
+            payload['ORDERDATA'] = header
 
         # If the BAPI is two-struct (header + items table), build the item from
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
@@ -192,10 +195,18 @@ class ProductionOrderSpineOrchestrator(BaseSpineOrchestrator):
         except Exception:
             return None, msgs + ["BAPI_TRANSACTION_COMMIT failed"], None, None
 
+        # Verify-value lookup: prefer header struct; fall back to first item
+        # of item struct when the BAPI is items-only.
+        if 'ORDERDATA':
+            value_source = payload.get('ORDERDATA', {}) or {}
+        elif ITEM_FIELD_MAPS:
+            items = payload.get('', []) or []
+            value_source = items[0] if items else {}
+        else:
+            value_source = {}
         verify_key = {
             "table": self.home_table,
             "key":   {VERIFY_KEY_FIELD: target_key},
-            "values": {fld: payload.get('ORDERDATA', {}).get(fld, "")
-                       for fld in VERIFY_VALUE_FIELDS},
+            "values": {fld: value_source.get(fld, "") for fld in VERIFY_VALUE_FIELDS},
         }
         return target_key, msgs, DISP_CREATED, verify_key

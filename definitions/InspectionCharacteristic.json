@@ -1,0 +1,84 @@
+{
+  "object_type":      "InspectionCharacteristic",
+  "source_key_field": "MKMNR",
+  "home_table":       "QPMK",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "QPMK",
+        "fields":  ["WERKS", "MKMNR", "VERWMERKM", "SORTFELD", "KURZTEXT"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {},
+    "item_field_maps": {
+      "WERKS":     "PLANT_QPMK",
+      "MKMNR":     "MSTR_CHAR",
+      "VERWMERKM": "VMSTR_CHAR",
+      "SORTFELD":  "SORT_FIELD",
+      "KURZTEXT":  "CHARACTERISTIC_NAME"
+    },
+    "dq_gates": [
+      { "field": "WERKS",     "rule": "werks_plant", "on_fail": "dead_letter", "code": "INVALID_PLANT" },
+      { "field": "MKMNR",     "rule": "non_empty",   "on_fail": "dead_letter", "code": "MISSING_CHAR_NO" },
+      { "field": "KURZTEXT",  "rule": "non_empty",   "on_fail": "dead_letter", "code": "MISSING_CHAR_NAME" }
+    ]
+  },
+
+  "fk": {
+    "WERKS": "Plant"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_QPMK_SAVEREPLICA",
+      "header_struct":    "",
+      "item_struct":      "MSTCHA",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "MSTR_CHAR"
+    },
+    "mc": {
+      "object_id":        "INSPECTION_CHARACTERISTIC",
+      "staging_template": "S_INSPECTION_CHARACTERISTIC"
+    },
+    "ltmom": {
+      "source_object": "S_INSP_CHAR_HEADER",
+      "target_object": "MKMNR"
+    }
+  },
+
+  "verify": {
+    "key_field":    "MKMNR",
+    "value_fields": ["WERKS", "VERWMERKM"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  true
+  },
+
+  "telemetry": {
+    "category": "QualityReadiness",
+    "affects":  ["InspectionCharacteristic"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_QPMK_SAVEREPLICA" },
+    "S4HANA_2022": { "use_bapi": "BAPI_QPMK_SAVEREPLICA" }
+  }
+}

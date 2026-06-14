@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/GoodsReceipt.json
+     Source SHA:  51092b06a3a2f0196423dde286543e31cb7b7922e6f98db0449876d2a3dce373
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="GoodsReceipt"
+               basic_type="WMMBID02"
+               message_type="WMMBXY">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>WMMBXY</MESTYP>
+    <IDOCTYP>WMMBID02</IDOCTYP>
+  </control>
+  <segments>    <field source="BLDAT" target_segment="E1GOODS" target_field="DOC_DATE"/>    <field source="BUDAT" target_segment="E1GOODS" target_field="PSTNG_DATE"/>    <field source="USNAM" target_segment="E1GOODS" target_field="PR_UNAME"/>    <field source="XBLNR" target_segment="E1GOODS" target_field="REF_DOC_NO"/>  </segments>
+</idoc_template>

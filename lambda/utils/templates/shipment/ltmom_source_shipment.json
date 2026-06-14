@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/Shipment.json",
+  "_source_sha":     "d8543555fd81993d1841f4ec98240264a04ba979e2369a23610b30473c0b829c",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for Shipment.",
+
+  "source_object": "S_SHIPMENT_HEADER",
+  "primary_table": "VTTK",
+  "source_key_field": "TKNUM",
+
+  "fields": [    { "name": "ROUTE", "type": "CHAR", "comment": "SHIPMENT_ROUTE" },    { "name": "SHTYP", "type": "CHAR", "comment": "SHIPMENT_TYPE" },    { "name": "TPLST", "type": "CHAR", "comment": "TRANS_PLAN_PT" },    { "name": "VSART", "type": "CHAR", "comment": "SHIPPING_TYPE" }  ]
+}

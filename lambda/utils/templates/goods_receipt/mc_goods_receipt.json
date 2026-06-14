@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/GoodsReceipt.json",
+  "_source_sha":     "51092b06a3a2f0196423dde286543e31cb7b7922e6f98db0449876d2a3dce373",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for GoodsReceipt. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "GOODS_RECEIPT",
+  "staging_template": "S_GOODS_RECEIPT",
+  "source_key_field": "MBLNR",
+
+  "columns": [    {"source_field": "BLDAT", "target_column": "DOC_DATE", "required": false },    {"source_field": "BUDAT", "target_column": "PSTNG_DATE", "required": false },    {"source_field": "USNAM", "target_column": "PR_UNAME", "required": false },    {"source_field": "XBLNR", "target_column": "REF_DOC_NO", "required": false }  ],
+
+  "primary_table":  "MKPF",
+  "join_tables": [    {"name": "MSEG", "join_on": ["MBLNR"], "fields": ["MBLNR","MATNR","WERKS","LGORT","BWART","MENGE","MEINS"] }  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

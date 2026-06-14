@@ -1,0 +1,2030 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_SHIPMENT_CREATE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "SHIPMENTGUID",
+      "optional": false,
+      "struct": "BAPISHIPMENTIDS",
+      "text": "Globally Unique Identifier (Linked to Time Segment, etc)"
+    },
+    {
+      "kind": "E",
+      "name": "TRANSPORT",
+      "optional": false,
+      "struct": "BAPISHIPMENTIDS",
+      "text": "Shipment Number"
+    },
+    {
+      "kind": "I",
+      "name": "HEADERDATA",
+      "optional": false,
+      "struct": "BAPISHIPMENTHEADER",
+      "text": "Shipment BAPI, Header Data"
+    },
+    {
+      "kind": "T",
+      "name": "ADDRESS",
+      "optional": true,
+      "struct": "BAPISHIPMENTADDRESS",
+      "text": "Shipment BAPI, Addresses"
+    },
+    {
+      "kind": "T",
+      "name": "HDUNHEADER",
+      "optional": true,
+      "struct": "BAPISHIPMENTHDUNHEADER",
+      "text": "Shipment BAPI, Handling Unit Header Data"
+    },
+    {
+      "kind": "T",
+      "name": "HDUNITEM",
+      "optional": true,
+      "struct": "BAPISHIPMENTHDUNITEM",
+      "text": "Shipment BAPI, Handling Unit Items"
+    },
+    {
+      "kind": "T",
+      "name": "HEADERDEADLINE",
+      "optional": true,
+      "struct": "BAPISHIPMENTHEADERDEADLINE",
+      "text": "Shipment BAPI, Deadlines"
+    },
+    {
+      "kind": "T",
+      "name": "ITEMDATA",
+      "optional": true,
+      "struct": "BAPISHIPMENTITEM",
+      "text": "Shipment BAPI, Items"
+    },
+    {
+      "kind": "T",
+      "name": "ITEMONSTAGE",
+      "optional": true,
+      "struct": "BAPISHIPMENTITEMONSTAGE",
+      "text": "Shipment BAPI, Items on Stages"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return Parameter"
+    },
+    {
+      "kind": "T",
+      "name": "STAGEDATA",
+      "optional": true,
+      "struct": "BAPISHIPMENTSTAGE",
+      "text": "Shipment BAPI, Stages"
+    },
+    {
+      "kind": "T",
+      "name": "STAGEDEADLINE",
+      "optional": true,
+      "struct": "BAPISHIPMENTSTAGEDEADLINE",
+      "text": "Shipment BAPI, Deadlines"
+    }
+  ],
+  "structs": {
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPISHIPMENTADDRESS": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ADDR_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "FORMOFADDR",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME_2",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME_3",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME_4",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "C_O_NAME",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "CITY",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DISTRICT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CITY_NO",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "POSTL_COD1",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "POSTL_COD2",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "POSTL_COD3",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PO_BOX",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "PO_BOX_CIT",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "DELIV_DIS",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STREET",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "STREET_NO",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "STR_ABBR",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "HOUSE_NO",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STR_SUPPL1",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STR_SUPPL2",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LOCATION",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUILDING",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FLOOR",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROOM_NO",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "REGION",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "SORT1",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "SORT2",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "TIME_ZONE",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ADR_NOTES",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COMM_TYPE",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "TEL1_NUMBR",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TEL1_EXT",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FAX_NUMBER",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FAX_EXTENS",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "STREET_LNG",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DISTRCT_NO",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHCKSTATUS",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "PBOXCIT_NO",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRANSPZONE",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "HOUSE_NO2",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 241,
+        "name": "E_MAIL",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STR_SUPPL3",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "TITLE",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COUNTRYISO",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGU_ISO",
+        "position": 50,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "BUILD_LONG",
+        "position": 51,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REGIOGROUP",
+        "position": 52,
+        "type": "C"
+      }
+    ],
+    "BAPISHIPMENTHDUNHEADER": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DELIV_NUMB",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "HDL_UNIT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "HDL_UNIT_EXID",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HDL_UNIT_EXID_TY",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TOTAL_WGHT",
+        "position": 5,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "LOAD_WGHT",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "ALLOWED_WGHT",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_OF_WT",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_OF_WT_ISO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TARE_WGHT",
+        "position": 10,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TARE_UNIT_WT",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TARE_UNIT_WT_ISO",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TOTAL_VOL",
+        "position": 13,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "LOAD_VOL",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "ALLOWEDVOL",
+        "position": 15,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "VOLUMEUNIT",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "VOLUMEUNIT_ISO",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TARE_VOL",
+        "position": 18,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TARE_UNI_VOL",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TARE_UNI_VOL_ISO",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SORT_FLD",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "HDL_UNIT_GRP1",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "HDL_UNIT_GRP2",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "HDL_UNIT_GRP3",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "HDL_UNIT_GRP4",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "HDL_UNIT_GRP5",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "SHIP_MAT",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "LENGTH",
+        "position": 28,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "WIDTH",
+        "position": 29,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "HEIGHT",
+        "position": 30,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_DIM",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_DIM_ISO",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "WT_TOL_LT",
+        "position": 33,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "VOL_TOL_LT",
+        "position": 34,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM_ISO",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "CONTENT",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SH_MAT_TYP",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MAT_GRP_SM",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LGTH_LOAD",
+        "position": 41,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LOAD_LGT_UNIT",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LOAD_LGT_UNIT_ISO",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TRAVL_TIME",
+        "position": 44,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DRIVTIMEUN",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DRIVTIMEUN_ISO",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "DISTANCE",
+        "position": 47,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_OF_DIST",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_OF_DIST_ISO",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "STGE_LOC",
+        "position": 50,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WT_VOL_FIX",
+        "position": 51,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SHIP_MAT_EXTERNAL",
+        "position": 52,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "SHIP_MAT_GUID",
+        "position": 53,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SHIP_MAT_VERSION",
+        "position": 54,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 22,
+        "name": "PACKNR_CONV",
+        "position": 55,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PACKSTATUS_LOCAL",
+        "position": 56,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "ALLOWEDLOAD",
+        "position": 57,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LABELTYPE",
+        "position": 58,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 22,
+        "name": "HDL_UNIT_GUID",
+        "position": 59,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LOG_SYSTEM",
+        "position": 60,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SHIP_MAT_LONG",
+        "position": 61,
+        "type": "C"
+      }
+    ],
+    "BAPISHIPMENTHDUNITEM": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "HDL_UNIT_INTO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "HDL_UNIT_NO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "HDL_UNIT_EXID_INTO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "HDL_UNIT_EXID",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DELIV_NUMB",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "DELIV_ITEM",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "PACK_QTY",
+        "position": 7,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SALES_UNIT",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SALES_UNIT_ISO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BATCH",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXTERNAL",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERSION",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HU_ITEM_TYPE",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "PACK_QTY_BASE",
+        "position": 16,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM_ISO",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "IDPLATE",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 20,
+        "type": "C"
+      }
+    ],
+    "BAPISHIPMENTHEADER": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SHIPMENT_NUM",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 22,
+        "name": "GUID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SHIPMENT_TYPE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TRANS_PLAN_PT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SERVICE_LEVEL",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "SHIPPING_TYPE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "SHIPPING_TYPE_PRE_LEG",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "SHIPPING_TYPE_SUB_LEG",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "SHIPPING_COND",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SHIPMENT_ROUTE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "CONTAINER_ID",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "EXTERNAL_ID_1",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "EXTERNAL_ID_2",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "DESCRIPTION",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS_PLAN",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS_CHECKIN",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS_LOAD_START",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS_LOAD_END",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS_COMPL",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS_SHPMNT_START",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS_SHPMNT_END",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SERVICE_AGENT_ID",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "DISTANCE",
+        "position": 23,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DISTANCE_UNIT",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DISTANCE_UNIT_ISO",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TRAVEL",
+        "position": 26,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TOTAL",
+        "position": 27,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TIME_UNIT",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TIME_UNIT_ISO",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "PRICING_PROCEDURE",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SPECIAL_PROCEDURE_ID",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHPMNT_COST_REL",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TOTAL_PLAN",
+        "position": 33,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_DURATION_PLAN",
+        "position": 34,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TOTAL_ACT",
+        "position": 35,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_DURATION_ACT",
+        "position": 36,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SUPPL_1",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SUPPL_2",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SUPPL_3",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SUPPL_4",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "TEXT_1",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "TEXT_2",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "TEXT_3",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "TEXT_4",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DG_GOOD_PROFILE",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_WAIT_PLAN",
+        "position": 46,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_WAIT_ACT",
+        "position": 47,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROUTE_SCHEDULE",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "STATUS_TENDERING",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TENDERING_ACCREJ_REASON",
+        "position": 50,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 80,
+        "name": "TENDERING_TEXT",
+        "position": 51,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TENDERING_MAX_PRICE",
+        "position": 52,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "TENDERING_MP_CURR_UNIT",
+        "position": 53,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TENDERING_MP_CURR_UNIT_ISO",
+        "position": 54,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TENDERING_ACT_PRICE",
+        "position": 55,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "TENDERING_AP_CURR_UNIT",
+        "position": 56,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TENDERING_AP_CURR_UNIT_ISO",
+        "position": 57,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TENDERING_CARRIER_ID",
+        "position": 58,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "TENDERING_CARRIER_NAME",
+        "position": 59,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "TENDERING_CARRIER_TRACK_ID",
+        "position": 60,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TENDERING_OFFER_DATE",
+        "position": 61,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "TENDERING_OFFER_TIME",
+        "position": 62,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "TENDERING_LOAD_LENGTH",
+        "position": 63,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TENDERING_LL_UNIT",
+        "position": 64,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TENDERING_LL_UNIT_ISO",
+        "position": 65,
+        "type": "C"
+      }
+    ],
+    "BAPISHIPMENTHEADERDEADLINE": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TIME_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TIME_STAMP_UTC",
+        "position": 2,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "TIME_ZONE",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPISHIPMENTIDS": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SHIPMENTNUM",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 22,
+        "name": "GUID",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPISHIPMENTITEM": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DELIVERY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ITENERARY",
+        "position": 2,
+        "type": "N"
+      }
+    ],
+    "BAPISHIPMENTITEMONSTAGE": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "STAGE_SEQ",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DELIVERY",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPISHIPMENTSTAGE": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STAGE_CAT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "STAGE_SEQ",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "SHIPPING_TYPE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "INCOTERMS",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LEG_INDICATOR",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ORG_ADDR",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ORG_POINT",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ORG_SHIPP_DPMNT",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "ORG_SHIPP_LOAD_PT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ORG_PLANT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ORG_PLANT_STOR_LC",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ORG_CUST",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ORG_SUPPL",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "ORG_ADDR_INFO",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ORG_DLV_NUM",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DEST_ADDR",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DEST_POINT",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DEST_SHIPP_DPMNT",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DEST_SHIPP_LOAD_PT",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DEST_PLANT",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DEST_PLANT_STOR_LC",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DEST_CUST",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DEST_SUPPL",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DEST_ADDR_INFO",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DEST_DLV_NUM",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SERVICE_AGENT",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "DISTANCE",
+        "position": 27,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DISTANCE_UNIT",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DISTANCE_UNIT_ISO",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TRAVEL",
+        "position": 30,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TOTAL",
+        "position": 31,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TIME_UNIT",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TIME_UNIT_ISO",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ORG_WAREHSE",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ORG_WAREHSE_GATE",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "ORG_CUST_UNLOAD_PT",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DEST_WAREHSE",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DEST_WAREHSE_GATE",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DEST_CUST_UNLOAD_PT",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TOT_PLAN",
+        "position": 40,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TOT_PLAN_DUR",
+        "position": 41,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TOT_ACT",
+        "position": 42,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_TOT_ACT_DUR",
+        "position": 43,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SPECIAL_PROCESS_ID",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHPMNT_COST_REL",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "COST_PROCEDURE",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_WAIT_PLAN",
+        "position": 47,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 11,
+        "name": "TIME_WAIT_ACT",
+        "position": 48,
+        "type": "P"
+      }
+    ],
+    "BAPISHIPMENTSTAGEDEADLINE": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "STAGE_SEQ",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TIME_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TIME_STAMP_UTC",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "TIME_ZONE",
+        "position": 4,
+        "type": "C"
+      }
+    ]
+  }
+}

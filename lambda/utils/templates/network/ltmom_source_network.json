@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/Network.json",
+  "_source_sha":     "aa150582078ca35c6db7c75c78b270f8475d64b493b23e6afecb3ca7e20fa196",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for Network.",
+
+  "source_object": "S_NETWORK_HEADER",
+  "primary_table": "AUFK",
+  "source_key_field": "AUFNR",
+
+  "fields": [    { "name": "AUART", "type": "CHAR", "comment": "NETWORK_TYPE" },    { "name": "AUFNR", "type": "CHAR", "comment": "NETWORK" },    { "name": "KTEXT", "type": "CHAR", "comment": "SHORT_TEXT" },    { "name": "WERKS", "type": "CHAR", "comment": "PLANT" }  ]
+}
