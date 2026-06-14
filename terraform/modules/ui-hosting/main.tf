@@ -70,6 +70,27 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "ui" {
   }
 }
 
+# SPA fallback function. Rewrites paths without a file extension to /index.html
+# so React Router serves the deep link. Skips anything that already looks like
+# a static asset (has a dot followed by a short extension).
+resource "aws_cloudfront_function" "spa_rewrite" {
+  name    = "migrate4hana-ui-spa-rewrite-${var.environment}"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite SPA deep links to /index.html (default behavior only)"
+  publish = true
+  code    = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      var uri = request.uri;
+      // Static asset (has a dot followed by 2-5 chars) — serve as-is.
+      if (/\.[a-z0-9]{2,5}$/i.test(uri)) return request;
+      // Anything else: SPA route, hand to React Router via index.html.
+      request.uri = '/index.html';
+      return request;
+    }
+  EOT
+}
+
 # Origin Access Control — only CloudFront can read from S3.
 resource "aws_cloudfront_origin_access_control" "ui" {
   name                              = "migrate4hana-ui-oac-${var.environment}"
@@ -125,6 +146,15 @@ resource "aws_cloudfront_distribution" "ui" {
 
     # CachingOptimized managed policy (long TTL for static assets)
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+    # SPA fallback runs ONLY on the S3 behavior — rewrites client-side routes
+    # (e.g. /runs, /pipeline) to /index.html so React Router takes over.
+    # /api/* keeps its own behavior + raw 4xx/5xx so the React app sees JSON
+    # errors, not HTML.
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_rewrite.arn
+    }
   }
 
   # ── /api/* behavior: ALB (no cache, all methods, forward auth) ──
@@ -142,21 +172,11 @@ resource "aws_cloudfront_distribution" "ui" {
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
   }
 
-  # SPA routing: 403/404 (S3 returns these for client-side routes like /runs)
-  # are rewritten to /index.html so React Router can handle them.
-  custom_error_response {
-    error_code         = 403
-    response_code      = 200
-    response_page_path = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
-    error_code         = 404
-    response_code      = 200
-    response_page_path = "/index.html"
-    error_caching_min_ttl = 0
-  }
+  # NOTE: distribution-wide custom_error_response was removed because it
+  # rewrote /api/* 404s to /index.html (200 HTML), causing the React app to
+  # show "Backend API offline" whenever the api-server legitimately returned
+  # 4xx. SPA routing now happens via aws_cloudfront_function.spa_rewrite
+  # attached only to the default (s3-ui) behavior.
 
   viewer_certificate {
     cloudfront_default_certificate = !local.use_custom_domain
