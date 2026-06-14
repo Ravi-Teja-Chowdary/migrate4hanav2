@@ -2839,6 +2839,97 @@ def _phase_b_validate_reconcile_sweep(event, run_id):
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FK resolution helper — used by phase_b_validate_generated test C.
+# Pulls live target values for foreign-key fields so the synthetic rows the
+# scaffolder seeds the validator with refer to records that actually exist
+# on the target system. Without this, every live BAPI call would fail with
+# "material does not exist" / "plant unknown" before the spine's own logic
+# could be exercised end-to-end.
+# ─────────────────────────────────────────────────────────────────────────────
+# Object_type -> (home_table, key_field). The base spine orchestrator
+# already maintains _OBJECT_HOME_TABLE for the verify-key short-circuit; we
+# extend it here with FK-only references (Plant, CompanyCode, etc.) that
+# aren't full spine objects but get cited in fk_fields all over the place.
+_FK_LOOKUP_EXTENSIONS = {
+    "Plant":           ("T001W", "WERKS"),
+    "CompanyCode":     ("T001",  "BUKRS"),
+    "ChartOfAccounts": ("T004",  "KTOPL"),
+    "WBSElement":      ("PRPS",  "PSPNR"),
+    "Currency":        ("TCURC", "WAERS"),
+    "Language":        ("T002",  "SPRAS"),
+    "DocumentType":    ("T003",  "BLART"),
+    "StorageLocation": ("T001L", "LGORT"),
+}
+
+
+def _fk_lookup_table(target_obj: str):
+    """Return (table, key_field) for a given object_type, or None if unknown.
+
+    Consults the spine orchestrator's table first (for the 33 object types
+    it knows about) then falls back to the FK-only extension dict above.
+    """
+    try:
+        from base_spine_orchestrator import _OBJECT_HOME_TABLE  # type: ignore
+        if target_obj in _OBJECT_HOME_TABLE:
+            return _OBJECT_HOME_TABLE[target_obj]
+    except Exception:
+        pass
+    return _FK_LOOKUP_EXTENSIONS.get(target_obj)
+
+
+def _fetch_live_fk_candidates(tconn, fk_fields: dict, per_field_limit: int = 10) -> dict:
+    """Read up to ``per_field_limit`` real values for each FK target table.
+
+    Returns ``{source_field: {"target_obj": str, "table": str, "key_field": str,
+                              "values": [list], "error": Optional[str]}}``.
+
+    A None ``error`` and non-empty ``values`` list means the FK is usable for
+    the live probe. An ``error`` value or empty ``values`` means we'll keep
+    the synthesised value (which will likely BAPI-fail — that's logged so
+    the caller knows it).
+    """
+    out: dict = {}
+    for src_field, target_obj in (fk_fields or {}).items():
+        info = _fk_lookup_table(target_obj)
+        if info is None:
+            out[src_field] = {"target_obj": target_obj, "table": None,
+                              "key_field": None, "values": [],
+                              "error": f"no lookup table known for {target_obj!r}"}
+            continue
+        table, key_field = info
+        try:
+            r = tconn.call("RFC_READ_TABLE",
+                           QUERY_TABLE=table, DELIMITER="|",
+                           FIELDS=[{"FIELDNAME": key_field}],
+                           ROWCOUNT=per_field_limit)
+            raw = [row.get("WA", "").strip() for row in r.get("DATA", [])]
+            vals = [v for v in raw if v]
+            out[src_field] = {"target_obj": target_obj, "table": table,
+                              "key_field": key_field, "values": vals,
+                              "error": None if vals else "table empty"}
+        except Exception as e:
+            out[src_field] = {"target_obj": target_obj, "table": table,
+                              "key_field": key_field, "values": [],
+                              "error": f"{type(e).__name__}: {str(e)[:160]}"}
+    return out
+
+
+def _apply_fk_substitution(rows: list, candidates: dict) -> list:
+    """Replace each row's FK fields with a real value drawn round-robin from
+    the candidates pool. Rows whose FK has no candidates keep their original
+    synthesised value (the BAPI call will fail and the dead-letter message
+    will surface why)."""
+    new_rows = [dict(r) for r in rows]
+    for src_field, info in (candidates or {}).items():
+        vals = info.get("values") or []
+        if not vals:
+            continue
+        for i, row in enumerate(new_rows):
+            row[src_field] = vals[i % len(vals)]
+    return new_rows
+
+
 def _phase_b_validate_generated(event, run_id):
     """Live S/4 smoke for any registered spine — works equally well against
     scaffolder-generated and hand-written orchestrators.
@@ -3030,18 +3121,65 @@ def _phase_b_validate_generated(event, run_id):
             km = None
             log_stage_event(run_id, "data-migrator", "phaseB_keymap_skipped",
                             {"reason": str(e)[:160]})
+
+        # FK auto-resolution: replace synthetic FK values with real ones pulled
+        # from the target. Without this, every live row dead-letters at the
+        # BAPI on "material doesn't exist" before the spine's own logic runs.
+        live_rows = [synth_good(i + 1000) for i in range(live_count)]
+        fk_fields = getattr(orch_cls, "fk_fields", {}) or {}
+        fk_resolution = _fetch_live_fk_candidates(tconn, fk_fields, per_field_limit=10)
+        if fk_resolution:
+            live_rows = _apply_fk_substitution(live_rows, fk_resolution)
+
+        # Pre-seed the ledger with IDENTITY mappings for the live FK targets so
+        # the spine's resolve_fk() (which looks up source->target via the ledger)
+        # finds the values we just substituted. In a real migration the ledger
+        # is populated by an earlier object's spine (Material before Reservation);
+        # the identity-seed simulates that without needing to chain spines for
+        # a smoke test.
+        fk_seeded = 0
+        if km is not None:
+            for src_field, info in (fk_resolution or {}).items():
+                target_obj = info.get("target_obj")
+                for val in info.get("values") or []:
+                    try:
+                        km.add(target_obj, val, val, "live_smoke_identity")
+                        fk_seeded += 1
+                    except Exception:
+                        pass
+
         orch_c = orch_cls(tconn, key_map=km, dry_run=False,
                           target_release=os.environ.get("M4H_TARGET_RELEASE", "S4HANA_2022"))
-        live_rows = [synth_good(i + 1000) for i in range(live_count)]
         live_results = orch_c.load_many(live_rows)
+
+        # Surface BAPI messages from the dead-letters so the caller can see
+        # WHY records failed (missing BAPI param, wrong structure layout, etc.).
+        # First three dead-letters are reported in full; the rest as a count.
+        dead_letter_messages = []
+        for r in live_results:
+            if r.status == "dead_letter" and len(dead_letter_messages) < 3:
+                dead_letter_messages.append({
+                    "source_key": r.source_key,
+                    "dead_letter": r.dead_letter,
+                    "messages":    r.messages,
+                })
+
         test_c = {
-            "skipped":      False,
-            "records_pushed": live_count,
-            "created":     sum(1 for r in live_results if r.status == "created"),
-            "matched":     sum(1 for r in live_results if r.status == "matched_existing"),
-            "dead_letter": sum(1 for r in live_results if r.status == "dead_letter"),
-            "stats":       orch_c.stats.to_dict(),
-            "results":     [r.to_dict() for r in live_results],
+            "skipped":         False,
+            "records_pushed":  live_count,
+            "created":         sum(1 for r in live_results if r.status == "created"),
+            "matched":         sum(1 for r in live_results if r.status == "matched_existing"),
+            "dead_letter":     sum(1 for r in live_results if r.status == "dead_letter"),
+            "stats":           orch_c.stats.to_dict(),
+            "results":         [r.to_dict() for r in live_results],
+            "fk_resolution":   {k: {"target_obj": v["target_obj"], "table": v["table"],
+                                    "key_field": v["key_field"],
+                                    "candidate_count": len(v["values"]),
+                                    "first_3":        v["values"][:3],
+                                    "error":          v["error"]}
+                                for k, v in fk_resolution.items()},
+            "fk_identity_seeded": fk_seeded,
+            "first_dead_letter_messages": dead_letter_messages,
         }
         test_c["pass"] = (test_c["created"] + test_c["matched"]) >= 1
 
