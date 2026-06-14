@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/SerialNumber.json",
+  "_source_sha":     "f5c742841a8727377d1972d0810df1a338a9b8b58d11e24daea121fa3cb87605",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for SerialNumber.",
+
+  "source_object": "S_SERIAL_HEADER",
+  "primary_table": "OBJK",
+  "source_key_field": "SERNR",
+
+  "fields": [    { "name": "SERNR", "type": "CHAR", "comment": "DESCRIPT" }  ]
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/SerialNumber.json
+     Source SHA:  f5c742841a8727377d1972d0810df1a338a9b8b58d11e24daea121fa3cb87605
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="SerialNumber"
+               basic_type="SERIALNUMBER01"
+               message_type="SERIALNUMBER">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>SERIALNUMBER</MESTYP>
+    <IDOCTYP>SERIALNUMBER01</IDOCTYP>
+  </control>
+  <segments>    <field source="SERNR" target_segment="E1SERIA" target_field="DESCRIPT"/>  </segments>
+</idoc_template>

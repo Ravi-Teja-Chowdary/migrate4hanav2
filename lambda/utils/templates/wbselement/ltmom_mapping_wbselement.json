@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/WBSElement.json",
+  "_source_sha":     "1149da37d69065d9055aa3950ff82fab93fc5fbf53e97d34821be6aae142e825",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for WBSElement. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "POSID",
+  "source_object":   "S_WBS_HEADER",
+  "primary_table":   "PRPS",
+
+  "mappings": [    { "source": "POST1", "target": "DESCRIPTION", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

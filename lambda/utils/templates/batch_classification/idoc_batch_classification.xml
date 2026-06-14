@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/BatchClassification.json
+     Source SHA:  b2d65b1ae5102aa8d8774eee0793c7b605ef9803db3dea448e4f99606188069a
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="BatchClassification"
+               basic_type="BATCHCLASSIFICATION01"
+               message_type="BATCHCLASSIFICATION">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>BATCHCLASSIFICATION</MESTYP>
+    <IDOCTYP>BATCHCLASSIFICATION01</IDOCTYP>
+  </control>
+  <segments>    <field source="OBJEK" target_segment="E1BATCH" target_field="OBJECTKEYNEW"/>  </segments>
+</idoc_template>

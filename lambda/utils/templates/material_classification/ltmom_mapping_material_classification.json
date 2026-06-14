@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/MaterialClassification.json",
+  "_source_sha":     "8934e391061c7210bf8d27155e406975804d5a8a372c1b566ef582e65d9d7b8e",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for MaterialClassification. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "MATNR",
+  "source_object":   "S_MAT_CLASS_HEADER",
+  "primary_table":   "AUSP",
+
+  "mappings": [    { "source": "OBJEK", "target": "OBJECTKEYNEW", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

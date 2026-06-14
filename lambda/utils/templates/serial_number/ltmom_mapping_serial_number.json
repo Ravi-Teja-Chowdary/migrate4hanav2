@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/SerialNumber.json",
+  "_source_sha":     "f5c742841a8727377d1972d0810df1a338a9b8b58d11e24daea121fa3cb87605",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for SerialNumber. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "SERNR",
+  "source_object":   "S_SERIAL_HEADER",
+  "primary_table":   "OBJK",
+
+  "mappings": [    { "source": "SERNR", "target": "DESCRIPT", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

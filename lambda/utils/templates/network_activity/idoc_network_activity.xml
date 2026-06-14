@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/NetworkActivity.json
+     Source SHA:  51d1e0596d69e6984ba1195122bfba6b5cfdb3bed40c1ef7bb7f7fa5378b104e
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="NetworkActivity"
+               basic_type="NETWORKACTIVITY01"
+               message_type="NETWORKACTIVITY">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>NETWORKACTIVITY</MESTYP>
+    <IDOCTYP>NETWORKACTIVITY01</IDOCTYP>
+  </control>
+  <segments>    <field source="AUFNR" target_segment="E1NETWO" target_field="NETWORK"/>  </segments>
+</idoc_template>

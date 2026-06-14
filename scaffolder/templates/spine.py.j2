@@ -185,7 +185,19 @@ class {{ class_name }}(BaseSpineOrchestrator):
         hard = [m for m in ret_list if m.get("TYPE") in ("E", "A")]
         msgs = [(m.get("MESSAGE") or "").strip() for m in ret_list if m.get("MESSAGE")]
 
-        target_key = (resp.get({{ bapi_return_key|repr }}) or "").strip()
+        # Target-key extraction. Most BAPIs return a scalar string at
+        # return_key_field, but some (BAPI_BUS2054_CREATE_MULTI, BAPI_NETWORK_
+        # MAINTAIN) only return a status struct/table — no scalar key. When
+        # the BAPI succeeded (no E/A in RETURN) but the named field isn't a
+        # scalar, fall back to the source key as the synthetic target_key so
+        # the Reconciler can still verify against home_table.
+        raw_key = resp.get({{ bapi_return_key|repr }})
+        if isinstance(raw_key, str):
+            target_key = raw_key.strip()
+        elif raw_key is None or isinstance(raw_key, (dict, list)):
+            target_key = "" if hard else src_key
+        else:
+            target_key = str(raw_key).strip()
 
         if hard or not target_key:
             try:

@@ -797,6 +797,30 @@ def lambda_handler(event, context):
         return _phase_b_validate_generated(event, run_id)
     if mode == "phase_c_mc_trigger":
         return _phase_c_mc_trigger(event, run_id)
+    if mode == "introspect_bapi":
+        # Cheap RFC_GET_FUNCTION_INTERFACE probe on the S/4 target so we can
+        # author JSON definitions for new spines without guessing field/struct
+        # names. Returns the parameter list + struct-field detail per BAPI.
+        bapis = event.get("bapis") or ([event["bapi"]] if event.get("bapi") else [])
+        target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+        out = {}
+        try:
+            tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+            from pyrfc import Connection
+            tconn = Connection(ashost=tsec["ashost"], sysnr=tsec.get("sysnr","00"),
+                               client=tsec["client"], user=tsec["user"],
+                               passwd=tsec.get("passwd") or tsec.get("password"), lang="EN")
+            from dynamic_schema_builder import introspect_via_get_function_interface
+            for bapi in bapis:
+                try:
+                    iface = introspect_via_get_function_interface(tconn, bapi)
+                    out[bapi] = iface
+                except Exception as e:
+                    out[bapi] = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
+        except Exception as e:
+            return {"status": "error", "phase": "introspect_bapi", "run_id": run_id,
+                    "error": f"{type(e).__name__}: {str(e)[:300]}"}
+        return {"status": "ok", "phase": "introspect_bapi", "run_id": run_id, "introspections": out}
 
     secret_id = (event.get("ecc_secret_id")
                  or os.environ.get("ECC_SECRET_ID")

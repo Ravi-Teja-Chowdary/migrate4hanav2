@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/MaterialClassification.json
+     Source SHA:  8934e391061c7210bf8d27155e406975804d5a8a372c1b566ef582e65d9d7b8e
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="MaterialClassification"
+               basic_type="MATERIALCLASSIFICATION01"
+               message_type="MATERIALCLASSIFICATION">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>MATERIALCLASSIFICATION</MESTYP>
+    <IDOCTYP>MATERIALCLASSIFICATION01</IDOCTYP>
+  </control>
+  <segments>    <field source="OBJEK" target_segment="E1MATER" target_field="OBJECTKEYNEW"/>  </segments>
+</idoc_template>
