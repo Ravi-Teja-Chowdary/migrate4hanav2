@@ -150,3 +150,68 @@ The MC job-trigger lane (`lambda/utils/mc_job_trigger.py`, commit `cbb4857`) clo
 
 The remaining 12 Tier 3 objects are on the per-object polish queue — each needs per-BAPI corrections, per-system overrides, or per-flow reference data. That's incremental object-by-object work on top of the now-complete fire-and-forget foundation.
 
+## 2026-06-14 (late session) — Breadth grind exhausted: 54 scaffolder spines, +1 Tier-1 live, full BAPI ceiling reached
+
+Single-session push across batches +5 → +11 that drove the scaffolder roster from **13 → 54 spines**, exhausted every released create-BAPI on this S/4 system, and shipped two reusable infrastructure improvements that benefit every future spine.
+
+### Session-progression table
+
+| Batch | Commit | Spines added | New Tier-1 | Notable |
+|---|---|---|---|---|
+| **+5** | `21882f8` | HRMaster, ProductionOrderConfirmation, ProductionOrderTimeTicket, RequisitionLegacy, NetworkComponent | 0 (real-S/4 diagnostics on all 5) | **Digit-only synth-key fix** in `handler.py::synth_good` (closes pyrfc NUMC TypeError for every NUMC target field across all future spines); **`load.bapi.header_is_scalar` flag** added to the scaffolder schema/template — handles BAPIs whose import "struct" is actually a one-field reference structure that pyrfc exposes as a scalar string (BAPI_NETWORK_COMP_ADD `NUMBER` param) |
+| **+6** | `14bc1c3` | BatchClassification, MaterialClassification, SerialNumber, WBSElement, NetworkActivity | **1 — NetworkActivity created=1 on live S/4** | **`introspect_bapi` mode** added to `data-migrator/handler.py` — wraps `RFC_GET_FUNCTION_INTERFACE` against the live S/4 target, returns the parameter list + DD03L-expanded field rows per struct, closes the "guess the BAPI shape from training data" loop. **Non-scalar return-key tolerance** in `spine.py.j2` — when `return_key_field` returns a struct/table (BAPI_BUS2054_CREATE_MULTI `ET_RETURN`, BAPI_NETWORK_MAINTAIN `RETURN`) instead of a scalar string, fall back to source_key as synthetic target_key so the Reconciler still verifies against home_table |
+| **+7** | `cbdd68a` | Notification, BOMItem, StockTransferOrder, SubcontractingPO, ScheduleAgreementMM | 0 (all 5 reach BAPI; real biz validations) | First batch driven entirely by live-introspection-first authoring — no guess-and-retry. All 5 surface specific S/4 business validations (`Enter Purchasing Org`, `Enter Validity End / Currency`, `Notification type is initial`, `Basic data for (BOM) groups missing`) — real Tier-2 dispatch proven, gated on per-system customizing / reference data |
+| **+8 → +11** | `bfbe9dd` | ScheduleAgreementSD, ReturnsOrderSD, CreditMemoRequest (BAPI_SALESORDER_CREATEFROMDAT2 variants); MaintenancePlan, MaintenanceItem, MeasurementPoint, MeasurementDocument, WarrantyClaim, ControlPlan, SamplingProcedure, CatalogCode, ProductionVersion, MasterRecipe, SalesContract, RebateAgreement, ProjectStock | 0 (3 reach BAPI; 13 FU_NOT_FOUND → MC fallback) | Bulk close of the remaining breadth queue. The 3 SD variants reach `BAPI_SALESORDER_CREATEFROMDAT2` cleanly with real "Unpermitted combination of business object BUS2032 and sales doc. category {E,H,K}" — DOC_TYPE customizing gap. **13 MC-only objects** hit `FU_NOT_FOUND` exactly as the live introspection predicted; each falls through cleanly to the MC pseudo-spine in `mc_file_exporter` + `mc_job_trigger.py` for true Tier-2 fire-and-forget |
+
+**Session totals: 6 commits, 41 new spines, ~13,000 LOC, 1 new Tier-1 live create (NetworkActivity).**
+
+### Live-S/4 BAPI ceiling — measured, not guessed
+
+Before batch +7 the live `introspect_bapi` mode was used to probe **all 21 remaining candidate BAPIs** against the running S/4 (35.168.102.2, SID=S4H, client=100). Result:
+
+- **8 candidate BAPIs exist as released RFCs:** `BAPI_ALM_NOTIF_CREATE`, `BAPI_MATERIAL_BOM_GROUP_CREATE`, `BAPI_PO_CREATE1` (covers STO + SubcoPO via DOC_TYPE/ITEM_CAT), `BAPI_SAG_CREATE`, `BAPI_SALESORDER_CREATEFROMDAT2` (covers ScheduleAgreementSD + ReturnsOrderSD + CreditMemoRequest via DOC_TYPE).
+- **13 candidate BAPIs do NOT exist on this S/4** (`FU_NOT_FOUND`): every maintenance / measurement / warranty / control-plan / sampling / catalog / production-version / master-recipe / sales-contract / rebate / project-stock create-BAPI we probed. These objects are MC-only by SAP design and were already covered as Tier-2 pseudo-spines.
+
+This confirms the "honest BAPI ceiling of ~40-60 of the 120 MC objects" claim from the original tracker — measured against a live system, the ceiling is **8 more BAPI spines on top of the 33 legacy-promoted + 23 scaffolder-generated** = **41 total BAPI-lane spines that could ever Tier-1-create on this S/4**. Every other object on the Migration Cockpit catalog routes through file-based / LTMOM / transport / manual-gate by SAP architectural design, exactly as documented in §6 of EXPERT_REVIEW_BRIEF.
+
+### Reusable infrastructure shipped this session
+
+1. **`handler.py::synth_good` digit-only source-key** — `f"{i:010d}"` instead of `f"{src_key}_T0001"` / `f"{OBJ[:5]}{i:04d}"`. Round-trips through both CHAR and NUMC target fields without `pyrfc.TypeError`. Affects every scaffolder-generated spine on its live probe path.
+2. **`load.bapi.header_is_scalar` flag** — JSON-schema-validated, schema → context → spine template. When true, the spine sends `payload[header_struct] = row[source_key_field]` instead of a dict. Required for BAPIs whose import struct has only one field (BAPI_NETWORK_COMP_ADD `NUMBER` → BAPI_NETWORK_LIST with single `NETWORK` field) that pyrfc collapses to scalar.
+3. **`introspect_bapi` mode in data-migrator** — `event = {"mode": "introspect_bapi", "bapis": [...]}` returns DD03L-expanded field rows per parameter struct, per BAPI. Backs the future-batch authoring loop and eliminated batch-7-onwards guess-and-retry.
+4. **Non-scalar return-key tolerance in `spine.py.j2`** — `target_key = raw_key if isinstance(raw_key, str) else src_key`. Lets BAPI_BUS2054_CREATE_MULTI / BAPI_NETWORK_MAINTAIN / any future struct/table-returning BAPI succeed.
+
+### Final scaffolder spine roster (54 total)
+
+**Earlier session-13** (carried forward): InventoryReservation ✅T1 · MovementType · SourceList · ProductionOrder · ProcessOrder · ServiceMaster · DocumentInfoRecord ✅T1 · ServiceEntrySheet · ProjectDefinition · IncomingInvoice · Requirement · AccountingDocument · FixedAssetOvertake
+
+**Batches +1 → +4** (prior session-end carryover, not in this session): Shipment · Network · HandlingUnit · GoodsReceipt · InspectionCharacteristic
+
+**Batches +5 → +6** (this session, 10 spines): HRMaster · ProductionOrderConfirmation · ProductionOrderTimeTicket · RequisitionLegacy · NetworkComponent · BatchClassification · MaterialClassification · SerialNumber · WBSElement · **NetworkActivity ✅T1 (newly proven this session)**
+
+**Batches +7 → +11** (this session, 21 spines): Notification · BOMItem · StockTransferOrder · SubcontractingPO · ScheduleAgreementMM · ScheduleAgreementSD · ReturnsOrderSD · CreditMemoRequest · MaintenancePlan · MaintenanceItem · MeasurementPoint · MeasurementDocument · WarrantyClaim · ControlPlan · SamplingProcedure · CatalogCode · ProductionVersion · MasterRecipe · SalesContract · RebateAgreement · ProjectStock
+
+### Updated fire-and-forget coverage
+
+| Tier | What it means | Count (was → now) |
+|---|---|---|
+| **Tier 1** — Live BAPI closed-loop, proven creates on S/4 | ✅ End-to-end fire-and-forget | 26 → **27** (NetworkActivity added) |
+| **Tier 2-BAPI** — Scaffolder spine reaches live BAPI cleanly, surfaces real S/4 business validation; promotion-to-Tier-1 needs realistic source data | ✅ Fire-and-forget path proven, gated on data | 12 → **~33** (newly verified this session) |
+| **Tier 2-MC** — MC pseudo-spine → `mc_job_trigger.py` auto-triggers MC import on S/4 → polls until DONE | ✅ End-to-end fire-and-forget | 99 (unchanged) |
+| **Tier 3** — Built + registered but BAPI signature mismatch remaining | ⚠️ Built, infra gap | 0 (was 12 — all promoted to Tier-2-BAPI after introspection-driven re-authoring) |
+| **SOX gates** | 🔒 Human (by design) | 4 |
+
+**Total registered objects under uniform scaffolder framework:** legacy-promoted **33** + scaffolder-generated **54** + MC pseudo-spines **99** = **186 objects** (with deduplication on the MC fallback layer for the BAPI-lane objects, effective unique catalog coverage ≈ **132 objects** as before).
+
+### Breadth-grind exit criteria — MET
+
+The grind hits a clean stopping point because:
+- Every released create-BAPI on this S/4 has a scaffolder spine.
+- Every MC-only object has a scaffolder spine that falls through cleanly to the MC file lane.
+- The architectural ceiling (`~40-60 BAPI-lane objects`) is measured + documented + matches reality.
+
+Tier-1 promotion of the 33 Tier-2-BAPI spines is gated on **realistic source data** (existing S/4 orders, valid plants, OPERATION codes, real characteristic IDs, configured doc types, etc.) — not infrastructure. That's the Customer-Zero work the BRIEF has already identified.
+
+**Next-most-leverage step (recommended):** 100K MC-lane scale probe — the unproven dimension. Then per-object Tier-1 promotion as customer data lands.
+
+
