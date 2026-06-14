@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/ServiceEntrySheet.json",
+  "_source_sha":     "43b8a16703804b0865d9bde0e44e397436349425227c12d4f8cccc36dfee266c",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for ServiceEntrySheet. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "SERVICE_ENTRY_SHEET",
+  "staging_template": "S_SERVICE_ENTRY_SHEET",
+  "source_key_field": "LBLNI",
+
+  "columns": [    {"source_field": "BLDAT", "target_column": "BEGDATE", "required": false },    {"source_field": "EBELN", "target_column": "EXT_NUMBER", "required": false },    {"source_field": "LBLNI", "target_column": "SHEET_NO", "required": true },    {"source_field": "LDATE", "target_column": "REF_DATE", "required": false },    {"source_field": "PACKNO", "target_column": "PCKG_NO", "required": false },    {"source_field": "TXZ01", "target_column": "SHORT_TEXT", "required": false }  ],
+
+  "primary_table":  "ESSR",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 10000
+}

@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/ProcessOrder.json",
+  "_source_sha":     "b65246441623e3a0bedf3b7a5fe8525aef37f832d0de8efc066c118c431cf427",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for ProcessOrder. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "AUFNR",
+  "source_object":   "S_PROCORD_HEADER",
+  "primary_table":   "AUFK",
+
+  "mappings": [    { "source": "AUART", "target": "ORDER_TYPE", "rule": "MOVE" },    { "source": "DGLTP", "target": "BASIC_START_DATE", "rule": "MOVE" },    { "source": "DGLTS", "target": "BASIC_END_DATE", "rule": "MOVE" },    { "source": "GAMNG", "target": "QUANTITY", "rule": "MOVE" },    { "source": "GMEIN", "target": "QUANTITY_UOM", "rule": "MOVE" },    { "source": "PLNBEZ", "target": "MATERIAL", "rule": "MOVE" },    { "source": "WERKS", "target": "PLANT", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

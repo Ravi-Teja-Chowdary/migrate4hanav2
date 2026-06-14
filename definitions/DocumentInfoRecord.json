@@ -1,0 +1,86 @@
+{
+  "object_type":      "DocumentInfoRecord",
+  "source_key_field": "DOKNR",
+  "home_table":       "DRAW",
+  "category":         "Master",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "DRAW",
+        "fields":  ["DOKAR", "DOKNR", "DOKVR", "DOKTL", "DKTXT", "DWNAM"],
+        "where":   "LVORM <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "DOKAR": "DOCUMENTTYPE",
+      "DOKNR": "DOCUMENTNUMBER",
+      "DOKVR": "DOCUMENTVERSION",
+      "DOKTL": "DOCUMENTPART",
+      "DKTXT": "DESCRIPTION",
+      "DWNAM": "USERNAME"
+    },
+    "dq_gates": [
+      { "field": "DOKAR", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DOCTYPE" },
+      { "field": "DOKNR", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DOCNUM" },
+      { "field": "DOKVR", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DOCVER" },
+      { "field": "DOKTL", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DOCPART" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_DOCUMENT_CREATE2",
+      "header_struct":    "DOCUMENTDATA",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "DOCUMENTNUMBER"
+    },
+    "mc": {
+      "object_id":        "DOCUMENT_INFO_RECORD",
+      "staging_template": "S_DOCUMENT_INFO_RECORD"
+    },
+    "idoc": {
+      "basic_type":   "BUS1001_CREATEMULTIPLE01",
+      "message_type": "DOC_CREATE"
+    },
+    "ltmom": {
+      "source_object": "S_DOC_INFO_HEADER",
+      "target_object": "DOKNR"
+    }
+  },
+
+  "verify": {
+    "key_field":    "DOKNR",
+    "value_fields": ["DOKAR", "DOKVR", "DOKTL"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  true
+  },
+
+  "telemetry": {
+    "category": "MasterDataReadiness",
+    "affects":  ["DocumentInfoRecord"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_DOCUMENT_CREATE2" },
+    "S4HANA_2022": { "use_bapi": "BAPI_DOCUMENT_CREATE2" }
+  }
+}

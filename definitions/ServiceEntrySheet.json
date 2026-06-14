@@ -1,0 +1,85 @@
+{
+  "object_type":      "ServiceEntrySheet",
+  "source_key_field": "LBLNI",
+  "home_table":       "ESSR",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "ESSR",
+        "fields":  ["LBLNI", "EBELN", "EBELP", "TXZ01", "LDATE", "BLDAT", "PACKNO"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "delta_field":           "BLDAT",
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {
+      "LBLNI": "SHEET_NO",
+      "EBELN": "EXT_NUMBER",
+      "TXZ01": "SHORT_TEXT",
+      "LDATE": "REF_DATE",
+      "BLDAT": "BEGDATE",
+      "PACKNO": "PCKG_NO"
+    },
+    "dq_gates": [
+      { "field": "LBLNI", "rule": "non_empty",  "on_fail": "dead_letter", "code": "MISSING_SHEET_NO" },
+      { "field": "EBELN", "rule": "non_empty",  "on_fail": "dead_letter", "code": "MISSING_PO_REF" },
+      { "field": "LDATE", "rule": "iso_date",   "on_fail": "dead_letter", "code": "INVALID_REF_DATE" },
+      { "field": "BLDAT", "rule": "iso_date",   "on_fail": "dead_letter", "code": "INVALID_DOC_DATE" }
+    ]
+  },
+
+  "fk": {
+    "EBELN": "PurchaseOrder"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_ENTRYSHEET_CREATE",
+      "header_struct":    "ENTRYSHEETHEADER",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "ENTRYSHEET"
+    },
+    "mc": {
+      "object_id":        "SERVICE_ENTRY_SHEET",
+      "staging_template": "S_SERVICE_ENTRY_SHEET"
+    },
+    "ltmom": {
+      "source_object": "S_SES_HEADER",
+      "target_object": "LBLNI"
+    }
+  },
+
+  "verify": {
+    "key_field":    "LBLNI",
+    "value_fields": ["EBELN", "BLDAT"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  true
+  },
+
+  "telemetry": {
+    "category": "ProcurementReadiness",
+    "affects":  ["ServiceEntrySheet"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_ENTRYSHEET_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_ENTRYSHEET_CREATE" }
+  }
+}

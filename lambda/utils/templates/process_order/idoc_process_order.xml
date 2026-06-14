@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ProcessOrder.json
+     Source SHA:  b65246441623e3a0bedf3b7a5fe8525aef37f832d0de8efc066c118c431cf427
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ProcessOrder"
+               basic_type="PROCORD01"
+               message_type="PROCORD">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>PROCORD</MESTYP>
+    <IDOCTYP>PROCORD01</IDOCTYP>
+  </control>
+  <segments>    <field source="AUART" target_segment="E1PROCE" target_field="ORDER_TYPE"/>    <field source="DGLTP" target_segment="E1PROCE" target_field="BASIC_START_DATE"/>    <field source="DGLTS" target_segment="E1PROCE" target_field="BASIC_END_DATE"/>    <field source="GAMNG" target_segment="E1PROCE" target_field="QUANTITY"/>    <field source="GMEIN" target_segment="E1PROCE" target_field="QUANTITY_UOM"/>    <field source="PLNBEZ" target_segment="E1PROCE" target_field="MATERIAL"/>    <field source="WERKS" target_segment="E1PROCE" target_field="PLANT"/>  </segments>
+</idoc_template>

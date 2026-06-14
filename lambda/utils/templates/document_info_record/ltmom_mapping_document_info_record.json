@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/DocumentInfoRecord.json",
+  "_source_sha":     "3e771223b706989edccce5343f7410fcd6584f4ee7255db4fca14c1e2b5cfa1d",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for DocumentInfoRecord. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "DOKNR",
+  "source_object":   "S_DOC_INFO_HEADER",
+  "primary_table":   "DRAW",
+
+  "mappings": [    { "source": "DKTXT", "target": "DESCRIPTION", "rule": "MOVE" },    { "source": "DOKAR", "target": "DOCUMENTTYPE", "rule": "MOVE" },    { "source": "DOKNR", "target": "DOCUMENTNUMBER", "rule": "MOVE" },    { "source": "DOKTL", "target": "DOCUMENTPART", "rule": "MOVE" },    { "source": "DOKVR", "target": "DOCUMENTVERSION", "rule": "MOVE" },    { "source": "DWNAM", "target": "USERNAME", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

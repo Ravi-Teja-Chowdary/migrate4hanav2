@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/ServiceMaster.json",
+  "_source_sha":     "8b9f779aecf3ed3fda544d4cabe90df2677ff17e394a3ebe5de7f447ae2332f5",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for ServiceMaster. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "SERVICE_MASTER",
+  "staging_template": "S_SERVICE_MASTER",
+  "source_key_field": "ASNUM",
+
+  "columns": [    {"source_field": "ASNUM", "target_column": "SERVICE", "required": true },    {"source_field": "BASME", "target_column": "BASE_UOM", "required": false },    {"source_field": "MATKL", "target_column": "MATL_GROUP", "required": false },    {"source_field": "MEINS", "target_column": "BASE_UOM_ISO", "required": false }  ],
+
+  "primary_table":  "ASMD",
+  "join_tables": [  ],
+
+  "package_size":          1000,
+  "max_rows_per_template": 50000
+}

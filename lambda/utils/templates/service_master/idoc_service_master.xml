@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ServiceMaster.json
+     Source SHA:  8b9f779aecf3ed3fda544d4cabe90df2677ff17e394a3ebe5de7f447ae2332f5
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ServiceMaster"
+               basic_type="SERVICEMASTER01"
+               message_type="SERVICEMASTER">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>SERVICEMASTER</MESTYP>
+    <IDOCTYP>SERVICEMASTER01</IDOCTYP>
+  </control>
+  <segments>    <field source="ASNUM" target_segment="E1SERVI" target_field="SERVICE"/>    <field source="BASME" target_segment="E1SERVI" target_field="BASE_UOM"/>    <field source="MATKL" target_segment="E1SERVI" target_field="MATL_GROUP"/>    <field source="MEINS" target_segment="E1SERVI" target_field="BASE_UOM_ISO"/>  </segments>
+</idoc_template>

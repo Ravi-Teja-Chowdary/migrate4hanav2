@@ -1,0 +1,96 @@
+{
+  "object_type":      "ProcessOrder",
+  "source_key_field": "AUFNR",
+  "home_table":       "AUFK",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "AUFK",
+        "fields":  ["AUFNR", "AUART", "WERKS", "ERDAT"],
+        "where":   "AUART LIKE 'PI%'",
+        "primary": true
+      },
+      {
+        "name":    "AFKO",
+        "fields":  ["AUFNR", "PLNBEZ", "GAMNG", "GMEIN", "DGLTP", "DGLTS"],
+        "join_on": ["AUFNR"]
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {
+      "AUART":  "ORDER_TYPE",
+      "PLNBEZ": "MATERIAL",
+      "WERKS":  "PLANT",
+      "GAMNG":  "QUANTITY",
+      "GMEIN":  "QUANTITY_UOM",
+      "DGLTP":  "BASIC_START_DATE",
+      "DGLTS":  "BASIC_END_DATE"
+    },
+    "dq_gates": [
+      { "field": "AUFNR",  "rule": "non_empty",              "on_fail": "dead_letter", "code": "MISSING_ORDER_NUMBER" },
+      { "field": "PLNBEZ", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_MATERIAL" },
+      { "field": "WERKS",  "rule": "werks_plant",            "on_fail": "dead_letter", "code": "INVALID_PLANT" },
+      { "field": "GAMNG",  "rule": "positive_number",        "on_fail": "dead_letter", "code": "INVALID_QUANTITY" },
+      { "field": "GMEIN",  "rule": "sap_unit_of_measure",    "on_fail": "dead_letter", "code": "INVALID_UOM" }
+    ]
+  },
+
+  "fk": {
+    "PLNBEZ": "Material",
+    "WERKS":  "Plant"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_PROCORD_CREATE",
+      "header_struct":    "ORDERDATA",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "ORDER_NUMBER"
+    },
+    "mc": {
+      "object_id":        "PROCESS_ORDER",
+      "staging_template": "S_PROCESS_ORDER"
+    },
+    "idoc": {
+      "basic_type":   "PROCORD01",
+      "message_type": "PROCORD"
+    },
+    "ltmom": {
+      "source_object": "S_PROCORD_HEADER",
+      "target_object": "AUFNR"
+    }
+  },
+
+  "verify": {
+    "key_field":    "AUFNR",
+    "value_fields": ["AUART", "WERKS"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "ManufacturingReadiness",
+    "affects":  ["ProcessOrder"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_PROCORD_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_PROCORD_CREATE" }
+  }
+}

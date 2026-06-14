@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/ServiceMaster.json",
+  "_source_sha":     "8b9f779aecf3ed3fda544d4cabe90df2677ff17e394a3ebe5de7f447ae2332f5",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for ServiceMaster. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "ASNUM",
+  "source_object":   "S_SVCMASTER_HEADER",
+  "primary_table":   "ASMD",
+
+  "mappings": [    { "source": "ASNUM", "target": "SERVICE", "rule": "MOVE" },    { "source": "BASME", "target": "BASE_UOM", "rule": "MOVE" },    { "source": "MATKL", "target": "MATL_GROUP", "rule": "MOVE" },    { "source": "MEINS", "target": "BASE_UOM_ISO", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

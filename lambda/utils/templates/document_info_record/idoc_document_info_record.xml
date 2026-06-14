@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/DocumentInfoRecord.json
+     Source SHA:  3e771223b706989edccce5343f7410fcd6584f4ee7255db4fca14c1e2b5cfa1d
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="DocumentInfoRecord"
+               basic_type="BUS1001_CREATEMULTIPLE01"
+               message_type="DOC_CREATE">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>DOC_CREATE</MESTYP>
+    <IDOCTYP>BUS1001_CREATEMULTIPLE01</IDOCTYP>
+  </control>
+  <segments>    <field source="DKTXT" target_segment="E1DOCUM" target_field="DESCRIPTION"/>    <field source="DOKAR" target_segment="E1DOCUM" target_field="DOCUMENTTYPE"/>    <field source="DOKNR" target_segment="E1DOCUM" target_field="DOCUMENTNUMBER"/>    <field source="DOKTL" target_segment="E1DOCUM" target_field="DOCUMENTPART"/>    <field source="DOKVR" target_segment="E1DOCUM" target_field="DOCUMENTVERSION"/>    <field source="DWNAM" target_segment="E1DOCUM" target_field="USERNAME"/>  </segments>
+</idoc_template>

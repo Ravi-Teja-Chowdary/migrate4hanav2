@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/ProcessOrder.json",
+  "_source_sha":     "b65246441623e3a0bedf3b7a5fe8525aef37f832d0de8efc066c118c431cf427",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for ProcessOrder. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "PROCESS_ORDER",
+  "staging_template": "S_PROCESS_ORDER",
+  "source_key_field": "AUFNR",
+
+  "columns": [    {"source_field": "AUART", "target_column": "ORDER_TYPE", "required": false },    {"source_field": "DGLTP", "target_column": "BASIC_START_DATE", "required": false },    {"source_field": "DGLTS", "target_column": "BASIC_END_DATE", "required": false },    {"source_field": "GAMNG", "target_column": "QUANTITY", "required": false },    {"source_field": "GMEIN", "target_column": "QUANTITY_UOM", "required": false },    {"source_field": "PLNBEZ", "target_column": "MATERIAL", "required": false },    {"source_field": "WERKS", "target_column": "PLANT", "required": false }  ],
+
+  "primary_table":  "AUFK",
+  "join_tables": [    {"name": "AFKO", "join_on": ["AUFNR"], "fields": ["AUFNR","PLNBEZ","GAMNG","GMEIN","DGLTP","DGLTS"] }  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 10000
+}

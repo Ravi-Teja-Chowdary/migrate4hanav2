@@ -1,0 +1,762 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_SERVICE_CREATE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "EX_SERVICE_DATA",
+      "optional": false,
+      "struct": "BAPISRV_ASMD",
+      "text": "General Data for Service, Export"
+    },
+    {
+      "kind": "E",
+      "name": "EX_SERVICE_DATAX",
+      "optional": false,
+      "struct": "BAPISRV_ASMDX",
+      "text": "Change Parameter for Service Data, Export"
+    },
+    {
+      "kind": "E",
+      "name": "SERVICE",
+      "optional": false,
+      "struct": "BAPISRV_ASMD",
+      "text": "Service Number"
+    },
+    {
+      "kind": "I",
+      "name": "IM_SERVICE_DATA",
+      "optional": false,
+      "struct": "BAPISRV_ASMD",
+      "text": "General Data for Service, Import"
+    },
+    {
+      "kind": "I",
+      "name": "IM_SERVICE_DATAX",
+      "optional": false,
+      "struct": "BAPISRV_ASMDX",
+      "text": "Change Parameter for Service Data, Import"
+    },
+    {
+      "kind": "I",
+      "name": "NO_NUMBER_RANGE_CHECK",
+      "optional": true,
+      "struct": "BAPIFLAG",
+      "text": "Indicator to Circumvent the Number Range Check"
+    },
+    {
+      "kind": "I",
+      "name": "TESTRUN",
+      "optional": true,
+      "struct": "BAPIFLAG",
+      "text": "Switch to Simulation Mode for Write BAPIs"
+    },
+    {
+      "kind": "T",
+      "name": "EXTENSION_IN",
+      "optional": true,
+      "struct": "BAPIPAREX",
+      "text": "Reference Structure for BAPI Parameters EXTENSIONIN/EXTENSIONOUT"
+    },
+    {
+      "kind": "T",
+      "name": "EXTENSION_OUT",
+      "optional": true,
+      "struct": "BAPIPAREX",
+      "text": "Reference Structure for BAPI Parameters EXTENSIONIN/EXTENSIONOUT"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": true,
+      "struct": "BAPIRET2",
+      "text": "Return Parameter(s)"
+    },
+    {
+      "kind": "T",
+      "name": "SERVICE_DESCRIPTION",
+      "optional": true,
+      "struct": "BAPISRV_ASMDT",
+      "text": "Communication Structure Short Text: Service Master"
+    },
+    {
+      "kind": "T",
+      "name": "SERVICE_LONG_TEXTS",
+      "optional": true,
+      "struct": "BAPISRV_TEXT",
+      "text": "Communication Structure Long Text: Service Master"
+    }
+  ],
+  "structs": {
+    "BAPIFLAG": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BAPIFLAG",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPIPAREX": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "STRUCTURE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART1",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART2",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART3",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART4",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPISRV_ASMD": [
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "SERVICE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "MATL_GROUP",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM_ISO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SERV_CAT",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "EAN_UPC",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "EAN_CAT",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DIVISION",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "AUTH_GROUP",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "P_STATUS",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM",
+        "position": 12,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "VAL_CLASS",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "HIER_SERV",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MASTER_LANGU",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "MASTER_LANGU_ISO",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "WAGETYPE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SERV_TYPE",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "EDITION",
+        "position": 19,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "SSC_ITEM",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_IND",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CONV_NUM",
+        "position": 22,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CONV_DEN",
+        "position": 23,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "WORK_UOM",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "WORK_UOM_ISO",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FORMULA",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHGTEXT",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 132,
+        "name": "GRAPHIC_URL",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CREATED_ON",
+        "position": 29,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CREATED_BY",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CHANGED_ON",
+        "position": 31,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGED_BY",
+        "position": 32,
+        "type": "C"
+      }
+    ],
+    "BAPISRV_ASMDT": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGUAGE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGUAGE_ISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SHORT_TEXT",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHANGE_ID",
+        "position": 4,
+        "type": "C"
+      }
+    ],
+    "BAPISRV_ASMDX": [
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "SERVICE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MATL_GROUP",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BASE_UOM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BASE_UOM_ISO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SERV_CAT",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EAN_UPC",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EAN_CAT",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DIVISION",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AUTH_GROUP",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "P_STATUS",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VALID_FROM",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VAL_CLASS",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HIER_SERV",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MASTER_LANGU",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MASTER_LANGU_ISO",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WAGETYPE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SERV_TYPE",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EDITION",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SSC_ITEM",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_IND",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CONV_NUM",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CONV_DEN",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WORK_UOM",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WORK_UOM_ISO",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FORMULA",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHGTEXT",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GRAPHIC_URL",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CREATED_ON",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CREATED_BY",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHANGED_ON",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHANGED_BY",
+        "position": 32,
+        "type": "C"
+      }
+    ],
+    "BAPISRV_TEXT": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGUAGE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGUAGE_ISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "FORMAT",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 132,
+        "name": "LINE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHANGE_ID",
+        "position": 5,
+        "type": "C"
+      }
+    ]
+  }
+}

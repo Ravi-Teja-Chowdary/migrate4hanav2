@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ProductionOrder.json",
+  "_source_sha":     "cc260ff8c84836e2e1e94d4f5686f980e18051cd3d479efcac44ad030824b857",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ProductionOrder.",
+
+  "source_object": "S_PRODORD_HEADER",
+  "primary_table": "AUFK",
+  "source_key_field": "AUFNR",
+
+  "fields": [    { "name": "AUART", "type": "CHAR", "comment": "ORDER_TYPE" },    { "name": "DGLTP", "type": "CHAR", "comment": "BASIC_START_DATE" },    { "name": "DGLTS", "type": "CHAR", "comment": "BASIC_END_DATE" },    { "name": "GAMNG", "type": "CHAR", "comment": "QUANTITY" },    { "name": "GMEIN", "type": "CHAR", "comment": "QUANTITY_UOM" },    { "name": "PLNBEZ", "type": "CHAR", "comment": "MATERIAL" },    { "name": "WERKS", "type": "CHAR", "comment": "PLANT" }  ]
+}

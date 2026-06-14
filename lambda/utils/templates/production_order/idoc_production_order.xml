@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ProductionOrder.json
+     Source SHA:  cc260ff8c84836e2e1e94d4f5686f980e18051cd3d479efcac44ad030824b857
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ProductionOrder"
+               basic_type="LOIPRO01"
+               message_type="LOIPRO">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>LOIPRO</MESTYP>
+    <IDOCTYP>LOIPRO01</IDOCTYP>
+  </control>
+  <segments>    <field source="AUART" target_segment="E1PRODU" target_field="ORDER_TYPE"/>    <field source="DGLTP" target_segment="E1PRODU" target_field="BASIC_START_DATE"/>    <field source="DGLTS" target_segment="E1PRODU" target_field="BASIC_END_DATE"/>    <field source="GAMNG" target_segment="E1PRODU" target_field="QUANTITY"/>    <field source="GMEIN" target_segment="E1PRODU" target_field="QUANTITY_UOM"/>    <field source="PLNBEZ" target_segment="E1PRODU" target_field="MATERIAL"/>    <field source="WERKS" target_segment="E1PRODU" target_field="PLANT"/>  </segments>
+</idoc_template>

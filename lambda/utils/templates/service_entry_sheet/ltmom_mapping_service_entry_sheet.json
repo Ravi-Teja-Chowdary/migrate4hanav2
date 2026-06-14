@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/ServiceEntrySheet.json",
+  "_source_sha":     "43b8a16703804b0865d9bde0e44e397436349425227c12d4f8cccc36dfee266c",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for ServiceEntrySheet. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "LBLNI",
+  "source_object":   "S_SES_HEADER",
+  "primary_table":   "ESSR",
+
+  "mappings": [    { "source": "BLDAT", "target": "BEGDATE", "rule": "MOVE" },    { "source": "EBELN", "target": "EXT_NUMBER", "rule": "MOVE" },    { "source": "LBLNI", "target": "SHEET_NO", "rule": "MOVE" },    { "source": "LDATE", "target": "REF_DATE", "rule": "MOVE" },    { "source": "PACKNO", "target": "PCKG_NO", "rule": "MOVE" },    { "source": "TXZ01", "target": "SHORT_TEXT", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

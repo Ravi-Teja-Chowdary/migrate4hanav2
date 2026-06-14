@@ -1,0 +1,1411 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_DOCUMENT_CREATE2",
+  "params": [
+    {
+      "kind": "E",
+      "name": "DOCUMENTNUMBER",
+      "optional": false,
+      "struct": "BAPI_DOC_AUX",
+      "text": "Document Number"
+    },
+    {
+      "kind": "E",
+      "name": "DOCUMENTPART",
+      "optional": false,
+      "struct": "BAPI_DOC_AUX",
+      "text": "Document Part"
+    },
+    {
+      "kind": "E",
+      "name": "DOCUMENTTYPE",
+      "optional": false,
+      "struct": "BAPI_DOC_AUX",
+      "text": "Document Type"
+    },
+    {
+      "kind": "E",
+      "name": "DOCUMENTVERSION",
+      "optional": false,
+      "struct": "BAPI_DOC_AUX",
+      "text": "Document Version"
+    },
+    {
+      "kind": "E",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return Structure"
+    },
+    {
+      "kind": "I",
+      "name": "CAD_MODE",
+      "optional": true,
+      "struct": "CSDATA",
+      "text": "CAD FLag for Document Structure"
+    },
+    {
+      "kind": "I",
+      "name": "DEFAULTCLASS",
+      "optional": true,
+      "struct": "BAPI_DOC_AUX",
+      "text": "Uses class maintained in customization"
+    },
+    {
+      "kind": "I",
+      "name": "DOCBOMCHANGENUMBER",
+      "optional": true,
+      "struct": "BAPI_DOC_DRAW2",
+      "text": "Change Number"
+    },
+    {
+      "kind": "I",
+      "name": "DOCBOMREVISIONLEVEL",
+      "optional": true,
+      "struct": "BAPI_DOC_DRAW2",
+      "text": "Revision level"
+    },
+    {
+      "kind": "I",
+      "name": "DOCBOMVALIDFROM",
+      "optional": true,
+      "struct": "BAPI_DOC_DRAW2",
+      "text": "Valid-From Date"
+    },
+    {
+      "kind": "I",
+      "name": "DOCUMENTDATA",
+      "optional": false,
+      "struct": "BAPI_DOC_DRAW2",
+      "text": "Document Data"
+    },
+    {
+      "kind": "I",
+      "name": "HOSTNAME",
+      "optional": true,
+      "struct": "BAPI_DOC_AUX",
+      "text": "Name of Frontend"
+    },
+    {
+      "kind": "I",
+      "name": "PF_FTP_DEST",
+      "optional": true,
+      "struct": "RFCDES",
+      "text": "Logical Destination (Specified in Function Call)"
+    },
+    {
+      "kind": "I",
+      "name": "PF_HTTP_DEST",
+      "optional": true,
+      "struct": "RFCDES",
+      "text": "Logical Destination (Specified in Function Call)"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTERISTICVALUES",
+      "optional": true,
+      "struct": "BAPI_CHARACTERISTIC_VALUES",
+      "text": "Assigned Characteristic Values"
+    },
+    {
+      "kind": "T",
+      "name": "CLASSALLOCATIONS",
+      "optional": true,
+      "struct": "BAPI_CLASS_ALLOCATION",
+      "text": "Classifications"
+    },
+    {
+      "kind": "T",
+      "name": "COMPONENTS",
+      "optional": true,
+      "struct": "BAPI_DOC_COMP",
+      "text": "Additional Files for Originals (in future development)"
+    },
+    {
+      "kind": "T",
+      "name": "DOCUMENTDESCRIPTIONS",
+      "optional": true,
+      "struct": "BAPI_DOC_DRAT",
+      "text": "Descriptions"
+    },
+    {
+      "kind": "T",
+      "name": "DOCUMENTFILES",
+      "optional": true,
+      "struct": "BAPI_DOC_FILES2",
+      "text": "Originals"
+    },
+    {
+      "kind": "T",
+      "name": "DOCUMENTSTRUCTURE",
+      "optional": true,
+      "struct": "BAPI_DOC_STRUCTURE",
+      "text": "Document-Based Structure"
+    },
+    {
+      "kind": "T",
+      "name": "LONGTEXTS",
+      "optional": true,
+      "struct": "BAPI_DOC_TEXT",
+      "text": "Long Texts"
+    },
+    {
+      "kind": "T",
+      "name": "OBJECTLINKS",
+      "optional": true,
+      "struct": "BAPI_DOC_DRAD",
+      "text": "Object Links"
+    }
+  ],
+  "structs": {
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_CHARACTERISTIC_VALUES": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CLASSTYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "CLASSNAME",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARNAME",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARVALUE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEVALUE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "CHARVALUE_LONG",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "BAPI_CLASS_ALLOCATION": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CLASSTYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "CLASSNAME",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STANDARDCLASS",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEALLOCATION",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ECNUMBER",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "BAPI_DOC_AUX": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLAG",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 255,
+        "name": "FILENAME",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "AUTHGR",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELFLAG",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCTYPE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCNUMBER",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCPART",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCVERSION",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "HOSTNAME",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DCTYPE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "WSAPPL",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DATUM",
+        "position": 12,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MAXROWS",
+        "position": 13,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANG",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANG_ISO",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DTTRG",
+        "position": 16,
+        "type": "C"
+      }
+    ],
+    "BAPI_DOC_COMP": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEVALUE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENTTYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENTNUMBER",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENTPART",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENTVERSION",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "ORIGINALTYPE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGUAGE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SOURCEDATACARRIER",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "STORAGECATEGORY",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 255,
+        "name": "DOCFILE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FORMAT",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DESCRIPTION",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PH_OBJID",
+        "position": 13,
+        "type": "C"
+      }
+    ],
+    "BAPI_DOC_DRAD": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEVALUE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "OBJECTTYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "OBJECTKEY",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DOCUMENTDIRECTION",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "OBJECTDESCRIPTION",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "OBJECTLINKID",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "ADDOBJECTTYPE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ADDOBJECTKEY",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAD_POS",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 90,
+        "name": "OBJECTKEY_LONG",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 90,
+        "name": "ADDOBJECTKEY_LONG",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPI_DOC_DRAT": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEVALUE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGUAGE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGUAGE_ISO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DESCRIPTION",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TEXTINDICATOR",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPI_DOC_DRAW2": [
+      {
+        "is_key": true,
+        "len": 3,
+        "name": "DOCUMENTTYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 25,
+        "name": "DOCUMENTNUMBER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 2,
+        "name": "DOCUMENTVERSION",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 3,
+        "name": "DOCUMENTPART",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DESCRIPTION",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "USERNAME",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "STATUSEXTERN",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "STATUSINTERN",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 100,
+        "name": "STATUSLOG",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LABORATORY",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ECNUMBER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALIDFROMDATE",
+        "position": 12,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "REVLEVEL",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEINDICATOR",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CADINDICATOR",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STRUCTUREINDICATOR",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "PREDOCUMENTNUMBER",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PREDOCUMENTVERSION",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PREDOCUMENTPART",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PREDOCUMENTTYPE",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "AUTHORITYGROUP",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 255,
+        "name": "DOCFILE1",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DATACARRIER1",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "WSAPPLICATION1",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 255,
+        "name": "DOCFILE2",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DATACARRIER2",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "WSAPPLICATION2",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VRLDAT",
+        "position": 28,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "USERDEFINED1",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "USERDEFINED2",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "USERDEFINED3",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "USERDEFINED4",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 255,
+        "name": "SAVEDOCFILE1",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SAVEDATACARRIER1",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 255,
+        "name": "SAVEDOCFILE2",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SAVEDATACARRIER2",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CREATEDATE",
+        "position": 37,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "REFDOCUMENTNUMBER",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "REFDOCUMENTPART",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "REFDOCUMENTVERSION",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "FILESIZE1",
+        "position": 41,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "FILESIZE2",
+        "position": 42,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CMFIXED",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CMRELEVANCE",
+        "position": 44,
+        "type": "C"
+      }
+    ],
+    "BAPI_DOC_FILES2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEVALUE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENTTYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENTNUMBER",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENTPART",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENTVERSION",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "ORIGINALTYPE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SOURCEDATACARRIER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "STORAGECATEGORY",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "WSAPPLICATION",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 255,
+        "name": "DOCPATH",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 255,
+        "name": "DOCFILE",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "STATUSINTERN",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "STATUSEXTERN",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 100,
+        "name": "STATUSLOG",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "APPLICATION_ID",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "FILE_ID",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DESCRIPTION",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGUAGE",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHECKEDIN",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACTIVE_VERSION",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CREATED_AT",
+        "position": 21,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CHANGED_AT",
+        "position": 22,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CREATED_BY",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGED_BY",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "CONTENT_DESCRIPTION",
+        "position": 25,
+        "type": "C"
+      }
+    ],
+    "BAPI_DOC_STRUCTURE": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEVALUE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENTTYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENTNUMBER",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENTPART",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENTVERSION",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "QUANTITY",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SORTSTRING",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RECALLOWED",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAD_POS",
+        "position": 9,
+        "type": "C"
+      }
+    ],
+    "BAPI_DOC_TEXT": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEVALUE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGUAGE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGUAGE_ISO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 132,
+        "name": "TEXTLINE",
+        "position": 4,
+        "type": "C"
+      }
+    ],
+    "CSDATA": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "XFELD",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHAR1",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "OBJID",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "RFCDES": [
+      {
+        "is_key": true,
+        "len": 32,
+        "name": "RFCDEST",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RFCTYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLUDE",
+        "position": 3,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTIONS",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTIONT",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTIONU",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTIONV",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTION1",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTION2",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTION3",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTION4",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTION5",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTION6",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTION7",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTION8",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTION9",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTIONA",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "RFCOPTIONB",
+        "position": 18,
+        "type": "C"
+      }
+    ]
+  }
+}

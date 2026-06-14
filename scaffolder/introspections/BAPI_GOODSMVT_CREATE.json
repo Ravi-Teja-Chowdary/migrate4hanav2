@@ -1,0 +1,1633 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_GOODSMVT_CREATE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "GOODSMVT_HEADRET",
+      "optional": false,
+      "struct": "BAPI2017_GM_HEAD_RET",
+      "text": "Material Document Number/Material Document Year"
+    },
+    {
+      "kind": "E",
+      "name": "MATDOCUMENTYEAR",
+      "optional": false,
+      "struct": "BAPI2017_GM_HEAD_RET",
+      "text": "Material Document Year"
+    },
+    {
+      "kind": "E",
+      "name": "MATERIALDOCUMENT",
+      "optional": false,
+      "struct": "BAPI2017_GM_HEAD_RET",
+      "text": "Number of Material Document"
+    },
+    {
+      "kind": "I",
+      "name": "GOODSMVT_CODE",
+      "optional": false,
+      "struct": "BAPI2017_GM_CODE",
+      "text": "Assign Code to Transaction for Goods Movement"
+    },
+    {
+      "kind": "I",
+      "name": "GOODSMVT_HEADER",
+      "optional": false,
+      "struct": "BAPI2017_GM_HEAD_01",
+      "text": "Material Document Header Data"
+    },
+    {
+      "kind": "I",
+      "name": "GOODSMVT_PRINT_CTRL",
+      "optional": true,
+      "struct": "BAPI2017_GM_PRINT",
+      "text": "BAPI Communication Structure: Material Document Print Contro"
+    },
+    {
+      "kind": "I",
+      "name": "GOODSMVT_REF_EWM",
+      "optional": true,
+      "struct": "/SPE/BAPI2017_GM_REF_EWM",
+      "text": "BAPI Communication Structure: Material Document EWM Ref."
+    },
+    {
+      "kind": "I",
+      "name": "TESTRUN",
+      "optional": true,
+      "struct": "BAPI2017_GM_GEN",
+      "text": "Simulate Goods Movement"
+    },
+    {
+      "kind": "T",
+      "name": "EXTENSIONIN",
+      "optional": true,
+      "struct": "BAPIPAREX",
+      "text": "Reference Structure for BAPI Parameters EXTENSIONIN/EXTENSIONOUT"
+    },
+    {
+      "kind": "T",
+      "name": "GOODSMVT_ITEM",
+      "optional": false,
+      "struct": "BAPI2017_GM_ITEM_CREATE",
+      "text": "Material Document Items"
+    },
+    {
+      "kind": "T",
+      "name": "GOODSMVT_ITEM_CWM",
+      "optional": true,
+      "struct": "/CWM/BAPI2017_GM_ITEM_CREATE",
+      "text": "BAPI Communication Structure: Create Item Data for CW"
+    },
+    {
+      "kind": "T",
+      "name": "GOODSMVT_SERIALNUMBER",
+      "optional": true,
+      "struct": "BAPI2017_GM_SERIALNUMBER",
+      "text": "Serial Number"
+    },
+    {
+      "kind": "T",
+      "name": "GOODSMVT_SERV_PART_DATA",
+      "optional": true,
+      "struct": "/SPE/BAPI2017_SERVICEPART_DATA",
+      "text": ""
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return Messages"
+    }
+  ],
+  "structs": {
+    "/CWM/BAPI2017_GM_ITEM_CREATE": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MATDOC_ITM",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY_PME",
+        "position": 2,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM_PME",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "ENTRY_QNT_PME",
+        "position": 4,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ENTRY_UOM_PME",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "/SPE/BAPI2017_GM_REF_EWM": [
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "REF_DOC_EWM",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LOGSYS",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "GTS_SCRAP_NO",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "/SPE/BAPI2017_SERVICEPART_DATA": [
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LINE_ID",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "RET_AUTH_NUMBER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DELIV_NUMBER",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "DELIV_ITEM",
+        "position": 4,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "HU_NUMBER",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "INSPOUT_GUID",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "EVENT",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DATE",
+        "position": 8,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "TIME",
+        "position": 9,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ZONLO",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TIMESTAMP",
+        "position": 11,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SCRAP_INDICATOR",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "KEEP_QUANTITY",
+        "position": 13,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GTS_STOCK_TYPE",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MOVE_GTS_STOCK_TYPE",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "KEEP_QUANTITY_CONVERSION",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ZERO_QUANTITY",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "NUMERATOR",
+        "position": 18,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "DENOMINATR",
+        "position": 19,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "INSP_DOC_NUMB",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PCHG_TYPE",
+        "position": 21,
+        "type": "C"
+      }
+    ],
+    "BAPI2017_GM_CODE": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GM_CODE",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPI2017_GM_GEN": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TESTRUN",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPI2017_GM_HEAD_01": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PSTNG_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DOC_DATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "REF_DOC_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "BILL_OF_LADING",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GR_GI_SLIP_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "PR_UNAME",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "HEADER_TXT",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VER_GR_GI_SLIP",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VER_GR_GI_SLIPX",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EXT_WMS",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "REF_DOC_NO_LONG",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "BILL_OF_LADING_LONG",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "BAR_CODE",
+        "position": 13,
+        "type": "C"
+      }
+    ],
+    "BAPI2017_GM_HEAD_RET": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MAT_DOC",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DOC_YEAR",
+        "position": 2,
+        "type": "N"
+      }
+    ],
+    "BAPI2017_GM_ITEM_CREATE": [
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "STGE_LOC",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BATCH",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MOVE_TYPE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STCK_TYPE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SPEC_STOCK",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VENDOR",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "CUSTOMER",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SALES_ORD",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "S_ORD_ITEM",
+        "position": 11,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SCHED_LINE",
+        "position": 12,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VAL_TYPE",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "ENTRY_QNT",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ENTRY_UOM",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ENTRY_UOM_ISO",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "PO_PR_QNT",
+        "position": 17,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ORDERPR_UN",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ORDERPR_UN_ISO",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PO_NUMBER",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "PO_ITEM",
+        "position": 21,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "SHIPPING",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COMP_SHIP",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_MORE_GR",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ITEM_TEXT",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "GR_RCPT",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "UNLOAD_PT",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDERID",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ORDER_ITNO",
+        "position": 30,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "CALC_MOTIVE",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ASSET_NO",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SUB_NUMBER",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "RESERV_NO",
+        "position": 34,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "RES_ITEM",
+        "position": 35,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RES_TYPE",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WITHDRAWN",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MOVE_MAT",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MOVE_PLANT",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MOVE_STLOC",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MOVE_BATCH",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MOVE_VAL_TYPE",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MVT_IND",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MOVE_REAS",
+        "position": 44,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RL_EST_KEY",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REF_DATE",
+        "position": 46,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "COST_OBJ",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_SEGM_NO",
+        "position": 48,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_CTR",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "WBS_ELEM",
+        "position": 50,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 51,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 52,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PART_ACCT",
+        "position": 53,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "AMOUNT_LC",
+        "position": 54,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "AMOUNT_SV",
+        "position": 55,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "REF_DOC_YR",
+        "position": 56,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "REF_DOC",
+        "position": 57,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "REF_DOC_IT",
+        "position": 58,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "EXPIRYDATE",
+        "position": 59,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PROD_DATE",
+        "position": 60,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 61,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 62,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CMMT_ITEM",
+        "position": 63,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VAL_SALES_ORD",
+        "position": 64,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "VAL_S_ORD_ITEM",
+        "position": 65,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "VAL_WBS_ELEM",
+        "position": 66,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GL_ACCOUNT",
+        "position": 67,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IND_PROPOSE_QUANX",
+        "position": 68,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "XSTOB",
+        "position": 69,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "EAN_UPC",
+        "position": 70,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DELIV_NUMB_TO_SEARCH",
+        "position": 71,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "DELIV_ITEM_TO_SEARCH",
+        "position": 72,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SERIALNO_AUTO_NUMBERASSIGNMENT",
+        "position": 73,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "VENDRBATCH",
+        "position": 74,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STGE_TYPE",
+        "position": 75,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "STGE_BIN",
+        "position": 76,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SU_PL_STCK_1",
+        "position": 77,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "ST_UN_QTYY_1",
+        "position": 78,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ST_UN_QTYY_1_ISO",
+        "position": 79,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNITTYPE_1",
+        "position": 80,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SU_PL_STCK_2",
+        "position": 81,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "ST_UN_QTYY_2",
+        "position": 82,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ST_UN_QTYY_2_ISO",
+        "position": 83,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNITTYPE_2",
+        "position": 84,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STGE_TYPE_PC",
+        "position": 85,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "STGE_BIN_PC",
+        "position": 86,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_PST_CHGNT",
+        "position": 87,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GR_NUMBER",
+        "position": 88,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STGE_TYPE_ST",
+        "position": 89,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "STGE_BIN_ST",
+        "position": 90,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATDOC_TR_CANCEL",
+        "position": 91,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MATITEM_TR_CANCEL",
+        "position": 92,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MATYEAR_TR_CANCEL",
+        "position": 93,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_TRANSFER_REQ",
+        "position": 94,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CO_BUSPROC",
+        "position": 95,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE",
+        "position": 96,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SUPPL_VEND",
+        "position": 97,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXTERNAL",
+        "position": 98,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 99,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERSION",
+        "position": 100,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MOVE_MAT_EXTERNAL",
+        "position": 101,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MOVE_MAT_GUID",
+        "position": 102,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MOVE_MAT_VERSION",
+        "position": 103,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FUNC_AREA",
+        "position": 104,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TR_PART_BA",
+        "position": 105,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PAR_COMPCO",
+        "position": 106,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DELIV_NUMB",
+        "position": 107,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "DELIV_ITEM",
+        "position": 108,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NB_SLIPS",
+        "position": 109,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NB_SLIPSX",
+        "position": 110,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GR_RCPTX",
+        "position": 111,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "UNLOAD_PTX",
+        "position": 112,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SPEC_MVMT",
+        "position": 113,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 114,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "CMMT_ITEM_LONG",
+        "position": 115,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA_LONG",
+        "position": 116,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LINE_ID",
+        "position": 117,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "PARENT_ID",
+        "position": 118,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LINE_DEPTH",
+        "position": 119,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 120,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 121,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LONGNUM",
+        "position": 122,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 123,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "EARMARKED_NUMBER",
+        "position": 124,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "EARMARKED_ITEM",
+        "position": 125,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "STK_SEGMENT",
+        "position": 126,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "MOVE_SEGMENT",
+        "position": 127,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 128,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MOVE_MAT_LONG",
+        "position": 129,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STK_SEG_LONG",
+        "position": 130,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MOV_SEG_LONG",
+        "position": 131,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CREATE_DELIVERY",
+        "position": 132,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "WAREHOUSE_EWM",
+        "position": 133,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "STGE_BIN_EWM",
+        "position": 134,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EWM_DIFF_ANA",
+        "position": 135,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SERVICE_DOC",
+        "position": 136,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SERVICE_ITEM",
+        "position": 137,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SERVICE_DOC_TYPE",
+        "position": 138,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SUPPLYAREA",
+        "position": 139,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "EWM_INSPUUID",
+        "position": 140,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "XSTOR",
+        "position": 141,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "TARGET_BIN_EWM",
+        "position": 142,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_SEGM_NO_ALPHA",
+        "position": 143,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "NR_OF_LABELS",
+        "position": 144,
+        "type": "N"
+      }
+    ],
+    "BAPI2017_GM_PRINT": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PR_PRINT",
+        "position": 1,
+        "type": "N"
+      }
+    ],
+    "BAPI2017_GM_SERIALNUMBER": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MATDOC_ITM",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "SERIALNO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 72,
+        "name": "UII",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "MANSERNO",
+        "position": 4,
+        "type": "C"
+      }
+    ],
+    "BAPIPAREX": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "STRUCTURE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART1",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART2",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART3",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 240,
+        "name": "VALUEPART4",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ]
+  }
+}

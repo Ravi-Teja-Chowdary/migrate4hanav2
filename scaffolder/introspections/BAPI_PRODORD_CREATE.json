@@ -1,0 +1,591 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_PRODORD_CREATE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "ORDER_NUMBER",
+      "optional": false,
+      "struct": "BAPI_ORDER_KEY",
+      "text": "Production order number"
+    },
+    {
+      "kind": "E",
+      "name": "ORDER_TYPE",
+      "optional": false,
+      "struct": "BAPI_ORDER_COPY",
+      "text": "Order Type"
+    },
+    {
+      "kind": "E",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return Parameters"
+    },
+    {
+      "kind": "I",
+      "name": "FSH_PRODORD_SEASON",
+      "optional": true,
+      "struct": "FSH_S_BAPI_PRODORD_SEASON",
+      "text": "Season Determination in Production Order"
+    },
+    {
+      "kind": "I",
+      "name": "ORDERDATA",
+      "optional": false,
+      "struct": "BAPI_PP_ORDER_CREATE",
+      "text": "Transfer Structure for Creating Production Orders"
+    },
+    {
+      "kind": "T",
+      "name": "EXTENSION_IN",
+      "optional": true,
+      "struct": "BAPIPAREXTAB",
+      "text": "Table with BAPIPAREX as Row Type"
+    }
+  ],
+  "structs": {
+    "BAPIPAREXTAB": [],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_ORDER_COPY": [
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "REFERENCE_ORDER",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ORDER_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDER_NUMBER",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "BASIC_START_DATE",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "BASIC_START_TIME",
+        "position": 5,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "BASIC_END_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "BASIC_END_TIME",
+        "position": 7,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "WBS_ELEMENT",
+        "position": 8,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SALES_ORDER",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SALES_ORDER_ITEM",
+        "position": 10,
+        "type": "N"
+      }
+    ],
+    "BAPI_ORDER_KEY": [
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDER_NUMBER",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPI_PP_ORDER_CREATE": [
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDER_NUMBER",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANNING_PLANT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ORDER_TYPE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "BASIC_START_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "BASIC_START_TIME",
+        "position": 7,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "BASIC_END_DATE",
+        "position": 8,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "BASIC_END_TIME",
+        "position": 9,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "QUANTITY",
+        "position": 10,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "SCRAP_QUANTITY",
+        "position": 11,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "QUANTITY_UOM",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ROUTING_TYPE",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ROUTING_GROUP",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "ROUTING_COUNTER",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PROD_VERSION",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "EXPLOSION_DATE",
+        "position": 17,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ORDER_PRIORITY",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MRP_CONTROLLER",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "CONFIGURATION",
+        "position": 20,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "WBS_ELEMENT",
+        "position": 21,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SALES_ORDER",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "SALES_ORDER_ITEM",
+        "position": 23,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUSINESS_AREA",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PROFIT_CENTER",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "SEQUENCE_NUMBER",
+        "position": 26,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STOCK_TYPE",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "GR_PROC_TIME",
+        "position": 28,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "STORAGE_LOCATION",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MRP_DISTR_KEY",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "GOODS_RECIPIENT",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "UNLOADING_POINT",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXTERNAL",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERSION",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ADDITIONAL_DAYS",
+        "position": 36,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "STOCK_SEGMENT",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STK_SEG_LONG",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "VALIDITY_OBJECT",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BASIC_SCHEDULING_TYPE",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BATCH",
+        "position": 42,
+        "type": "C"
+      }
+    ],
+    "FSH_S_BAPI_PRODORD_SEASON": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FSH_SEASON_YEAR",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FSH_SEASON",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "FSH_COLLECTION",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "FSH_THEME",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADJUST_QUANTITY",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "RFM_SEASON_LONG",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "RFM_COLLECTION_LONG",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "RFM_THEME_LONG",
+        "position": 8,
+        "type": "C"
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ServiceEntrySheet.json
+     Source SHA:  43b8a16703804b0865d9bde0e44e397436349425227c12d4f8cccc36dfee266c
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ServiceEntrySheet"
+               basic_type="SERVICEENTRYSHEET01"
+               message_type="SERVICEENTRYSHEET">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>SERVICEENTRYSHEET</MESTYP>
+    <IDOCTYP>SERVICEENTRYSHEET01</IDOCTYP>
+  </control>
+  <segments>    <field source="BLDAT" target_segment="E1SERVI" target_field="BEGDATE"/>    <field source="EBELN" target_segment="E1SERVI" target_field="EXT_NUMBER"/>    <field source="LBLNI" target_segment="E1SERVI" target_field="SHEET_NO"/>    <field source="LDATE" target_segment="E1SERVI" target_field="REF_DATE"/>    <field source="PACKNO" target_segment="E1SERVI" target_field="PCKG_NO"/>    <field source="TXZ01" target_segment="E1SERVI" target_field="SHORT_TEXT"/>  </segments>
+</idoc_template>

@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ServiceMaster.json",
+  "_source_sha":     "8b9f779aecf3ed3fda544d4cabe90df2677ff17e394a3ebe5de7f447ae2332f5",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ServiceMaster.",
+
+  "source_object": "S_SVCMASTER_HEADER",
+  "primary_table": "ASMD",
+  "source_key_field": "ASNUM",
+
+  "fields": [    { "name": "ASNUM", "type": "CHAR", "comment": "SERVICE" },    { "name": "BASME", "type": "CHAR", "comment": "BASE_UOM" },    { "name": "MATKL", "type": "CHAR", "comment": "MATL_GROUP" },    { "name": "MEINS", "type": "CHAR", "comment": "BASE_UOM_ISO" }  ]
+}

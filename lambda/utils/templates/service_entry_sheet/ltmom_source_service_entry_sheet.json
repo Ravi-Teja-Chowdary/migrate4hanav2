@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ServiceEntrySheet.json",
+  "_source_sha":     "43b8a16703804b0865d9bde0e44e397436349425227c12d4f8cccc36dfee266c",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ServiceEntrySheet.",
+
+  "source_object": "S_SES_HEADER",
+  "primary_table": "ESSR",
+  "source_key_field": "LBLNI",
+
+  "fields": [    { "name": "BLDAT", "type": "CHAR", "comment": "BEGDATE" },    { "name": "EBELN", "type": "CHAR", "comment": "EXT_NUMBER" },    { "name": "LBLNI", "type": "CHAR", "comment": "SHEET_NO" },    { "name": "LDATE", "type": "CHAR", "comment": "REF_DATE" },    { "name": "PACKNO", "type": "CHAR", "comment": "PCKG_NO" },    { "name": "TXZ01", "type": "CHAR", "comment": "SHORT_TEXT" }  ]
+}
