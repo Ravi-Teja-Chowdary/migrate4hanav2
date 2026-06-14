@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ProductionOrderTimeTicket.json",
+  "_source_sha":     "e9b89a97a76436608b254cdc72444439e0822e0e2a700cf95aaaccfa43d591a1",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ProductionOrderTimeTicket.",
+
+  "source_object": "S_TIME_TICKET_HEADER",
+  "primary_table": "AFRU",
+  "source_key_field": "RUECK",
+
+  "fields": [  ]
+}

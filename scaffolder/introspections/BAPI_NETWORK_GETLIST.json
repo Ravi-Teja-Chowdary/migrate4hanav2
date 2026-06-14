@@ -1,0 +1,319 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_NETWORK_GETLIST",
+  "params": [
+    {
+      "kind": "E",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return value"
+    },
+    {
+      "kind": "I",
+      "name": "MAX_ROWS",
+      "optional": true,
+      "struct": "BAPIF4A",
+      "text": "Maximum number of returned networks"
+    },
+    {
+      "kind": "T",
+      "name": "NETWORK_LIST",
+      "optional": false,
+      "struct": "BAPI_NETWORK_LIST_EXP",
+      "text": "Export: list of network numbers"
+    },
+    {
+      "kind": "T",
+      "name": "NETWORK_RANGE",
+      "optional": true,
+      "struct": "BAPI_PP_ORDERRANGE",
+      "text": "Import: range to select networks"
+    },
+    {
+      "kind": "T",
+      "name": "PLANT_RANGE",
+      "optional": true,
+      "struct": "BAPI2017_GM_PLANT_RA",
+      "text": "Import: Range to select networks for plants"
+    },
+    {
+      "kind": "T",
+      "name": "SHORT_TEXT_RANGE",
+      "optional": true,
+      "struct": "BAPI_2002_SHORT_TEXT_RANGE",
+      "text": "Import: range to select networks for short texts"
+    }
+  ],
+  "structs": {
+    "BAPI2017_GM_PLANT_RA": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SIGN",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "OPTION",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "LOW",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "HIGH",
+        "position": 4,
+        "type": "C"
+      }
+    ],
+    "BAPIF4A": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "OBJTYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "OBJNAME",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "METHOD",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MAX_ROWS",
+        "position": 6,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DESCRIP",
+        "position": 7,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_2002_SHORT_TEXT_RANGE": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SIGN",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "OPTION",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LOW",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "HIGH",
+        "position": 4,
+        "type": "C"
+      }
+    ],
+    "BAPI_NETWORK_LIST_EXP": [
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SHORT_TEXT",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPI_PP_ORDERRANGE": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SIGN",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "OPTION",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "LOW",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "HIGH",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLU--AP",
+        "position": 5,
+        "type": ""
+      }
+    ]
+  }
+}

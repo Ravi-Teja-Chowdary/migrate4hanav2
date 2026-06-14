@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ProductionOrderTimeTicket.json
+     Source SHA:  e9b89a97a76436608b254cdc72444439e0822e0e2a700cf95aaaccfa43d591a1
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ProductionOrderTimeTicket"
+               basic_type="PRODUCTIONORDERTIMETICKET01"
+               message_type="PRODUCTIONORDERTIMETICKET">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>PRODUCTIONORDERTIMETICKET</MESTYP>
+    <IDOCTYP>PRODUCTIONORDERTIMETICKET01</IDOCTYP>
+  </control>
+  <segments>  </segments>
+</idoc_template>

@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/NetworkComponent.json",
+  "_source_sha":     "771f4fda7b07d36a2ff38fdf713c78eda091fd08c97729bc987045c6e91e3e85",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for NetworkComponent.",
+
+  "source_object": "S_NETWORK_COMP_HEADER",
+  "primary_table": "RESB",
+  "source_key_field": "AUFNR",
+
+  "fields": [    { "name": "AUFNR", "type": "CHAR", "comment": "NETWORK" }  ]
+}

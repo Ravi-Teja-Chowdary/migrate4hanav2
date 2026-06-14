@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/NetworkComponent.json",
+  "_source_sha":     "771f4fda7b07d36a2ff38fdf713c78eda091fd08c97729bc987045c6e91e3e85",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for NetworkComponent. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "AUFNR",
+  "source_object":   "S_NETWORK_COMP_HEADER",
+  "primary_table":   "RESB",
+
+  "mappings": [    { "source": "AUFNR", "target": "NETWORK", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

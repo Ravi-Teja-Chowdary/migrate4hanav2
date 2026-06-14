@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/ProductionOrderConfirmation.json",
+  "_source_sha":     "12be713a46a9017b50211b76f625fba26179f50533427ecf05491b0176f9ecc9",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for ProductionOrderConfirmation. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "PROD_ORDER_CONFIRMATION",
+  "staging_template": "S_PROD_ORDER_CONFIRMATION",
+  "source_key_field": "AUFNR",
+
+  "columns": [  ],
+
+  "primary_table":  "AFRU",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 10000
+}

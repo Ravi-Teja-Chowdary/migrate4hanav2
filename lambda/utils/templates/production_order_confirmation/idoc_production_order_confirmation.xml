@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ProductionOrderConfirmation.json
+     Source SHA:  12be713a46a9017b50211b76f625fba26179f50533427ecf05491b0176f9ecc9
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ProductionOrderConfirmation"
+               basic_type="PRODUCTIONORDERCONFIRMATION01"
+               message_type="PRODUCTIONORDERCONFIRMATION">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>PRODUCTIONORDERCONFIRMATION</MESTYP>
+    <IDOCTYP>PRODUCTIONORDERCONFIRMATION01</IDOCTYP>
+  </control>
+  <segments>  </segments>
+</idoc_template>

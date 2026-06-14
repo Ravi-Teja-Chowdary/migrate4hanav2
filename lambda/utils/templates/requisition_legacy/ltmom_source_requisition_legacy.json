@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/RequisitionLegacy.json",
+  "_source_sha":     "fd682fc3820722c7fb893d9f76b667c8f1c8f9f71e2675dcc6a517957ff26bdb",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for RequisitionLegacy.",
+
+  "source_object": "S_REQUISITION_HEADER",
+  "primary_table": "EBAN",
+  "source_key_field": "BANFN",
+
+  "fields": [  ]
+}

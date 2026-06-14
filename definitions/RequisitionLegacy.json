@@ -1,0 +1,86 @@
+{
+  "object_type":      "RequisitionLegacy",
+  "source_key_field": "BANFN",
+  "home_table":       "EBAN",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "EBAN",
+        "fields":  ["BANFN", "BSART", "EKGRP", "ERNAM", "TXZ01", "MATNR", "WERKS"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {},
+    "item_field_maps": {
+      "BSART": "DOC_TYPE",
+      "EKGRP": "PUR_GROUP",
+      "ERNAM": "CREATED_BY",
+      "TXZ01": "SHORT_TEXT",
+      "MATNR": "MATERIAL"
+    },
+    "dq_gates": [
+      { "field": "BSART", "rule": "in_set", "rule_args": {"values": ["NB", "RV", "FO"]}, "on_fail": "dead_letter", "code": "MISSING_DOC_TYPE" },
+      { "field": "EKGRP", "rule": "non_empty",              "on_fail": "dead_letter", "code": "MISSING_PUR_GROUP" },
+      { "field": "ERNAM", "rule": "non_empty",              "on_fail": "dead_letter", "code": "MISSING_USERNAME" },
+      { "field": "TXZ01", "rule": "non_empty",              "on_fail": "dead_letter", "code": "MISSING_SHORT_TEXT" },
+      { "field": "MATNR", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_MATERIAL" }
+    ]
+  },
+
+  "fk": {
+    "MATNR": "Material"
+  },
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_REQUISITION_CREATE",
+      "header_struct":    "",
+      "item_struct":      "REQUISITION_ITEMS",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "NUMBER"
+    },
+    "mc": {
+      "object_id":        "REQUISITION_LEGACY",
+      "staging_template": "S_REQUISITION_LEGACY"
+    },
+    "ltmom": {
+      "source_object": "S_REQUISITION_HEADER",
+      "target_object": "BANFN"
+    }
+  },
+
+  "verify": {
+    "key_field":    "BANFN",
+    "value_fields": ["BSART", "MATNR"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "ProcurementReadiness",
+    "affects":  ["RequisitionLegacy"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_REQUISITION_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_REQUISITION_CREATE" }
+  }
+}

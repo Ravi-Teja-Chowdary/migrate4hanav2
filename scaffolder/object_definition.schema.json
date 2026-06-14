@@ -144,6 +144,7 @@
           "properties": {
             "function":            { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
             "header_struct":       { "type": "string" },
+            "header_is_scalar":    { "type": "boolean", "default": false, "description": "When true, header_struct names a SCALAR import parameter (typically a one-field reference structure that pyrfc exposes as a plain string). The spine then sends the source_key_field VALUE directly instead of a dict — required for BAPIs like BAPI_NETWORK_COMP_ADD whose NUMBER param wraps a single-field struct." },
             "item_struct":         { "type": "string" },
             "extension_structure": { "type": "string" },
             "commit_with_wait":    { "type": "boolean", "default": true },

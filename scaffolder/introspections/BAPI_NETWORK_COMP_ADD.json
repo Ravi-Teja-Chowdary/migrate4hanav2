@@ -1,0 +1,714 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_NETWORK_COMP_ADD",
+  "params": [
+    {
+      "kind": "E",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return Parameter"
+    },
+    {
+      "kind": "I",
+      "name": "NUMBER",
+      "optional": false,
+      "struct": "BAPI_NETWORK_LIST",
+      "text": "Network Number"
+    },
+    {
+      "kind": "T",
+      "name": "E_MESSAGE_TABLE",
+      "optional": false,
+      "struct": "BAPI_METH_MESSAGE",
+      "text": "Message Table for BAPIs (Project System)"
+    },
+    {
+      "kind": "T",
+      "name": "I_COMPONENTS_ADD",
+      "optional": false,
+      "struct": "BAPI_NETWORK_COMP_ADD",
+      "text": "BAPI Structure for Adding Material Components"
+    }
+  ],
+  "structs": {
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_METH_MESSAGE": [
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "METHOD",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "OBJECT_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 90,
+        "name": "INTERNAL_OBJECT_ID",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 90,
+        "name": "EXTERNAL_OBJECT_ID",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "MESSAGE_ID",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MESSAGE_NUMBER",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MESSAGE_TYPE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 72,
+        "name": "MESSAGE_TEXT",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI_NETWORK_COMP_ADD": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TYPE_OF_PUR_RESV",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ITEM_NUMBER",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "ENTRY_QUANTITY",
+        "position": 6,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM_ISO",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ITEM_CAT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "ITEM_TEXT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MRP_RELEVANT",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REQ_DATE",
+        "position": 12,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MANUAL_REQUIREMENTS_DATE",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LEAD_TIME_OFFSET_OPR",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LEAD_TIME_OFFSET_OPR_UNIT",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LEAD_TIME_OFFSET_OPR_UNIT_ISO",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "MRP_DISTRIBUTION_KEY",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "COST_RELEVANT",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "STGE_LOC",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BATCH",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "BOMEXPL_NO",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DELIVERY_DAYS",
+        "position": 22,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PUR_GROUP",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PURCH_ORG",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INFO_REC",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "PRICE",
+        "position": 26,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "PRICE_UNIT",
+        "position": 27,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PUR_INFO_RECORD_DATA_FIXED",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "AGREEMENT",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "AGMT_ITEM",
+        "position": 32,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GL_ACCOUNT",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VENDOR_NO",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "GR_PR_TIME",
+        "position": 35,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "MATL_GROUP",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "PREQ_NAME",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "GR_RCPT",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRACKINGNO",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "UNLOAD_PT",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SORT_STRING",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BACKFLUSH",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BULK_MAT",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "VSI_SIZE1",
+        "position": 44,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "VSI_SIZE2",
+        "position": 45,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "VSI_SIZE3",
+        "position": 46,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "VSI_SIZE_UNIT",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "VSI_SIZE_UNIT_ISO",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "VSI_QTY",
+        "position": 49,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "VAR_SIZE_COMP_MEASURE_UNIT",
+        "position": 50,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "VAR_SIZE_COMP_MEASURE_UNIT_ISO",
+        "position": 51,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "VSI_FORMULA",
+        "position": 52,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "VSI_NO",
+        "position": 53,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "ORIGINAL_QUANTITY",
+        "position": 54,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ADDR_NO",
+        "position": 55,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ADDR_NO2",
+        "position": 56,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SUPP_VENDOR",
+        "position": 57,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "CUSTOMER",
+        "position": 58,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "WBS_ELEMENT",
+        "position": 59,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "S_ORD_ITEM",
+        "position": 60,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXTERNAL",
+        "position": 61,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 62,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERSION",
+        "position": 63,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 64,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PRODUCTTYPEGROUP",
+        "position": 65,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SERVICEPERFORMER",
+        "position": 66,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "STARTDATE",
+        "position": 67,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ENDDATE",
+        "position": 68,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "SERVICEDURATION",
+        "position": 69,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SERVICEDURATIONUNIT",
+        "position": 70,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "OVERALLLIMITAMOUNT",
+        "position": 71,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "EXPECTEDOVERALLLIMITAMOUNT",
+        "position": 72,
+        "type": "P"
+      }
+    ],
+    "BAPI_NETWORK_LIST": [
+      {
+        "is_key": true,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 1,
+        "type": "C"
+      }
+    ]
+  }
+}

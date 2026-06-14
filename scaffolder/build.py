@@ -277,6 +277,7 @@ def _build_context(definition: dict, source_sha: str) -> dict:
 
         "extension_structure":   bapi.get("extension_structure", ""),
         "bapi_header_struct":    bapi.get("header_struct", "HEADER"),
+        "bapi_header_is_scalar": bapi.get("header_is_scalar", False),
         "bapi_item_struct":      bapi.get("item_struct", ""),
         "bapi_return_key":       bapi.get("return_key_field", "NUMBER"),
         "bapi_commit_with_wait": bapi.get("commit_with_wait", True),

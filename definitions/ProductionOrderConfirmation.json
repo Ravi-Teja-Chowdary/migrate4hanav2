@@ -1,0 +1,81 @@
+{
+  "object_type":      "ProductionOrderConfirmation",
+  "source_key_field": "AUFNR",
+  "home_table":       "AFRU",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "AFRU",
+        "fields":  ["RUECK", "AUFNR", "BUDAT", "ERNAM"],
+        "where":   "STOKZ <> 'X' AND STZHL = '0'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "delta_field":           "BUDAT",
+    "max_rows_per_template": 10000
+  },
+
+  "transform": {
+    "field_maps": {},
+    "item_field_maps": {
+      "AUFNR": "ORDERID",
+      "BUDAT": "POSTG_DATE",
+      "ERNAM": "EX_CREATED_BY"
+    },
+    "dq_gates": [
+      { "field": "AUFNR", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_ORDER" },
+      { "field": "BUDAT", "rule": "iso_date",  "on_fail": "dead_letter", "code": "INVALID_POSTG_DATE" },
+      { "field": "ERNAM", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_USERNAME" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_PRODORDCONF_CREATE_HDR",
+      "header_struct":    "",
+      "item_struct":      "ATHDRLEVELS",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "ORDERID"
+    },
+    "mc": {
+      "object_id":        "PROD_ORDER_CONFIRMATION",
+      "staging_template": "S_PROD_ORDER_CONFIRMATION"
+    },
+    "ltmom": {
+      "source_object": "S_PROD_CONF_HEADER",
+      "target_object": "AUFNR"
+    }
+  },
+
+  "verify": {
+    "key_field":    "AUFNR",
+    "value_fields": ["BUDAT", "ERNAM"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  false
+  },
+
+  "telemetry": {
+    "category": "ManufacturingReadiness",
+    "affects":  ["ProductionOrderConfirmation"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_PRODORDCONF_CREATE_HDR" },
+    "S4HANA_2022": { "use_bapi": "BAPI_PRODORDCONF_CREATE_HDR" }
+  }
+}

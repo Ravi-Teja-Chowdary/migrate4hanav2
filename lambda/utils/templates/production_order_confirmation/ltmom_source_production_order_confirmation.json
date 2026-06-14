@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ProductionOrderConfirmation.json",
+  "_source_sha":     "12be713a46a9017b50211b76f625fba26179f50533427ecf05491b0176f9ecc9",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ProductionOrderConfirmation.",
+
+  "source_object": "S_PROD_CONF_HEADER",
+  "primary_table": "AFRU",
+  "source_key_field": "AUFNR",
+
+  "fields": [  ]
+}

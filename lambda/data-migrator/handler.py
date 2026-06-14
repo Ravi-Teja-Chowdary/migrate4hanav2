@@ -3116,7 +3116,11 @@ def _phase_b_validate_generated(event, run_id):
             row[field] = val
         # Re-stamp source_key after the DQ pass (it might be a string-format
         # field that the source_key_field happened to share with a DQ gate).
-        row[orch_cls.source_key_field] = f"{object_type[:5].upper()}{i:04d}"
+        # Digit-only source key so it round-trips through both CHAR and NUMC
+        # target fields (NUMC fields reject letters at the pyrfc fill layer).
+        # 10 digits fits in CONF_NO (NUMC 10) and zero-pads cleanly into NUMC
+        # OBJ_ID (8) / smaller fields without losing identity.
+        row[orch_cls.source_key_field] = f"{i:010d}"
         return row
 
     def synth_bad(i: int) -> tuple:

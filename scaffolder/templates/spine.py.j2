@@ -138,9 +138,17 @@ class {{ class_name }}(BaseSpineOrchestrator):
         # Header struct: when header_struct is empty (items-only BAPI like
         # BAPI_QPMK_SAVEREPLICA or BAPI_INSPECTIONPLAN_CREATE), skip the
         # header path entirely — the spine sends only the items table.
+        # When header_is_scalar=True (rare: BAPI_NETWORK_COMP_ADD NUMBER), the
+        # named param is a scalar string at the pyrfc layer despite RFC_GET
+        # introspection reporting a one-field struct — send the source key
+        # value directly, not a dict.
         if {{ bapi_header_struct|repr }}:
+{% if bapi_header_is_scalar %}
+            payload[{{ bapi_header_struct|repr }}] = row.get(self.source_key_field, "")
+{% else %}
             header = self._apply_field_map(row, FIELD_MAPS)
             payload[{{ bapi_header_struct|repr }}] = header
+{% endif %}
 
         # If the BAPI is two-struct (header + items table), build the item from
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
@@ -196,7 +204,12 @@ class {{ class_name }}(BaseSpineOrchestrator):
             return None, msgs + ["BAPI_TRANSACTION_COMMIT failed"], None, None
 
         # Verify-value lookup: prefer header struct; fall back to first item
-        # of item struct when the BAPI is items-only.
+        # of item struct when the BAPI is items-only OR when the header is a
+        # scalar (the scalar carries only the key, not value-field data).
+{% if bapi_header_is_scalar %}
+        items = payload.get({{ bapi_item_struct|repr }}, []) or []
+        value_source = items[0] if items else {}
+{% else %}
         if {{ bapi_header_struct|repr }}:
             value_source = payload.get({{ bapi_header_struct|repr }}, {}) or {}
         elif ITEM_FIELD_MAPS:
@@ -204,6 +217,7 @@ class {{ class_name }}(BaseSpineOrchestrator):
             value_source = items[0] if items else {}
         else:
             value_source = {}
+{% endif %}
         verify_key = {
             "table": self.home_table,
             "key":   {VERIFY_KEY_FIELD: target_key},
