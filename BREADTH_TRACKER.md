@@ -272,4 +272,21 @@ Schema/build/template. Sends additional BAPI struct (object value) or table (arr
 
 **Cumulative session Tier-1 count: 35 → 37.** Total reusable scaffolder features added today: **5** (constants_header, constants_item, constants_extra, headerx_struct/itemx_struct, extra_payload).
 
+## 2026-06-15 (late afternoon) — +1 more Tier-1: MaterialClassification (37 → 38)
+
+| New Tier-1 | Live S/4 outcome | Discovery chain |
+|---|---|---|
+| MaterialClassification | **Assignment created** on TG0015 / LAPTOP / SCREEN=15 | KLAH WHERE KLART='001' → LAPTOP class (CLINT 0000000058) → KSML → chars 824/825/826 → CABN → SCREEN/RAM/MODEL → CAWN WHERE ATINN='0000000824' → allowed values 14/15/17 |
+
+Established the **classification discovery chain** (KLAH → KSML → CABN → CAWN) as a reusable pattern for any classification-style BAPI on any customer landscape.
+
+**Tier-2.5 with documented gap (definitions ship with full live constants for first-probe promotion in Customer Zero):**
+
+- **BatchClassification**: idempotent BAPI returns "Assignment exists and is valid" on every batch tested (all batches already classified). Real-data gap.
+- **WBSElement**: project mask satisfied; BAPI_TRANSACTION_COMMIT fails — CAL S/4 has zero PROJ/TCJ4 PS data; no project profile customizing.
+- **GoodsReceipt**: MVT_IND='B' fixes the X-X error; reaches BAPI with PO + material match. "PU Ordered quantity exceeded" — every NB PO on this S/4 fully received already.
+- **InspectionCharacteristic**: MSTCHA + MSTCHA_TEXT shape works; "Details not complete" — needs MSTCHA_INSP_METH cross-reference.
+
+**Tier-1 count: 37 → 38.** All 5 scaffolder features still cover every shape; remaining gaps are now uniformly classified as (basis customizing missing | real source data missing | BAPI doesn't exist on this release).
+
 

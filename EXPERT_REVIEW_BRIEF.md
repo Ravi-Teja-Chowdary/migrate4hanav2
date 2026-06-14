@@ -241,6 +241,20 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 > Tier-1 promotions today (in order): HRMaster, RequisitionLegacy (PR# 0010001624), ScheduleAgreementMM (SAG# 5500000038), StockTransferOrder (STO# 4500002140), HandlingUnit, DocumentInfoRecord, IncomingInvoice, Notification, **BOMItem (BOMGroup 00000218/1710/1)**, **AccountingDocument (FI doc 0100000238/2025)**.
 >
 > The architectural picture is now: every Tier-2 spine on this CAL S/4 reaches the live BAPI cleanly; every Tier-2-BAPI gap is partitioned into one of (basis customizing missing, real source data missing, BAPI doesn't exist on this release). Zero infrastructure gaps remain on the scaffolder side.
+>
+> ### Late-afternoon update — +1 more Tier-1: MaterialClassification (37 → 38)
+>
+> | New Tier-1 spine | Doc # / outcome | Discovery chain used |
+> |---|---|---|
+> | **MaterialClassification** | **Assignment created** on TG0015 / LAPTOP / SCREEN=15 | Full classification chain KLAH → KSML → CABN → CAWN via `query_target_table` |
+>
+> The MaterialClassification promotion establishes a reusable **classification-discovery pattern** that applies to BAPI_OBJCL_CREATE for any class type (material / batch / equipment / vendor / customer / characteristic class). For Customer Zero, the chain is repeatable in seconds against any landscape:
+> 1. `KLAH WHERE KLART=<type>` → real class names + CLINT internal IDs
+> 2. `KSML WHERE CLINT=<class_clint>` → IMERK characteristic internal IDs  
+> 3. `CABN WHERE ATINN IN (<imerks>)` → human-readable characteristic names
+> 4. `CAWN WHERE ATINN=<imerk>` → allowed value list per characteristic
+>
+> **Tier-1 count: 37 → 38. Today's session total: 27 → 38 (+11 promotions, ~30% of starting Tier-2-BAPI graduated to Tier-1).** Remaining ~16 Tier-2 spines are now uniformly classified into a clean carry-forward partition; every one will promote on first re-probe in Customer Zero when the named-gap is closed.
 
 ---
 
