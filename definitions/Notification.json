@@ -1,0 +1,77 @@
+{
+  "object_type":      "Notification",
+  "source_key_field": "QMNUM",
+  "home_table":       "QMEL",
+  "category":         "Transactional",
+  "phase":            "explore",
+
+  "extract": {
+    "rfc": "RFC_READ_TABLE",
+    "tables": [
+      {
+        "name":    "QMEL",
+        "fields":  ["QMNUM", "QMART", "QMTXT", "PRIOK", "ARBPL"],
+        "where":   "LOEKZ <> 'X'",
+        "primary": true
+      }
+    ],
+    "package_size":          500,
+    "max_rows_per_template": 25000
+  },
+
+  "transform": {
+    "field_maps": {
+      "QMTXT": "SHORT_TEXT",
+      "PRIOK": "PRIORITY"
+    },
+    "item_field_maps": {},
+    "dq_gates": [
+      { "field": "QMART", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_NOTIF_TYPE" },
+      { "field": "QMTXT", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_SHORT_TEXT" }
+    ]
+  },
+
+  "fk": {},
+
+  "load": {
+    "primary_lane": "BAPI",
+    "fallback_lane": "MC",
+    "bapi": {
+      "function":         "BAPI_ALM_NOTIF_CREATE",
+      "header_struct":    "NOTIFHEADER",
+      "extension_structure": "",
+      "commit_with_wait": true,
+      "return_key_field": "NOTIFHEADER_EXPORT"
+    },
+    "mc": {
+      "object_id":        "NOTIFICATION",
+      "staging_template": "S_NOTIFICATION"
+    },
+    "ltmom": {
+      "source_object": "S_NOTIFICATION_HEADER",
+      "target_object": "QMNUM"
+    }
+  },
+
+  "verify": {
+    "key_field":    "QMNUM",
+    "value_fields": ["QMART", "QMTXT"]
+  },
+
+  "extensions": {
+    "supports_ZZ_fields":  false,
+    "supports_partners":   false,
+    "supports_conditions": false,
+    "supports_longtexts":  true
+  },
+
+  "telemetry": {
+    "category": "PlantMaintenanceReadiness",
+    "affects":  ["Notification"]
+  },
+
+  "version_routing": {
+    "S4HANA_2020": { "use_bapi": "BAPI_ALM_NOTIF_CREATE" },
+    "S4HANA_2022": { "use_bapi": "BAPI_ALM_NOTIF_CREATE" }
+  }
+}

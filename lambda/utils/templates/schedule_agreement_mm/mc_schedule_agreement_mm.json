@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/ScheduleAgreementMM.json",
+  "_source_sha":     "e999ac28217b5ead9f41247ab83e858eb106991daa9b7a382211b5f7c7b4e436",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for ScheduleAgreementMM. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "SCHEDULE_AGREEMENT_MM",
+  "staging_template": "S_SCHEDULE_AGREEMENT_MM",
+  "source_key_field": "EBELN",
+
+  "columns": [    {"source_field": "BSART", "target_column": "DOC_TYPE", "required": false },    {"source_field": "EKGRP", "target_column": "PUR_GROUP", "required": false },    {"source_field": "EKORG", "target_column": "PURCH_ORG", "required": false },    {"source_field": "WAERS", "target_column": "CURRENCY", "required": false }  ],
+
+  "primary_table":  "EKKO",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

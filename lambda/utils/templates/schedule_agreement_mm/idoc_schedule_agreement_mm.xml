@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/ScheduleAgreementMM.json
+     Source SHA:  e999ac28217b5ead9f41247ab83e858eb106991daa9b7a382211b5f7c7b4e436
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="ScheduleAgreementMM"
+               basic_type="SCHEDULEAGREEMENTMM01"
+               message_type="SCHEDULEAGREEMENTMM">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>SCHEDULEAGREEMENTMM</MESTYP>
+    <IDOCTYP>SCHEDULEAGREEMENTMM01</IDOCTYP>
+  </control>
+  <segments>    <field source="BSART" target_segment="E1SCHED" target_field="DOC_TYPE"/>    <field source="EKGRP" target_segment="E1SCHED" target_field="PUR_GROUP"/>    <field source="EKORG" target_segment="E1SCHED" target_field="PURCH_ORG"/>    <field source="WAERS" target_segment="E1SCHED" target_field="CURRENCY"/>  </segments>
+</idoc_template>

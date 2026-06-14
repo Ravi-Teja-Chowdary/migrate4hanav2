@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/BOMItem.json",
+  "_source_sha":     "9b777353963888d74d39e01eb8172c8d089594d25873ac489e3d02ce0c5b9665",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for BOMItem. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "BOM_ITEM",
+  "staging_template": "S_BOM_ITEM",
+  "source_key_field": "MATNR",
+
+  "columns": [  ],
+
+  "primary_table":  "STPO",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

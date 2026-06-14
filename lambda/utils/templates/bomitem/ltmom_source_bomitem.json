@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/BOMItem.json",
+  "_source_sha":     "9b777353963888d74d39e01eb8172c8d089594d25873ac489e3d02ce0c5b9665",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for BOMItem.",
+
+  "source_object": "S_BOM_HEADER",
+  "primary_table": "STPO",
+  "source_key_field": "MATNR",
+
+  "fields": [  ]
+}

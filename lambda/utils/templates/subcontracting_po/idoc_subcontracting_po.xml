@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/SubcontractingPO.json
+     Source SHA:  aff3bba9da2b0a29d230d7801f8ba2adc16ff9e30495570df3528b6068cf9536
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="SubcontractingPO"
+               basic_type="SUBCONTRACTINGPO01"
+               message_type="SUBCONTRACTINGPO">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>SUBCONTRACTINGPO</MESTYP>
+    <IDOCTYP>SUBCONTRACTINGPO01</IDOCTYP>
+  </control>
+  <segments>    <field source="BSART" target_segment="E1SUBCO" target_field="DOC_TYPE"/>    <field source="EKGRP" target_segment="E1SUBCO" target_field="PUR_GROUP"/>    <field source="EKORG" target_segment="E1SUBCO" target_field="PURCH_ORG"/>    <field source="WAERS" target_segment="E1SUBCO" target_field="CURRENCY"/>  </segments>
+</idoc_template>

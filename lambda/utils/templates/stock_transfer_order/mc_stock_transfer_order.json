@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/StockTransferOrder.json",
+  "_source_sha":     "c39439cdcec1bfac5d899ea4573be1273875fa1151db7aeb44ed3000fe02e237",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for StockTransferOrder. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "STOCK_TRANSFER_ORDER",
+  "staging_template": "S_STOCK_TRANSFER_ORDER",
+  "source_key_field": "EBELN",
+
+  "columns": [    {"source_field": "BSART", "target_column": "DOC_TYPE", "required": false },    {"source_field": "EKGRP", "target_column": "PUR_GROUP", "required": false },    {"source_field": "EKORG", "target_column": "PURCH_ORG", "required": false },    {"source_field": "WAERS", "target_column": "CURRENCY", "required": false }  ],
+
+  "primary_table":  "EKKO",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from definitions/Notification.json
+     Source SHA:  47e3f9a199aa2d6fa38b1a709d770eae906846e56ef143d391d1a9aac27e559f
+     Generator:   migrate4hana scaffolder v1.0.0
+     Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
+-->
+<idoc_template object_type="Notification"
+               basic_type="NOTIFICATION01"
+               message_type="NOTIFICATION">
+  <control>
+    <SNDPRT>LS</SNDPRT>
+    <SNDPRN>M4HSENDER</SNDPRN>
+    <RCVPRT>LS</RCVPRT>
+    <RCVPRN>S4HCLNT100</RCVPRN>
+    <MESTYP>NOTIFICATION</MESTYP>
+    <IDOCTYP>NOTIFICATION01</IDOCTYP>
+  </control>
+  <segments>    <field source="PRIOK" target_segment="E1NOTIF" target_field="PRIORITY"/>    <field source="QMTXT" target_segment="E1NOTIF" target_field="SHORT_TEXT"/>  </segments>
+</idoc_template>

@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/StockTransferOrder.json",
+  "_source_sha":     "c39439cdcec1bfac5d899ea4573be1273875fa1151db7aeb44ed3000fe02e237",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for StockTransferOrder.",
+
+  "source_object": "S_STO_HEADER",
+  "primary_table": "EKKO",
+  "source_key_field": "EBELN",
+
+  "fields": [    { "name": "BSART", "type": "CHAR", "comment": "DOC_TYPE" },    { "name": "EKGRP", "type": "CHAR", "comment": "PUR_GROUP" },    { "name": "EKORG", "type": "CHAR", "comment": "PURCH_ORG" },    { "name": "WAERS", "type": "CHAR", "comment": "CURRENCY" }  ]
+}

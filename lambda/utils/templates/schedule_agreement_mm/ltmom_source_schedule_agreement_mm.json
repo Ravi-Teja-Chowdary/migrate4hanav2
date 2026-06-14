@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/ScheduleAgreementMM.json",
+  "_source_sha":     "e999ac28217b5ead9f41247ab83e858eb106991daa9b7a382211b5f7c7b4e436",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for ScheduleAgreementMM.",
+
+  "source_object": "S_SAG_MM_HEADER",
+  "primary_table": "EKKO",
+  "source_key_field": "EBELN",
+
+  "fields": [    { "name": "BSART", "type": "CHAR", "comment": "DOC_TYPE" },    { "name": "EKGRP", "type": "CHAR", "comment": "PUR_GROUP" },    { "name": "EKORG", "type": "CHAR", "comment": "PURCH_ORG" },    { "name": "WAERS", "type": "CHAR", "comment": "CURRENCY" }  ]
+}

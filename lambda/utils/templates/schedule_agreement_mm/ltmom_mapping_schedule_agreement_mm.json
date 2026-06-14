@@ -1,0 +1,14 @@
+{
+  "_generated_from": "definitions/ScheduleAgreementMM.json",
+  "_source_sha":     "e999ac28217b5ead9f41247ab83e858eb106991daa9b7a382211b5f7c7b4e436",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM field-mapping spec for ScheduleAgreementMM. Used by lambda/ltmom-orchestrator to drive SLT.",
+
+  "target_object":   "EBELN",
+  "source_object":   "S_SAG_MM_HEADER",
+  "primary_table":   "EKKO",
+
+  "mappings": [    { "source": "BSART", "target": "DOC_TYPE", "rule": "MOVE" },    { "source": "EKGRP", "target": "PUR_GROUP", "rule": "MOVE" },    { "source": "EKORG", "target": "PURCH_ORG", "rule": "MOVE" },    { "source": "WAERS", "target": "CURRENCY", "rule": "MOVE" }  ],
+
+  "value_translations": [  ]
+}

@@ -1,0 +1,18 @@
+{
+  "_generated_from": "definitions/SubcontractingPO.json",
+  "_source_sha":     "aff3bba9da2b0a29d230d7801f8ba2adc16ff9e30495570df3528b6068cf9536",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "Migration Cockpit (MC) staging-table layout for SubcontractingPO. Loaded by lambda/migration-cockpit-orchestrator at runtime.",
+
+  "object_id":        "SUBCONTRACTING_PO",
+  "staging_template": "S_SUBCONTRACTING_PO",
+  "source_key_field": "EBELN",
+
+  "columns": [    {"source_field": "BSART", "target_column": "DOC_TYPE", "required": false },    {"source_field": "EKGRP", "target_column": "PUR_GROUP", "required": false },    {"source_field": "EKORG", "target_column": "PURCH_ORG", "required": false },    {"source_field": "WAERS", "target_column": "CURRENCY", "required": false }  ],
+
+  "primary_table":  "EKKO",
+  "join_tables": [  ],
+
+  "package_size":          500,
+  "max_rows_per_template": 25000
+}

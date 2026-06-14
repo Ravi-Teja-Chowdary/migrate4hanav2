@@ -1,0 +1,12 @@
+{
+  "_generated_from": "definitions/Notification.json",
+  "_source_sha":     "47e3f9a199aa2d6fa38b1a709d770eae906846e56ef143d391d1a9aac27e559f",
+  "_generator":      "migrate4hana scaffolder v1.0.0",
+  "_doc":            "LTMOM source-structure definition for Notification.",
+
+  "source_object": "S_NOTIFICATION_HEADER",
+  "primary_table": "QMEL",
+  "source_key_field": "QMNUM",
+
+  "fields": [    { "name": "PRIOK", "type": "CHAR", "comment": "PRIORITY" },    { "name": "QMTXT", "type": "CHAR", "comment": "SHORT_TEXT" }  ]
+}
