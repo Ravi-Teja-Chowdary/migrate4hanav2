@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated from definitions/IncomingInvoice.json
-     Source SHA:  f57cb950c8be5453546aeaddba530dce6f503eb1b9dedaad47cc52e951e1d043
+     Source SHA:  bab8577a3b97217565367f8847fc19be25fb2d791068f262de8da1700459609b
      Generator:   migrate4hana scaffolder v1.0.0
      Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
 -->

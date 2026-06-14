@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build AccountingDocument` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   cf01a77373666231b2c33c05167111ad811dd2d2492ef9714ca56084581f7728
+Source SHA:   5088a2374f766b8e93e4724636baac9f1673b1908f2ed33e3bcc3ac7a71c3fe2
 Object type:  AccountingDocument
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -25,8 +25,10 @@ from base_spine_orchestrator import (
 
 # DQ rules — pure functions, sourced from lambda/utils/dq_rules/ at runtime.
 from dq_rules.bukrs_company_code import bukrs_company_code
+from dq_rules.currency_iso_4217 import currency_iso_4217
 from dq_rules.iso_date import iso_date
 from dq_rules.non_empty import non_empty
+from dq_rules.positive_number import positive_number
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Field maps lifted from the JSON definition
@@ -41,9 +43,12 @@ FIELD_MAPS = {
     'USNAM': 'USERNAME',
 }
 
-# ITEM fields — populate the BAPI items table ().
+# ITEM fields — populate the BAPI items table (CURRENCYAMOUNT).
 # Empty for master objects whose BAPI is single-struct (no items table).
 ITEM_FIELD_MAPS = {
+    'AMT_DOCCUR': 'AMT_DOCCUR',
+    'CURRENCY': 'CURRENCY',
+    'ITEMNO_ACC': 'ITEMNO_ACC',
 }
 
 # target_field -> { source_value: target_value }
@@ -52,10 +57,15 @@ VALUE_MAPS = {
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
 DQ_GATES = [
+    ('AMT_DOCCUR', 'positive_number', {}, 'INVALID_AMOUNT'),
     ('BELNR', 'non_empty', {}, 'MISSING_DOC_NUMBER'),
+    ('BKTXT', 'non_empty', {}, 'MISSING_HEADER_TXT'),
     ('BLDAT', 'iso_date', {}, 'INVALID_DOC_DATE'),
     ('BUDAT', 'iso_date', {}, 'INVALID_PSTNG_DATE'),
     ('BUKRS', 'bukrs_company_code', {}, 'INVALID_COMPANY_CODE'),
+    ('CURRENCY', 'currency_iso_4217', {}, 'INVALID_CURRENCY'),
+    ('ITEMNO_ACC', 'positive_number', {}, 'MISSING_ITEM_NO'),
+    ('USNAM', 'non_empty', {}, 'MISSING_USERNAME'),
 ]
 
 # Foreign keys — source_field -> registry object_type
@@ -78,8 +88,10 @@ VERSION_BAPI_MAP = {
 # Dispatch table for DQ rules — built once at import time.
 _RULE_FNS = {
     'bukrs_company_code': bukrs_company_code,
+    'currency_iso_4217': currency_iso_4217,
     'iso_date': iso_date,
     'non_empty': non_empty,
+    'positive_number': positive_number,
 }
 
 
@@ -135,7 +147,7 @@ class AccountingDocumentSpineOrchestrator(BaseSpineOrchestrator):
         # aggregate N source rows into one parent header are out of scope here.
         if ITEM_FIELD_MAPS:
             item = self._apply_field_map(row, ITEM_FIELD_MAPS)
-            payload[''] = [item]
+            payload['CURRENCYAMOUNT'] = [item]
 
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows

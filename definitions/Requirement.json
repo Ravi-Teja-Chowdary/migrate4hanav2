@@ -25,14 +25,12 @@
       "WERKS": "PLANT",
       "BDZEI": "REQUIREMENTSTYPE",
       "VERSB": "VERSION",
-      "PLNMG": "REQUIREMENT_QUANTITY",
-      "MEINS": "BASE_UOM"
+      "PLNMG": "REQUIREMENT_QUANTITY"
     },
     "dq_gates": [
       { "field": "MATNR", "rule": "material_number_format", "on_fail": "dead_letter", "code": "INVALID_MATERIAL" },
       { "field": "WERKS", "rule": "werks_plant",            "on_fail": "dead_letter", "code": "INVALID_PLANT" },
-      { "field": "PLNMG", "rule": "positive_number",        "on_fail": "dead_letter", "code": "INVALID_QUANTITY" },
-      { "field": "MEINS", "rule": "sap_unit_of_measure",    "on_fail": "dead_letter", "code": "INVALID_UOM" }
+      { "field": "PLNMG", "rule": "positive_number",        "on_fail": "dead_letter", "code": "INVALID_QUANTITY" }
     ]
   },
 

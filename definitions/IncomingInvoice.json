@@ -30,13 +30,20 @@
       "WAERS": "CURRENCY",
       "RMWWR": "GROSS_AMOUNT"
     },
+    "item_field_maps": {
+      "INVOICE_DOC_ITEM": "INVOICE_DOC_ITEM",
+      "ITEM_AMOUNT":      "ITEM_AMOUNT",
+      "TAX_CODE":         "TAX_CODE"
+    },
     "dq_gates": [
-      { "field": "BELNR", "rule": "non_empty",       "on_fail": "dead_letter", "code": "MISSING_INVOICE_DOC" },
-      { "field": "BUKRS", "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },
-      { "field": "WAERS", "rule": "currency_iso_4217",  "on_fail": "dead_letter", "code": "INVALID_CURRENCY" },
-      { "field": "BLDAT", "rule": "iso_date",        "on_fail": "dead_letter", "code": "INVALID_DOC_DATE" },
-      { "field": "BUDAT", "rule": "iso_date",        "on_fail": "dead_letter", "code": "INVALID_PSTNG_DATE" },
-      { "field": "RMWWR", "rule": "positive_number", "on_fail": "dead_letter", "code": "INVALID_AMOUNT" }
+      { "field": "BELNR",       "rule": "non_empty",          "on_fail": "dead_letter", "code": "MISSING_INVOICE_DOC" },
+      { "field": "BUKRS",       "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },
+      { "field": "WAERS",       "rule": "currency_iso_4217",  "on_fail": "dead_letter", "code": "INVALID_CURRENCY" },
+      { "field": "BLDAT",       "rule": "iso_date",           "on_fail": "dead_letter", "code": "INVALID_DOC_DATE" },
+      { "field": "BUDAT",       "rule": "iso_date",           "on_fail": "dead_letter", "code": "INVALID_PSTNG_DATE" },
+      { "field": "RMWWR",       "rule": "positive_number",    "on_fail": "dead_letter", "code": "INVALID_AMOUNT" },
+      { "field": "ITEM_AMOUNT",      "rule": "positive_number", "on_fail": "dead_letter", "code": "INVALID_ITEM_AMOUNT" },
+      { "field": "INVOICE_DOC_ITEM", "rule": "positive_number", "on_fail": "dead_letter", "code": "MISSING_ITEM_NO" }
     ]
   },
 
@@ -50,6 +57,7 @@
     "bapi": {
       "function":         "BAPI_INCOMINGINVOICE_CREATE",
       "header_struct":    "HEADERDATA",
+      "item_struct":      "ITEMDATA",
       "extension_structure": "",
       "commit_with_wait": true,
       "return_key_field": "INVOICEDOCNUMBER"

@@ -22,8 +22,8 @@
   "transform": {
     "field_maps": {
       "BUKRS": "COMPANYCODE",
-      "ANLN1": "ASSETMAINO",
-      "ANLN2": "ASSETSUBNO"
+      "ANLN1": "ASSET",
+      "ANLN2": "SUBNUMBER"
     },
     "dq_gates": [
       { "field": "BUKRS", "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },

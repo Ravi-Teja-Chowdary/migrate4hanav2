@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/FixedAssetOvertake.json",
-  "_source_sha":     "b32e66ccdad6a4df437806f1fdaf6b46eee33a4067c81465bee90a4873519021",
+  "_source_sha":     "7d11064adf0f19b68fe9e25937b87b1ed3760fac9ef5845a4323b013525fe4f6",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM field-mapping spec for FixedAssetOvertake. Used by lambda/ltmom-orchestrator to drive SLT.",
 
@@ -8,7 +8,7 @@
   "source_object":   "S_FIXED_ASSET_HEADER",
   "primary_table":   "ANLA",
 
-  "mappings": [    { "source": "ANLN1", "target": "ASSETMAINO", "rule": "MOVE" },    { "source": "ANLN2", "target": "ASSETSUBNO", "rule": "MOVE" },    { "source": "BUKRS", "target": "COMPANYCODE", "rule": "MOVE" }  ],
+  "mappings": [    { "source": "ANLN1", "target": "ASSET", "rule": "MOVE" },    { "source": "ANLN2", "target": "SUBNUMBER", "rule": "MOVE" },    { "source": "BUKRS", "target": "COMPANYCODE", "rule": "MOVE" }  ],
 
   "value_translations": [  ]
 }

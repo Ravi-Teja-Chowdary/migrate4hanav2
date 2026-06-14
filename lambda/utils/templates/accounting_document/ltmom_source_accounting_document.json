@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/AccountingDocument.json",
-  "_source_sha":     "cf01a77373666231b2c33c05167111ad811dd2d2492ef9714ca56084581f7728",
+  "_source_sha":     "5088a2374f766b8e93e4724636baac9f1673b1908f2ed33e3bcc3ac7a71c3fe2",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM source-structure definition for AccountingDocument.",
 

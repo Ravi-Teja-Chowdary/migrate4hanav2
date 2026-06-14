@@ -29,11 +29,21 @@
       "BKTXT": "HEADER_TXT",
       "USNAM": "USERNAME"
     },
+    "item_field_maps": {
+      "ITEMNO_ACC": "ITEMNO_ACC",
+      "AMT_DOCCUR": "AMT_DOCCUR",
+      "CURRENCY":   "CURRENCY"
+    },
     "dq_gates": [
-      { "field": "BELNR", "rule": "non_empty",     "on_fail": "dead_letter", "code": "MISSING_DOC_NUMBER" },
-      { "field": "BUKRS", "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },
-      { "field": "BLDAT", "rule": "iso_date",      "on_fail": "dead_letter", "code": "INVALID_DOC_DATE" },
-      { "field": "BUDAT", "rule": "iso_date",      "on_fail": "dead_letter", "code": "INVALID_PSTNG_DATE" }
+      { "field": "BELNR",      "rule": "non_empty",          "on_fail": "dead_letter", "code": "MISSING_DOC_NUMBER" },
+      { "field": "USNAM",      "rule": "non_empty",          "on_fail": "dead_letter", "code": "MISSING_USERNAME" },
+      { "field": "BKTXT",      "rule": "non_empty",          "on_fail": "dead_letter", "code": "MISSING_HEADER_TXT" },
+      { "field": "BUKRS",      "rule": "bukrs_company_code", "on_fail": "dead_letter", "code": "INVALID_COMPANY_CODE" },
+      { "field": "BLDAT",      "rule": "iso_date",           "on_fail": "dead_letter", "code": "INVALID_DOC_DATE" },
+      { "field": "BUDAT",      "rule": "iso_date",           "on_fail": "dead_letter", "code": "INVALID_PSTNG_DATE" },
+      { "field": "ITEMNO_ACC", "rule": "positive_number",    "on_fail": "dead_letter", "code": "MISSING_ITEM_NO" },
+      { "field": "AMT_DOCCUR", "rule": "positive_number",    "on_fail": "dead_letter", "code": "INVALID_AMOUNT" },
+      { "field": "CURRENCY",   "rule": "currency_iso_4217",  "on_fail": "dead_letter", "code": "INVALID_CURRENCY" }
     ]
   },
 
@@ -47,6 +57,7 @@
     "bapi": {
       "function":         "BAPI_ACC_DOCUMENT_POST",
       "header_struct":    "DOCUMENTHEADER",
+      "item_struct":      "CURRENCYAMOUNT",
       "extension_structure": "",
       "commit_with_wait": true,
       "return_key_field": "OBJ_KEY"

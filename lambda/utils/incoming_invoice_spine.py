@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build IncomingInvoice` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   f57cb950c8be5453546aeaddba530dce6f503eb1b9dedaad47cc52e951e1d043
+Source SHA:   bab8577a3b97217565367f8847fc19be25fb2d791068f262de8da1700459609b
 Object type:  IncomingInvoice
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -44,9 +44,12 @@ FIELD_MAPS = {
     'XBLNR': 'REF_DOC_NO',
 }
 
-# ITEM fields — populate the BAPI items table ().
+# ITEM fields — populate the BAPI items table (ITEMDATA).
 # Empty for master objects whose BAPI is single-struct (no items table).
 ITEM_FIELD_MAPS = {
+    'INVOICE_DOC_ITEM': 'INVOICE_DOC_ITEM',
+    'ITEM_AMOUNT': 'ITEM_AMOUNT',
+    'TAX_CODE': 'TAX_CODE',
 }
 
 # target_field -> { source_value: target_value }
@@ -59,6 +62,8 @@ DQ_GATES = [
     ('BLDAT', 'iso_date', {}, 'INVALID_DOC_DATE'),
     ('BUDAT', 'iso_date', {}, 'INVALID_PSTNG_DATE'),
     ('BUKRS', 'bukrs_company_code', {}, 'INVALID_COMPANY_CODE'),
+    ('INVOICE_DOC_ITEM', 'positive_number', {}, 'MISSING_ITEM_NO'),
+    ('ITEM_AMOUNT', 'positive_number', {}, 'INVALID_ITEM_AMOUNT'),
     ('RMWWR', 'positive_number', {}, 'INVALID_AMOUNT'),
     ('WAERS', 'currency_iso_4217', {}, 'INVALID_CURRENCY'),
 ]
@@ -142,7 +147,7 @@ class IncomingInvoiceSpineOrchestrator(BaseSpineOrchestrator):
         # aggregate N source rows into one parent header are out of scope here.
         if ITEM_FIELD_MAPS:
             item = self._apply_field_map(row, ITEM_FIELD_MAPS)
-            payload[''] = [item]
+            payload['ITEMDATA'] = [item]
 
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows

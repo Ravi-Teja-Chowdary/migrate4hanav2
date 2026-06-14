@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build FixedAssetOvertake` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   b32e66ccdad6a4df437806f1fdaf6b46eee33a4067c81465bee90a4873519021
+Source SHA:   7d11064adf0f19b68fe9e25937b87b1ed3760fac9ef5845a4323b013525fe4f6
 Object type:  FixedAssetOvertake
 Category:     Master
 Lane:         BAPI (fallback: MC)"""
@@ -32,8 +32,8 @@ from dq_rules.non_empty import non_empty
 # ─────────────────────────────────────────────────────────────────────────────
 # HEADER fields — populate the BAPI header struct (KEY)
 FIELD_MAPS = {
-    'ANLN1': 'ASSETMAINO',
-    'ANLN2': 'ASSETSUBNO',
+    'ANLN1': 'ASSET',
+    'ANLN2': 'SUBNUMBER',
     'BUKRS': 'COMPANYCODE',
 }
 

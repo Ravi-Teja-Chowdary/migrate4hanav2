@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated from definitions/AccountingDocument.json
-     Source SHA:  cf01a77373666231b2c33c05167111ad811dd2d2492ef9714ca56084581f7728
+     Source SHA:  5088a2374f766b8e93e4724636baac9f1673b1908f2ed33e3bcc3ac7a71c3fe2
      Generator:   migrate4hana scaffolder v1.0.0
      Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
 -->

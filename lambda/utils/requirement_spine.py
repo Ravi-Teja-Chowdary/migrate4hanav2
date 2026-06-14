@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build Requirement` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   25750850a414a98dacec0fd91337436b97dcf8c0ea403f120bd1ef2d8968fcd4
+Source SHA:   fb88d3d3bfb0bd99d1e125776ffad221e3615a1507aa646258ac60dbd01a6a2b
 Object type:  Requirement
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -26,7 +26,6 @@ from base_spine_orchestrator import (
 # DQ rules — pure functions, sourced from lambda/utils/dq_rules/ at runtime.
 from dq_rules.material_number_format import material_number_format
 from dq_rules.positive_number import positive_number
-from dq_rules.sap_unit_of_measure import sap_unit_of_measure
 from dq_rules.werks_plant import werks_plant
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -36,7 +35,6 @@ from dq_rules.werks_plant import werks_plant
 FIELD_MAPS = {
     'BDZEI': 'REQUIREMENTSTYPE',
     'MATNR': 'MATERIAL',
-    'MEINS': 'BASE_UOM',
     'PLNMG': 'REQUIREMENT_QUANTITY',
     'VERSB': 'VERSION',
     'WERKS': 'PLANT',
@@ -54,7 +52,6 @@ VALUE_MAPS = {
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
 DQ_GATES = [
     ('MATNR', 'material_number_format', {}, 'INVALID_MATERIAL'),
-    ('MEINS', 'sap_unit_of_measure', {}, 'INVALID_UOM'),
     ('PLNMG', 'positive_number', {}, 'INVALID_QUANTITY'),
     ('WERKS', 'werks_plant', {}, 'INVALID_PLANT'),
 ]
@@ -81,7 +78,6 @@ VERSION_BAPI_MAP = {
 _RULE_FNS = {
     'material_number_format': material_number_format,
     'positive_number': positive_number,
-    'sap_unit_of_measure': sap_unit_of_measure,
     'werks_plant': werks_plant,
 }
 

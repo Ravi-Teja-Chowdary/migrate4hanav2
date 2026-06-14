@@ -3093,14 +3093,17 @@ def _phase_b_validate_generated(event, run_id):
     }
 
     def synth_good(i: int) -> dict:
+        # Only seed fields that DQ gates need (with typed values) + the source
+        # key. Don't blanket-default every field_maps source to "X" — that
+        # corrupts NUMC/DATE/DEC fields when the BAPI runs live (e.g.
+        # RESPONSIBLE_NO is NUMC, "X" is rejected by pyrfc as not a digit).
+        # Unset source fields are skipped by the spine's _apply_field_map, so
+        # the BAPI uses its own defaults for unset optional fields, and
+        # required-but-unset fields surface as real S/4 validation errors.
         row = {orch_cls.source_key_field: f"{object_type[:5].upper()}{i:04d}"}
-        for src in field_maps.keys():
-            row.setdefault(src, "X")
         for gate in dq_gates:
             field = gate[0] if isinstance(gate, (tuple, list)) else gate.get("field")
             rule  = gate[1] if isinstance(gate, (tuple, list)) else gate.get("rule")
-            if field in row and row[field] != "X":
-                continue
             val = RULE_VALUE.get(rule, "VALUE")
             # in_set rules need a value from the configured set
             if rule == "in_set":
