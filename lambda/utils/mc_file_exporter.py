@@ -758,12 +758,24 @@ def _make_mc_file_class(obj_name: str, spec: dict):
     return _MCFileSpine
 
 
-# Register all 20 MC file objects at import time
+# Register all MC file objects at import time. We keep a direct handle to
+# each MC factory class in _MC_CLASSES so callers (like the scale-probe
+# handler) can flush without depending on _SPINE_REGISTRY ordering — the
+# scaffolder-generated BAPI spine for the same object_type may register
+# later and shadow the MC class in the shared registry.
 _REGISTERED_MC_OBJECTS = []
+_MC_CLASSES: dict = {}
 for _obj, _spec in MC_TEMPLATES.items():
     _cls = _make_mc_file_class(_obj, _spec)
     register_spine(_cls)
     _REGISTERED_MC_OBJECTS.append(_obj)
+    _MC_CLASSES[_obj] = _cls
+
+
+def get_mc_class(object_type: str):
+    """Return the MC factory class for object_type, bypassing the shared
+    spine registry (which the scaffolder-generated BAPI spine may shadow)."""
+    return _MC_CLASSES.get(object_type)
 
 
 def flush_all(s3_client, bucket: str, run_id: str, tenant_slug: str = "default",
@@ -782,10 +794,12 @@ def flush_all(s3_client, bucket: str, run_id: str, tenant_slug: str = "default",
       {"mechanism": "...", "job_id": "...", "status": "DONE"/"FAILED"/...,
        "rows_loaded": N, "log_lines": [...], "errors": [...]}
     """
-    from base_spine_orchestrator import _SPINE_REGISTRY
+    # Use the direct MC-class handle, NOT the shared spine registry —
+    # scaffolder-generated BAPI spines for the same object_type may have
+    # registered later and shadowed the MC class in _SPINE_REGISTRY.
     results = []
     for obj in _REGISTERED_MC_OBJECTS:
-        cls = _SPINE_REGISTRY.get(obj)
+        cls = _MC_CLASSES.get(obj)
         if cls is None:
             continue
         r = cls.flush_to_s3(s3_client, bucket, run_id, tenant_slug)

@@ -797,6 +797,94 @@ def lambda_handler(event, context):
         return _phase_b_validate_generated(event, run_id)
     if mode == "phase_c_mc_trigger":
         return _phase_c_mc_trigger(event, run_id)
+    if mode == "mc_lane_scale_probe":
+        # 100K-row MC-lane throughput probe. Synthesizes rows that pass
+        # the spine's mandatory-column validator, runs them through
+        # spine.build_payload + call_bapi (buffer), then flushes to S3
+        # as the MC-conformant CSV. Optional auto_trigger fires the
+        # mc_job_trigger strategy chain on the live S/4 target.
+        import time as _time
+        object_type = event.get("object_type", "SourceList")
+        row_count = int(event.get("row_count", 100000))
+        auto_trigger = bool(event.get("auto_trigger", False))
+        project_id = event.get("project_id", "")
+        tenant_slug = event.get("tenant_slug", "probe-scale")
+
+        from mc_file_exporter import MC_TEMPLATES, flush_all, get_mc_class
+        spec = MC_TEMPLATES.get(object_type)
+        if not spec:
+            return {"status": "error", "phase": "mc_lane_scale_probe", "run_id": run_id,
+                    "error": f"object_type '{object_type}' not in MC_TEMPLATES",
+                    "available": sorted(MC_TEMPLATES.keys())[:30]}
+        # Use the MC factory class directly — scaffolder-generated BAPI spines
+        # with the same object_type may have shadowed it in the shared registry.
+        cls = get_mc_class(object_type)
+        if cls is None:
+            return {"status": "error", "phase": "mc_lane_scale_probe", "run_id": run_id,
+                    "error": f"object_type '{object_type}' not in MC factory registry"}
+        # MC-lane probe doesn't need a real S/4 connection — call_bapi just
+        # appends to an in-memory buffer. Pass None as conn; spine.validate
+        # + spine.build_payload + spine.call_bapi all run without it.
+        spine = cls(None, dry_run=True)
+
+        # Synthesize: every mandatory column gets a non-empty value. Use a
+        # mix of digit + char patterns so NUMC fields (WERKS, BUKRS) and
+        # CHAR fields (MATNR, KUNNR) both pass downstream MC validation.
+        mandatory = spec.get("mandatory", [])
+        all_cols = spec.get("csv_columns", [])
+        # Common field-shape hints; default = digit-only zero-padded
+        _hint = {"WERKS": "1710", "BUKRS": "1710", "EKORG": "1710",
+                 "VKORG": "1710", "MATNR": None, "KUNNR": None, "LIFNR": None}
+        def _val(col, i):
+            h = _hint.get(col)
+            if h is not None: return h
+            return f"{col[:4]}{i:08d}"
+
+        t_synth_start = _time.time()
+        validated = 0; rejected = 0; buffered = 0
+        for i in range(row_count):
+            row = {col: _val(col, i) for col in all_cols}
+            err = spine.validate(row)
+            if err:
+                rejected += 1
+                continue
+            validated += 1
+            payload = spine.build_payload(row, [])
+            spine.call_bapi(payload)
+            buffered += 1
+        t_synth = _time.time() - t_synth_start
+
+        t_flush_start = _time.time()
+        tconn = None
+        if auto_trigger:
+            target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+            try:
+                tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+                from pyrfc import Connection
+                tconn = Connection(ashost=tsec["ashost"], sysnr=tsec.get("sysnr","00"),
+                                   client=tsec["client"], user=tsec["user"],
+                                   passwd=tsec.get("passwd") or tsec.get("password"), lang="EN")
+            except Exception as e:
+                return {"status": "error", "phase": "mc_lane_scale_probe", "run_id": run_id,
+                        "error": f"target_connection failed: {type(e).__name__}: {str(e)[:200]}"}
+        flush_results = flush_all(
+            S3, STAGING_BUCKET, run_id, tenant_slug=tenant_slug,
+            target_conn=tconn, project_id=project_id,
+            auto_trigger=auto_trigger, wait_for_complete=False,
+        )
+        t_flush = _time.time() - t_flush_start
+        total = t_synth + t_flush
+
+        return {"status": "ok", "phase": "mc_lane_scale_probe", "run_id": run_id,
+                "object_type": object_type, "row_count": row_count,
+                "validated": validated, "rejected": rejected, "buffered": buffered,
+                "synth_secs": round(t_synth, 3),
+                "flush_secs": round(t_flush, 3),
+                "total_secs": round(total, 3),
+                "rows_per_sec": round(row_count / total, 1) if total > 0 else None,
+                "auto_trigger": auto_trigger,
+                "flush_results": flush_results}
+
     if mode == "introspect_bapi":
         # Cheap RFC_GET_FUNCTION_INTERFACE probe on the S/4 target so we can
         # author JSON definitions for new spines without guessing field/struct
