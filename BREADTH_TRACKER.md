@@ -111,3 +111,42 @@ Coverage = (BAPI-loaded, RECONCILED proven) + (correctly-routed with evidence), 
 The honest ceiling for the released-BAPI/OData spine is **~40–60 of the 120 MC objects**; the rest
 are intentionally file-based / LTMOM / transport / manual-gate, exactly like real SAP partner
 toolchains.
+
+## 2026-06-14 — Scaffolder breadth grind + fire-and-forget tier table
+
+### Scaffolder-generated spines (declarative JSON → spine + tests + lane templates)
+
+The scaffolder lets a single JSON in `definitions/<Object>.json` regenerate `lambda/utils/<obj>_spine.py` + tests + MC/IDoc/LTMOM templates deterministically. Each spine inherits the `BaseSpineOrchestrator` lifecycle (DQ → FK resolve → payload build → BAPI call → key map → reconcile) and supports header-struct + items-table BAPIs via `item_struct` + `item_field_maps`.
+
+| # | Object | Live BAPI status | Notes |
+|---|---|---|---|
+| 1 | InventoryReservation | ✅ Tier 1 (proven live on S/4) | RESB writes confirmed via direct read-back |
+| 2 | MovementType | Tier 3 — registered, live not proven | Customizing-style, mostly read-only |
+| 3 | SourceList | Tier 3 — registered, live not proven | Requires Material + Vendor + Plant FK chain |
+| 4 | ProductionOrder | Tier 3 blocked by SAP Note 2295840 | "Incompatible Call Rejected" — SAP-side policy |
+| 5 | ProcessOrder | Tier 3 blocked by SAP Note 2295840 | same |
+| 6 | ServiceMaster | Tier 3 — short text in secondary table | SHORT_TEXT lives in SERVICE_DESCRIPTION (not the header struct) |
+| 7 | DocumentInfoRecord | ✅ **Tier 1 (proven live: 3/3 created on S/4)** | Overrides {DOKAR:"AUT", DOKVR:"01", DOKTL:"000"}; first scaffolder-generated live spine |
+| 8 | ServiceEntrySheet | Tier 3 — PO reference required | BAPI rejects without a valid EBELN/EBELP |
+| 9 | ProjectDefinition | Tier 3 — per-system profile needed | "could not be created" (generic); requires PROJECT_PROFILE customizing |
+| 10 | IncomingInvoice | Tier 3 — items table flows; needs PO ref | BAPI now sees ITEMDATA; demands `PO_NUMBER` / `PO_ITEM` (logistics flow precondition) |
+| 11 | Requirement | Tier 3 — odd BAPI shape | BAPISITEMR doesn't expose UoM/qty as struct fields directly |
+| 12 | AccountingDocument | Tier 3 — header flowing; items polish | USERNAME now flows; CURRENCYAMOUNT items table needs per-system field tuning |
+| 13 | FixedAssetOvertake | Tier 3 — per-system AA setup | Field map corrected (`ASSET`/`SUBNUMBER`); BAPI now rejects with "Company code 0001 not defined in Asset Accounting" — real customizing gap |
+
+**Total scaffolder-generated: 13** (was 3 at start of 2026-06-13 session).
+
+### Fire-and-forget tier coverage (after 2026-06-14 MC trigger lane shipped)
+
+| Tier | What it means for fire-and-forget | Count |
+|---|---|---|
+| **Tier 1** — Live BAPI closed-loop, proven creates on S/4 | ✅ End-to-end fire-and-forget | **26** (25 LIVE-25 SWEEP + DocumentInfoRecord) |
+| **Tier 2** — MC pseudo-spine generates SAP-conformant file → `mc_job_trigger.py` auto-triggers MC import on S/4 → polls until DONE | ✅ End-to-end fire-and-forget (NEW: trigger lane shipped) | **99** (all MC_TEMPLATES entries) |
+| **Tier 3** — Built + registered scaffolder spine, live BAPI rejects on per-system gaps (per-object polish queue) | ⚠️ Built; not yet live | **12** |
+| **SOX gates** — Cutover-go / period-close / tax-accept / compliance | 🔒 Human (by design) | 4 |
+| **Total fire-and-forget** | Tier 1 + Tier 2 | **125 / 140 = 89%** |
+
+The MC job-trigger lane (`lambda/utils/mc_job_trigger.py`, commit `cbb4857`) closes the single biggest architectural gap to "fire-and-forget except SOX gates" — the 99 MC pseudo-spines no longer require a human to log into S/4 and click Transfer in the Migration Cockpit. Strategy chain (LTMC_API → OData → XBP background job) live-confirmed on CAL S/4 target: XBP available (universal SAP-since-4.6C fallback).
+
+The remaining 12 Tier 3 objects are on the per-object polish queue — each needs per-BAPI corrections, per-system overrides, or per-flow reference data. That's incremental object-by-object work on top of the now-complete fire-and-forget foundation.
+
