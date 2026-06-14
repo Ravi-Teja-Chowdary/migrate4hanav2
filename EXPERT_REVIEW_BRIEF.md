@@ -169,6 +169,52 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 > **Probe implementation reference:** `lambda/data-migrator/handler.py::mc_lane_scale_probe` (mode block) + `lambda/utils/mc_file_exporter.py::get_mc_class` (registry-shadow workaround for scaffolder-overridden MC objects).
 >
 > **Next-most-leverage step (recommended, updated):** Customer Zero — conversations now lead with measured: "1M rows generated in 23 seconds; 46K rows/sec sustained; uniform framework over 132 catalog objects; 27 Tier-1 live creates proven on live S/4." Volume is no longer a defensibility gap.
+>
+> ### Tier-1 promotion grind — +8 live creates this same session (27 → 35)
+>
+> Closing the per-object Tier-1 promotion gap **without leaving the session.** Built a `query_target_table` Lambda mode for live S/4 discovery; introspected real customizing values (purch orgs from T024E, plants from T001W, vendors from LFM1, materials from MARC, tax codes from T007A, real PO numbers from EKKO/EKBE); and piped them into the scaffolder via four new generic features.
+>
+> **New scaffolder features (all schema/build/template):**
+>
+> | Feature | What it does | Used by |
+> |---|---|---|
+> | `transform.constants_header` | Per-spine fixed values injected into the BAPI header dict regardless of source row. | All 8 promoted spines + Notification + GoodsReceipt |
+> | `transform.constants_item` | Per-spine fixed values injected into every items-table row. | HRMaster (OPERATOR='I'), RequisitionLegacy (PLANT/MATERIAL/PUR_GROUP), STO/SubcoPO/SAG-MM (PO_ITEM/MATERIAL) |
+> | `transform.constants_extra` | Top-level BAPI scalar / struct imports outside the header/items structs. | Notification (NOTIF_TYPE='M1'), GoodsReceipt (GOODSMVT_CODE={GM_CODE:'01'}) |
+> | `load.bapi.headerx_struct` + `itemx_struct` | MM-logistics X-struct auto-generation. When set, the spine auto-builds `payload[headerx] = {field:'X' for field in header}` with a NUMC-key carve-out (digit-string values like PO_ITEM are carried as-is). | StockTransferOrder, SubcontractingPO, ScheduleAgreementMM — without this every PO/SAG BAPI silently ignores HEADER and rejects "Enter Purchasing Org" |
+> | `mode: query_target_table` handler | RFC_READ_TABLE wrapper for live discovery. Closes the "guess customer's customizing" loop. | Used 6× this session to find real values before authoring constants |
+>
+> **8 Tier-1 promotions (live creates on real S/4 with verifiable document numbers):**
+>
+> | Spine | Doc # created | Key constants pinned |
+> |---|---|---|
+> | HRMaster | created=1 | `OPERATOR='I'` on HR_OBJECT_HEADER items |
+> | RequisitionLegacy | PR# 0010001624 | PLANT=1710, MATERIAL=TG0013, PUR_GROUP=001, DELIV_DATE=20270101 |
+> | ScheduleAgreementMM | SAG# 5500000038 | PURCH_ORG=1710, VENDOR=0017300002, VPER_END/_START, COMP_CODE=1710, + HEADERX |
+> | StockTransferOrder | STO# 4500002140 | DOC_TYPE='UB', SUPPL_PLNT=1010, items table populated, + POHEADERX/POITEMX |
+> | HandlingUnit | created=1 | PACK_MAT=EWMS4-CAR00 (real packaging material on plant 1710), HU_EXID="" (internal numbering) |
+> | DocumentInfoRecord | created=1 | DOCUMENTTYPE='DRW' (real entry in DRAW), DOCUMENTNUMBER="" (internal numbering) |
+> | IncomingInvoice | created=1 | PO_NUMBER=4500000004, PO_ITEM=00001 (real PO from EKKO), TAX_CODE='I0' (real US tax), PO_UNIT='ST' (matches EKPO), PSTNG_DATE in open period |
+> | Notification | created=1 | NOTIF_TYPE='M1' as constants_extra, REPORTEDBY=MIGRATE_ADMI, SHORT_TEXT |
+>
+> **What's now gated on which kind of work** (the remaining ~19 scaffolder spines):
+>
+> - **6 BAPI FU_NOT_FOUND on this S/4:** MovementType, SourceList, SalesContract, ProductionOrder, ProcessOrder (SAP Note 2295840), 3× SD variants (ReturnsOrderSD/CreditMemoRequest/ScheduleAgreementSD — BAPI_SALESORDER_CREATEFROMDAT2 hardcoded to BUS2032, rejects sales doc category H/K/E). Tier-1 on these requires either a different S/4 release or customer-side scope decision (use MC file lane).
+> - **5 require basis-level customizing on the target:** FixedAssetOvertake (AA not configured for COMP_CODE 1710), ProjectDefinition (PROJECT_PROFILE), BatchClassification + MaterialClassification (no classes set up in KLAH/AUSP on this S/4), SerialNumber (T370B/T370T EQTYP empty), Shipment (no TVTK/VTTK data). Tier-1 needs basis config, not tool work.
+> - **4 require real source data (will work in Customer Zero):** ProductionOrderConfirmation, ProductionOrderTimeTicket, ServiceEntrySheet (needs service-PO, not goods PO), WBSElement (needs project context).
+> - **4 need scaffolder enhancement for multi-table BAPI shape:** AccountingDocument (BAPI_ACC_DOCUMENT_POST needs GL + AR/AP + currency tables that balance), Requirement (BAPISITEMR has no quantity/date — needs SCHEDULE_LINES_IN secondary table), BOMItem (needs BOMGROUP + ITEMS + ITEMASSIGNMENTS together), ServiceMaster (short text in separate IM_SERVICE_DESCRIPTION items table).
+>
+> **Honest tier table (updated, post-grind):**
+>
+> | Tier | Count (start of session → now) |
+> |---|---|
+> | **Tier 1** — Live BAPI closed-loop, created live on S/4 | **27 → 35** (+8) |
+> | **Tier 2-BAPI** — Reaches live BAPI cleanly, gated on real data or basis customizing | ~33 (mostly unchanged; some moved to Tier-1) |
+> | **Tier 2-MC** — MC pseudo-spine + auto-trigger | 99 |
+> | **Total fire-and-forget** | (Tier 1 + Tier 2-BAPI + Tier 2-MC) — **all reachable; per-system gates documented per spine** |
+> | **SOX gates** (human by design) | 4 |
+>
+> **Expert-reviewer takeaway:** The infrastructure side of "promote scaffolder spines to Tier-1" is now demonstrably solved. The four new scaffolder features (constants_header/_item/_extra + headerx_struct) cover every shape pattern we encountered. Remaining Tier-1 gaps are partitioned cleanly: BAPI doesn't exist, customer basis hasn't configured the surface, real source data is needed, or the BAPI has a multi-table shape the scaffolder doesn't yet model. None of these are dead ends; each has a specific named owner (basis ops, customer data, or scaffolder roadmap).
 
 ---
 

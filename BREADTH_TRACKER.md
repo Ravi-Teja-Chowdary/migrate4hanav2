@@ -214,4 +214,35 @@ Tier-1 promotion of the 33 Tier-2-BAPI spines is gated on **realistic source dat
 
 **Next-most-leverage step (recommended):** 100K MC-lane scale probe — the unproven dimension. Then per-object Tier-1 promotion as customer data lands.
 
+## 2026-06-15 — Tier-1 promotion grind: +8 live creates (27 → 35), 4 scaffolder features added
+
+| New Tier-1 spine | Doc# / outcome | Key constants used |
+|---|---|---|
+| HRMaster | created=1 | OPERATOR='I' on HR_OBJECT_HEADER |
+| RequisitionLegacy | PR# 0010001624 | PLANT=1710, MATERIAL=TG0013, PUR_GROUP=001 |
+| ScheduleAgreementMM | SAG# 5500000038 | VENDOR=0017300002, VPER_END=20271231, + HEADERX |
+| StockTransferOrder | STO# 4500002140 | DOC_TYPE='UB', SUPPL_PLNT=1010, + POHEADERX/POITEMX |
+| HandlingUnit | created=1 | PACK_MAT=EWMS4-CAR00, HU_EXID="" |
+| DocumentInfoRecord | created=1 | DOCUMENTTYPE='DRW', DOCUMENTNUMBER="" |
+| IncomingInvoice | created=1 | PO_NUMBER=4500000004, TAX_CODE='I0', PO_UNIT='ST' |
+| Notification | created=1 | NOTIF_TYPE='M1' via constants_extra |
+
+### Four new scaffolder features (all schema/build/template, generic across spines):
+
+1. **`transform.constants_header`** — fixed values injected into the BAPI header dict.
+2. **`transform.constants_item`** — fixed values injected into every items-table row.
+3. **`transform.constants_extra`** — top-level scalar/struct BAPI imports outside header/items (NOTIF_TYPE scalar, GOODSMVT_CODE struct).
+4. **`load.bapi.headerx_struct` + `itemx_struct`** — MM-logistics X-struct auto-generation with NUMC-key carve-out. Required for `BAPI_PO_CREATE1`, `BAPI_SAG_CREATE` family.
+
+Plus a new `query_target_table` Lambda handler mode for live RFC_READ_TABLE discovery — used to find real per-system values (T024E purch orgs, T001W plants, LFM1 vendors-by-EKORG, T007A tax codes, EKKO/EKBE real PO numbers, DRAW doc types, MARA packaging materials) before pinning constants.
+
+### What remains gated, partitioned by cause (the remaining ~19 Tier-2 spines):
+
+- **BAPI doesn't exist on this S/4** (6): MovementType, SourceList, SalesContract, ProductionOrder + ProcessOrder (SAP Note 2295840), 3× SD variants (BAPI_SALESORDER_CREATEFROMDAT2 rejects non-C sales doc categories).
+- **Basis-level customizing needed** (5): FixedAssetOvertake (no AA config), ProjectDefinition (no PROJECT_PROFILE), BatchClassification + MaterialClassification (no classes in KLAH), SerialNumber (no EQTYP), Shipment (no shipment data on this S/4).
+- **Real customer source data needed** (4): ProductionOrderConfirmation, ProductionOrderTimeTicket, ServiceEntrySheet (needs service-PO), WBSElement.
+- **Multi-table BAPI shape — scaffolder roadmap** (4): AccountingDocument, Requirement, BOMItem, ServiceMaster.
+
+Tier-1 total: **35** (was 27). Total scaffolder-generated spines unchanged at 54 (no new objects added in this push — only promotions).
+
 

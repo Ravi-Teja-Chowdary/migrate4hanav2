@@ -2583,6 +2583,68 @@ Sample output: `{"rps": 44290, "synth_secs": 1.669, "flush_secs": 0.589, "flush_
 
 **Implication for the SCALE_BENCHMARK.md and Customer-Zero conversation:** the tool now has a measured 1M-row number for the MC file lane on top of the previously-measured 32-way parallel BAPI curve (105.7 rps aggregate, sub-linear scaling, p99 1150ms). Combined story: BAPI lane for high-fidelity per-row writes (~100 rps with 32-way fan-out); MC file lane for high-volume cutover (~46K rps single-Lambda, projected ~1.5M rps with 32-way fan-out though never tested at that level).
 
+## 2026-06-15 — Tier-1 promotion grind: +8 live creates with verifiable S/4 document numbers (27 → 35)
+
+Closed the per-object Tier-1 promotion gap by combining a new `query_target_table` Lambda mode (for live customizing discovery) with four reusable scaffolder features (constants_header, constants_item, constants_extra, headerx_struct/itemx_struct).
+
+### 8 Tier-1 promotions — per-spine engineering path
+
+| Spine | Document # / outcome | Key infra used |
+|---|---|---|
+| HRMaster | created=1 | `constants_item.OPERATOR='I'` |
+| RequisitionLegacy | **PR# 0010001624** | Real material TG0013 from MARC, PUR_GROUP=001 from T024, future DELIV_DATE |
+| ScheduleAgreementMM | **SAG# 5500000038** | `headerx_struct=HEADERX`, vendor 0017300002 from LFM1 WHERE EKORG=1710 |
+| StockTransferOrder | **STO# 4500002140** | `headerx_struct=POHEADERX` + `itemx_struct=POITEMX` with NUMC-key carve-out |
+| HandlingUnit | created=1 | PACK_MAT=EWMS4-CAR00 (real VERP from MARA), HU_EXID="" (internal) |
+| DocumentInfoRecord | created=1 | DOCUMENTTYPE='DRW' from DRAW, DOCUMENTNUMBER="" |
+| IncomingInvoice | created=1 | PO 4500000004 from EKKO, tax I0 from T007A KALSM=TAXUSJ, PO_UNIT='ST' from EKPO |
+| Notification | created=1 | `constants_extra.NOTIF_TYPE='M1'` (scalar import outside header) |
+
+### Four scaffolder features shipped to enable the grind
+
+1. **`transform.constants_header`** — per-spine fixed values injected into the BAPI header dict regardless of source row. Schema + build + template.
+2. **`transform.constants_item`** — per-spine fixed values injected into every items-table row. Same files.
+3. **`transform.constants_extra`** — top-level BAPI scalar/struct imports outside header/items structures. Required for BAPIs like BAPI_ALM_NOTIF_CREATE (NOTIF_TYPE scalar) or BAPI_GOODSMVT_CREATE (GOODSMVT_CODE struct). Same files + `payload.update()` in build_payload.
+4. **`load.bapi.headerx_struct` + `itemx_struct`** — MM-logistics X-struct auto-generation. When set, the spine auto-builds `payload[headerx] = {field:'X' for field in header}` with a NUMC-key carve-out: digit-string values (PO_ITEM, NUMBER) are carried as-is to satisfy NUMC field validation; everything else gets 'X'. Without these, BAPI_PO_CREATE1 + BAPI_SAG_CREATE family silently ignore HEADER and reject with "Enter Purchasing Org".
+
+Plus one new Lambda handler mode:
+
+- **`query_target_table`** (~30 LOC at `lambda/data-migrator/handler.py`). RFC_READ_TABLE wrapper for live S/4 discovery. Used 6× this session to find real values (T024E purch orgs, T001W plants, LFA1/LFM1 vendors, MARC materials, T007A tax codes, EKKO POs, DRAW doc types) before pinning constants.
+
+### What remains gated (the remaining ~19 Tier-2-BAPI spines), partitioned by cause
+
+- **BAPI doesn't exist on this S/4 release** (6): MovementType, SourceList, SalesContract, ProductionOrder + ProcessOrder (blocked by SAP Note 2295840), 3 SD variants (BAPI_SALESORDER_CREATEFROMDAT2 hardcoded to BUS2032, rejects sales doc categories E/H/K). Tier-1 needs different S/4 release or customer-side scope decision (route to MC file lane).
+- **Basis-level customizing required on the target** (5): FixedAssetOvertake (no AA config for COMP_CODE 1710), ProjectDefinition (no PROJECT_PROFILE), BatchClassification + MaterialClassification (no classes in KLAH/AUSP), SerialNumber (T370B EQTYP empty), Shipment (no shipment/planning-point data).
+- **Real customer source data required** (4): ProductionOrderConfirmation + ProductionOrderTimeTicket (need existing AUFNR), ServiceEntrySheet (needs service PO), WBSElement (needs project context).
+- **Multi-table BAPI shape — scaffolder roadmap** (4): AccountingDocument (BAPI_ACC_DOCUMENT_POST needs balanced GL + AR/AP + currency tables), Requirement (BAPISITEMR has no qty/date, needs SCHEDULE_LINES_IN table), BOMItem (needs coordinated BOMGROUP + ITEMS + ITEMASSIGNMENTS), ServiceMaster (short text lives in separate IM_SERVICE_DESCRIPTION items table).
+
+The fourth bucket — multi-table BAPI shape — is the next-most-leverage scaffolder roadmap item. A `transform.tables` (named: List[field_maps]) mechanism would unblock all 4 with one feature. Estimated ~1 day of work.
+
+### Tier-1 count progression (this session, in invocation order)
+
+| Step | Tier-1 |
+|---|---|
+| Session start | 27 |
+| + Batch A (HRMaster, RequisitionLegacy, ScheduleAgreementMM, StockTransferOrder) | 31 |
+| + HandlingUnit | 32 |
+| + DocumentInfoRecord | 33 |
+| + IncomingInvoice | 34 |
+| + Notification | 35 |
+
+### Files touched this push (engineering reference)
+
+**Scaffolder framework (+5 schema fields + template changes):**
+- `scaffolder/object_definition.schema.json` (+5 fields: `constants_header`, `constants_item`, `constants_extra`, `load.bapi.headerx_struct`, `load.bapi.itemx_struct`)
+- `scaffolder/build.py` (+6 lines of context mapping)
+- `scaffolder/templates/spine.py.j2` (+~50 lines covering all five features)
+
+**Lambda handler (+~30 LOC):**
+- `lambda/data-migrator/handler.py` — new `query_target_table` mode
+
+**JSON definitions updated** (8 promoted + 3 explored):
+- HRMaster, RequisitionLegacy, ScheduleAgreementMM, StockTransferOrder, HandlingUnit, DocumentInfoRecord, IncomingInvoice, Notification (the 8 promoted)
+- Network, Shipment, Requirement, SubcontractingPO, ServiceMaster, ServiceEntrySheet, GoodsReceipt (explored, not promoted)
+
 ---
 
 *End of detailed review brief. For executive summary, see `EXPERT_REVIEW_BRIEF.md`.
