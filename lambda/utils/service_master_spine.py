@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build ServiceMaster` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   de340bdef23761c9f46eae985cd831ed7b1a07bbe3dbdb2fa53ab6984f9bfff6
+Source SHA:   987f390056e29b1ff7f2124c9302aa62f318c203bc97b0a6302db8bf8dd32301
 Object type:  ServiceMaster
 Category:     Master
 Lane:         BAPI (fallback: MC)"""
@@ -52,9 +52,26 @@ VALUE_MAPS = {
 # BAPI operator flags, doc-type pins) but the target BAPI demands.
 CONSTANTS_HEADER = {
     'BASE_UOM': 'EA',
+    'MATL_GROUP': 'L001',
+    'SERVICE': '',
+    'SERV_TYPE': 'DIEN',
 }
 
 CONSTANTS_ITEM = {
+}
+
+# Top-level scalar BAPI imports — sent as named params in the BAPI call,
+# outside the header / items structures. Use for BAPIs that take scalar
+# imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
+CONSTANTS_EXTRA = {
+}
+
+# Additional struct / table params for multi-struct BAPIs (BAPI_FIXEDASSET_OVRTAKE_CREATE,
+# BAPI_ACC_DOCUMENT_POST, BAPI_MATERIAL_BOM_GROUP_CREATE). Object values are
+# sent as struct payloads; list values are sent as table payloads.
+EXTRA_PAYLOAD = {
+    'IM_SERVICE_DATAX': {'BASE_UOM': 'X', 'MATL_GROUP': 'X', 'SERV_TYPE': 'X'},
+    'SERVICE_DESCRIPTION': [{'LANGUAGE': 'E', 'LANGUAGE_ISO': 'EN', 'SHORT_TEXT': 'Migrated service'}],
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -158,6 +175,10 @@ class ServiceMasterSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(
                 self.extension_structure, field_names
             )
+        if CONSTANTS_EXTRA:
+            payload.update(CONSTANTS_EXTRA)
+        if EXTRA_PAYLOAD:
+            payload.update(EXTRA_PAYLOAD)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────

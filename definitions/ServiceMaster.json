@@ -27,7 +27,22 @@
       "MEINS": "BASE_UOM_ISO"
     },
     "constants_header": {
-      "BASE_UOM":   "EA"
+      "BASE_UOM":    "EA",
+      "SERVICE":     "",
+      "MATL_GROUP":  "L001",
+      "SERV_TYPE":   "DIEN"
+    },
+    "extra_payload": {
+      "IM_SERVICE_DATAX": {
+        "BASE_UOM":    "X",
+        "MATL_GROUP":  "X",
+        "SERV_TYPE":   "X"
+      },
+      "SERVICE_DESCRIPTION": [{
+        "LANGUAGE":      "E",
+        "LANGUAGE_ISO":  "EN",
+        "SHORT_TEXT":    "Migrated service"
+      }]
     },
     "dq_gates": [
       { "field": "ASNUM", "rule": "non_empty",            "on_fail": "dead_letter", "code": "MISSING_SERVICE_NUMBER" },

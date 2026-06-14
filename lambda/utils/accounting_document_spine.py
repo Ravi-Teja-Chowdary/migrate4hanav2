@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build AccountingDocument` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   5088a2374f766b8e93e4724636baac9f1673b1908f2ed33e3bcc3ac7a71c3fe2
+Source SHA:   a9a4993ce87f0694a474643705724ba4e65def99a075f25812d0058a0cf0205e
 Object type:  AccountingDocument
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -53,6 +53,38 @@ ITEM_FIELD_MAPS = {
 
 # target_field -> { source_value: target_value }
 VALUE_MAPS = {
+}
+
+# Per-spine constants injected into header / items regardless of source row.
+# Used for fields the source ECC table doesn't carry (PURCH_ORG defaults,
+# BAPI operator flags, doc-type pins) but the target BAPI demands.
+CONSTANTS_HEADER = {
+    'COMP_CODE': '1710',
+    'DOC_DATE': '20251115',
+    'DOC_TYPE': 'SA',
+    'HEADER_TXT': 'Migrated acc doc',
+    'PSTNG_DATE': '20251115',
+    'USERNAME': 'MIGRATE_ADMI',
+}
+
+CONSTANTS_ITEM = {
+    'AMT_DOCCUR': '100',
+    'CURRENCY': 'USD',
+    'ITEMNO_ACC': '0000000001',
+}
+
+# Top-level scalar BAPI imports — sent as named params in the BAPI call,
+# outside the header / items structures. Use for BAPIs that take scalar
+# imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
+CONSTANTS_EXTRA = {
+}
+
+# Additional struct / table params for multi-struct BAPIs (BAPI_FIXEDASSET_OVRTAKE_CREATE,
+# BAPI_ACC_DOCUMENT_POST, BAPI_MATERIAL_BOM_GROUP_CREATE). Object values are
+# sent as struct payloads; list values are sent as table payloads.
+EXTRA_PAYLOAD = {
+    'ACCOUNTGL': [{'ITEMNO_ACC': '0000000001', 'GL_ACCOUNT': '0064002000', 'COMP_CODE': '1710', 'COSTCENTER': '0017101601'}, {'ITEMNO_ACC': '0000000002', 'GL_ACCOUNT': '0064040000', 'COMP_CODE': '1710', 'COSTCENTER': '0017101601'}],
+    'CURRENCYAMOUNT': [{'ITEMNO_ACC': '0000000001', 'CURR_TYPE': '00', 'CURRENCY': 'USD', 'AMT_DOCCUR': '100.00'}, {'ITEMNO_ACC': '0000000002', 'CURR_TYPE': '00', 'CURRENCY': 'USD', 'AMT_DOCCUR': '-100.00'}],
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -140,16 +172,25 @@ class AccountingDocumentSpineOrchestrator(BaseSpineOrchestrator):
         # Header struct: when header_struct is empty (items-only BAPI like
         # BAPI_QPMK_SAVEREPLICA or BAPI_INSPECTIONPLAN_CREATE), skip the
         # header path entirely — the spine sends only the items table.
+        # When header_is_scalar=True (rare: BAPI_NETWORK_COMP_ADD NUMBER), the
+        # named param is a scalar string at the pyrfc layer despite RFC_GET
+        # introspection reporting a one-field struct — send the source key
+        # value directly, not a dict.
         if 'DOCUMENTHEADER':
             header = self._apply_field_map(row, FIELD_MAPS)
+            # Per-spine fixed values overlay the source-derived header
+            if CONSTANTS_HEADER:
+                header = {**header, **CONSTANTS_HEADER}
             payload['DOCUMENTHEADER'] = header
 
         # If the BAPI is two-struct (header + items table), build the item from
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
         # one item" pattern is the smoke-test shape; production loaders that
         # aggregate N source rows into one parent header are out of scope here.
-        if ITEM_FIELD_MAPS:
-            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
+        if ITEM_FIELD_MAPS or CONSTANTS_ITEM:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS) if ITEM_FIELD_MAPS else {}
+            if CONSTANTS_ITEM:
+                item = {**item, **CONSTANTS_ITEM}
             payload['CURRENCYAMOUNT'] = [item]
 
         if ext_rows:
@@ -158,6 +199,10 @@ class AccountingDocumentSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(
                 self.extension_structure, field_names
             )
+        if CONSTANTS_EXTRA:
+            payload.update(CONSTANTS_EXTRA)
+        if EXTRA_PAYLOAD:
+            payload.update(EXTRA_PAYLOAD)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────
@@ -179,7 +224,19 @@ class AccountingDocumentSpineOrchestrator(BaseSpineOrchestrator):
         hard = [m for m in ret_list if m.get("TYPE") in ("E", "A")]
         msgs = [(m.get("MESSAGE") or "").strip() for m in ret_list if m.get("MESSAGE")]
 
-        target_key = (resp.get('OBJ_KEY') or "").strip()
+        # Target-key extraction. Most BAPIs return a scalar string at
+        # return_key_field, but some (BAPI_BUS2054_CREATE_MULTI, BAPI_NETWORK_
+        # MAINTAIN) only return a status struct/table — no scalar key. When
+        # the BAPI succeeded (no E/A in RETURN) but the named field isn't a
+        # scalar, fall back to the source key as the synthetic target_key so
+        # the Reconciler can still verify against home_table.
+        raw_key = resp.get('OBJ_KEY')
+        if isinstance(raw_key, str):
+            target_key = raw_key.strip()
+        elif raw_key is None or isinstance(raw_key, (dict, list)):
+            target_key = "" if hard else src_key
+        else:
+            target_key = str(raw_key).strip()
 
         if hard or not target_key:
             try:
@@ -198,7 +255,8 @@ class AccountingDocumentSpineOrchestrator(BaseSpineOrchestrator):
             return None, msgs + ["BAPI_TRANSACTION_COMMIT failed"], None, None
 
         # Verify-value lookup: prefer header struct; fall back to first item
-        # of item struct when the BAPI is items-only.
+        # of item struct when the BAPI is items-only OR when the header is a
+        # scalar (the scalar carries only the key, not value-field data).
         if 'DOCUMENTHEADER':
             value_source = payload.get('DOCUMENTHEADER', {}) or {}
         elif ITEM_FIELD_MAPS:

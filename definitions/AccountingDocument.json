@@ -34,6 +34,29 @@
       "AMT_DOCCUR": "AMT_DOCCUR",
       "CURRENCY":   "CURRENCY"
     },
+    "constants_header": {
+      "COMP_CODE":  "1710",
+      "DOC_TYPE":   "SA",
+      "DOC_DATE":   "20251115",
+      "PSTNG_DATE": "20251115",
+      "USERNAME":   "MIGRATE_ADMI",
+      "HEADER_TXT": "Migrated acc doc"
+    },
+    "constants_item": {
+      "ITEMNO_ACC": "0000000001",
+      "AMT_DOCCUR": "100",
+      "CURRENCY":   "USD"
+    },
+    "extra_payload": {
+      "ACCOUNTGL": [
+        {"ITEMNO_ACC": "0000000001", "GL_ACCOUNT": "0064002000", "COMP_CODE": "1710", "COSTCENTER": "0017101601"},
+        {"ITEMNO_ACC": "0000000002", "GL_ACCOUNT": "0064040000", "COMP_CODE": "1710", "COSTCENTER": "0017101601"}
+      ],
+      "CURRENCYAMOUNT": [
+        {"ITEMNO_ACC": "0000000001", "CURR_TYPE": "00", "CURRENCY": "USD", "AMT_DOCCUR": "100.00"},
+        {"ITEMNO_ACC": "0000000002", "CURR_TYPE": "00", "CURRENCY": "USD", "AMT_DOCCUR": "-100.00"}
+      ]
+    },
     "dq_gates": [
       { "field": "BELNR",      "rule": "non_empty",          "on_fail": "dead_letter", "code": "MISSING_DOC_NUMBER" },
       { "field": "USNAM",      "rule": "non_empty",          "on_fail": "dead_letter", "code": "MISSING_USERNAME" },
