@@ -1,1 +1,1 @@
-{"mode":"phase_b_validate_generated","object_type":"ProjectDefinition","live":true}
+{"where":"LOEKZ <> 'X'","mode":"query_target_table","fields":["PSPID","PROFL"],"table":"PROJ","rowcount":8}

@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/GoodsReceipt.json",
-  "_source_sha":     "990c4483f8ff9782050ce108078c53307b0eabf9955b3091774a650ee69bb97c",
+  "_source_sha":     "57de1b2c96cf65364f8b4e4d3cfc3d03cd1a1bce878b1046befb2ca7a18a8960",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM source-structure definition for GoodsReceipt.",
 

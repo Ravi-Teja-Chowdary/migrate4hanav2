@@ -14,7 +14,7 @@ Used by the nightly breadth-grind job + the phase_b_validate_<n> Lambda modes
 to verify the generated spine loads at least one real record end-to-end.
 
 Generator:  migrate4hana scaffolder v1.0.0
-Source SHA: 7b23f7b8f82e4bf987456fc484d3d964b1299701e9b5aa224c771eedf6f5b106
+Source SHA: d1b4005fbd6592bc77f8093e551dae9c879261329f6299c22230d5954eec1c73
 """
 from __future__ import annotations
 

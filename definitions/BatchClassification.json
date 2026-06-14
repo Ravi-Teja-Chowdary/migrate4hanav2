@@ -28,11 +28,11 @@
       "ATWRT": "VALUE_CHAR"
     },
     "constants_item": {
-      "CHARACT":     "WARRANTY_TIME",
-      "VALUE_CHAR":  "12"
+      "CHARACT":     "YB_BATCH_NUMBER",
+      "VALUE_CHAR":  "TG22-001"
     },
     "constants_extra": {
-      "OBJECTKEYNEW":   "TG22                              0000000020",
+      "OBJECTKEYNEW":   "RM30              0000000006",
       "CLASSNUMNEW":    "YB_BATCH",
       "CLASSTYPENEW":   "023",
       "OBJECTTABLENEW": "MCH1",

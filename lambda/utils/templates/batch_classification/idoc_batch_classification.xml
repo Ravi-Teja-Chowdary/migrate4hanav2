@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated from definitions/BatchClassification.json
-     Source SHA:  a7968bfa20cb956c6909a6e0d2e14dbaa212bd68cdb3fecef2c97cd954922615
+     Source SHA:  da4b7eae965b2cac2c8c7e5678e55c6db54dc3f5bc5a1f9808071235fa741a78
      Generator:   migrate4hana scaffolder v1.0.0
      Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
 -->

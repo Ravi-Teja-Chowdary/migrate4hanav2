@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/InspectionCharacteristic.json",
-  "_source_sha":     "7b23f7b8f82e4bf987456fc484d3d964b1299701e9b5aa224c771eedf6f5b106",
+  "_source_sha":     "d1b4005fbd6592bc77f8093e551dae9c879261329f6299c22230d5954eec1c73",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM source-structure definition for InspectionCharacteristic.",
 

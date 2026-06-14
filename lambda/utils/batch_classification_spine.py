@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build BatchClassification` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   a7968bfa20cb956c6909a6e0d2e14dbaa212bd68cdb3fecef2c97cd954922615
+Source SHA:   da4b7eae965b2cac2c8c7e5678e55c6db54dc3f5bc5a1f9808071235fa741a78
 Object type:  BatchClassification
 Category:     Master
 Lane:         BAPI (fallback: MC)"""
@@ -53,8 +53,8 @@ CONSTANTS_HEADER = {
 }
 
 CONSTANTS_ITEM = {
-    'CHARACT': 'WARRANTY_TIME',
-    'VALUE_CHAR': '12',
+    'CHARACT': 'YB_BATCH_NUMBER',
+    'VALUE_CHAR': 'TG22-001',
 }
 
 # Top-level scalar BAPI imports — sent as named params in the BAPI call,
@@ -64,7 +64,7 @@ CONSTANTS_EXTRA = {
     'CLASSNUMNEW': 'YB_BATCH',
     'CLASSTYPENEW': '023',
     'KEYDATE': '20251115',
-    'OBJECTKEYNEW': 'TG22                              0000000020',
+    'OBJECTKEYNEW': 'RM30              0000000006',
     'OBJECTTABLENEW': 'MCH1',
 }
 

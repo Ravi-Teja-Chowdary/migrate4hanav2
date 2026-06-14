@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated from definitions/GoodsReceipt.json
-     Source SHA:  990c4483f8ff9782050ce108078c53307b0eabf9955b3091774a650ee69bb97c
+     Source SHA:  57de1b2c96cf65364f8b4e4d3cfc3d03cd1a1bce878b1046befb2ca7a18a8960
      Generator:   migrate4hana scaffolder v1.0.0
      Consumed by: lambda/idoc-orchestrator at runtime to envelope extracted rows.
 -->

@@ -1,6 +1,6 @@
 {
   "_generated_from": "definitions/MaterialClassification.json",
-  "_source_sha":     "8934e391061c7210bf8d27155e406975804d5a8a372c1b566ef582e65d9d7b8e",
+  "_source_sha":     "f7ce9000f13b958b64e9a6a3c4af8c82dadc6d4b58a7ed8c72736b84c8a637cc",
   "_generator":      "migrate4hana scaffolder v1.0.0",
   "_doc":            "LTMOM field-mapping spec for MaterialClassification. Used by lambda/ltmom-orchestrator to drive SLT.",
 

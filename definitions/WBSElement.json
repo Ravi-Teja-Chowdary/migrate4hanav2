@@ -27,6 +27,13 @@
       "POSID": "WBS_ELEMENT",
       "PRART": "PROJECT_TYPE"
     },
+    "constants_extra": {
+      "I_PROJECT_DEFINITION": "M.1.MIGPRO.X001"
+    },
+    "constants_item": {
+      "WBS_ELEMENT":    "M.1.MIGPRO.X001-000001",
+      "DESCRIPTION":    "Migrated WBS"
+    },
     "dq_gates": [
       { "field": "POSID", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_WBS_ID" },
       { "field": "POST1", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_DESCRIPTION" }
