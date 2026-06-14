@@ -58,6 +58,21 @@ VALUE_MAPS = {
 {% endfor %}
 }
 
+# Per-spine constants injected into header / items regardless of source row.
+# Used for fields the source ECC table doesn't carry (PURCH_ORG defaults,
+# BAPI operator flags, doc-type pins) but the target BAPI demands.
+CONSTANTS_HEADER = {
+{% for tgt, val in constants_header_sorted %}
+    {{ tgt|repr }}: {{ val|repr }},
+{% endfor %}
+}
+
+CONSTANTS_ITEM = {
+{% for tgt, val in constants_item_sorted %}
+    {{ tgt|repr }}: {{ val|repr }},
+{% endfor %}
+}
+
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
 DQ_GATES = [
 {% for gate in dq_gates_sorted %}
@@ -147,16 +162,40 @@ class {{ class_name }}(BaseSpineOrchestrator):
             payload[{{ bapi_header_struct|repr }}] = row.get(self.source_key_field, "")
 {% else %}
             header = self._apply_field_map(row, FIELD_MAPS)
+            # Per-spine fixed values overlay the source-derived header
+            if CONSTANTS_HEADER:
+                header = {**header, **CONSTANTS_HEADER}
             payload[{{ bapi_header_struct|repr }}] = header
+{% if bapi_headerx_struct %}
+            # MM-logistics-family X-struct: every populated header field gets
+            # field='X' in the companion struct so the BAPI honours the value.
+            # NUMC-key fields like NUMBER must instead carry their value (the
+            # X-struct's NUMC keys are introspected as digit strings, not 'X').
+            payload[{{ bapi_headerx_struct|repr }}] = {
+                k: (v if (isinstance(v, str) and v.isdigit()) else "X")
+                for k, v in header.items()
+            }
+{% endif %}
 {% endif %}
 
         # If the BAPI is two-struct (header + items table), build the item from
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
         # one item" pattern is the smoke-test shape; production loaders that
         # aggregate N source rows into one parent header are out of scope here.
-        if ITEM_FIELD_MAPS:
-            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
+        if ITEM_FIELD_MAPS or CONSTANTS_ITEM:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS) if ITEM_FIELD_MAPS else {}
+            if CONSTANTS_ITEM:
+                item = {**item, **CONSTANTS_ITEM}
             payload[{{ bapi_item_struct|repr }}] = [item]
+{% if bapi_itemx_struct %}
+            # Same NUMC-key carve-out as the header X-struct: digit-string
+            # values (PO_ITEM, ITEM_NO, etc.) get carried; everything else
+            # gets 'X' as the boolean change indicator.
+            payload[{{ bapi_itemx_struct|repr }}] = [{
+                k: (v if (isinstance(v, str) and v.isdigit()) else "X")
+                for k, v in item.items()
+            }]
+{% endif %}
 
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows

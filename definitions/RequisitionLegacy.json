@@ -28,6 +28,15 @@
       "TXZ01": "SHORT_TEXT",
       "MATNR": "MATERIAL"
     },
+    "constants_item": {
+      "PLANT":     "1710",
+      "QUANTITY":  "1",
+      "UNIT":      "EA",
+      "MATERIAL":  "TG0013",
+      "PUR_GROUP": "001",
+      "DOC_TYPE":  "NB",
+      "DELIV_DATE": "20270101"
+    },
     "dq_gates": [
       { "field": "BSART", "rule": "in_set", "rule_args": {"values": ["NB", "RV", "FO"]}, "on_fail": "dead_letter", "code": "MISSING_DOC_TYPE" },
       { "field": "EKGRP", "rule": "non_empty",              "on_fail": "dead_letter", "code": "MISSING_PUR_GROUP" },

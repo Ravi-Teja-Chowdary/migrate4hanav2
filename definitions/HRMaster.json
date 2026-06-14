@@ -26,6 +26,9 @@
       "OTYPE": "OBJ_TYPE",
       "OBJID": "OBJ_ID"
     },
+    "constants_item": {
+      "OPERATOR": "I"
+    },
     "dq_gates": [
       { "field": "PLVAR", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_PLAN_VERSION" },
       { "field": "OTYPE", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_OBJECT_TYPE" },

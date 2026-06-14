@@ -91,6 +91,16 @@
           },
           "description": "target_field -> { source_value: target_value }."
         },
+        "constants_header": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "target_field -> fixed value, injected into the BAPI header dict regardless of source row. Use for per-system overrides like PURCH_ORG, DOC_TYPE, CURRENCY, or BAPI operator flags that don't exist in the source ECC table."
+        },
+        "constants_item": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "target_field -> fixed value, injected into every items-table row. Use for per-row constants like OPERATION='I' on HR records, PLAN_TYPE='M' on master recipes, etc."
+        },
         "dq_gates": {
           "type": "array",
           "items": {
@@ -145,7 +155,9 @@
             "function":            { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
             "header_struct":       { "type": "string" },
             "header_is_scalar":    { "type": "boolean", "default": false, "description": "When true, header_struct names a SCALAR import parameter (typically a one-field reference structure that pyrfc exposes as a plain string). The spine then sends the source_key_field VALUE directly instead of a dict — required for BAPIs like BAPI_NETWORK_COMP_ADD whose NUMBER param wraps a single-field struct." },
+            "headerx_struct":      { "type": "string", "description": "Companion change-indicator struct name. When set, the spine auto-generates payload[headerx_struct] = {field: 'X' for each populated field in header}. Required by the MM logistics BAPI family (BAPI_PO_CREATE1 -> POHEADERX, BAPI_SAG_CREATE -> HEADERX). Without it, the BAPI ignores HEADER values." },
             "item_struct":         { "type": "string" },
+            "itemx_struct":        { "type": "string", "description": "Companion items-table change-indicator. When set, the spine auto-generates payload[itemx_struct] = [{field: 'X' for each populated field in items[0]}]. Required by BAPI_PO_CREATE1 (POITEMX), BAPI_SAG_CREATE (ITEMX), etc." },
             "extension_structure": { "type": "string" },
             "commit_with_wait":    { "type": "boolean", "default": true },
             "return_key_field":    { "type": "string", "default": "NUMBER" }

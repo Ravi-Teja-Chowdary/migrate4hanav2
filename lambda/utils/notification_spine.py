@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build Notification` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   47e3f9a199aa2d6fa38b1a709d770eae906846e56ef143d391d1a9aac27e559f
+Source SHA:   d44d826814c4e045df281877f1841dc0722513d4ebc783c9d433d6babe1609f0
 Object type:  Notification
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -42,6 +42,16 @@ ITEM_FIELD_MAPS = {
 
 # target_field -> { source_value: target_value }
 VALUE_MAPS = {
+}
+
+# Per-spine constants injected into header / items regardless of source row.
+# Used for fields the source ECC table doesn't carry (PURCH_ORG defaults,
+# BAPI operator flags, doc-type pins) but the target BAPI demands.
+CONSTANTS_HEADER = {
+    'REPORTEDBY': 'MIGRATE_ADMI',
+}
+
+CONSTANTS_ITEM = {
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -123,14 +133,19 @@ class NotificationSpineOrchestrator(BaseSpineOrchestrator):
         # value directly, not a dict.
         if 'NOTIFHEADER':
             header = self._apply_field_map(row, FIELD_MAPS)
+            # Per-spine fixed values overlay the source-derived header
+            if CONSTANTS_HEADER:
+                header = {**header, **CONSTANTS_HEADER}
             payload['NOTIFHEADER'] = header
 
         # If the BAPI is two-struct (header + items table), build the item from
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
         # one item" pattern is the smoke-test shape; production loaders that
         # aggregate N source rows into one parent header are out of scope here.
-        if ITEM_FIELD_MAPS:
-            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
+        if ITEM_FIELD_MAPS or CONSTANTS_ITEM:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS) if ITEM_FIELD_MAPS else {}
+            if CONSTANTS_ITEM:
+                item = {**item, **CONSTANTS_ITEM}
             payload[''] = [item]
 
         if ext_rows:

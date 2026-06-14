@@ -27,6 +27,23 @@
       "WAERS": "CURRENCY"
     },
     "item_field_maps": {},
+    "constants_header": {
+      "PURCH_ORG":  "1710",
+      "PUR_GROUP":  "001",
+      "CURRENCY":   "USD",
+      "VPER_END":   "20271231",
+      "VPER_START": "20270101",
+      "VENDOR":     "0017300002",
+      "DOC_TYPE":   "LP",
+      "COMP_CODE":  "1710"
+    },
+    "constants_item": {
+      "ITEM_NO":   "00010",
+      "MATERIAL":  "TG0013",
+      "PLANT":     "1710",
+      "TARGET_QTY": "1",
+      "PO_UNIT":   "EA"
+    },
     "dq_gates": [
       { "field": "EBELN", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_AGREEMENT_NO" },
       { "field": "BSART", "rule": "in_set", "rule_args": {"values": ["LP","LPA"]}, "on_fail": "dead_letter", "code": "INVALID_DOC_TYPE" },
@@ -42,6 +59,9 @@
     "bapi": {
       "function":         "BAPI_SAG_CREATE",
       "header_struct":    "HEADER",
+      "headerx_struct":   "HEADERX",
+      "item_struct":      "ITEM",
+      "itemx_struct":     "ITEMX",
       "extension_structure": "",
       "commit_with_wait": true,
       "return_key_field": "PURCHASINGDOCUMENT"

@@ -885,6 +885,35 @@ def lambda_handler(event, context):
                 "auto_trigger": auto_trigger,
                 "flush_results": flush_results}
 
+    if mode == "query_target_table":
+        # Quick read against the live S/4 target table; used to discover
+        # real customizing values (purchasing orgs, plants, doc types) so
+        # scaffolder definitions can pin per-system constants accurately.
+        table   = event.get("table", "T024E")
+        fields  = event.get("fields") or []
+        where   = event.get("where", "")
+        rowcount = int(event.get("rowcount", 30))
+        target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+        try:
+            tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+            from pyrfc import Connection
+            tconn = Connection(ashost=tsec["ashost"], sysnr=tsec.get("sysnr","00"),
+                               client=tsec["client"], user=tsec["user"],
+                               passwd=tsec.get("passwd") or tsec.get("password"), lang="EN")
+            params = {"QUERY_TABLE": table, "DELIMITER": "|", "ROWCOUNT": rowcount}
+            if fields:
+                params["FIELDS"] = [{"FIELDNAME": f} for f in fields]
+            if where:
+                params["OPTIONS"] = [{"TEXT": where}]
+            resp = tconn.call("RFC_READ_TABLE", **params)
+            return {"status": "ok", "phase": "query_target_table", "run_id": run_id,
+                    "table": table, "rowcount": len(resp.get("DATA", [])),
+                    "fields": [f.get("FIELDNAME") for f in resp.get("FIELDS", [])],
+                    "rows":   [r.get("WA") for r in resp.get("DATA", [])][:50]}
+        except Exception as e:
+            return {"status": "error", "phase": "query_target_table", "run_id": run_id,
+                    "error": f"{type(e).__name__}: {str(e)[:300]}"}
+
     if mode == "introspect_bapi":
         # Cheap RFC_GET_FUNCTION_INTERFACE probe on the S/4 target so we can
         # author JSON definitions for new spines without guessing field/struct

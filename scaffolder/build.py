@@ -213,6 +213,8 @@ def _build_context(definition: dict, source_sha: str) -> dict:
     field_maps      = transform.get("field_maps", {}) or {}
     item_field_maps = transform.get("item_field_maps", {}) or {}
     value_maps      = transform.get("value_maps", {}) or {}
+    constants_header = transform.get("constants_header", {}) or {}
+    constants_item   = transform.get("constants_item", {}) or {}
     dq_gates        = transform.get("dq_gates", []) or []
 
     # Sort containers for determinism
@@ -271,6 +273,8 @@ def _build_context(definition: dict, source_sha: str) -> dict:
         "field_maps_sorted":     field_maps_sorted,
         "item_field_maps_sorted": item_field_maps_sorted,
         "value_maps_sorted":     value_maps_sorted,
+        "constants_header_sorted": sorted(constants_header.items()),
+        "constants_item_sorted":   sorted(constants_item.items()),
         "dq_gates_sorted":       dq_gates_sorted,
         "dq_rule_imports":       dq_rule_imports,
         "fk_fields_sorted":      fk_fields_sorted,
@@ -278,7 +282,9 @@ def _build_context(definition: dict, source_sha: str) -> dict:
         "extension_structure":   bapi.get("extension_structure", ""),
         "bapi_header_struct":    bapi.get("header_struct", "HEADER"),
         "bapi_header_is_scalar": bapi.get("header_is_scalar", False),
+        "bapi_headerx_struct":   bapi.get("headerx_struct", ""),
         "bapi_item_struct":      bapi.get("item_struct", ""),
+        "bapi_itemx_struct":     bapi.get("itemx_struct", ""),
         "bapi_return_key":       bapi.get("return_key_field", "NUMBER"),
         "bapi_commit_with_wait": bapi.get("commit_with_wait", True),
         "default_bapi":          default_bapi,

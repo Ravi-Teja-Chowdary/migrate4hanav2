@@ -25,6 +25,9 @@
       "PRIOK": "PRIORITY"
     },
     "item_field_maps": {},
+    "constants_header": {
+      "REPORTEDBY": "MIGRATE_ADMI"
+    },
     "dq_gates": [
       { "field": "QMART", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_NOTIF_TYPE" },
       { "field": "QMTXT", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_SHORT_TEXT" }

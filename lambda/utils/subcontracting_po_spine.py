@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build SubcontractingPO` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   aff3bba9da2b0a29d230d7801f8ba2adc16ff9e30495570df3528b6068cf9536
+Source SHA:   514623141957192902b359a57cc2d1af4aa9f95d94217aba5ebbf3c8d0f87ea5
 Object type:  SubcontractingPO
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -24,6 +24,7 @@ from base_spine_orchestrator import (
 )
 
 # DQ rules — pure functions, sourced from lambda/utils/dq_rules/ at runtime.
+from dq_rules.in_set import in_set
 from dq_rules.non_empty import non_empty
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +38,7 @@ FIELD_MAPS = {
     'WAERS': 'CURRENCY',
 }
 
-# ITEM fields — populate the BAPI items table ().
+# ITEM fields — populate the BAPI items table (POITEM).
 # Empty for master objects whose BAPI is single-struct (no items table).
 ITEM_FIELD_MAPS = {
 }
@@ -46,9 +47,33 @@ ITEM_FIELD_MAPS = {
 VALUE_MAPS = {
 }
 
+# Per-spine constants injected into header / items regardless of source row.
+# Used for fields the source ECC table doesn't carry (PURCH_ORG defaults,
+# BAPI operator flags, doc-type pins) but the target BAPI demands.
+CONSTANTS_HEADER = {
+    'COMP_CODE': '1710',
+    'CURRENCY': 'USD',
+    'DOC_DATE': '20260615',
+    'DOC_TYPE': 'NB',
+    'PURCH_ORG': '1710',
+    'PUR_GROUP': '001',
+    'VENDOR': '0017300002',
+}
+
+CONSTANTS_ITEM = {
+    'ITEM_CAT': 'L',
+    'MATERIAL': 'TG0013',
+    'NET_PRICE': '10',
+    'PLANT': '1710',
+    'PO_ITEM': '00010',
+    'PO_UNIT': 'PC',
+    'PRICE_UNIT': '1',
+    'QUANTITY': '1',
+}
+
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
 DQ_GATES = [
-    ('BSART', 'non_empty', {}, 'MISSING_DOC_TYPE'),
+    ('BSART', 'in_set', {'values': ['NB', 'F']}, 'INVALID_DOC_TYPE'),
     ('EBELN', 'non_empty', {}, 'MISSING_PO_NUMBER'),
     ('EKORG', 'non_empty', {}, 'MISSING_PURCH_ORG'),
 ]
@@ -71,6 +96,7 @@ VERSION_BAPI_MAP = {
 
 # Dispatch table for DQ rules — built once at import time.
 _RULE_FNS = {
+    'in_set': in_set,
     'non_empty': non_empty,
 }
 
@@ -126,15 +152,35 @@ class SubcontractingPOSpineOrchestrator(BaseSpineOrchestrator):
         # value directly, not a dict.
         if 'POHEADER':
             header = self._apply_field_map(row, FIELD_MAPS)
+            # Per-spine fixed values overlay the source-derived header
+            if CONSTANTS_HEADER:
+                header = {**header, **CONSTANTS_HEADER}
             payload['POHEADER'] = header
+            # MM-logistics-family X-struct: every populated header field gets
+            # field='X' in the companion struct so the BAPI honours the value.
+            # NUMC-key fields like NUMBER must instead carry their value (the
+            # X-struct's NUMC keys are introspected as digit strings, not 'X').
+            payload['POHEADERX'] = {
+                k: (v if (isinstance(v, str) and v.isdigit()) else "X")
+                for k, v in header.items()
+            }
 
         # If the BAPI is two-struct (header + items table), build the item from
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
         # one item" pattern is the smoke-test shape; production loaders that
         # aggregate N source rows into one parent header are out of scope here.
-        if ITEM_FIELD_MAPS:
-            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
-            payload[''] = [item]
+        if ITEM_FIELD_MAPS or CONSTANTS_ITEM:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS) if ITEM_FIELD_MAPS else {}
+            if CONSTANTS_ITEM:
+                item = {**item, **CONSTANTS_ITEM}
+            payload['POITEM'] = [item]
+            # Same NUMC-key carve-out as the header X-struct: digit-string
+            # values (PO_ITEM, ITEM_NO, etc.) get carried; everything else
+            # gets 'X' as the boolean change indicator.
+            payload['POITEMX'] = [{
+                k: (v if (isinstance(v, str) and v.isdigit()) else "X")
+                for k, v in item.items()
+            }]
 
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows
@@ -199,7 +245,7 @@ class SubcontractingPOSpineOrchestrator(BaseSpineOrchestrator):
         if 'POHEADER':
             value_source = payload.get('POHEADER', {}) or {}
         elif ITEM_FIELD_MAPS:
-            items = payload.get('', []) or []
+            items = payload.get('POITEM', []) or []
             value_source = items[0] if items else {}
         else:
             value_source = {}

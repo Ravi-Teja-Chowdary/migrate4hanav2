@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build ScheduleAgreementMM` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   e999ac28217b5ead9f41247ab83e858eb106991daa9b7a382211b5f7c7b4e436
+Source SHA:   aa2b19d4ddbd898c7bcb77fc2bda548a19a661342631ef1c34636c18f898aa84
 Object type:  ScheduleAgreementMM
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -38,13 +38,35 @@ FIELD_MAPS = {
     'WAERS': 'CURRENCY',
 }
 
-# ITEM fields — populate the BAPI items table ().
+# ITEM fields — populate the BAPI items table (ITEM).
 # Empty for master objects whose BAPI is single-struct (no items table).
 ITEM_FIELD_MAPS = {
 }
 
 # target_field -> { source_value: target_value }
 VALUE_MAPS = {
+}
+
+# Per-spine constants injected into header / items regardless of source row.
+# Used for fields the source ECC table doesn't carry (PURCH_ORG defaults,
+# BAPI operator flags, doc-type pins) but the target BAPI demands.
+CONSTANTS_HEADER = {
+    'COMP_CODE': '1710',
+    'CURRENCY': 'USD',
+    'DOC_TYPE': 'LP',
+    'PURCH_ORG': '1710',
+    'PUR_GROUP': '001',
+    'VENDOR': '0017300002',
+    'VPER_END': '20271231',
+    'VPER_START': '20270101',
+}
+
+CONSTANTS_ITEM = {
+    'ITEM_NO': '00010',
+    'MATERIAL': 'TG0013',
+    'PLANT': '1710',
+    'PO_UNIT': 'EA',
+    'TARGET_QTY': '1',
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -128,15 +150,35 @@ class ScheduleAgreementMMSpineOrchestrator(BaseSpineOrchestrator):
         # value directly, not a dict.
         if 'HEADER':
             header = self._apply_field_map(row, FIELD_MAPS)
+            # Per-spine fixed values overlay the source-derived header
+            if CONSTANTS_HEADER:
+                header = {**header, **CONSTANTS_HEADER}
             payload['HEADER'] = header
+            # MM-logistics-family X-struct: every populated header field gets
+            # field='X' in the companion struct so the BAPI honours the value.
+            # NUMC-key fields like NUMBER must instead carry their value (the
+            # X-struct's NUMC keys are introspected as digit strings, not 'X').
+            payload['HEADERX'] = {
+                k: (v if (isinstance(v, str) and v.isdigit()) else "X")
+                for k, v in header.items()
+            }
 
         # If the BAPI is two-struct (header + items table), build the item from
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
         # one item" pattern is the smoke-test shape; production loaders that
         # aggregate N source rows into one parent header are out of scope here.
-        if ITEM_FIELD_MAPS:
-            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
-            payload[''] = [item]
+        if ITEM_FIELD_MAPS or CONSTANTS_ITEM:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS) if ITEM_FIELD_MAPS else {}
+            if CONSTANTS_ITEM:
+                item = {**item, **CONSTANTS_ITEM}
+            payload['ITEM'] = [item]
+            # Same NUMC-key carve-out as the header X-struct: digit-string
+            # values (PO_ITEM, ITEM_NO, etc.) get carried; everything else
+            # gets 'X' as the boolean change indicator.
+            payload['ITEMX'] = [{
+                k: (v if (isinstance(v, str) and v.isdigit()) else "X")
+                for k, v in item.items()
+            }]
 
         if ext_rows:
             payload["EXTENSIONIN"] = ext_rows
@@ -201,7 +243,7 @@ class ScheduleAgreementMMSpineOrchestrator(BaseSpineOrchestrator):
         if 'HEADER':
             value_source = payload.get('HEADER', {}) or {}
         elif ITEM_FIELD_MAPS:
-            items = payload.get('', []) or []
+            items = payload.get('ITEM', []) or []
             value_source = items[0] if items else {}
         else:
             value_source = {}
