@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build GoodsReceipt` to
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   990c4483f8ff9782050ce108078c53307b0eabf9955b3091774a650ee69bb97c
+Source SHA:   57de1b2c96cf65364f8b4e4d3cfc3d03cd1a1bce878b1046befb2ca7a18a8960
 Object type:  GoodsReceipt
 Category:     Transactional
 Lane:         BAPI (fallback: MC)"""
@@ -70,11 +70,12 @@ CONSTANTS_HEADER = {
 CONSTANTS_ITEM = {
     'ENTRY_QNT': '1',
     'ENTRY_UOM': 'ST',
-    'MATERIAL': 'TG0013',
+    'MATERIAL': 'MZ-RM-M550-01',
     'MOVE_TYPE': '101',
+    'MVT_IND': 'B',
     'PLANT': '1710',
     'PO_ITEM': '00001',
-    'PO_NUMBER': '4500000663',
+    'PO_NUMBER': '4500000004',
     'STGE_LOC': '171A',
 }
 
@@ -83,6 +84,12 @@ CONSTANTS_ITEM = {
 # imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
 CONSTANTS_EXTRA = {
     'GOODSMVT_CODE': {'GM_CODE': '01'},
+}
+
+# Additional struct / table params for multi-struct BAPIs (BAPI_FIXEDASSET_OVRTAKE_CREATE,
+# BAPI_ACC_DOCUMENT_POST, BAPI_MATERIAL_BOM_GROUP_CREATE). Object values are
+# sent as struct payloads; list values are sent as table payloads.
+EXTRA_PAYLOAD = {
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -201,6 +208,8 @@ class GoodsReceiptSpineOrchestrator(BaseSpineOrchestrator):
             )
         if CONSTANTS_EXTRA:
             payload.update(CONSTANTS_EXTRA)
+        if EXTRA_PAYLOAD:
+            payload.update(EXTRA_PAYLOAD)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────

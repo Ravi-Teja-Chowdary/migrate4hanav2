@@ -25,8 +25,26 @@
       "WERKS":     "PLANT_QPMK",
       "MKMNR":     "MSTR_CHAR",
       "VERWMERKM": "VMSTR_CHAR",
-      "SORTFELD":  "SORT_FIELD",
-      "KURZTEXT":  "CHARACTERISTIC_NAME"
+      "SORTFELD":  "SORT_FIELD"
+    },
+    "constants_item": {
+      "PLANT_QPMK":  "1710",
+      "MSTR_CHAR":   "MIGCHR0001",
+      "VMSTR_CHAR":  "X",
+      "VALID_FROM":  "20251115",
+      "STATUS":      "1",
+      "FUNCTION":    "001"
+    },
+    "extra_payload": {
+      "MSTCHA_TEXT": [{
+        "PLANT_QPMK":  "1710",
+        "MSTR_CHAR":   "MIGCHR0001",
+        "VMSTR_CHAR":  "X",
+        "VALID_FROM":  "20251115",
+        "LANGU":       "E",
+        "LANGU_ISO":   "EN",
+        "CHAR_DESCR":  "Migrated insp char"
+      }]
     },
     "dq_gates": [
       { "field": "WERKS",     "rule": "werks_plant", "on_fail": "dead_letter", "code": "INVALID_PLANT" },

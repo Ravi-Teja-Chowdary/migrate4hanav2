@@ -6,7 +6,7 @@ DO NOT EDIT BY HAND. Re-run `python -m scaffolder.build MaterialClassification` 
 regenerate after editing the JSON definition.
 
 Generator:    migrate4hana scaffolder v1.0.0
-Source SHA:   8934e391061c7210bf8d27155e406975804d5a8a372c1b566ef582e65d9d7b8e
+Source SHA:   f7ce9000f13b958b64e9a6a3c4af8c82dadc6d4b58a7ed8c72736b84c8a637cc
 Object type:  MaterialClassification
 Category:     Master
 Lane:         BAPI (fallback: MC)"""
@@ -44,6 +44,34 @@ ITEM_FIELD_MAPS = {
 
 # target_field -> { source_value: target_value }
 VALUE_MAPS = {
+}
+
+# Per-spine constants injected into header / items regardless of source row.
+# Used for fields the source ECC table doesn't carry (PURCH_ORG defaults,
+# BAPI operator flags, doc-type pins) but the target BAPI demands.
+CONSTANTS_HEADER = {
+}
+
+CONSTANTS_ITEM = {
+    'CHARACT': 'SCREEN',
+    'VALUE_CHAR': '15',
+}
+
+# Top-level scalar BAPI imports — sent as named params in the BAPI call,
+# outside the header / items structures. Use for BAPIs that take scalar
+# imports like BAPI_GOODSMVT_CREATE.GOODSMVT_CODE or BAPI_ALM_NOTIF_CREATE.NOTIF_TYPE.
+CONSTANTS_EXTRA = {
+    'CLASSNUMNEW': 'LAPTOP',
+    'CLASSTYPENEW': '001',
+    'KEYDATE': '20251115',
+    'OBJECTKEYNEW': 'TG0015',
+    'OBJECTTABLENEW': 'MARA',
+}
+
+# Additional struct / table params for multi-struct BAPIs (BAPI_FIXEDASSET_OVRTAKE_CREATE,
+# BAPI_ACC_DOCUMENT_POST, BAPI_MATERIAL_BOM_GROUP_CREATE). Object values are
+# sent as struct payloads; list values are sent as table payloads.
+EXTRA_PAYLOAD = {
 }
 
 # DQ gates — (field, rule_name, rule_args, dead_letter_code)
@@ -132,8 +160,10 @@ class MaterialClassificationSpineOrchestrator(BaseSpineOrchestrator):
         # ITEM_FIELD_MAPS and place it as a single-element list. The "one row =
         # one item" pattern is the smoke-test shape; production loaders that
         # aggregate N source rows into one parent header are out of scope here.
-        if ITEM_FIELD_MAPS:
-            item = self._apply_field_map(row, ITEM_FIELD_MAPS)
+        if ITEM_FIELD_MAPS or CONSTANTS_ITEM:
+            item = self._apply_field_map(row, ITEM_FIELD_MAPS) if ITEM_FIELD_MAPS else {}
+            if CONSTANTS_ITEM:
+                item = {**item, **CONSTANTS_ITEM}
             payload['ALLOCVALUESCHAR'] = [item]
 
         if ext_rows:
@@ -142,6 +172,10 @@ class MaterialClassificationSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(
                 self.extension_structure, field_names
             )
+        if CONSTANTS_EXTRA:
+            payload.update(CONSTANTS_EXTRA)
+        if EXTRA_PAYLOAD:
+            payload.update(EXTRA_PAYLOAD)
         return payload
 
     # ── BAPI invocation ─────────────────────────────────────────────────────

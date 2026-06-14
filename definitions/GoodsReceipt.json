@@ -47,13 +47,14 @@
       "HEADER_TXT": "Migrated GR"
     },
     "constants_item": {
-      "MATERIAL":   "TG0013",
+      "MATERIAL":   "MZ-RM-M550-01",
       "PLANT":      "1710",
       "STGE_LOC":   "171A",
       "MOVE_TYPE":  "101",
+      "MVT_IND":    "B",
       "ENTRY_QNT":  "1",
       "ENTRY_UOM":  "ST",
-      "PO_NUMBER":  "4500000663",
+      "PO_NUMBER":  "4500000004",
       "PO_ITEM":    "00001"
     },
     "constants_extra": {

@@ -27,6 +27,17 @@
       "ATINN": "CHARACT",
       "ATWRT": "VALUE_CHAR"
     },
+    "constants_item": {
+      "CHARACT":    "SCREEN",
+      "VALUE_CHAR": "15"
+    },
+    "constants_extra": {
+      "OBJECTKEYNEW":   "TG0015",
+      "CLASSNUMNEW":    "LAPTOP",
+      "CLASSTYPENEW":   "001",
+      "OBJECTTABLENEW": "MARA",
+      "KEYDATE":        "20251115"
+    },
     "dq_gates": [
       { "field": "OBJEK", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_OBJECT_KEY" },
       { "field": "ATINN", "rule": "non_empty", "on_fail": "dead_letter", "code": "MISSING_CHARACTERISTIC" },
