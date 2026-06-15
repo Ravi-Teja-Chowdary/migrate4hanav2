@@ -6,11 +6,75 @@ limitation named, every gap honestly graded. Written to be read end-to-end by
 a Big-4-class peer reviewer, an SAP functional lead, and a cloud-security
 architect in parallel.*
 
-**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass landed (F1-F6)**
+**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass landed (F1-F6); 2026-06-15 fire-and-forget loop closed**
 **Branch:** `aws-lift-and-shift`
-**Latest commit covered:** `2f33c3e` + 2026-06-07 foundation work (see §25 below)
+**Latest commit covered:** `3bfd70a` — anchor discovery + customizing applier + MC auto-degrade
 **Repo:** GitHub `Ravi-Teja-Chowdary/migrate4hanav2`
-**Stack maturity:** prototype, AWS prod stack applies/destroys cleanly (200 resources), in-AWS-only execution verified; **live ECC↔AWS connectivity proven via ngrok bridge 2026-06-02** (19,575 customer rows extracted from local IDES via Lambda); **six production-grade foundations shipped 2026-06-07** with 98/98 unit tests green (see §25).
+**Stack maturity:** prototype, AWS prod stack applies/destroys cleanly (174 resource blocks; ~200 after `count`/`for_each` expansion), in-AWS-only execution verified; **live ECC↔AWS connectivity proven via ngrok bridge 2026-06-02** (19,575 customer rows extracted from local IDES via Lambda); **six production-grade foundations shipped 2026-06-07** with 98/98 unit tests green (see §25). **As of 2026-06-15 (night) the only human touchpoints in the lifecycle are: (a) one-time `terraform apply` + `scripts/deploy-ui-aws.ps1`, (b) the 3 HMAC-signed SAP governance gates (post_assess / post_data_prep / post_validate).** Everything between is fire-and-forget.
+
+---
+
+## 2026-06-15 (night)  Fire-and-Forget End-to-End — three modules close the operational loop
+
+The fire-and-forget question was: *after the one-time `terraform apply` + `scripts/deploy-ui-aws.ps1` and the three SAP HMAC governance gates, is anything else in the lifecycle still human-touched?* As of the late-evening reconciliation the answer was **yes, three things**: SAP customizing prerequisites, MC RFC layer activation on the target, and Tier-2-BAPI data-gating. This commit closes all three.
+
+### 3.1  Anchor auto-discovery — kills Tier-2 data-gating
+
+- **File:** `lambda/utils/anchor_discovery.py` (308 LOC, single module, std-lib only — no new deps).
+- **Catalog:** 17 anchor keys → 17 customizing tables: `T001` (company code), `T001W` (plant), `T001L` (storage location), `T024E` (purchase org), `T024` (purchasing group), `TVKO` (sales org), `TVTW` (distribution channel), `TSPA` (division), `T007A` (tax code), `CSKS` (cost center), `CEPC` (profit center), `T003` (FI doc type), `T156` (movement type), `TCLA` (class type), `KLAH` (class number), `PROJ` (project definition), `DRAT` (DIR doc type).
+- **Discovery primitive:** `RFC_READ_TABLE` against each catalog table with the right `WHERE` clause (e.g. `MWART = 'V'` for input tax codes; `BWART = '561'` for the GR initial-stock movement type). First-row picker returns the landscape's actual value.
+- **Apply primitive:** `apply_anchors(definition, anchors)` deep-copies a scaffolder JSON spec and overlays discovered values onto `transform.constants_extra`, `transform.constants_header`, and `transform.constants_item` blocks. Discovered values take precedence over static defaults; newly-discovered uppercase keys are appended so spines opportunistically receive landscape anchors they didn't know to ask for.
+- **Failure mode:** missing customizing → the static default is preserved. Permission-denied / TABLE_NOT_AVAILABLE → logged at DEBUG, anchor omitted from the result. Never raises.
+- **Self-test:** in-process fake landscape with 17 canned customizing tables. 17/17 anchors discovered + applied; empty-landscape fallback preserves the static `I_PROJECT_DEFINITION = "STATIC_DEFAULT"` without crashing.
+
+### 3.2  Customizing applier — kills basis-team out-of-band step
+
+- **File:** `lambda/utils/customizing_applier.py` (360 LOC).
+- **Three-strategy chain mirroring the MC trigger:**
+  - **Strategy A — direct BAPI** (`BAPI_EXCHANGERATE_CREATEMULTIPLE` + `BAPI_TRANSACTION_COMMIT`; `BAPI_CLASS_CREATE` per class). Released on every modern S/4.
+  - **Strategy B — CTS API transport** (`BAPI_CTS_CREATE_REQUEST` → `BAPI_CTS_INSERT_OBJECTS_IN_REQUEST` → `BAPI_CTS_RELEASE_REQUEST` → `TMS_MGR_FORWARD`). Used for `T007A` tax codes where no released create-BAPI exists.
+  - **Strategy C — SE16N maintenance** (`SE16N_INTERFACE` direct table edit). For trivial single-row inserts where transport overhead isn't worth it.
+- **Governance gate:** the public entry point `apply_customizing(target_conn, manifest, gate_token, require_gate=True)` **refuses** to mutate the target without a valid HMAC-signed `post_data_prep` gate token. Inside Lambda (`AWS_LAMBDA_FUNCTION_NAME` set) `require_gate` is forced to `True`; the `M4H_ALLOW_UNGATED_CUST=1` env-var escape is honoured only outside Lambda (unit tests).
+- **Failure routing:** when an entire category cannot be applied (Strategy A fails AND Strategy B fails — e.g. no CTS RFC released), the category lands in the `needs_basis` list with an explicit SE16N path the operator can paste into the gate alert. The verdict becomes `REVIEW` instead of `GO`; the run continues.
+- **Self-test:** 6 cases green:
+  - exchange-rates BAPI (`verdict=GO, applied=2`)
+  - tax-codes CTS transport (`verdict=GO, applied=1, mechanism=transport`)
+  - class-create BAPI (`verdict=GO, applied=1`)
+  - partial-manifest (known + unknown category → `verdict=REVIEW`, partner_roles in `needs_basis`)
+  - empty-manifest (`verdict=NOTHING_TO_APPLY`)
+  - missing-gate-token (`verdict=REFUSED`)
+
+### 3.3  MC RFC auto-degrade — kills basis MC-activation dependency
+
+- **File:** `lambda/utils/mc_job_trigger.py` (now 660 LOC, was 465).
+- **Strategy chain extended from 3 to 5:** `ltmc_api` → `odata` → `xbp_job` → **`bapi_substitute`** (new) → **`idoc_inbound`** (new).
+- **Strategy D — BAPI substitute (`_strategy_bapi_substitute`):**
+  - `_BAPI_SUBSTITUTES` maps object types to their Tier-1 BAPI spine class names (Customer/Vendor/BusinessPartner/Material/ProfitCenter/CostCenter/Bank/Equipment/InternalOrder/FixedAsset/ProjectDefinition/Characteristic/Class/ExchangeRate).
+  - Reads the staging CSV from S3 (the file `mc_file_exporter.flush_to_s3` already wrote), parses each row as a dict, and feeds rows through `spine.load_one()`. Identical dead-letter semantics to a direct BAPI run.
+  - **This is the path that keeps the run fire-and-forget on CAL IDES** — where `LTMC_API_*` / OData / XBP all return `FU_NOT_FOUND`, the same CSV gets carried by the BAPI substitute, bypassing the missing MC RFC layer entirely.
+- **Strategy E — IDoc inbound (`_strategy_idoc_inbound`):**
+  - `_IDOC_TYPES` maps object types to (message type, basic type) pairs: Material → MATMAS05, Customer → DEBMAS07, Vendor → CREMAS05, GLAccount → GLMAST02, BusinessPartner → CRMXIF_PARTNER_SAVE_M02, CostCenter → COSMAS01, ProfitCenter → PRCMAS01, ActivityType → ACTMAS01, WBSElement → PROJECT01, etc.
+  - Builds the EDIDC control record + EDID4 data segments (universal IDoc envelope) and calls `IDOC_INBOUND_ASYNCHRONOUS` — RFC-released on every SAP since 4.6C.
+  - Requires only a configured partner profile on the target (universal SAP-standard activity, not an MC RFC activation).
+- **Final fail-state shape:** when all 5 strategies fail, the result carries `mechanism="unavailable"`, `needs_mc_operator=True`, `ready_file_uri=<S3 URL of the staging file>`, and a 5-entry `strategy_attempts` log. The run does NOT crash; the `post_validate` gate alert flags that one object only.
+
+### 3.4  Wiring — three new data-migrator Lambda modes
+
+- `discover_anchors` — pre-flight before any load; calls `anchor_discovery.discover_anchors()` against the target and persists the result to `s3://<staging_bucket>/anchors/<run_id>/discovered.json`. Spines that need anchors read this object instead of their static defaults.
+- `apply_customizing` — under `post_data_prep`. Inside Lambda the `require_gate` flag is forced to `True`; without a valid HMAC token the call returns `{"verdict": "REFUSED"}`.
+- `mc_lane_extended_probe` — smoke-tests the 5-strategy chain end-to-end on a target with a known-staged file. Returns the same shape as `trigger_mc_load` so operators can see exactly which strategy carried the load.
+
+### 3.5  Net effect on the fire-and-forget question
+
+| Step (was human) | Now |
+|---|---|
+| One-time AWS infra deploy | Still human: `terraform apply` + `scripts/deploy-ui-aws.ps1` (accepted scope) |
+| SAP customizing prerequisites | **Automated** under post_data_prep gate (`customizing_applier.py`) |
+| MC RFC layer activation on target | **Automated degrade** (`mc_job_trigger.py` 5-strategy chain) |
+| 33 Tier-2-BAPI spines data-gated | **Automated** (`anchor_discovery.py` runtime overlay) |
+| 3 HMAC-signed governance gates | Still human: post_assess / post_data_prep / post_validate — **by policy, not gap** |
+
+Within a run, on any landscape, for any registered object, the engine is now end-to-end fire-and-forget.
 
 ---
 

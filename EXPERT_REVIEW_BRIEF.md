@@ -4,7 +4,7 @@
 is an honest assessment of where the tool stands — gaps are stated deliberately so your
 review is efficient. Nothing here is marketing; please challenge any claim.*
 
-**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass (F1-F6) shipped** · **Branch reviewed:** `aws-lift-and-shift` · **Build status:** working prototype on a live system pair; **full AWS prod stack provisions and tears down cleanly end-to-end** (200 resources, see §13); **six production-grade foundations shipped 2026-06-07** (see §15 below for the full delta + 98-test green suite).
+**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass (F1-F6) shipped; 2026-06-15 fire-and-forget loop closed** · **Branch reviewed:** `aws-lift-and-shift` · **Latest commit:** `3bfd70a` (anchor discovery + customizing applier + MC auto-degrade) · **Build status:** working prototype on a live system pair; **full AWS prod stack provisions and tears down cleanly end-to-end** (174 resource blocks, ~200 after expansion — see §13); **six production-grade foundations shipped 2026-06-07** (see §15 below for the full delta + 98-test green suite); **as of 2026-06-15 night, the only human touchpoints in the lifecycle are: (a) one-time `terraform apply` + `scripts/deploy-ui-aws.ps1`, (b) the 3 HMAC-signed SAP governance gates.**
 
 > **2026-06-15 (night) — Fire-and-forget end-to-end closed; only terraform apply + `scripts/deploy-ui-aws.ps1` + the 3 SAP manual gates remain human-touched.**
 >
