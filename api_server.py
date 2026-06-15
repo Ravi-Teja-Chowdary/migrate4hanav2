@@ -254,6 +254,35 @@ def verify_jwt(token: str) -> Optional[dict]:
         return None
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Role-aware JWT (carries email, role, client_scopes, allowed_operations).
+# Backward-compatible with the legacy /api/auth/token format: legacy tokens
+# have no "role" claim and default to "iam" with empty scope (deny by default
+# on protected operations until a real login replaces the token).
+# ─────────────────────────────────────────────────────────────────────────────
+def generate_user_jwt(*, email: str, role: str,
+                      client_scopes: Optional[List[str]] = None,
+                      allowed_operations: Optional[List[str]] = None,
+                      expiry_hours: int = 12) -> str:
+    """Issue a JWT carrying the full identity claim. Used by /api/auth/login."""
+    _ensure_jwt_secret()
+    header = _b64url_encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+    now = int(time.time())
+    payload = _b64url_encode(json.dumps({
+        "sub":   email,
+        "email": email,
+        "role":  role,
+        "scopes": client_scopes or [],
+        "ops":    allowed_operations or [],
+        "iat":   now,
+        "exp":   now + expiry_hours * 3600,
+    }).encode())
+    signing_input = f"{header}.{payload}"
+    sig = hmac.new(_JWT_SECRET.encode(), signing_input.encode(),
+                   hashlib.sha256).digest()
+    return f"{signing_input}.{_b64url_encode(sig)}"
+
+
 # =============================================================================
 # AUTH DEPENDENCY
 # =============================================================================
@@ -796,8 +825,302 @@ async def health():
 
 @app.post("/api/auth/token")
 async def create_token():
+    """Legacy token endpoint - kept for backwards compatibility with the
+    pre-2026-06-15 UI. The new UI uses /api/auth/login (root) and
+    /api/auth/iam-login (IAM). Legacy tokens are role-less and fail the
+    new can() check on any operation guarded by require_can()."""
     token = generate_jwt()
     return {"token": token, "expires_in": 86400, "type": "Bearer"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# User store (lazy import so api_server.py boots without the new deps in
+# environments that haven't pulled them yet)
+# ─────────────────────────────────────────────────────────────────────────────
+_user_store = None
+
+
+def _get_user_store():
+    global _user_store
+    if _user_store is None:
+        # The lambda/utils path is added at module init by the api server
+        # bootstrap; if we're running standalone, add it now.
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from auth_users import UserStore, ensure_root_user
+        _user_store = UserStore()
+        # First-run bootstrap if M4H_ROOT_EMAIL + M4H_ROOT_PASSWORD are set.
+        try:
+            ensure_root_user(_user_store)
+        except Exception as e:
+            log.warning("root bootstrap skipped: %s", e)
+    return _user_store
+
+
+class LoginRequest(BaseModel):
+    email:    str
+    password: str
+    # IAM logins must specify the client they're logging into; root logins
+    # ignore this field. AWS-style root = no client; AWS-style IAM = one client.
+    client_id: Optional[str] = None
+
+
+@app.post("/api/auth/login")
+async def auth_login_root(body: LoginRequest):
+    """AWS-style ROOT login.
+
+    The root user is account-level superuser; cannot be scoped to a single
+    client. UI uses the 'Root user' tab.
+    """
+    from auth_users import verify_password, ROLE_ROOT
+    store = _get_user_store()
+    user = store.get_user(body.email)
+    if not user or user.role != ROLE_ROOT or user.disabled:
+        # Use the same error shape for unknown user + wrong-role + disabled so
+        # an attacker can't enumerate which roles exist.
+        raise HTTPException(status_code=401,
+                            detail={"error": "invalid root credentials"})
+    if not verify_password(body.password, user.password_hash, user.password_salt):
+        raise HTTPException(status_code=401,
+                            detail={"error": "invalid root credentials"})
+    user.last_login_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    try:
+        store.put_user(user)
+    except Exception:
+        pass
+    token = generate_user_jwt(email=user.email, role=user.role,
+                              client_scopes=[],
+                              allowed_operations=["*"],
+                              expiry_hours=12)
+    return {"token": token, "type": "Bearer", "expires_in": 12 * 3600,
+            "user": user.public_dict()}
+
+
+@app.post("/api/auth/iam-login")
+async def auth_login_iam(body: LoginRequest):
+    """AWS-style IAM login.
+
+    The user must specify the client_id they're logging into. The login
+    succeeds only if the IAM user is scoped to that client and not disabled.
+    """
+    from auth_users import verify_password, ROLE_IAM
+    if not body.client_id:
+        raise HTTPException(status_code=400,
+                            detail={"error": "client_id is required for IAM login"})
+    store = _get_user_store()
+    user = store.get_user(body.email)
+    if not user or user.role != ROLE_IAM or user.disabled:
+        raise HTTPException(status_code=401,
+                            detail={"error": "invalid IAM credentials"})
+    if not verify_password(body.password, user.password_hash, user.password_salt):
+        raise HTTPException(status_code=401,
+                            detail={"error": "invalid IAM credentials"})
+    cid = body.client_id.strip().lower()
+    if cid not in [s.lower() for s in user.client_scopes]:
+        raise HTTPException(status_code=403,
+                            detail={"error": "user is not scoped to this client",
+                                    "client_id": cid})
+    user.last_login_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    try:
+        store.put_user(user)
+    except Exception:
+        pass
+    token = generate_user_jwt(email=user.email, role=user.role,
+                              client_scopes=[cid],   # narrow to login client
+                              allowed_operations=user.allowed_operations,
+                              expiry_hours=12)
+    return {"token": token, "type": "Bearer", "expires_in": 12 * 3600,
+            "active_client_id": cid,
+            "user": user.public_dict()}
+
+
+@app.get("/api/auth/me", dependencies=[Depends(require_auth)])
+async def auth_me(request: Request):
+    """Return the current principal's identity claim as carried by the JWT."""
+    auth = request.headers.get("authorization", "") or request.headers.get("Authorization", "")
+    token = auth[7:] if auth.lower().startswith("bearer ") else \
+            (request.query_params.get("token") or "")
+    payload = verify_jwt(token) if token else None
+    if not payload:
+        # Legacy token-only flow (no role claim) is treated as anonymous-iam.
+        return {"email": "anonymous", "role": "legacy", "scopes": [], "ops": []}
+    return {
+        "email":  payload.get("email") or payload.get("sub"),
+        "role":   payload.get("role", "legacy"),
+        "scopes": payload.get("scopes") or [],
+        "ops":    payload.get("ops") or [],
+    }
+
+
+@app.post("/api/auth/logout")
+async def auth_logout():
+    """Stateless JWT logout: nothing to revoke server-side; the UI drops
+    the token. We surface a 200 so the UI can confirm the call."""
+    return {"ok": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Role-aware auth dependencies for new endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+def _principal_from_request(request: Request) -> dict:
+    """Extract role/scopes/ops from the JWT carried by the request. Used by
+    role-aware dependencies. Returns {} when the request has no JWT (the
+    legacy /api/auth/token flow) so legacy callers still get 401 from
+    require_can on protected operations."""
+    auth = request.headers.get("authorization", "") or \
+           request.headers.get("Authorization", "")
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else \
+            (request.query_params.get("token") or "")
+    if not token:
+        return {}
+    payload = verify_jwt(token) or {}
+    return {
+        "email":  payload.get("email") or payload.get("sub"),
+        "role":   payload.get("role"),
+        "scopes": payload.get("scopes") or [],
+        "ops":    payload.get("ops") or [],
+    }
+
+
+def require_role(*allowed_roles: str):
+    """FastAPI dependency: 403 unless the principal's role is in the
+    allowed list. Root passes everything; this is the right gate for
+    superuser-only endpoints like /api/admin/*."""
+    async def _check(request: Request, _auth=Depends(require_auth)):
+        p = _principal_from_request(request)
+        if p.get("role") == "root":
+            return p
+        if p.get("role") in allowed_roles:
+            return p
+        raise HTTPException(status_code=403,
+                            detail={"error": "role not permitted",
+                                    "required_roles": list(allowed_roles)})
+    return _check
+
+
+def require_can(operation: str):
+    """FastAPI dependency: 403 unless the principal can perform this
+    operation. Root passes everything. IAM users need the operation in
+    their token's `ops` claim AND, when client_id is given as a path/query
+    param, the client must be in their `scopes` claim."""
+    async def _check(request: Request, _auth=Depends(require_auth)):
+        p = _principal_from_request(request)
+        if p.get("role") == "root":
+            return p
+        ops = p.get("ops") or []
+        if "*" not in ops and operation not in ops:
+            raise HTTPException(status_code=403,
+                                detail={"error": "operation not permitted",
+                                        "required_operation": operation})
+        # If the route is scoped to a client_id, the IAM user must be in scope.
+        cid = (request.query_params.get("client_id") or
+               request.path_params.get("client_id") or "")
+        if cid:
+            cid = cid.strip().lower()
+            scopes = [s.lower() for s in (p.get("scopes") or [])]
+            if cid not in scopes:
+                raise HTTPException(status_code=403,
+                                    detail={"error": "client not in scope",
+                                            "client_id": cid})
+        return p
+    return _check
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Root-only user management endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+class IAMUserCreate(BaseModel):
+    email:              str
+    password:           str
+    client_scopes:      List[str]
+    allowed_operations: Optional[List[str]] = None
+
+
+class IAMUserUpdate(BaseModel):
+    client_scopes:      Optional[List[str]] = None
+    allowed_operations: Optional[List[str]] = None
+    disabled:           Optional[bool]      = None
+    new_password:       Optional[str]       = None
+
+
+@app.get("/api/users", dependencies=[Depends(require_role("root"))])
+async def list_users():
+    store = _get_user_store()
+    return {"users": [u.public_dict() for u in store.list_users()]}
+
+
+@app.post("/api/users", dependencies=[Depends(require_role("root"))])
+async def create_iam_user(body: IAMUserCreate, request: Request):
+    from auth_users import (User, hash_password, ROLE_IAM,
+                              DEFAULT_IAM_OPERATIONS, OPERATIONS)
+    store = _get_user_store()
+    if store.get_user(body.email):
+        raise HTTPException(status_code=409, detail={"error": "user already exists"})
+    if not body.client_scopes:
+        raise HTTPException(status_code=400,
+                            detail={"error": "client_scopes must be non-empty for IAM user"})
+    ops = body.allowed_operations or list(DEFAULT_IAM_OPERATIONS)
+    invalid = [o for o in ops if o not in OPERATIONS]
+    if invalid:
+        raise HTTPException(status_code=400,
+                            detail={"error": "unknown operation slug(s)",
+                                    "invalid": invalid,
+                                    "valid": sorted(OPERATIONS)})
+    h, s = hash_password(body.password)
+    principal = _principal_from_request(request)
+    user = User(
+        email=body.email, role=ROLE_IAM,
+        password_hash=h, password_salt=s,
+        client_scopes=[c.strip().lower() for c in body.client_scopes],
+        allowed_operations=ops,
+        created_by=principal.get("email", "root"),
+        created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    )
+    store.put_user(user)
+    return {"ok": True, "user": user.public_dict()}
+
+
+@app.patch("/api/users/{email}", dependencies=[Depends(require_role("root"))])
+async def update_iam_user(email: str, body: IAMUserUpdate):
+    from auth_users import hash_password, OPERATIONS
+    store = _get_user_store()
+    user = store.get_user(email)
+    if not user:
+        raise HTTPException(status_code=404, detail={"error": "user not found"})
+    if body.client_scopes is not None:
+        user.client_scopes = [c.strip().lower() for c in body.client_scopes]
+    if body.allowed_operations is not None:
+        invalid = [o for o in body.allowed_operations if o not in OPERATIONS]
+        if invalid:
+            raise HTTPException(status_code=400,
+                                detail={"error": "unknown operation slug(s)",
+                                        "invalid": invalid})
+        user.allowed_operations = body.allowed_operations
+    if body.disabled is not None:
+        user.disabled = bool(body.disabled)
+    if body.new_password:
+        user.password_hash, user.password_salt = hash_password(body.new_password)
+    store.put_user(user)
+    return {"ok": True, "user": user.public_dict()}
+
+
+@app.delete("/api/users/{email}", dependencies=[Depends(require_role("root"))])
+async def delete_iam_user(email: str):
+    store = _get_user_store()
+    user = store.get_user(email)
+    if not user:
+        raise HTTPException(status_code=404, detail={"error": "user not found"})
+    if user.role == "root":
+        raise HTTPException(status_code=400,
+                            detail={"error": "cannot delete root via the API"})
+    ok = store.delete_user(email)
+    return {"ok": ok}
+
+
+@app.get("/api/operations", dependencies=[Depends(require_auth)])
+async def list_operations():
+    from auth_users import OPERATIONS, DEFAULT_IAM_OPERATIONS
+    return {"operations": OPERATIONS,
+            "default_iam": DEFAULT_IAM_OPERATIONS}
 
 
 # =============================================================================

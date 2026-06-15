@@ -31,6 +31,24 @@ variable "key_map_table" {
   default = ""
 }
 
+variable "users_table" {
+  type        = string
+  default     = ""
+  description = "DynamoDB table name for migrate4hana-users-<env> (auth user store)"
+}
+
+variable "clients_table" {
+  type        = string
+  default     = ""
+  description = "DynamoDB table name for migrate4hana-clients-<env> (auth client store)"
+}
+
+variable "wizard_state_table" {
+  type        = string
+  default     = ""
+  description = "DynamoDB table name for migrate4hana-wizard-state-<env> (wizard run state)"
+}
+
 variable "anthropic_secret_arn" {
   type    = string
   default = ""
@@ -359,6 +377,11 @@ resource "aws_ecs_task_definition" "api_server" {
       { name = "S3_STAGING_BUCKET", value = var.staging_bucket },
       { name = "M4H_KEYMAP_TABLE", value = var.key_map_table },
       { name = "M4H_ANTHROPIC_SECRET_ARN", value = var.anthropic_secret_arn },
+      # ── 2026-06-15 UI rebuild: auth store, client store, wizard state ──
+      { name = "M4H_USERS_TABLE", value = var.users_table },
+      { name = "M4H_CLIENTS_TABLE", value = var.clients_table },
+      { name = "M4H_WIZARD_STATE_TABLE", value = var.wizard_state_table },
+      { name = "M4H_ENV", value = var.environment },
       { name = "PYTHONUNBUFFERED", value = "1" },
     ]
     logConfiguration = {

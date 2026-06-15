@@ -725,6 +725,9 @@ module "api_server" {
   ecs_cluster_arn      = module.ecs.cluster_arn
   staging_bucket       = module.s3_staging.bucket_name
   key_map_table        = aws_dynamodb_table.key_map.name
+  users_table          = aws_dynamodb_table.m4h_users.name
+  clients_table        = aws_dynamodb_table.m4h_clients.name
+  wizard_state_table   = aws_dynamodb_table.m4h_wizard_state.name
   anthropic_secret_arn = aws_secretsmanager_secret.anthropic_api_key.arn
 }
 
@@ -828,6 +831,80 @@ resource "aws_dynamodb_table" "key_map" {
   point_in_time_recovery { enabled = true }
   server_side_encryption { enabled = true }
   tags = { Component = "KeyMapLedger", Pillar = "4" }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Auth + wizard tables — 2026-06-15 UI rebuild
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_dynamodb_table" "m4h_users" {
+  name         = "migrate4hana-users-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "email"
+  attribute {
+    name = "email"
+    type = "S"
+  }
+  point_in_time_recovery { enabled = true }
+  server_side_encryption { enabled = true }
+  tags = { Component = "AuthUserStore" }
+}
+
+resource "aws_dynamodb_table" "m4h_clients" {
+  name         = "migrate4hana-clients-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "client_id"
+  attribute {
+    name = "client_id"
+    type = "S"
+  }
+  point_in_time_recovery { enabled = true }
+  server_side_encryption { enabled = true }
+  tags = { Component = "AuthClientStore" }
+}
+
+resource "aws_dynamodb_table" "m4h_wizard_state" {
+  name         = "migrate4hana-wizard-state-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_email"
+  range_key    = "run_id"
+  attribute {
+    name = "user_email"
+    type = "S"
+  }
+  attribute {
+    name = "run_id"
+    type = "S"
+  }
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+  point_in_time_recovery { enabled = true }
+  server_side_encryption { enabled = true }
+  tags = { Component = "WizardState" }
+}
+
+# Root-user bootstrap credentials. The api-server reads these via
+# M4H_ROOT_EMAIL / M4H_ROOT_PASSWORD on first start and writes the
+# initial root user into the users table. Subsequent starts are no-ops.
+resource "random_password" "root_password" {
+  length  = 32
+  special = true
+}
+
+resource "aws_secretsmanager_secret" "root_user_credentials" {
+  name                    = "migrate4hana/${var.environment}/root-user"
+  description             = "Initial root user email + password (M4H_ROOT_*) — rotate after first login"
+  recovery_window_in_days = 0
+  tags                    = { Component = "AuthBootstrap" }
+}
+
+resource "aws_secretsmanager_secret_version" "root_user_credentials" {
+  secret_id = aws_secretsmanager_secret.root_user_credentials.id
+  secret_string = jsonencode({
+    M4H_ROOT_EMAIL    = var.alert_email
+    M4H_ROOT_PASSWORD = random_password.root_password.result
+  })
 }
 
 # Pillar 3 — governance gate HMAC secret
