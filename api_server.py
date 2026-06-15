@@ -474,12 +474,18 @@ def get_run(run_id, client_id: str = "default"):
         return json.load(f)
 
 
-async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_kind="in_place"):
+async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_kind="in_place",
+                                 run_id=None):
     global _active_run
+    # The wizard hands us its own run_id (e.g. wiz-20260615T120117Z-b539783e);
+    # keep it so logs/state files/UI all use the same identifier instead of
+    # the runner inventing a fresh `local-<ts>` id.
+    pipeline_run_id = run_id or f"run-{int(time.time())}"
     async with _lock:
         if _active_run["status"] == "running":
             return {"error": "Pipeline already running"}
-        _active_run = {"status": "running", "results": None, "run_id": None,
+        _active_run = {"status": "running", "results": None,
+                       "run_id": pipeline_run_id,
                        "started": time.time(), "mode": mode,
                        "generate_pdf_after": generate_pdf_after}
 
@@ -497,11 +503,17 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
             # Determine if live ECC connection is available
             conns = _load_connections()
             ecc_conf = conns.get("ecc") or {}
+            s4_conf  = conns.get("s4hana") or {}
             has_ecc = bool(ecc_conf.get("ashost"))
             use_live = has_ecc and _ecc_passwd
 
             if use_live:
-                cmd.append("--live")
+                # The classic runner (run_local_pipeline.py) accepts --live as a
+                # no-op back-compat flag; run_local_lift_and_shift.py does NOT
+                # have a --live arg (argparse exits 2 on unknown args). Live
+                # mode for both runners is signalled by M4H_ECC_PASSWD env var.
+                if pipeline_kind != "lift_and_shift":
+                    cmd.append("--live")
                 _add_progress_step("connection", "Using live ECC connection", "SUCCESS",
                                    {"host": ecc_conf.get("ashost", "")})
             elif has_ecc and not _ecc_passwd:
@@ -532,6 +544,16 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                 _LS_THROUGH = {"assess": "stage3", "code": "stage9c", "data": "stage18"}
                 if mode in _LS_THROUGH:
                     cmd.extend(["--through", _LS_THROUGH[mode]])
+                # Propagate the run id so the wizard, log files, and pipeline
+                # state all share one identifier instead of the runner
+                # inventing a fresh `local-<ts>` id.
+                cmd.extend(["--run-id", str(pipeline_run_id)])
+                # Pass saved hosts; the runner falls back to env if these
+                # are blank.
+                if ecc_conf.get("ashost"):
+                    cmd.extend(["--ecc-host", ecc_conf["ashost"]])
+                if s4_conf.get("ashost"):
+                    cmd.extend(["--target-host", s4_conf["ashost"]])
             else:
                 if mode == "assess":
                     cmd.append("--assess-only")
@@ -543,6 +565,8 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
             env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
             if use_live:
                 env["M4H_ECC_PASSWD"] = _ecc_passwd
+                if _s4_passwd:
+                    env["M4H_TARGET_PASSWD"] = _s4_passwd
 
             # Stream stdout line-by-line for real-time progress
             proc = await asyncio.create_subprocess_exec(
@@ -578,8 +602,11 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                 print(f"  [API] Pipeline subprocess failed (exit {proc.returncode}): {err_msg}")
                 _add_progress_step("pipeline", f"Pipeline failed (exit {proc.returncode})", "ERROR",
                                    {"error": err_msg[:200]})
-
-            _add_progress_step("extraction", "ECC data extraction completed", "SUCCESS")
+                _add_progress_step("extraction",
+                                   "ECC data extraction halted (pipeline failed before completion)",
+                                   "ERROR")
+            else:
+                _add_progress_step("extraction", "ECC data extraction completed", "SUCCESS")
 
             runs = list_runs()
             latest = runs[0] if runs else None
@@ -633,7 +660,7 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
             _add_progress_step("pipeline", f"Pipeline error: {err_detail[:200]}", "ERROR")
 
     asyncio.create_task(_run())
-    return {"status": "started", "mode": mode}
+    return {"status": "started", "mode": mode, "run_id": pipeline_run_id}
 
 
 def _parse_pipeline_output(line):
@@ -1727,32 +1754,46 @@ async def legacy_run():
 # =============================================================================
 # ROUTES - LIFT-AND-SHIFT (greenfield S/4HANA target via SAP-shipped tools)
 # =============================================================================
+class _LiftAndShiftRequest(BaseModel):
+    """Optional payload from the v2 wizard. We accept anything; only run_id is
+    threaded through to the runner so logs/state files all share one id."""
+    run_id: Optional[str] = None
+    migration_type: Optional[str] = None
+    selective_objects: Optional[List[str]] = None
+    ecc_version: Optional[str] = None
+    s4_version:  Optional[str] = None
+
+
 @app.post("/api/pipeline/lift-and-shift", dependencies=[Depends(require_auth)])
-async def pipeline_lift_and_shift():
+async def pipeline_lift_and_shift(body: Optional[_LiftAndShiftRequest] = None):
     """Run the full 28-stage lift-and-shift pipeline (orchestration plane only).
 
     Every S/4 write goes through Migration Cockpit / LTMOM / IDoc inbound /
     CTS+/tp - we never call BAPIs against the target. See
     MIGRATE4HANA-LIFT-AND-SHIFT.md for the architecture charter."""
-    return await start_pipeline_async(mode="full", pipeline_kind="lift_and_shift")
+    return await start_pipeline_async(mode="full", pipeline_kind="lift_and_shift",
+                                       run_id=(body.run_id if body else None))
 
 
 @app.post("/api/pipeline/lift-and-shift/assess", dependencies=[Depends(require_auth)])
-async def pipeline_lift_and_shift_assess():
+async def pipeline_lift_and_shift_assess(body: Optional[_LiftAndShiftRequest] = None):
     """Phase 0 only - discovery, sizing, object routing. No writes."""
-    return await start_pipeline_async(mode="assess", pipeline_kind="lift_and_shift")
+    return await start_pipeline_async(mode="assess", pipeline_kind="lift_and_shift",
+                                       run_id=(body.run_id if body else None))
 
 
 @app.post("/api/pipeline/lift-and-shift/code", dependencies=[Depends(require_auth)])
-async def pipeline_lift_and_shift_code():
+async def pipeline_lift_and_shift_code(body: Optional[_LiftAndShiftRequest] = None):
     """Phases 0-2 only - up through code transport import + verify."""
-    return await start_pipeline_async(mode="code", pipeline_kind="lift_and_shift")
+    return await start_pipeline_async(mode="code", pipeline_kind="lift_and_shift",
+                                       run_id=(body.run_id if body else None))
 
 
 @app.post("/api/pipeline/lift-and-shift/data", dependencies=[Depends(require_auth)])
-async def pipeline_lift_and_shift_data():
+async def pipeline_lift_and_shift_data(body: Optional[_LiftAndShiftRequest] = None):
     """Phases 0-5 - up through data load via MC/LTMOM/IDoc lanes."""
-    return await start_pipeline_async(mode="data", pipeline_kind="lift_and_shift")
+    return await start_pipeline_async(mode="data", pipeline_kind="lift_and_shift",
+                                       run_id=(body.run_id if body else None))
 
 
 @app.get("/api/pipeline/lift-and-shift/stages", dependencies=[Depends(require_auth)])
@@ -2362,10 +2403,17 @@ async def tail_logs(
     events = _read_local_log(run_id, max_lines=limit)
     if q:
         events = [e for e in events if q.lower() in e["msg"].lower()]
-    # Always splice the in-memory progress steps in too (they're not in files)
+    # Always splice the in-memory progress steps in too (they're not in files).
+    # `step.ts` is already epoch-ms (set by _add_progress_step). Do NOT multiply
+    # by 1000 again or you get year-58k timestamps in the UI.
     for s in (_progress_steps or []):
+        raw_ts = s.get("ts")
+        if isinstance(raw_ts, (int, float)) and raw_ts > 0:
+            ts_ms = int(raw_ts) if raw_ts > 1e11 else int(raw_ts * 1000)
+        else:
+            ts_ms = int(time.time() * 1000)
         events.append({
-            "ts":  int((s.get("ts") or time.time()) * 1000),
+            "ts":  ts_ms,
             "msg": f"[{s.get('phase','-')}] {s.get('message','')}",
             "src": "progress",
         })
