@@ -530,6 +530,37 @@ class EvidencePack:
             manifest["sealed_block_hash"] = self.chain.head()
         return manifest
 
+    def write(self, manifest: dict, out_dir: str | os.PathLike | None = None,
+              s3_bucket: str | None = None, s3_key: str | None = None,
+              retain_days: int = 2555) -> dict:
+        """Persist the manifest locally (always) and, if configured, to S3 with WORM
+        Object Lock. Returns the artifact locations + whether WORM was applied."""
+        result = {"manifest_sha256": manifest.get("manifest_sha256"), "local": None,
+                  "s3": None, "worm": False}
+        body = json.dumps(manifest, indent=2, default=str).encode("utf-8")
+        if out_dir:
+            d = Path(out_dir)
+            d.mkdir(parents=True, exist_ok=True)
+            local = d / f"evidence_pack_{self.run_id}.json"
+            local.write_bytes(body)
+            result["local"] = str(local)
+        bucket = s3_bucket or os.environ.get("M4H_EVIDENCE_BUCKET")
+        if bucket:
+            key = s3_key or f"evidence/{self.run_id}/evidence_pack.json"
+            try:  # infra-gated - WORM bucket must have Object Lock enabled at creation
+                import boto3
+                from datetime import timedelta
+                boto3.client("s3").put_object(
+                    Bucket=bucket, Key=key, Body=body,
+                    ContentType="application/json",
+                    ObjectLockMode="COMPLIANCE",
+                    ObjectLockRetainUntilDate=datetime.now(timezone.utc) + timedelta(days=retain_days))
+                result["s3"] = f"s3://{bucket}/{key}"
+                result["worm"] = True
+            except Exception as e:  # noqa: BLE001
+                result["s3_error"] = str(e)[:160]
+        return result
+
 
 # Required for the auditor close. If a spool with this code is missing, the
 # verdict is NO_GO regardless of the tool's internal reconciliation status.
@@ -587,37 +618,6 @@ def _compute_cutover_verdict(*, balance_tieouts, captured_spools,
             "reasons": soft_warnings,
             "precedence_rule": "SAP-standard spool reports outrank tool ledger; "
                                "tool ledger cannot override a NO_GO"}
-
-    def write(self, manifest: dict, out_dir: str | os.PathLike | None = None,
-              s3_bucket: str | None = None, s3_key: str | None = None,
-              retain_days: int = 2555) -> dict:
-        """Persist the manifest locally (always) and, if configured, to S3 with WORM
-        Object Lock. Returns the artifact locations + whether WORM was applied."""
-        result = {"manifest_sha256": manifest.get("manifest_sha256"), "local": None,
-                  "s3": None, "worm": False}
-        body = json.dumps(manifest, indent=2, default=str).encode("utf-8")
-        if out_dir:
-            d = Path(out_dir)
-            d.mkdir(parents=True, exist_ok=True)
-            local = d / f"evidence_pack_{self.run_id}.json"
-            local.write_bytes(body)
-            result["local"] = str(local)
-        bucket = s3_bucket or os.environ.get("M4H_EVIDENCE_BUCKET")
-        if bucket:
-            key = s3_key or f"evidence/{self.run_id}/evidence_pack.json"
-            try:  # infra-gated — WORM bucket must have Object Lock enabled at creation
-                import boto3
-                from datetime import timedelta
-                boto3.client("s3").put_object(
-                    Bucket=bucket, Key=key, Body=body,
-                    ContentType="application/json",
-                    ObjectLockMode="COMPLIANCE",
-                    ObjectLockRetainUntilDate=datetime.now(timezone.utc) + timedelta(days=retain_days))
-                result["s3"] = f"s3://{bucket}/{key}"
-                result["worm"] = True
-            except Exception as e:  # noqa: BLE001
-                result["s3_error"] = str(e)[:160]
-        return result
 
 
 # ── self-test (no AWS) — chain integrity, tamper-detection, tie-out, evidence ──

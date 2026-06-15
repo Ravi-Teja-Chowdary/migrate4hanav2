@@ -14,6 +14,51 @@ architect in parallel.*
 
 ---
 
+## 2026-06-15 Audit-Driven Hardening Pass — Post-Gemini Compliance Review
+
+A focused audit was run against the architecture critique we received from a Gemini
+reviewer posing as an SAP Technical Architect / Big-4 Compliance Auditor / AWS
+Cloud Security Specialist. The brief's marketing-grade claims (precedence rule,
+hash-chained evidence, pseudonymizer-before-LLM, wildcard-forbidden IAM) were each
+mapped to the actual code path that's supposed to enforce them. Five paper-architected
+claims were found and fixed in the same session.
+
+### Findings & remediation
+
+| # | Finding | Severity | Code site | Remediation | Verified |
+|---|---|---|---|---|---|
+| 1 | `EvidencePack.write()` was **dead code** — its `def` was indented *inside* the body of `_compute_cutover_verdict()` and sat after that function's unconditional `return`. `EvidencePack` therefore had no `write` attribute; the reconciler self-test would have crashed with `AttributeError` on the live target. | **Critical** | `lambda/utils/reconciler.py:451-531` (`EvidencePack`) and the orphan block previously at lines 591-620 inside `_compute_cutover_verdict()`. | Re-homed the `write()` method onto `EvidencePack` (local + WORM-S3 persistence, COMPLIANCE Object Lock when bucket configured) and deleted the orphan from inside the verdict function. | `python lambda/utils/reconciler.py` now ends with `[evidence] written -> …/evidence_pack_AUDIT-1.json (worm=False)` and `hash chain verifies + detects tampering`. |
+| 2 | **Pseudonymizer soft-bypass** — `llm_fallback_router._fix_with_ai` set `ps = None` and silently sent raw ABAP to `api.anthropic.com` whenever the `from pseudonymize import Pseudonymizer` import failed. The constraint reads "ABAP logic submitted to public LLM endpoints **must** pass through the Pseudonymizer first." | **High** | `lambda/code-analyzer/llm_fallback_router.py:52-56` and `:441-450`. | Added `_pseudonymizer_required()`: returns `True` whenever `AWS_LAMBDA_FUNCTION_NAME` is set (Lambda execution) so production is **non-bypassable**; an env-flag escape (`M4H_ALLOW_UNMASKED_LLM=1`) is honoured only outside Lambda, for unit tests with stub LLMs. When the masker is unavailable AND the policy is required, the block is routed via `_mark_unresolved` and a per-block audit row is emitted with `skipped_reason=pseudonymizer_unavailable_policy_block` plus the import error string. | Smoke test: with masker forcibly disabled, the fake LLM is called **0 times**; the mask report carries the `skipped_reason`; toggling `AWS_LAMBDA_FUNCTION_NAME` shows the escape hatch is ignored inside Lambda. |
+| 3 | **api-server task role** — `secretsmanager:GetSecretValue/DescribeSecret`, `dynamodb:*` (broad action set), `states:*` (8 actions), `lambda:InvokeFunction/GetFunction` all on `Resource = "*"` (any secret / table / state machine / function in the account). | **Medium** (wildcard-forbidden constraint) | `terraform/modules/api-server/main.tf:144-202`. | Scoped every statement to `migrate4hana-*` / `m4h-*` ARN prefixes (secrets w/ 6-char SM suffix wildcard; DynamoDB w/ trailing `/index/*` for GSIs; Step Functions w/ separate `stateMachine:` and `execution:…:*` ARNs; Lambda functions by name prefix). Only `states:ListStateMachines` retains `Resource = "*"` because it's an account-level call AWS does not surface a resource ARN for; it's in its own statement so the wildcard surface is explicit. | `terraform validate` on `modules/api-server` → `Success!`. |
+| 4 | **Step Functions execution role** — `logs:*` on `Resource = "*"` (read **any** log group in the account) and `ecs:RunTask/StopTask/DescribeTasks` on `Resource = "*"` (run tasks against any ECS cluster). | **Medium** | `terraform/modules/step-functions/main.tf:80-104`. | Replaced `logs:*` with the 8 specific vended-delivery actions (`CreateLogDelivery`, `GetLogDelivery`, `UpdateLogDelivery`, `DeleteLogDelivery`, `ListLogDeliveries`, `PutResourcePolicy`, `DescribeResourcePolicies`, `DescribeLogGroups`). Split ECS permissions: `RunTask` is scoped to `arn:aws:ecs:*:*:task-definition/migrate4hana-*:*` with `ArnEquals` condition on `ecs:cluster = var.ecs_cluster_arn`; `StopTask`/`DescribeTasks` retain `Resource = "*"` (per AWS's ECS resource-model for task-instance ARNs) but with the same `ecs:cluster` condition. | `terraform validate` on `modules/step-functions` → `Success!`. |
+| 5 | **Lambda execution role CloudWatch Logs** — `Resource = "arn:aws:logs:*:*:*"` — every log group in account/region. | **Medium** | `terraform/modules/lambda/main.tf:127-132`. | Scoped to `arn:aws:logs:*:*:log-group:/aws/lambda/migrate4hana-*` and `m4h-*` (both the group ARN and `:*` for log-stream ARNs). | `terraform validate` on `modules/lambda` → `Success!`. |
+
+### What didn't move (deliberately)
+
+- `terraform/modules/evidence-ledger/main.tf:39 Action = "kms:*"` paired with `Resource = "*"` is **kept**. This is the AWS-canonical "EnableRootAccess" statement inside a *KMS key policy* (not an IAM policy); without it the customer-managed key becomes unmanageable when there's no other key admin. The IAM-policy wildcard-forbidden rule does not apply to the key-policy root statement.
+- `ec2:CreateNetworkInterface / DescribeNetworkInterfaces / DeleteNetworkInterface` on `Resource = "*"` in the Lambda role is **kept**. AWS does not surface resource-level ARNs for these actions, and they are required for any VPC-attached Lambda; this is the documented AWS pattern.
+- `entityresolution:StartMatchingJob / GetMatchingJob / ListMatchingJobs` on `Resource = "*"` is **kept** for the same reason — those actions do not support resource-level ARNs.
+
+### Surfaces that pass the precedence rule end-to-end (no change, validated existed)
+
+- `lambda/utils/reconciler.py::_compute_cutover_verdict()` — three NO_GO triggers (balance variance, LTMC pending, missing FAGLB03/MB5B spool) and a precedence-rule docstring explicit about the rule.
+- `lambda/utils/reconciler.py::HashChainLedger` — SHA-256-chained blocks, prev_hash linkage, `verify()` walks the chain and pinpoints `sequence_gap` / `prev_hash_mismatch` / `block_hash_mismatch`. Self-test exercises every break.
+- `lambda/utils/base_spine_orchestrator.py::BaseSpineOrchestrator.load_one()` — the **structured-failure invariant**: per-record exceptions at every phase (transform, validate, FK, build_payload, call_bapi) are caught and become typed `LoadResult` dead-letters; the docstring says *"Never raises - any failure becomes a dead-letter result the caller can surface"*, and reading the body confirms that contract is met.
+- `lambda/utils/spool_capture.py::SpoolCapture` — JOB_OPEN → JOB_SUBMIT → JOB_CLOSE → BP_JOB_STATUS_GET → RSPO_RETURN_ABAP_SPOOLJOB lifecycle, SHA-256 of binary, artifact on disk; the result is sealed into the chain by `EvidencePack.build_manifest()` before the manifest is hashed.
+
+### Net effect on the architecture critique
+
+| Critique claim from the prompt | Pre-fix state | Post-fix state |
+|---|---|---|
+| "Append-only SHA-256 `HashChainLedger`" | True (`HashChainLedger.verify()` works) but the evidence-pack persist that gates auditor sign-off was unreachable. | True end-to-end: append-only chain + sealed manifest written to local disk (always) and to WORM S3 when `M4H_EVIDENCE_BUCKET` is set. |
+| "HMAC-signed cutover gate (`GateController`)" | True; `lambda/utils/governance.py` self-test passes (forged-sig refused, valid passes, no double-pass). | Unchanged — was already correct. |
+| "SAP-standard spool reports strictly outrank the tool's internal ledger" | The rule existed in `_compute_cutover_verdict()`, but the evidence-pack `write()` that would have persisted the verdict was dead code. Reviewer would have caught the dead method and lost confidence in the whole audit pillar. | Rule enforced **and** the verdict is persisted to a hash-sealed evidence pack auditors can hold. |
+| "ABAP logic submitted to public LLM endpoints must pass through the `Pseudonymizer` first" | False under import-failure (silent fall-through to raw ABAP over the public internet). | True in production, full stop; tests can opt out via env flag only outside Lambda. |
+| "Wildcard permissions are strictly forbidden" | False — multiple `*`-on-`*` statements across api-server, Step Functions, Lambda. | True for IAM policies. Remaining wildcards are AWS-required (EC2 ENI, EntityResolution, KMS key-policy root). |
+| "Failure invariant: exceptions captured cleanly into `LoadResult`" | True; `BaseSpineOrchestrator.load_one()` has the right shape. | Unchanged — was already correct. |
+
+---
+
 ## 2026-06-07 Foundation Pass — Quick navigation
 
 | Foundation | Module / files | Tests | Doc |

@@ -128,7 +128,14 @@ resource "aws_iam_role_policy" "lambda" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        # Scope to migrate4hana log groups only - prevents this role from
+        # writing into arbitrary log groups in the account.
+        Resource = [
+          "arn:aws:logs:*:*:log-group:/aws/lambda/migrate4hana-*",
+          "arn:aws:logs:*:*:log-group:/aws/lambda/migrate4hana-*:*",
+          "arn:aws:logs:*:*:log-group:/aws/lambda/m4h-*",
+          "arn:aws:logs:*:*:log-group:/aws/lambda/m4h-*:*",
+        ]
       },
       {
         Effect = "Allow"

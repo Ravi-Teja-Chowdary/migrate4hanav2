@@ -77,26 +77,55 @@ resource "aws_iam_role_policy" "step_functions" {
         Action   = ["lambda:InvokeFunction"]
         Resource = values(var.lambda_arns)
       },
+      # Step Functions vended-logs delivery to CloudWatch. These specific
+      # actions are what the service principal needs; `logs:*` is far too
+      # broad and would let the state machine read arbitrary log groups in
+      # the account.
       {
-        Effect   = "Allow"
-        Action   = ["logs:*"]
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogDelivery",
+          "logs:GetLogDelivery",
+          "logs:UpdateLogDelivery",
+          "logs:DeleteLogDelivery",
+          "logs:ListLogDeliveries",
+          "logs:PutResourcePolicy",
+          "logs:DescribeResourcePolicies",
+          "logs:DescribeLogGroups",
+        ]
         Resource = "*"
       },
-      # Manual-gate human-approval pattern (lambda:invoke.waitForTaskToken)
+      # Manual-gate human-approval pattern (lambda:invoke.waitForTaskToken).
+      # SendTaskSuccess / SendTaskFailure / SendTaskHeartbeat are token-keyed
+      # but AWS does not surface resource-level ARNs for them, so the action
+      # itself is the boundary (the caller still needs the live task token).
       {
         Effect   = "Allow"
         Action   = ["states:SendTaskSuccess", "states:SendTaskFailure", "states:SendTaskHeartbeat"]
         Resource = "*"
       },
       # ── ECS Fargate permissions (Stages 1, 5, 12, 12A) ──
+      # Scoped via cluster + task-definition ARN conditions so this role can
+      # only RunTask against the migrate4hana cluster and its task defs.
       {
-        Effect = "Allow"
-        Action = [
-          "ecs:RunTask",
-          "ecs:StopTask",
-          "ecs:DescribeTasks"
-        ]
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = "arn:aws:ecs:*:*:task-definition/migrate4hana-*:*"
+        Condition = {
+          ArnEquals = {
+            "ecs:cluster" = var.ecs_cluster_arn
+          }
+        }
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ecs:StopTask", "ecs:DescribeTasks"]
         Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "ecs:cluster" = var.ecs_cluster_arn
+          }
+        }
       },
       {
         Effect = "Allow"
@@ -148,9 +177,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
       # ══════════════════════════════════════════════════════════════
 
       Phase1_Prepare_Marker = {
-        Type    = "Pass"
-        Comment = "Phase 1: PREPARE — Assessment & Pre-Checks"
-        Result  = { phase = 1, phase_name = "PREPARE", description = "Assessment & Pre-Checks" }
+        Type       = "Pass"
+        Comment    = "Phase 1: PREPARE — Assessment & Pre-Checks"
+        Result     = { phase = 1, phase_name = "PREPARE", description = "Assessment & Pre-Checks" }
         ResultPath = "$.phase_telemetry"
         Next       = "Stage1_Discovery_Prep"
       }
@@ -175,9 +204,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
         Comment  = "ECS Fargate — Scan ECC: custom code, tables, org structure, roles"
         Resource = "arn:aws:states:::ecs:runTask.waitForTaskToken"
         Parameters = {
-          LaunchType      = "FARGATE"
-          Cluster         = var.ecs_cluster_arn
-          TaskDefinition  = var.ecs_task_definition_arn
+          LaunchType     = "FARGATE"
+          Cluster        = var.ecs_cluster_arn
+          TaskDefinition = var.ecs_task_definition_arn
           NetworkConfiguration = {
             AwsvpcConfiguration = {
               Subnets        = var.private_subnet_ids
@@ -189,9 +218,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
             ContainerOverrides = [{
               Name = "migration-worker"
               Environment = [
-                { Name = "STAGE_TARGET",    Value = "discovery-engine" },
+                { Name = "STAGE_TARGET", Value = "discovery-engine" },
                 { "Name" = "SFN_TASK_TOKEN", "Value.$" = "$$.Task.Token" },
-                { "Name" = "SFN_INPUT",      "Value.$" = "States.JsonToString($.stage_payload)" },
+                { "Name" = "SFN_INPUT", "Value.$" = "States.JsonToString($.stage_payload)" },
               ]
             }]
           }
@@ -342,9 +371,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
       # ══════════════════════════════════════════════════════════════
 
       Phase2_Explore_Marker = {
-        Type    = "Pass"
-        Comment = "Phase 2: EXPLORE — Application Preparation"
-        Result  = { phase = 2, phase_name = "EXPLORE", description = "Application Preparation" }
+        Type       = "Pass"
+        Comment    = "Phase 2: EXPLORE — Application Preparation"
+        Result     = { phase = 2, phase_name = "EXPLORE", description = "Application Preparation" }
         ResultPath = "$.phase_telemetry"
         Next       = "Stage5_CodeAnalysis_Prep"
       }
@@ -367,9 +396,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
         Comment  = "ECS Fargate — AST extraction, PII scrub, GenAI prep (15 K+ programs)"
         Resource = "arn:aws:states:::ecs:runTask.waitForTaskToken"
         Parameters = {
-          LaunchType      = "FARGATE"
-          Cluster         = var.ecs_cluster_arn
-          TaskDefinition  = var.ecs_task_definition_arn
+          LaunchType     = "FARGATE"
+          Cluster        = var.ecs_cluster_arn
+          TaskDefinition = var.ecs_task_definition_arn
           NetworkConfiguration = {
             AwsvpcConfiguration = {
               Subnets        = var.private_subnet_ids
@@ -381,9 +410,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
             ContainerOverrides = [{
               Name = "migration-worker"
               Environment = [
-                { Name = "STAGE_TARGET",    Value = "code-analyzer" },
+                { Name = "STAGE_TARGET", Value = "code-analyzer" },
                 { "Name" = "SFN_TASK_TOKEN", "Value.$" = "$$.Task.Token" },
-                { "Name" = "SFN_INPUT",      "Value.$" = "States.JsonToString($.stage_payload)" },
+                { "Name" = "SFN_INPUT", "Value.$" = "States.JsonToString($.stage_payload)" },
               ]
             }]
           }
@@ -527,9 +556,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
       # ══════════════════════════════════════════════════════════════
 
       Phase3_Realize_Marker = {
-        Type    = "Pass"
-        Comment = "Phase 3: REALIZE — Technical System Conversion (SUM/DMO)"
-        Result  = { phase = 3, phase_name = "REALIZE", description = "Technical System Conversion" }
+        Type       = "Pass"
+        Comment    = "Phase 3: REALIZE — Technical System Conversion (SUM/DMO)"
+        Result     = { phase = 3, phase_name = "REALIZE", description = "Technical System Conversion" }
         ResultPath = "$.phase_telemetry"
         Next       = "Stage9_PreConversionGate"
       }
@@ -591,9 +620,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
         Parameters = {
           FunctionName = lookup(var.lambda_arns, "sum-orchestrator", "")
           Payload = {
-            "stage"       = "sum-dmo"
-            "metadata.$"  = "$.metadata"
-            "cutover.$"   = "$.cutover.Payload"
+            "stage"      = "sum-dmo"
+            "metadata.$" = "$.metadata"
+            "cutover.$"  = "$.cutover.Payload"
           }
         }
         ResultPath     = "$.sum_dmo"
@@ -617,9 +646,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
       # ══════════════════════════════════════════════════════════════
 
       Phase4_PostConversion_Marker = {
-        Type    = "Pass"
-        Comment = "Phase 4: POST-CONVERSION — Deploy, Configure & Validate"
-        Result  = { phase = 4, phase_name = "POST_CONVERSION", description = "Deploy, Configure & Validate" }
+        Type       = "Pass"
+        Comment    = "Phase 4: POST-CONVERSION — Deploy, Configure & Validate"
+        Result     = { phase = 4, phase_name = "POST_CONVERSION", description = "Deploy, Configure & Validate" }
         ResultPath = "$.phase_telemetry"
         Next       = "Stage11_CodeDeploy"
       }
@@ -661,10 +690,10 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
         Comment = "Fan-out: prepare data load chunks for parallel ECS processing"
         Parameters = {
           "data_streams" = [
-            { "stream_type" = "finance",       "description" = "ACDOCA via BAPI_ACC_DOCUMENT_POST" },
+            { "stream_type" = "finance", "description" = "ACDOCA via BAPI_ACC_DOCUMENT_POST" },
             { "stream_type" = "business_partner", "description" = "BUT000 via BAPI_BUPA_CREATE_FROM_DATA" },
             { "stream_type" = "material_documents", "description" = "MATDOC via BAPI_GOODSMVT_CREATE" },
-            { "stream_type" = "custom_tables",  "description" = "Z-tables via RFC_WRITE_TABLE" },
+            { "stream_type" = "custom_tables", "description" = "Z-tables via RFC_WRITE_TABLE" },
           ]
           "metadata.$"       = "$.metadata"
           "data_migration.$" = "$.data_migration.Payload"
@@ -674,9 +703,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
       }
 
       Stage12_DataLoad_DistributedMap = {
-        Type    = "Map"
-        Comment = "Parallel data loading — 4 concurrent Fargate tasks"
-        ItemsPath = "$.data_load_input.data_streams"
+        Type           = "Map"
+        Comment        = "Parallel data loading — 4 concurrent Fargate tasks"
+        ItemsPath      = "$.data_load_input.data_streams"
         MaxConcurrency = 4
         Parameters = {
           "stream_type.$"    = "$$.Map.Item.Value.stream_type"
@@ -690,7 +719,7 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
           States = {
             # Capture the full map-item input so we can stringify it for SFN_INPUT
             PrepDataStreamPayload = {
-              Type       = "Pass"
+              Type = "Pass"
               Parameters = {
                 "stream_type.$"    = "$.stream_type"
                 "description.$"    = "$.description"
@@ -706,9 +735,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
               Comment  = "ECS Fargate — load one data stream into S/4HANA"
               Resource = "arn:aws:states:::ecs:runTask.waitForTaskToken"
               Parameters = {
-                LaunchType      = "FARGATE"
-                Cluster         = var.ecs_cluster_arn
-                TaskDefinition  = var.ecs_task_definition_arn
+                LaunchType     = "FARGATE"
+                Cluster        = var.ecs_cluster_arn
+                TaskDefinition = var.ecs_task_definition_arn
                 NetworkConfiguration = {
                   AwsvpcConfiguration = {
                     Subnets        = var.private_subnet_ids
@@ -720,9 +749,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
                   ContainerOverrides = [{
                     Name = "migration-worker"
                     Environment = [
-                      { Name = "STAGE_TARGET",    Value = "data-loader" },
+                      { Name = "STAGE_TARGET", Value = "data-loader" },
                       { "Name" = "SFN_TASK_TOKEN", "Value.$" = "$$.Task.Token" },
-                      { "Name" = "SFN_INPUT",      "Value.$" = "States.JsonToString($.sfn_payload)" },
+                      { "Name" = "SFN_INPUT", "Value.$" = "States.JsonToString($.sfn_payload)" },
                     ]
                   }]
                 }
@@ -754,10 +783,10 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
         Comment = "Consolidate parallel data load results + trigger reconciliation"
         Parameters = {
           "Payload" = {
-            "status"       = "success"
-            "parallel"     = true
-            "streams.$"    = "$.data_load_streams"
-            "metadata.$"   = "$.data_load_input.metadata"
+            "status"     = "success"
+            "parallel"   = true
+            "streams.$"  = "$.data_load_streams"
+            "metadata.$" = "$.data_load_input.metadata"
           }
         }
         ResultPath = "$.data_load"
@@ -783,9 +812,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
         Comment  = "ECS Fargate — post-load reconciliation: ECC GL vs S/4HANA ACDOCA"
         Resource = "arn:aws:states:::ecs:runTask.waitForTaskToken"
         Parameters = {
-          LaunchType      = "FARGATE"
-          Cluster         = var.ecs_cluster_arn
-          TaskDefinition  = var.ecs_task_definition_arn
+          LaunchType     = "FARGATE"
+          Cluster        = var.ecs_cluster_arn
+          TaskDefinition = var.ecs_task_definition_arn
           NetworkConfiguration = {
             AwsvpcConfiguration = {
               Subnets        = var.private_subnet_ids
@@ -797,9 +826,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
             ContainerOverrides = [{
               Name = "migration-worker"
               Environment = [
-                { Name = "STAGE_TARGET",    Value = "data-loader" },
+                { Name = "STAGE_TARGET", Value = "data-loader" },
                 { "Name" = "SFN_TASK_TOKEN", "Value.$" = "$$.Task.Token" },
-                { "Name" = "SFN_INPUT",      "Value.$" = "States.JsonToString($.stage_payload)" },
+                { "Name" = "SFN_INPUT", "Value.$" = "States.JsonToString($.stage_payload)" },
               ]
             }]
           }
@@ -865,9 +894,9 @@ resource "aws_sfn_state_machine" "migration_pipeline" {
       # ══════════════════════════════════════════════════════════════
 
       Phase5_DeployAndRun_Marker = {
-        Type    = "Pass"
-        Comment = "Phase 5: DEPLOY & RUN — Integration, Validation & Go-Live"
-        Result  = { phase = 5, phase_name = "DEPLOY_AND_RUN", description = "Integration, Validation & Go-Live" }
+        Type       = "Pass"
+        Comment    = "Phase 5: DEPLOY & RUN — Integration, Validation & Go-Live"
+        Result     = { phase = 5, phase_name = "DEPLOY_AND_RUN", description = "Integration, Validation & Go-Live" }
         ResultPath = "$.phase_telemetry"
         Next       = "Stage15_IntegrationActivate"
       }
@@ -1039,9 +1068,9 @@ locals {
     # NOTE: key MUST match the lambda module's each.key (kebab-case, not snake).
     # 2026-06-10: was previously "pdf_report_generator" (snake), causing a silent
     # fallback to manual-gate-prod even when the Lambda was deployed.
-    PdfReportGeneratorArn            = lookup(var.lambda_arns, "pdf-report-generator", local.ls_fallback_arn)
-    RollbackManagerArn               = lookup(var.lambda_arns, "rollback-manager", local.ls_fallback_arn)
-    ManualGateLambdaArn              = lookup(var.lambda_arns, "manual-gate", local.ls_fallback_arn)
+    PdfReportGeneratorArn = lookup(var.lambda_arns, "pdf-report-generator", local.ls_fallback_arn)
+    RollbackManagerArn    = lookup(var.lambda_arns, "rollback-manager", local.ls_fallback_arn)
+    ManualGateLambdaArn   = lookup(var.lambda_arns, "manual-gate", local.ls_fallback_arn)
   }
 }
 
@@ -1056,32 +1085,32 @@ resource "aws_sfn_state_machine" "lift_and_shift" {
   # Lambda ARN.
   definition = replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(
     file("${path.module}/lift_and_shift_pipeline.asl.json"),
-    "$${DiscoveryEngineArn}",               local.ls_arns.DiscoveryEngineArn),
-    "$${SizingAdvisorArn}",                 local.ls_arns.SizingAdvisorArn),
-    "$${ObjectRouterArn}",                  local.ls_arns.ObjectRouterArn),
-    "$${TargetProvisionerArn}",             local.ls_arns.TargetProvisionerArn),
-    "$${BasisValidatorArn}",                local.ls_arns.BasisValidatorArn),
-    "$${CodeAnalyzerArn}",                  local.ls_arns.CodeAnalyzerArn),
-    "$${TransportArtifactBuilderArn}",      local.ls_arns.TransportArtifactBuilderArn),
-    "$${TransportFilePlacerArn}",           local.ls_arns.TransportFilePlacerArn),
-    "$${TransportImportExecutorArn}",       local.ls_arns.TransportImportExecutorArn),
-    "$${TransportImportVerifierArn}",       local.ls_arns.TransportImportVerifierArn),
-    "$${ConfigReplicatorArn}",              local.ls_arns.ConfigReplicatorArn),
-    "$${BCSetBuilderArn}",                  local.ls_arns.BCSetBuilderArn),
-    "$${DataMigratorArn}",                  local.ls_arns.DataMigratorArn),
-    "$${DataHygieneArn}",                   local.ls_arns.DataHygieneArn),
-    "$${MigrationCockpitOrchestratorArn}",  local.ls_arns.MigrationCockpitOrchestratorArn),
-    "$${LTMOMOrchestratorArn}",             local.ls_arns.LTMOMOrchestratorArn),
-    "$${IDocOrchestratorArn}",              local.ls_arns.IDocOrchestratorArn),
-    "$${MigrationValidatorArn}",            local.ls_arns.MigrationValidatorArn),
-    "$${TestGeneratorArn}",                 local.ls_arns.TestGeneratorArn),
+    "$${DiscoveryEngineArn}", local.ls_arns.DiscoveryEngineArn),
+    "$${SizingAdvisorArn}", local.ls_arns.SizingAdvisorArn),
+    "$${ObjectRouterArn}", local.ls_arns.ObjectRouterArn),
+    "$${TargetProvisionerArn}", local.ls_arns.TargetProvisionerArn),
+    "$${BasisValidatorArn}", local.ls_arns.BasisValidatorArn),
+    "$${CodeAnalyzerArn}", local.ls_arns.CodeAnalyzerArn),
+    "$${TransportArtifactBuilderArn}", local.ls_arns.TransportArtifactBuilderArn),
+    "$${TransportFilePlacerArn}", local.ls_arns.TransportFilePlacerArn),
+    "$${TransportImportExecutorArn}", local.ls_arns.TransportImportExecutorArn),
+    "$${TransportImportVerifierArn}", local.ls_arns.TransportImportVerifierArn),
+    "$${ConfigReplicatorArn}", local.ls_arns.ConfigReplicatorArn),
+    "$${BCSetBuilderArn}", local.ls_arns.BCSetBuilderArn),
+    "$${DataMigratorArn}", local.ls_arns.DataMigratorArn),
+    "$${DataHygieneArn}", local.ls_arns.DataHygieneArn),
+    "$${MigrationCockpitOrchestratorArn}", local.ls_arns.MigrationCockpitOrchestratorArn),
+    "$${LTMOMOrchestratorArn}", local.ls_arns.LTMOMOrchestratorArn),
+    "$${IDocOrchestratorArn}", local.ls_arns.IDocOrchestratorArn),
+    "$${MigrationValidatorArn}", local.ls_arns.MigrationValidatorArn),
+    "$${TestGeneratorArn}", local.ls_arns.TestGeneratorArn),
     "$${MigrationCompletenessAnalyzerArn}", local.ls_arns.MigrationCompletenessAnalyzerArn),
-    "$${CutoverOrchestratorArn}",           local.ls_arns.CutoverOrchestratorArn),
-    "$${DeltaExtractorArn}",                local.ls_arns.DeltaExtractorArn),
-    "$${IntegrationActivatorArn}",          local.ls_arns.IntegrationActivatorArn),
-    "$${PdfReportGeneratorArn}",            local.ls_arns.PdfReportGeneratorArn),
-    "$${RollbackManagerArn}",               local.ls_arns.RollbackManagerArn),
-    "$${ManualGateLambdaArn}",              local.ls_arns.ManualGateLambdaArn)
+    "$${CutoverOrchestratorArn}", local.ls_arns.CutoverOrchestratorArn),
+    "$${DeltaExtractorArn}", local.ls_arns.DeltaExtractorArn),
+    "$${IntegrationActivatorArn}", local.ls_arns.IntegrationActivatorArn),
+    "$${PdfReportGeneratorArn}", local.ls_arns.PdfReportGeneratorArn),
+    "$${RollbackManagerArn}", local.ls_arns.RollbackManagerArn),
+  "$${ManualGateLambdaArn}", local.ls_arns.ManualGateLambdaArn)
 
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.sfn_ls[0].arn}:*"

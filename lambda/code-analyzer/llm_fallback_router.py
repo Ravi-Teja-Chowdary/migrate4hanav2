@@ -50,10 +50,31 @@ except Exception:  # pragma: no cover - exercised only when path is wrong
     process_abap_file = None  # type: ignore
 
 # Reversible masking — surrogates leave the process to Bedrock; originals restored on return.
+# Policy: ABAP fragments submitted to public LLM endpoints MUST pass through the
+# Pseudonymizer. If the import fails in production, refuse to call the LLM — silent
+# fall-through would leak raw customer hostnames / IPs / secrets to api.anthropic.com.
+# Tests can opt out via M4H_ALLOW_UNMASKED_LLM=1 (only honoured outside Lambda).
 try:
     from pseudonymize import Pseudonymizer
-except Exception:
+    _PSEUDONYMIZER_AVAILABLE = True
+    _PSEUDONYMIZER_ERROR: Optional[str] = None
+except Exception as _e:  # noqa: BLE001 - record reason for the policy refusal
     Pseudonymizer = None  # type: ignore
+    _PSEUDONYMIZER_AVAILABLE = False
+    _PSEUDONYMIZER_ERROR = f"{type(_e).__name__}: {_e}"
+
+
+def _pseudonymizer_required() -> bool:
+    """True ⇒ refuse to call the LLM when the masker is unavailable.
+
+    Defaults to True (enforced). Set M4H_ALLOW_UNMASKED_LLM=1 ONLY in unit-tests
+    that have no real outbound network (e.g. when the LLM callable is a stub).
+    AWS Lambda execution context ignores the escape hatch — production never
+    sends raw ABAP off the box.
+    """
+    if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return True
+    return os.environ.get("M4H_ALLOW_UNMASKED_LLM", "0") != "1"
 
 # Default Claude model for ABAP remediation. Sonnet 4.6 handles narrow
 # fragment-fix tasks at ~5x cheaper than Opus; the router escalates to
@@ -418,7 +439,19 @@ class FallbackRouter:
             blocks.append(block)
 
             # ── mask the snippet for Bedrock; keep the mapping for restore ──
+            # Policy enforcement: the Pseudonymizer is REQUIRED before any ABAP
+            # leaves the process for a public LLM endpoint. In production
+            # (AWS_LAMBDA_FUNCTION_NAME set) the import-failure branch refuses
+            # the call rather than silently sending raw source.
             ps = Pseudonymizer() if Pseudonymizer is not None else None
+            if ps is None and _pseudonymizer_required():
+                fixed = self._mark_unresolved(fixed, block)
+                mask_reports.append({
+                    "line": block.line,
+                    "skipped_reason": "pseudonymizer_unavailable_policy_block",
+                    "import_error": _PSEUDONYMIZER_ERROR,
+                })
+                continue
             if ps is not None:
                 masked_snippet = ps.mask(block.snippet)
                 masked_block = OffendingBlock(

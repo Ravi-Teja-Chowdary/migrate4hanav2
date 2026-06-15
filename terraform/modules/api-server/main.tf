@@ -142,10 +142,15 @@ resource "aws_iam_role" "task" {
 # Same permissions surface as the Lambda role so api_server.py can do
 # everything the Lambdas can (read secrets, write artifacts, kick SFN).
 data "aws_iam_policy_document" "task_policy" {
+  # Secrets - scoped to migrate4hana-prefixed secrets only. Wildcard suffix
+  # covers Secrets Manager's appended 6-character random suffix.
   statement {
-    effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-    resources = ["*"]
+    effect  = "Allow"
+    actions = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+    resources = [
+      "arn:aws:secretsmanager:*:*:secret:migrate4hana-*",
+      "arn:aws:secretsmanager:*:*:secret:m4h-*",
+    ]
   }
   statement {
     effect  = "Allow"
@@ -155,6 +160,7 @@ data "aws_iam_policy_document" "task_policy" {
       "arn:aws:s3:::${var.staging_bucket}/*",
     ]
   }
+  # DynamoDB - migrate4hana / m4h-prefixed tables and their indexes only.
   statement {
     effect = "Allow"
     actions = [
@@ -163,22 +169,40 @@ data "aws_iam_policy_document" "task_policy" {
       "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem",
       "dynamodb:DescribeTable",
     ]
-    resources = ["*"]
+    resources = [
+      "arn:aws:dynamodb:*:*:table/migrate4hana-*",
+      "arn:aws:dynamodb:*:*:table/migrate4hana-*/index/*",
+      "arn:aws:dynamodb:*:*:table/m4h-*",
+      "arn:aws:dynamodb:*:*:table/m4h-*/index/*",
+    ]
   }
+  # Step Functions - migrate4hana state machines + their executions only.
   statement {
     effect = "Allow"
     actions = [
       "states:StartExecution", "states:StopExecution", "states:DescribeExecution",
       "states:GetExecutionHistory", "states:ListExecutions", "states:DescribeStateMachine",
-      "states:ListStateMachines", "states:SendTaskSuccess", "states:SendTaskFailure",
-      "states:SendTaskHeartbeat",
+      "states:SendTaskSuccess", "states:SendTaskFailure", "states:SendTaskHeartbeat",
     ]
+    resources = [
+      "arn:aws:states:*:*:stateMachine:migrate4hana-*",
+      "arn:aws:states:*:*:execution:migrate4hana-*:*",
+    ]
+  }
+  # ListStateMachines is an account-level operation with no resource ARN; keep
+  # in its own statement so the wildcard surface is narrow and explicit.
+  statement {
+    effect    = "Allow"
+    actions   = ["states:ListStateMachines"]
     resources = ["*"]
   }
   statement {
-    effect    = "Allow"
-    actions   = ["lambda:InvokeFunction", "lambda:GetFunction"]
-    resources = ["*"]
+    effect  = "Allow"
+    actions = ["lambda:InvokeFunction", "lambda:GetFunction"]
+    resources = [
+      "arn:aws:lambda:*:*:function:migrate4hana-*",
+      "arn:aws:lambda:*:*:function:m4h-*",
+    ]
   }
   statement {
     effect    = "Allow"

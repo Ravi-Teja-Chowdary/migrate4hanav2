@@ -6,6 +6,25 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 
 **Date:** 2026-05-31 (review base); **2026-06-07 foundation pass (F1-F6) shipped** · **Branch reviewed:** `aws-lift-and-shift` · **Build status:** working prototype on a live system pair; **full AWS prod stack provisions and tears down cleanly end-to-end** (200 resources, see §13); **six production-grade foundations shipped 2026-06-07** (see §15 below for the full delta + 98-test green suite).
 
+> **2026-06-15 update — Audit-driven hardening (post-Gemini compliance review).**
+> Round-tripped the architecture critique against the actual code; shipped fixes for
+> five paper-architected claims, including one that would have **crashed the reconciler self-test**.
+>
+> | Finding | Severity | Fix |
+> |---|---|---|
+> | `EvidencePack.write()` was dead code — `def` sat **after** `_compute_cutover_verdict()`'s unconditional return, so the entire WORM-S3 + local-evidence-pack persist path was unreachable | **Critical** | Moved `write()` inside `EvidencePack`; reconciler self-test now writes the sealed pack to disk and prints `[evidence] written -> …/evidence_pack_AUDIT-1.json`. |
+> | Pseudonymizer soft-bypass — if `from pseudonymize import Pseudonymizer` failed, `llm_fallback_router._fix_with_ai` silently sent **raw ABAP** (incl. passwords/hostnames) to `api.anthropic.com` | **High** (policy violation: "must mask before public LLM") | Added `_pseudonymizer_required()`: production (any `AWS_LAMBDA_FUNCTION_NAME` set) refuses the LLM call when the masker is missing; emits an audit-trail entry `pseudonymizer_unavailable_policy_block`. Escape hatch `M4H_ALLOW_UNMASKED_LLM=1` is honoured **only** outside Lambda (unit tests). |
+> | api-server IAM — `secretsmanager:*`, `dynamodb:*`, `states:*`, `lambda:*` on `Resource = "*"` | **Medium** (wildcard-forbidden constraint) | Scoped every statement to `migrate4hana-*` / `m4h-*` ARN prefixes; only `states:ListStateMachines` keeps `*` (it's an account-level call with no resource ARN). |
+> | Step Functions IAM — `logs:*` and `ecs:RunTask/StopTask/DescribeTasks` on `Resource = "*"` | **Medium** | Replaced `logs:*` with the 8 vended-delivery actions; `ecs:RunTask` scoped to `task-definition/migrate4hana-*:*` with `ecs:cluster` ArnEquals condition; `StopTask`/`DescribeTasks` likewise condition-gated to the migrate4hana cluster. |
+> | Lambda exec role — CloudWatch Logs `Resource = "arn:aws:logs:*:*:*"` (any log group in account) | **Medium** | Tightened to `/aws/lambda/migrate4hana-*` and `/aws/lambda/m4h-*` log-group ARNs. |
+>
+> **Verified post-fix:**
+> - `python lambda/utils/reconciler.py` → hash chain verifies, tamper detected at block 1, balance variance flagged, evidence pack persists to disk with sealed block hash.
+> - `terraform validate` on all three edited modules (`step-functions`, `api-server`, `lambda`) → `Success!`.
+> - Pseudonymizer smoke: LLM call count `0` when masker is policy-blocked; mask report carries `skipped_reason=pseudonymizer_unavailable_policy_block`; in-Lambda env-flag escape is ignored.
+>
+> **What this means for the next reviewer:** the precedence rule (FAGLB03/MB5B > tool ledger), the hash-chained evidence pack, the LLM-egress masking guarantee, and the wildcard-forbidden IAM posture now match what the documentation has been claiming. The reconciler write path is no longer dead code; the masker is no longer optional in production.
+
 > **2026-06-07 update — Six-foundation pass shipped (F1 - F6) in a single autonomous session.**
 > Material engineering progress against the three biggest gaps the original review flagged
 > (no cross-run ledger, hand-curated catalogs, no version routing). All six foundations
