@@ -74,8 +74,9 @@ _lock = asyncio.Lock()
 _progress_steps = []
 _progress_lock = asyncio.Lock()
 
-# In-memory ECC password (set after successful connection test, never persisted)
+# In-memory ECC + S/4 passwords (set after successful connection test, never persisted)
 _ecc_passwd = ""
+_s4_passwd = ""
 
 # ── Multi-tenant: per-client in-memory passwords + persisted client registry ──
 # Everything else in the file continues to use the single _ecc_passwd above to
@@ -1244,19 +1245,58 @@ class ConnectionTestRequest(BaseModel):
 @app.post("/api/connections/ecc/test-with-permissions",
            dependencies=[Depends(require_auth)])
 async def connection_test_ecc_permaware(body: ConnectionTestRequest):
+    global _ecc_passwd
     sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
     from connection_validator import validate_ecc
-    return validate_ecc(body.creds, migration_type=body.migration_type,
-                        selected_objects=body.selected_objects)
+    res = validate_ecc(body.creds, migration_type=body.migration_type,
+                       selected_objects=body.selected_objects)
+    # If the probe successfully opened an RFC channel, the password is
+    # known-good. Stash it so the pipeline doesn't need a second round-trip.
+    if res.get("login_ok") and body.creds.get("passwd"):
+        _ecc_passwd = body.creds["passwd"]
+        # Also persist the connection metadata so the start-migration path
+        # can find it without a separate save call.
+        try:
+            conns = _load_connections()
+            conns["ecc"] = {
+                "ashost":    body.creds.get("ashost", ""),
+                "sysnr":     body.creds.get("sysnr", ""),
+                "client":    body.creds.get("client", ""),
+                "user":      body.creds.get("user", ""),
+                "saprouter": body.creds.get("saprouter", ""),
+                "saved_at":  datetime.now().isoformat(),
+            }
+            _save_connections(conns)
+        except Exception:
+            pass
+    return res
 
 
 @app.post("/api/connections/s4/test-with-permissions",
            dependencies=[Depends(require_auth)])
 async def connection_test_s4_permaware(body: ConnectionTestRequest):
+    global _s4_passwd
     sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
     from connection_validator import validate_s4
-    return validate_s4(body.creds, migration_type=body.migration_type,
-                       selected_objects=body.selected_objects)
+    res = validate_s4(body.creds, migration_type=body.migration_type,
+                      selected_objects=body.selected_objects)
+    if res.get("login_ok") and body.creds.get("passwd"):
+        _s4_passwd = body.creds["passwd"]
+        try:
+            conns = _load_connections()
+            conns["s4hana"] = {
+                "connection_type": "rfc",
+                "ashost":    body.creds.get("ashost", ""),
+                "sysnr":     body.creds.get("sysnr", ""),
+                "client":    body.creds.get("client", ""),
+                "user":      body.creds.get("user", ""),
+                "saprouter": body.creds.get("saprouter", ""),
+                "saved_at":  datetime.now().isoformat(),
+            }
+            _save_connections(conns)
+        except Exception:
+            pass
+    return res
 
 
 # =============================================================================
@@ -1417,22 +1457,40 @@ async def get_connections():
 
 @app.post("/api/connections/ecc", dependencies=[Depends(require_auth)])
 async def save_ecc_connection(body: ECCConnection):
+    """Persist ECC connection metadata AND keep the password in process
+    memory for the runtime.
+
+    The wizard calls this right after the perm-aware test passes, with the
+    plaintext password. We never write the password to disk, but holding it
+    in memory is the difference between "Start migration" working and
+    failing with 'session expired'.
+    """
+    global _ecc_passwd
     conns = _load_connections()
     conns["ecc"] = {"ashost": body.ashost, "sysnr": body.sysnr, "client": body.client,
                     "user": body.user, "saprouter": body.saprouter, "saved_at": datetime.now().isoformat()}
     _save_connections(conns)
-    return {"status": "saved", "connection": conns["ecc"]}
+    if body.passwd:
+        _ecc_passwd = body.passwd
+    return {"status": "saved", "connection": conns["ecc"],
+            "session_has_passwd": bool(_ecc_passwd)}
 
 
 @app.post("/api/connections/s4hana", dependencies=[Depends(require_auth)])
 async def save_s4hana_connection(body: S4HANAConnection):
+    """Persist S/4 connection metadata AND keep the password in process
+    memory. Same pattern as ECC save above."""
+    global _s4_passwd
     conns = _load_connections()
     conns["s4hana"] = {"connection_type": body.connection_type, "ashost": body.ashost,
                        "sysnr": body.sysnr, "client": body.client, "user": body.user,
                        "api_url": body.api_url, "saprouter": body.saprouter,
                        "saved_at": datetime.now().isoformat()}
     _save_connections(conns)
-    return {"status": "saved", "connection": conns["s4hana"]}
+    if body.passwd:
+        _s4_passwd = body.passwd
+    return {"status": "saved", "connection": conns["s4hana"],
+            "session_has_passwd": bool(_s4_passwd)}
 
 
 @app.post("/api/connections/ecc/test", dependencies=[Depends(require_auth)])
@@ -2183,23 +2241,45 @@ def _cloudwatch_client():
 
 
 def _list_log_groups():
-    """Return the known set of log groups for the migration platform."""
-    cw = _cloudwatch_client()
+    """Return the known set of log groups for the migration platform.
+
+    Always offers a "local" source (in-memory progress steps + on-disk
+    log files under outputs/<run_id>/) so the UI works without AWS
+    creds. CloudWatch sources are appended only when they actually exist;
+    a missing log group is silently skipped so we don't hand the UI a
+    source that 404s on selection.
+    """
     out = []
-    # Always advertise the ECS + SFN groups. The Lambda group list is
-    # discovered via DescribeLogGroups (so newly-added lambdas appear
-    # automatically without a code change).
-    out.append({"key": "sfn",       "name": _SFN_LOG_GROUP, "label": "Step Functions executions"})
-    out.append({"key": "api",       "name": _ECS_LOG_GROUP, "label": "API server (Fargate)"})
-    if cw:
+    # Local source is always present and free; default for dev.
+    out.append({"key": "local", "name": "local",
+                 "label": "Local (in-memory progress + outputs/)"})
+    cw = _cloudwatch_client()
+    if not cw:
+        return out
+    # CloudWatch is reachable - probe each candidate group's existence
+    # before advertising it. Missing groups are silently skipped so we
+    # don't fail tail_logs with ResourceNotFoundException.
+    def _group_exists(name: str) -> bool:
+        if not name:
+            return False
         try:
-            resp = cw.describe_log_groups(logGroupNamePrefix=_LOG_GROUP_PREFIX, limit=50)
-            for g in resp.get("logGroups", []):
-                name = g.get("logGroupName", "")
-                short = name.replace(_LOG_GROUP_PREFIX, "").replace("-prod", "")
-                out.append({"key": f"lambda-{short}", "name": name, "label": f"Lambda · {short}"})
+            resp = cw.describe_log_groups(logGroupNamePrefix=name, limit=1)
+            return any(g.get("logGroupName") == name for g in resp.get("logGroups", []))
         except Exception:
-            pass
+            return False
+
+    if _group_exists(_SFN_LOG_GROUP):
+        out.append({"key": "sfn", "name": _SFN_LOG_GROUP, "label": "Step Functions executions"})
+    if _group_exists(_ECS_LOG_GROUP):
+        out.append({"key": "api", "name": _ECS_LOG_GROUP, "label": "API server (Fargate)"})
+    try:
+        resp = cw.describe_log_groups(logGroupNamePrefix=_LOG_GROUP_PREFIX, limit=50)
+        for g in resp.get("logGroups", []):
+            name = g.get("logGroupName", "")
+            short = name.replace(_LOG_GROUP_PREFIX, "").replace("-prod", "")
+            out.append({"key": f"lambda-{short}", "name": name, "label": f"Lambda · {short}"})
+    except Exception:
+        pass
     return out
 
 
@@ -2254,7 +2334,9 @@ async def tail_logs(
     cw = _cloudwatch_client()
     sources = {s["key"]: s["name"] for s in _list_log_groups()}
     group = sources.get(source)
-    if cw and group:
+    # The "local" pseudo-source always uses the local fallback below, even
+    # when CloudWatch creds are present. Only real CW groups go to CW.
+    if cw and group and source != "local" and group != "local":
         kwargs = {"logGroupName": group, "limit": min(max(int(limit), 1), 1000)}
         if next_token: kwargs["nextToken"] = next_token
         if start_ms:   kwargs["startTime"] = int(start_ms)
@@ -2304,7 +2386,7 @@ async def download_logs(source: str = "sfn", run_id: Optional[str] = None,
     buf = io.StringIO()
     buf.write(f"# Migrate4HANA logs — source={source} group={group or '(local)'} "
               f"run_id={run_id or '-'} window={hours}h q={q or '-'}\n")
-    if cw and group:
+    if cw and group and source != "local" and group != "local":
         next_tok = None
         total = 0
         try:

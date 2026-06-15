@@ -19,8 +19,11 @@ export default function LiveOpsWrapper() {
 }
 
 function LiveOps({ runId }) {
-  const [source, setSource] = useState('sfn');
-  const [sources, setSources] = useState(['sfn']);
+  // Default to the "local" source — always works, no CloudWatch required.
+  // If the sources endpoint returns CloudWatch groups we'll keep the user
+  // on local until they explicitly switch.
+  const [source, setSource] = useState('local');
+  const [sources, setSources] = useState(['local']);
   const [events, setEvents] = useState([]);
   const [steps, setSteps] = useState([]);
   const [paused, setPaused] = useState(false);
@@ -35,10 +38,10 @@ function LiveOps({ runId }) {
       .then((d) => {
         if (cancelled) return;
         const list = (d.sources || []).map((s) =>
-          typeof s === 'string' ? s : (s.key || s.name || 'sfn'));
-        setSources(list.length ? list : ['sfn']);
+          typeof s === 'string' ? s : (s.key || s.name || 'local'));
+        setSources(list.length ? list : ['local']);
       })
-      .catch(() => { /* default 'sfn' is fine */ });
+      .catch(() => { /* default 'local' is fine */ });
     return () => { cancelled = true; };
   }, []);
 
