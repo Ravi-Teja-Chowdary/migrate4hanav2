@@ -177,21 +177,25 @@ function StageList({ steps }) {
       </div>
     );
   }
+  // Steps carry both `step` (e.g. "pre.scan") and `stage` (e.g. "pre");
+  // we group by the leading stage segment. Be tolerant of either shape.
   const byStage = {};
   for (const s of steps) {
-    const key = (s.step || '').split('.')[0];
-    byStage[key] = s;
+    const stageId = s.stage
+      || (typeof s.step === 'string' ? s.step.split('.')[0] : '')
+      || '';
+    if (stageId) byStage[stageId] = s;
   }
   return (
     <ul className="space-y-2">
       {STAGES.map((st) => {
         const s = byStage[st.id];
-        const status = s?.status || 'pending';
+        const status = normalizeStatus(s?.status);
         return (
           <li key={st.id} className="flex items-center gap-3">
             <Badge status={status} />
             <span className="text-sm flex-1">{st.label}</span>
-            {s?.duration_ms && (
+            {s?.duration_ms != null && (
               <span className="text-xs text-slate-400">{s.duration_ms} ms</span>
             )}
           </li>
@@ -199,6 +203,16 @@ function StageList({ steps }) {
       })}
     </ul>
   );
+}
+
+// Backend writes IN_PROGRESS / OK / FAILED / COMPLETE; UI buckets them.
+function normalizeStatus(s) {
+  const t = String(s || 'pending').toUpperCase();
+  if (t === 'COMPLETE' || t === 'OK' || t === 'SUCCESS')   return 'complete';
+  if (t === 'FAILED'   || t === 'ERROR')                    return 'failed';
+  if (t === 'IN_PROGRESS' || t === 'RUNNING')               return 'running';
+  if (t === 'PENDING') return 'pending';
+  return s ? 'running' : 'pending';
 }
 
 function Badge({ status }) {
@@ -218,8 +232,10 @@ function Badge({ status }) {
 
 function Stats({ stats, steps }) {
   const total = steps?.length || 0;
-  const done = (steps || []).filter((s) =>
-    ['complete', 'ok'].includes(s.status)).length;
+  const done = (steps || []).filter((s) => {
+    const t = String(s.status || '').toUpperCase();
+    return t === 'COMPLETE' || t === 'OK' || t === 'SUCCESS';
+  }).length;
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <Stat label="Steps complete" value={`${done}/${total}`} />

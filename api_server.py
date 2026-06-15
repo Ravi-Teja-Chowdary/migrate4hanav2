@@ -130,17 +130,32 @@ def _client_outputs_dir(client_id: str) -> str:
 
 
 def _add_progress_step(stage, action, status="IN_PROGRESS", details=None, duration_ms=None):
-    """Add a progress step to the real-time telemetry feed."""
+    """Add a progress step to the real-time telemetry feed.
+
+    The step carries both the legacy keys (stage, action, timestamp) and
+    the convenience keys (step, message, ts, phase) that downstream
+    consumers (tail_logs, conversion-progress, the v2 frontend) expect.
+    Keeping all keys in one row means we never lose data through a
+    shape translation."""
     import asyncio as _aio
+    now_iso = datetime.now(timezone.utc).isoformat()
+    now_ms  = int(time.time() * 1000)
+    msg = f"{stage}.{action}" if action else (stage or "")
     step = {
-        "event_id": secrets.token_hex(6),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "stage": stage,
-        "action": action,
-        "status": status,
-        "details": details or {},
+        "event_id":    secrets.token_hex(6),
+        "timestamp":   now_iso,
+        "ts":          now_ms,                # epoch-ms for tail_logs/UI
+        "stage":       stage,
+        "phase":       stage,                 # alias - tail_logs reads this
+        "action":      action,
+        "step":        msg,                   # composite key the UI expects
+        "status":      status,
+        "message":     (details or {}).get("message") if isinstance(details, dict) else None,
+        "details":     details or {},
         "duration_ms": duration_ms,
     }
+    if not step["message"]:
+        step["message"] = msg
     _progress_steps.append(step)
     return step
 
@@ -1286,22 +1301,23 @@ async def conversion_progress(run_id: str):
     # spine telemetry; we read it and pass to summarise_run.
     per_object = {}
     try:
-        # _progress_steps is module-global state populated by the runtime
-        # as the run reports progress; each step has {step, status, details}.
-        # The conversion-progress shape we want is {object: {rows_loaded,
-        # rows_total, rps, status}}, which the spine emits as steps named
-        # spine.<Object>.progress with the relevant payload.
+        # _progress_steps carries normalised step rows (see _add_progress_step).
+        # We accept any of: step row's `step` (e.g. "spine.Customer.progress"),
+        # or the legacy {stage, action} combination, so spines that emit
+        # either shape are picked up.
         for step in _progress_steps:
-            name = step.get("step", "")
+            name = step.get("step") or f"{step.get('stage','')}.{step.get('action','')}"
             details = step.get("details") or {}
             if name.startswith("spine.") and ".progress" in name:
-                obj = name.split(".", 2)[1]
-                per_object[obj] = {
-                    "rows_loaded": int(details.get("rows_loaded", 0)),
-                    "rows_total":  int(details.get("rows_total", 0)),
-                    "rps":         float(details.get("rps", 0) or 0),
-                    "status":      details.get("status", "running"),
-                }
+                parts = name.split(".")
+                if len(parts) >= 2:
+                    obj = parts[1]
+                    per_object[obj] = {
+                        "rows_loaded": int(details.get("rows_loaded", 0) or 0),
+                        "rows_total":  int(details.get("rows_total", 0) or 0),
+                        "rps":         float(details.get("rps", 0) or 0),
+                        "status":      details.get("status", "running"),
+                    }
     except Exception:
         per_object = {}
     return {"run_id": run_id, "rows": summarise_run(per_object)}

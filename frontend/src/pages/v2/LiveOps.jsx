@@ -1,23 +1,49 @@
 // Live ops view (opened in a new tab from the Project page).
 // Shows real-time logs + step events as they stream. Auto-scrolls.
+//
+// Backend shape (from /api/logs/tail): {events: [{ts:int_ms, msg, src, id}], next_token}
+// Backend shape (from /api/progress): {steps: [{event_id, timestamp, ts, stage, action,
+//                                                 step, message, status, details, duration_ms}]}
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
+import ErrorBoundary from '../../components/v2/ErrorBoundary';
 
-export default function LiveOps() {
+export default function LiveOpsWrapper() {
   const { runId } = useParams();
+  return (
+    <ErrorBoundary>
+      <LiveOps runId={runId} />
+    </ErrorBoundary>
+  );
+}
+
+function LiveOps({ runId }) {
   const [source, setSource] = useState('sfn');
   const [sources, setSources] = useState(['sfn']);
   const [events, setEvents] = useState([]);
   const [steps, setSteps] = useState([]);
   const [paused, setPaused] = useState(false);
   const [filter, setFilter] = useState('');
+  const [err, setErr] = useState('');
   const tailEnd = useRef(null);
 
+  // Load available log sources (CloudWatch groups + local fallback).
   useEffect(() => {
-    api.logSources().then((d) => setSources(d.sources || ['sfn'])).catch(() => {});
+    let cancelled = false;
+    api.logSources()
+      .then((d) => {
+        if (cancelled) return;
+        const list = (d.sources || []).map((s) =>
+          typeof s === 'string' ? s : (s.key || s.name || 'sfn'));
+        setSources(list.length ? list : ['sfn']);
+      })
+      .catch(() => { /* default 'sfn' is fine */ });
+    return () => { cancelled = true; };
   }, []);
 
+  // Poll logs + progress. EVERY shape access is defensive; we never let a
+  // missing field crash the page (that was the root cause of the blank page).
   useEffect(() => {
     let cancelled = false;
     let timer = null;
@@ -28,16 +54,24 @@ export default function LiveOps() {
           api.progress(0),
         ]);
         if (cancelled) return;
+        const incoming = Array.isArray(logs?.events) ? logs.events : [];
         setEvents((cur) => {
-          const ids = new Set(cur.map((e) => e.timestamp + '|' + e.message?.slice(0, 60)));
-          const fresh = (logs.events || []).filter(
-            (e) => !ids.has(e.timestamp + '|' + (e.message || '').slice(0, 60)));
+          // Dedup on a stable key. The backend returns id (CloudWatch event
+          // id) when available; fall back to ts + msg prefix otherwise.
+          const idOf = (e) =>
+            e.id || `${e.ts || 0}|${String(e.msg || '').slice(0, 60)}`;
+          const seen = new Set(cur.map(idOf));
+          const fresh = incoming.filter((e) => !seen.has(idOf(e)));
           const next = [...cur, ...fresh];
-          // keep last 2000 lines
           return next.length > 2000 ? next.slice(next.length - 2000) : next;
         });
-        setSteps(prog.steps || []);
-      } catch { /* network blip */ }
+        const incomingSteps = Array.isArray(prog?.steps) ? prog.steps : [];
+        setSteps(incomingSteps);
+        if (logs?.error) setErr(`logs source error: ${logs.error}`);
+        else setErr('');
+      } catch (e) {
+        if (!cancelled) setErr(e?.message || String(e));
+      }
       if (!cancelled && !paused) timer = setTimeout(poll, 2000);
     }
     if (!paused) poll();
@@ -83,18 +117,24 @@ export default function LiveOps() {
         </div>
       </header>
 
+      {err && (
+        <div className="bg-red-900/40 border-b border-red-800 px-4 py-2 text-xs text-red-200">
+          {err}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-0 h-[calc(100vh-49px)]">
         <div className="overflow-y-auto p-4 font-mono text-xs leading-relaxed">
           {events.length === 0 ? (
-            <div className="text-slate-500">Waiting for log events…</div>
+            <div className="text-slate-500">
+              Waiting for log events… (source: {source}; run: {runId})
+            </div>
           ) : (
             <pre className="whitespace-pre-wrap break-words">
               {events.map((e, i) => (
-                <div key={i} className={severityClass(e.level || e.message)}>
-                  <span className="text-slate-500">
-                    {e.timestamp?.slice(0, 19) || ''}
-                  </span>{'  '}
-                  <span>{e.message}</span>
+                <div key={`${e.id || i}`} className={severityClass(e.msg)}>
+                  <span className="text-slate-500">{formatTs(e.ts)}</span>{'  '}
+                  <span>{e.msg || ''}</span>
                 </div>
               ))}
               <div ref={tailEnd} />
@@ -110,15 +150,12 @@ export default function LiveOps() {
           ) : (
             <ul className="space-y-1">
               {steps.slice(-30).map((s, i) => (
-                <li key={i} className="text-xs">
+                <li key={s.event_id || i} className="text-xs">
                   <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
-                    s.status === 'complete' || s.status === 'ok' ? 'bg-emerald-500'
-                    : s.status === 'failed'                       ? 'bg-red-500'
-                    : s.status === 'running'                      ? 'bg-blue-500 animate-pulse'
-                    : 'bg-slate-500'
+                    statusColor(s.status)
                   }`} />
-                  <span className="font-mono">{s.step}</span>
-                  <span className="text-slate-500"> · {s.status}</span>
+                  <span className="font-mono">{s.step || s.stage || '(step)'}</span>
+                  <span className="text-slate-500"> · {s.status || ''}</span>
                 </li>
               ))}
             </ul>
@@ -129,10 +166,27 @@ export default function LiveOps() {
   );
 }
 
-function severityClass(s) {
-  const t = String(s || '').toUpperCase();
+function severityClass(msg) {
+  const t = String(msg || '').toUpperCase();
   if (t.includes('ERROR') || t.includes('CRITICAL') || t.includes('FAIL')) return 'text-red-400';
   if (t.includes('WARN'))                                                  return 'text-amber-300';
-  if (t.includes('SUCCESS') || t.includes('DONE'))                          return 'text-emerald-300';
+  if (t.includes('SUCCESS') || t.includes('DONE') || t.includes(' OK ')) return 'text-emerald-300';
   return 'text-slate-300';
+}
+
+function formatTs(ts) {
+  if (!ts) return '';
+  // ts may be epoch-ms (number) or an ISO string. Handle both.
+  if (typeof ts === 'number') {
+    try { return new Date(ts).toISOString().slice(0, 19); } catch { return ''; }
+  }
+  return String(ts).slice(0, 19);
+}
+
+function statusColor(status) {
+  const s = String(status || '').toUpperCase();
+  if (s === 'COMPLETE' || s === 'OK' || s === 'SUCCESS')   return 'bg-emerald-500';
+  if (s === 'FAILED'   || s === 'ERROR')                    return 'bg-red-500';
+  if (s === 'IN_PROGRESS' || s === 'RUNNING')               return 'bg-blue-500 animate-pulse';
+  return 'bg-slate-500';
 }
