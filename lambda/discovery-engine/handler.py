@@ -90,7 +90,30 @@ def get_sap_connection(override_params=None):
     for opt in ("gwhost", "gwserv", "saprouter"):
         if conn_params.get(opt):
             kwargs[opt] = conn_params[opt]
-    connection = Connection(**kwargs)
+
+    # Non-Unicode SAP systems (IDES EHP8, classic ECC 6.0 < EHP6 etc.) run
+    # codepage 1100 (SAP_LATIN1). Without an explicit hint, pyrfc on
+    # Windows negotiates codepage 4103 (UTF-16LE) and the server then
+    # responds with RFC_CONVERSION_FAILURE (rc=22) during handshake.
+    # Honor M4H_ECC_CODEPAGE env / codepage secret field; otherwise let
+    # the SDK pick.
+    codepage = (
+        (conn_params.get("codepage") or "").strip()
+        or os.environ.get("M4H_ECC_CODEPAGE", "").strip()
+    )
+    if codepage:
+        kwargs["codepage"] = codepage
+    try:
+        connection = Connection(**kwargs)
+    except Exception as e:
+        msg = str(e).lower()
+        if "rfc_conversion_failure" in msg or "codepage" in msg:
+            logger.error(
+                "RFC codepage handshake failed (%s). Your ECC is likely "
+                "non-Unicode; set M4H_ECC_CODEPAGE=1100 (or 4103 for Unicode) "
+                "and retry.", e
+            )
+        raise
 
     logger.info(f"RFC connection established to {ashost} client {conn_params['client']}")
     return connection

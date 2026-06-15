@@ -568,6 +568,26 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                 if _s4_passwd:
                     env["M4H_TARGET_PASSWD"] = _s4_passwd
 
+            # Non-Unicode ECC handshake. Default to codepage 1100 (SAP_LATIN1)
+            # which is what every IDES EHP < 8 Unicode-disabled system runs;
+            # the saved connection's `codepage` field overrides this. Without
+            # this hint pyrfc on Windows negotiates 4103 (UTF-16LE) and the
+            # server replies RFC_CONVERSION_FAILURE (rc=22) during handshake.
+            # MFC_CODEPAGE is read natively by the NW RFC SDK, so every
+            # handler benefits without per-handler changes.
+            ecc_codepage = (ecc_conf.get("codepage") or "").strip()
+            if not ecc_codepage:
+                # Heuristic default: most CAL IDES profiles + classic ECC 6.0
+                # are non-Unicode 1100. Unicode systems (EHP8+ Unicode, S/4)
+                # ignore the hint, so this is safe as a global default.
+                ecc_codepage = os.environ.get("M4H_ECC_CODEPAGE", "1100")
+            env["M4H_ECC_CODEPAGE"] = ecc_codepage
+            env["MFC_CODEPAGE"] = ecc_codepage
+            _add_progress_step("connection",
+                               f"RFC codepage set to {ecc_codepage} (override with the saved "
+                               f"connection's codepage field or M4H_ECC_CODEPAGE env)",
+                               "INFO")
+
             # Stream stdout line-by-line for real-time progress
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
@@ -735,6 +755,10 @@ class ECCConnection(BaseModel):
     user: str = ""
     passwd: str = ""
     saprouter: str = ""
+    # SAP codepage hint for the RFC handshake. 1100 = SAP_LATIN1 (non-Unicode,
+    # the default for IDES EHP < 8 and classic ECC 6.0). 4103 = UTF-16LE
+    # (Unicode-enabled ECC). Leave blank to let the SDK pick.
+    codepage: str = ""
 
 class S4HANAConnection(BaseModel):
     connection_type: str = "rfc"
@@ -1495,7 +1519,8 @@ async def save_ecc_connection(body: ECCConnection):
     global _ecc_passwd
     conns = _load_connections()
     conns["ecc"] = {"ashost": body.ashost, "sysnr": body.sysnr, "client": body.client,
-                    "user": body.user, "saprouter": body.saprouter, "saved_at": datetime.now().isoformat()}
+                    "user": body.user, "saprouter": body.saprouter,
+                    "codepage": body.codepage, "saved_at": datetime.now().isoformat()}
     _save_connections(conns)
     if body.passwd:
         _ecc_passwd = body.passwd
