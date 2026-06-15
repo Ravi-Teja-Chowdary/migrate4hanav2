@@ -1,0 +1,2669 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_INSPECTIONPLAN_CREATE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "GROUP",
+      "optional": false,
+      "struct": "BAPI1191_TSK_C",
+      "text": "Key for Task List Group"
+    },
+    {
+      "kind": "E",
+      "name": "GROUPCOUNTER",
+      "optional": false,
+      "struct": "BAPI1191_TSK_C",
+      "text": "Group Counter"
+    },
+    {
+      "kind": "I",
+      "name": "PROFILE",
+      "optional": true,
+      "struct": "BAPI1012_CONTROL_DATA",
+      "text": "Profile To Be Used"
+    },
+    {
+      "kind": "I",
+      "name": "TESTRUN",
+      "optional": true,
+      "struct": "BAPIFLAG",
+      "text": "Switch to Simulation Mode for Write BAPIs"
+    },
+    {
+      "kind": "T",
+      "name": "INSPCHARACTERISTIC",
+      "optional": true,
+      "struct": "BAPI1191_CHA_C",
+      "text": "Inspection Characteristics in CREATE-BAPI for Inspection Plans"
+    },
+    {
+      "kind": "T",
+      "name": "INSP_CHAR_VALUES",
+      "optional": true,
+      "struct": "BAPI1191_CHV_C",
+      "text": "Specific Insp. Characteristic Specifications in CREATE_BAPI for Insp. Plans"
+    },
+    {
+      "kind": "T",
+      "name": "MATERIALTASKALLOCATION",
+      "optional": true,
+      "struct": "BAPI1191_MTK_C",
+      "text": "Material-Task List Assignment in CREATE_BAPI for Inspection Plans"
+    },
+    {
+      "kind": "T",
+      "name": "OPERATION",
+      "optional": true,
+      "struct": "BAPI1191_OPR_C",
+      "text": "Operations in CREATE-BAPI for Inspection Plans"
+    },
+    {
+      "kind": "T",
+      "name": "PRODUCTIONRESOURCE",
+      "optional": true,
+      "struct": "BAPI1191_PRT_C",
+      "text": "PRT Assignments in CREATE_BAPI for Inspection Plans"
+    },
+    {
+      "kind": "T",
+      "name": "REFERENCEOPERATION",
+      "optional": true,
+      "struct": "BAPI1191_REF_OPR_C",
+      "text": "Ref. Operation Set Ref. in CREATE_BAPI for Insp. Plans"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": true,
+      "struct": "BAPIRET2",
+      "text": "Return Parameter"
+    },
+    {
+      "kind": "T",
+      "name": "TASK",
+      "optional": false,
+      "struct": "BAPI1191_TSK_C",
+      "text": "Task List Header Data in CREATE-BAPI for Inspection Plans"
+    },
+    {
+      "kind": "T",
+      "name": "TEXT",
+      "optional": true,
+      "struct": "BAPI1012_TXT_C",
+      "text": "Long Text Lines for Inspection Plans"
+    },
+    {
+      "kind": "T",
+      "name": "TEXTALLOCATION",
+      "optional": true,
+      "struct": "BAPI1191_TXT_HDR_C",
+      "text": "Text Assignments in CREATE-BAPI for Inspection Plans"
+    }
+  ],
+  "structs": {
+    "BAPI1012_CONTROL_DATA": [
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "PROFILE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BOM_USAGE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "APPLICATION",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPI1012_TXT_C": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "FORMAT_COL",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 132,
+        "name": "TEXT_LINE",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPI1191_CHA_C": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TASK_LIST_GROUP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GROUP_COUNTER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "OPERATION_ID",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "INSPCHAR",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO_TO",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_TO_DATE",
+        "position": 9,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "QUANTITATIVE_IND",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PRESET_CTRL_INDS_KEY",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "MSTR_CHAR",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PMSTR_CHAR",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHA_MASTER_IMPORT_MODUS",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "CHAR_DESCR",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "METHOD",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PMETHOD",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TOLERANCE_KEY",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MEAS_VALUE_CONFIRM_IND",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ATTRIBUTE_REQUIRED_IND",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "UP_TOL_LMT_IND",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LW_TOL_LMT_IND",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TARGET_VAL_CHECK_IND",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SCOPE_IND",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LONG_TERM_INSP_IND",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RESULT_RECORDING_TYPE",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DOCU_REQU",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CONFIRMATION_CATEGORY",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADD_SAMPLE_QUANTITY",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DESTRUCTIVE_INSP_IND",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FORMULA_IND",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SAMPLING_PROCEDURE_IND",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "QSCORE_AND_SHARE_RELEVANT",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEFECT_NO_CONFIRMATION",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INSP_TOOL_IND",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AUTO_DEFCT_RECORDING",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHANGE_DOCUMENTS_REQ",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SPC_IND",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRINT_IND",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "CH_WGT_COD",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PHYS_SMPL",
+        "position": 42,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "INSPECTOR_QUALIF",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INFOFIELD1",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "INFOFIELD2",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "INFOFIELD3",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "CHARACTERISTIC_NAME",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "RES_ORG",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "SHARE_CALC",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ITEM_NO_OF_PRODUCTION_RESOURCE",
+        "position": 50,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DEC_PLACES",
+        "position": 51,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "MEAS_UNIT",
+        "position": 52,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MEAS_UNIT_ISO",
+        "position": 53,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "TARGET_VAL",
+        "position": 54,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "UP_TOL_LMT",
+        "position": 55,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "LW_TOL_LMT",
+        "position": 56,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NO_OF_VALUE_CLASSES",
+        "position": 57,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "CLASS_WIDTH",
+        "position": 58,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "CLASS_MIDPOINT",
+        "position": 59,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "UP_LMT_1",
+        "position": 60,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "LW_LMT_1",
+        "position": 61,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "UP_LMT_2",
+        "position": 62,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "LW_LMT_2",
+        "position": 63,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "UP_PLS_LMT",
+        "position": 64,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "LW_PLS_LMT",
+        "position": 65,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FORMULA_CHECK_BY_SAP",
+        "position": 66,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "FORMULA_FIELD_1",
+        "position": 67,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "FORMULA_FIELD_2",
+        "position": 68,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "SEL_SET1",
+        "position": 69,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PSEL_SET1",
+        "position": 70,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAT_TYPE2",
+        "position": 71,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CODE_GROUP2",
+        "position": 72,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAT_TYPE3",
+        "position": 73,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CODE_GROUP3",
+        "position": 74,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAT_TYPE4",
+        "position": 75,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CODE_GROUP4",
+        "position": 76,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAT_TYPE5",
+        "position": 77,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CODE_GROUP5",
+        "position": 78,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DEF_CODE_GRP_GENERAL",
+        "position": 79,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DEF_CODE_GENERAL",
+        "position": 80,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LW_DEF_CODE_GRP",
+        "position": 81,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "LW_DEF_CODE",
+        "position": 82,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "UP_DEF_CODE_GRP",
+        "position": 83,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "UP_DEF_CODE",
+        "position": 84,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "SMPL_PROCEDURE",
+        "position": 85,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SMPL_UNIT",
+        "position": 86,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SMPL_UNIT_ISO",
+        "position": 87,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "SMPL_QUANT",
+        "position": 88,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SPC_CRITERION_KEY",
+        "position": 89,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DYN_MODIF_RULE",
+        "position": 90,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DYN_MODIF_REF_CHA",
+        "position": 91,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DYN_MODIF_BY_VENDOR",
+        "position": 92,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DYN_MODIF_BY_MANUFAC",
+        "position": 93,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DYN_MODIF_BY_CUSTOMR",
+        "position": 94,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "INPPROC",
+        "position": 95,
+        "type": "C"
+      }
+    ],
+    "BAPI1191_CHV_C": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TASK_LIST_GROUP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GROUP_COUNTER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "OPERATION_ID",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "INSPCHAR",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "NO_OF_SPEC_VALUE",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM_DATE",
+        "position": 8,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO_TO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_TO_DATE",
+        "position": 10,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VENDOR",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "CUSTOMER",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "SEARCH_FIELD",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DEC_PLACES",
+        "position": 17,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MESURE_UNIT_QUANT",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MEAS_UNIT_ISO",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "TARGET_VAL",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "UP_TOL_LMT",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "LW_TOL_LMT",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NO_OF_VALUE_CLASSES",
+        "position": 23,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "CLASS_WIDTH",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "CLASS_MIDPOINT",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "UP_LMT_1",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "LW_LMT_1",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "UP_LMT_2",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "LW_LMT_2",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "UP_PLS_LMT",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "LW_PLS_LMT",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "SEL_SET1",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PSEL_SET1",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAT_TYPE2",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CODE_GROUP2",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAT_TYPE3",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CODE_GROUP3",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAT_TYPE4",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CODE_GROUP4",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CAT_TYPE5",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CODE_GROUP5",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ITEM_NO_OF_PRODUCTION_RESOURCE",
+        "position": 42,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INFOFIELD1",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "INFOFIELD2",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "INFOFIELD3",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "MS_OBJECT",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "MS_OBJTYPE",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MS_REF",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 49,
+        "type": "C"
+      }
+    ],
+    "BAPI1191_MTK_C": [
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TASK_LIST_GROUP",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GROUP_COUNTER",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO_TO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_TO_DATE",
+        "position": 8,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "VENDOR",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "CUSTOMER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "SEARCH_FIELD",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXTERNAL",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERSION",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "MS_OBJECT",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "MS_OBJTYPE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 18,
+        "type": "C"
+      }
+    ],
+    "BAPI1191_OPR_C": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TASK_LIST_GROUP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GROUP_COUNTER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO_TO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_TO_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "OPERATION_ID",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CONTROL_KEY",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "OBJ_ID",
+        "position": 11,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "OBJECT_TYPE_CIM_RESOURCE",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "WORK_CNTR",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "STANDARD_TEXT_KEY",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DESCRIPTION",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "OPERATION_MEASURE_UNIT",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "OPERATION_MEASURE_UNIT_ISO",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "DENOMINATOR",
+        "position": 19,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "NOMINATOR",
+        "position": 20,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "BASE_QUANTITY",
+        "position": 21,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE_01",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_01",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_01_ISO",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "STD_VALUE_01",
+        "position": 25,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE_02",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_02",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_02_ISO",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "STD_VALUE_02",
+        "position": 29,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE_03",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_03",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_03_ISO",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "STD_VALUE_03",
+        "position": 33,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE_04",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_04",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_04_ISO",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "STD_VALUE_04",
+        "position": 37,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE_05",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_05",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_05_ISO",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "STD_VALUE_05",
+        "position": 41,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ACTTYPE_06",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_06",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STD_UNIT_06_ISO",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "STD_VALUE_06",
+        "position": 45,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "USERFIELDS_KEYWORD_ID",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "USERFIELD_CH20_00",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "USERFIELD_CH20_01",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "USERFIELD_CH10_02",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "USERFIELD_CH10_03",
+        "position": 50,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "USERFIELD_QUAN_04",
+        "position": 51,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "USERFIELD_UNIT_04",
+        "position": 52,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "USERFIELD_UNIT_04_ISO",
+        "position": 53,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "USERFIELD_QUAN_05",
+        "position": 54,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "USERFIELD_UNIT_05",
+        "position": 55,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "USERFIELD_UNIT_05_ISO",
+        "position": 56,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 28,
+        "name": "USERFIELD_CURR_06",
+        "position": 57,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "USERFIELD_CURRENCY_06",
+        "position": 58,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "USERFIELD_CURRENCY_06_ISO",
+        "position": 59,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 28,
+        "name": "USERFIELD_CURR_07",
+        "position": 60,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "USERFIELD_CURRENCY_07",
+        "position": 61,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "USERFIELD_CURRENCY_07_ISO",
+        "position": 62,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "USERFIELD_DATE_08",
+        "position": 63,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "USERFIELD_DATE_09",
+        "position": 64,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "USERFIELD_FLAG_10",
+        "position": 65,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "USERFIELD_FLAG_11",
+        "position": 66,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "RECORDING_VIEW",
+        "position": 67,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INSP_POINT_COMPLT_FLOW_VARIANT",
+        "position": 68,
+        "type": "C"
+      }
+    ],
+    "BAPI1191_PRT_C": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TASK_LIST_GROUP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GROUP_COUNTER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PRT_ITEM_COUNT",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM",
+        "position": 5,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO_TO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_TO_DATE",
+        "position": 7,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "OPERATION_ID",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "OBJECT_TYPE_CIM_RESOURCE",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "OBJECT_ID_CIM_RESOURCE",
+        "position": 12,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "OBJECT_OF_TASK_LIST",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ITEM_NO_OF_PRODUCTION_RESOURCE",
+        "position": 14,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CTRL_KEY",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CREATE_LOAD_RECS",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "START_REF_DATE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "START_OFFSET",
+        "position": 18,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "START_OFFSET_UNIT",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "START_OFFSET_UNIT_ISO",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "END_REF_DATE",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "END_OFFSET",
+        "position": 22,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "END_OFFSET_UNIT",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "END_OFFSET_UNIT_ISO",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PRT_MEASURE_UNIT",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PRT_MEASURE_UNIT_ISO",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "STD_VALUE_FOR_PRT_QTY",
+        "position": 27,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "FORMULA_TOT_QTY",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PRT_USAGE_VALUE_UNIT",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PRT_USAGE_VALUE_UNIT_ISO",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "STD_USAGE_VALUE_FOR_PRT",
+        "position": 31,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "FORMULA_TOT_USAGE",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "STD_TEXT_KEY",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DESCRIPTION",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRT_CATEGORY",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 33,
+        "name": "PRT_NUMBER",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PRT_PLANT",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MATERIAL",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "MISCELLANEOUS",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_TYPE",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENT_NUMBER",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_PART",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENT_VERSION",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "EQUIPMENT",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_EXTERNAL",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MATERIAL_GUID",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MATERIAL_VERSION",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MATERIAL_LONG",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "PRT_NUMBER_LONG",
+        "position": 49,
+        "type": "C"
+      }
+    ],
+    "BAPI1191_REF_OPR_C": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TASK_LIST_GROUP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GROUP_COUNTER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO_TO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_TO_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "OPERATION_ID",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REFERENCED_TASK_LIST_GROUP",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "REFERENCED_GROUP_COUNTER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "REFERENCED_ACTIVITY_INCREMENT",
+        "position": 12,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "STANDARD_TEXT_KEY",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DESCRIPTION",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI1191_TSK_C": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TASK_LIST_GROUP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GROUP_COUNTER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO_TO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_TO_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TASK_LIST_USAGE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TASK_LIST_STATUS",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TASK_MEASURE_UNIT",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TASK_MEASURE_UNIT_ISO",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "LOT_SIZE_FROM",
+        "position": 13,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 13,
+        "name": "LOT_SIZE_TO",
+        "position": 14,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "RESP_PLANNER_GROUP",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DESCRIPTION",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "OLD_NUMBER_OF_TASK_LIST",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RECALC_STD_VALUES",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DYN_MODIF_LEVEL",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DYN_MODIF_RULE",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DYN_MODIF_BY_VENDOR",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DYN_MODIF_BY_MANUFACT",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DYN_MODIF_BY_CUSTOMR",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "SAMPLE_DRAWING_PROCEDURE",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "IND_UNITS_EXT_NUMBERING",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "IDENT_KEY",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INSPPOINT_PARTIALLOT_ASSGNMT",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHANGE_RULE",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "OBJECT_CHANGE_TYPE",
+        "position": 29,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PLANNING_WORK_CENTER",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MS_FLAG",
+        "position": 31,
+        "type": "C"
+      }
+    ],
+    "BAPI1191_TXT_HDR_C": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "OBJECT_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGE_NO_TO",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_TO_DATE",
+        "position": 5,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEL_IND",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TASK_LIST_GROUP",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GROUP_COUNTER",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "OPERATION_ID",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ITEM_NO_OF_PRODUCTION_RESOURCE",
+        "position": 11,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PRT_ITEM_COUNT",
+        "position": 12,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "INSPCHAR",
+        "position": 13,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHA_TEXT_TYPE",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGU_ISO",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LINE_FROM",
+        "position": 17,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LINE_TO",
+        "position": 18,
+        "type": "N"
+      }
+    ],
+    "BAPIFLAG": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BAPIFLAG",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ]
+  }
+}

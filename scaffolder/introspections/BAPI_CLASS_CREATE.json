@@ -1,0 +1,950 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_CLASS_CREATE",
+  "params": [
+    {
+      "kind": "I",
+      "name": "CHANGENUMBER",
+      "optional": true,
+      "struct": "BAPI1003_KEY",
+      "text": "Change Number"
+    },
+    {
+      "kind": "I",
+      "name": "CLASSADDITIONAL",
+      "optional": true,
+      "struct": "BAPI1003_ADD",
+      "text": "Additional Data"
+    },
+    {
+      "kind": "I",
+      "name": "CLASSBASICDATA",
+      "optional": false,
+      "struct": "BAPI1003_BASIC",
+      "text": "Basic Data"
+    },
+    {
+      "kind": "I",
+      "name": "CLASSDOCUMENT",
+      "optional": true,
+      "struct": "BAPI1003_DOCU",
+      "text": "Document Information"
+    },
+    {
+      "kind": "I",
+      "name": "CLASSNUMNEW",
+      "optional": false,
+      "struct": "BAPI_CLASS_KEY",
+      "text": "Class"
+    },
+    {
+      "kind": "I",
+      "name": "CLASSSTANDARD",
+      "optional": true,
+      "struct": "BAPI1003_STAND",
+      "text": "Standards Data"
+    },
+    {
+      "kind": "I",
+      "name": "CLASSTYPENEW",
+      "optional": false,
+      "struct": "BAPI_CLASS_KEY",
+      "text": "Class Type"
+    },
+    {
+      "kind": "I",
+      "name": "TESTRUN",
+      "optional": true,
+      "struct": "TESTRUN",
+      "text": "Switch to Simulation Mode for Write BAPIs"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTOVERWRITE",
+      "optional": true,
+      "struct": "BAPI1003_CHARACT_OVERWR",
+      "text": "Overwritten Characteristic Attributes"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTVALUEOVERWRITE",
+      "optional": true,
+      "struct": "BAPI1003_CHARACT_VALUE_OVR",
+      "text": "Overwritten Characteristic Values"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTVALUETEXTOVR",
+      "optional": true,
+      "struct": "BAPI1003_CHARVALTEXT",
+      "text": "Overwritten Characteristic Descriptions"
+    },
+    {
+      "kind": "T",
+      "name": "CLASSCHARACTERISTICS",
+      "optional": true,
+      "struct": "BAPI1003_CHARACT",
+      "text": "Characteristics"
+    },
+    {
+      "kind": "T",
+      "name": "CLASSDESCRIPTIONS",
+      "optional": false,
+      "struct": "BAPI1003_CATCH",
+      "text": "Class Description / Keywords"
+    },
+    {
+      "kind": "T",
+      "name": "CLASSLONGTEXTS",
+      "optional": true,
+      "struct": "BAPI1003_LONGTEXT",
+      "text": "Long Texts"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Return Parameters"
+    }
+  ],
+  "structs": {
+    "BAPI1003_ADD": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BOM_USAGE_OK",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ISOCODE_UNIT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BASE_UOM",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RES_POSTYPE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DEPARTMENT_VIEW",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "REQ_COMPONENT",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MULTIPLE_SELECT",
+        "position": 7,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_BASIC": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "CLASSGROUP",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DEPARTMENT_VIEW",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_FROM",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALID_TO",
+        "position": 5,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "AUTHMAINTAIN",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "AUTHCLASSIFY",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "AUTHSEARCH",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SAME_VALUE_NO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SAME_VALUE_W",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SAME_VALUE_E",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LOCAL_CLASS",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "KATALOG",
+        "position": 13,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_CATCH": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGU_ISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "CATCHWORD",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETE_FLAG",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "INSERT_BEFORE",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_CHARACT": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "NAME_CHAR",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "CODE_LETTER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "CHARACT_ORIGIN",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DEPARTMENT_VIEW",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "INSERT_BEFORE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DELETEVALUE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRINT_RELEV",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SELECT_RELEV",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DISPLAY_RELEV",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INDEX_RELEV",
+        "position": 10,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_CHARACT_OVERWR": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "NAME_CHAR",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ENTRY_OBLIGATORY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INTERVALS_ALLOWED",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "UNFORMATED",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PROP_TEMPL",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DISPL_VALS",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADDITIONAL_VAL",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENT_NUMBER",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_TYPE",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_PART",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENT_VERSION",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLRESET_AL",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INPUT",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_DISPLAY",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_CHARACT_VALUE_OVR": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "NAME_CHAR",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VALUE_BEF",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHAR_VALUE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEFAULT_FLAG",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENT_NUMBER",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_TYPE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_PART",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENT_VERSION",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLDELETE",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHAR_VALUE_HIGH",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLRESET_AL",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "VALUE_BEF_LONG",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "CHAR_VALUE_LONG",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "CHAR_VALUE_HIGH_LONG",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_CHARVALTEXT": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARACT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VALUE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VALDESCR",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGU_ISO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLDELETE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "VALUE_LONG",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "VALDESCR_LONG",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_DOCU": [
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENT_NUMBER",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_PART",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENT_VERSION",
+        "position": 4,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_KEY": [
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "CLASSNUM",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CLASSTYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "OBJECT",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "OBJECTTABLE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "KEYDATE",
+        "position": 5,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGENUMBER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STDCLASS",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLAG",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "OBJECT_GUID",
+        "position": 10,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 90,
+        "name": "OBJECT_LONG",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_LONGTEXT": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TEXT_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGU_ISO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "TEXT_DESCR",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TEXT_FORM",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 132,
+        "name": "TEXT_LINE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLDELETE",
+        "position": 7,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_STAND": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "STANDARD_NAME",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "STANDARD_NO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DATE_OF_ISSUE",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DATE_OF_VERSION",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "NO_OF_VERSION",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "TABULAR_LAYOUT",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "BAPI_CLASS_KEY": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CLASSTYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "CLASSNUM",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "TESTRUN": []
+  }
+}

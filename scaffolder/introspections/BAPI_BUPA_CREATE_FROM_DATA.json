@@ -1,0 +1,3066 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_BUPA_CREATE_FROM_DATA",
+  "params": [
+    {
+      "kind": "E",
+      "name": "BUSINESSPARTNER",
+      "optional": false,
+      "struct": "BAPIBUS1006_HEAD",
+      "text": "Business Partner Number"
+    },
+    {
+      "kind": "I",
+      "name": "ACCEPT_ERROR",
+      "optional": true,
+      "struct": "BAPI4001_1",
+      "text": "Accept Regional Structure Check Errors with Warnings"
+    },
+    {
+      "kind": "I",
+      "name": "ADDRESSDATA",
+      "optional": true,
+      "struct": "BAPIBUS1006_ADDRESS",
+      "text": "Address"
+    },
+    {
+      "kind": "I",
+      "name": "ADDRESS_DEP_ATTR_DATA",
+      "optional": true,
+      "struct": "BAPIBUS1006_ADDR_DEP_ATT",
+      "text": "SAP-GP: BAPI Structure for Address-Dependent Attributes"
+    },
+    {
+      "kind": "I",
+      "name": "BUSINESSPARTNEREXTERN",
+      "optional": true,
+      "struct": "BAPIBUS1006_HEAD",
+      "text": "Business Partner Number"
+    },
+    {
+      "kind": "I",
+      "name": "CENTRALDATA",
+      "optional": false,
+      "struct": "BAPIBUS1006_CENTRAL",
+      "text": "Central Data"
+    },
+    {
+      "kind": "I",
+      "name": "CENTRALDATAGROUP",
+      "optional": true,
+      "struct": "BAPIBUS1006_CENTRAL_GROUP",
+      "text": "Central Data, Group"
+    },
+    {
+      "kind": "I",
+      "name": "CENTRALDATAORGANIZATION",
+      "optional": true,
+      "struct": "BAPIBUS1006_CENTRAL_ORGAN",
+      "text": "Central Data, Organization"
+    },
+    {
+      "kind": "I",
+      "name": "CENTRALDATAPERSON",
+      "optional": true,
+      "struct": "BAPIBUS1006_CENTRAL_PERSON",
+      "text": "Central Data, Person"
+    },
+    {
+      "kind": "I",
+      "name": "DUPLICATE_MESSAGE_TYPE",
+      "optional": true,
+      "struct": "BAPIBUS1006_HEAD",
+      "text": "Message Type Control"
+    },
+    {
+      "kind": "I",
+      "name": "PARTNERCATEGORY",
+      "optional": false,
+      "struct": "BAPIBUS1006_HEAD",
+      "text": "Business Partner Category"
+    },
+    {
+      "kind": "I",
+      "name": "PARTNERGROUP",
+      "optional": true,
+      "struct": "BAPIBUS1006_HEAD",
+      "text": "Business Partner Grouping"
+    },
+    {
+      "kind": "T",
+      "name": "ADDRESSDUPLICATES",
+      "optional": true,
+      "struct": "BAPIBUS1006_ADDRESS_DUPLICATES",
+      "text": "Address Duplicates"
+    },
+    {
+      "kind": "T",
+      "name": "ADDRESSNOTES",
+      "optional": true,
+      "struct": "BAPIAD_REM",
+      "text": "Address Notes"
+    },
+    {
+      "kind": "T",
+      "name": "COMMUNICATIONNOTES",
+      "optional": true,
+      "struct": "BAPICOMREM",
+      "text": "Notes on Communication"
+    },
+    {
+      "kind": "T",
+      "name": "COMMUNICATIONNOTESNONADDRESS",
+      "optional": true,
+      "struct": "BAPICOMREM",
+      "text": "Notes on Communication Types (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "COMMUNICATIONUSAGE",
+      "optional": true,
+      "struct": "BAPIADUSE",
+      "text": "Communication Usages (BAS)"
+    },
+    {
+      "kind": "T",
+      "name": "COMMUNICATIONUSAGENONADDRESS",
+      "optional": true,
+      "struct": "BAPIADUSE",
+      "text": "Communication Usages (Address-Independent, BAS)"
+    },
+    {
+      "kind": "T",
+      "name": "E_MAILDATA",
+      "optional": true,
+      "struct": "BAPIADSMTP",
+      "text": "Internet Addresses"
+    },
+    {
+      "kind": "T",
+      "name": "E_MAILDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADSMTP",
+      "text": "E-Mail Addresses (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "FAXDATA",
+      "optional": true,
+      "struct": "BAPIADFAX",
+      "text": "Fax Numbers"
+    },
+    {
+      "kind": "T",
+      "name": "FAXDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADFAX",
+      "text": "Fax Numbers (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "PAGADDRESSDATA",
+      "optional": true,
+      "struct": "BAPIADPAG",
+      "text": "Pager Numbers"
+    },
+    {
+      "kind": "T",
+      "name": "PAGADDRESSDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADPAG",
+      "text": "Pager Numbers (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "PRTADDRESSDATA",
+      "optional": true,
+      "struct": "BAPIADPRT",
+      "text": "Printer Addresses"
+    },
+    {
+      "kind": "T",
+      "name": "PRTADDRESSDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADPRT",
+      "text": "PRT Addresses (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": true,
+      "struct": "BAPIRET2",
+      "text": "Messages"
+    },
+    {
+      "kind": "T",
+      "name": "RFCADDRESSDATA",
+      "optional": true,
+      "struct": "BAPIADRFC",
+      "text": "RFC Addresses"
+    },
+    {
+      "kind": "T",
+      "name": "RFCADDRESSDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADRFC",
+      "text": "RFC Addresses (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "RMLADDRESSDATA",
+      "optional": true,
+      "struct": "BAPIADRML",
+      "text": "RemoteMail Addresses"
+    },
+    {
+      "kind": "T",
+      "name": "RMLADDRESSDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADRML",
+      "text": "RML Addresses (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "SSFADDRESSDATA",
+      "optional": true,
+      "struct": "BAPIADSSF",
+      "text": "SSF Addresses"
+    },
+    {
+      "kind": "T",
+      "name": "SSFADDRESSDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADSSF",
+      "text": "SSF Addresses (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "TELEFONDATA",
+      "optional": true,
+      "struct": "BAPIADTEL",
+      "text": "Telephone Numbers"
+    },
+    {
+      "kind": "T",
+      "name": "TELEFONDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADTEL",
+      "text": "Telephone Numbers (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "TELETEXDATA",
+      "optional": true,
+      "struct": "BAPIADTTX",
+      "text": "Teletex Numbers"
+    },
+    {
+      "kind": "T",
+      "name": "TELETEXDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADTTX",
+      "text": "Teletex Numbers (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "TELEXDATA",
+      "optional": true,
+      "struct": "BAPIADTLX",
+      "text": "Telex Numbers"
+    },
+    {
+      "kind": "T",
+      "name": "TELEXDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADTLX",
+      "text": "Telex Numbers (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "URIADDRESSDATA",
+      "optional": true,
+      "struct": "BAPIADURI",
+      "text": "URI Addresses"
+    },
+    {
+      "kind": "T",
+      "name": "URIADDRESSDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADURI",
+      "text": "URI Addresses (Address-Independent)"
+    },
+    {
+      "kind": "T",
+      "name": "X400ADDRESSDATA",
+      "optional": true,
+      "struct": "BAPIADX400",
+      "text": "X400 Addresses"
+    },
+    {
+      "kind": "T",
+      "name": "X400ADDRESSDATANONADDRESS",
+      "optional": true,
+      "struct": "BAPIADX400",
+      "text": "X.400 Addresses (Address-Independent)"
+    }
+  ],
+  "structs": {
+    "BAPI4001_1": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "OBJTYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "OBJKEY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "EXTENSION",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CONTEXT",
+        "position": 4,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ADDR_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACCEPT_ERR",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHECK_ADDR",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SAVE_ADDR",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CURRENTCOM",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TIMEDEPCOM",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CONS_INSERT",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPIADFAX": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COUNTRYISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FAX",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "EXTENSION",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FAX_NO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "SENDER_NO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FAX_GROUP",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "R_3_USER",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 12,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 16,
+        "type": "C"
+      }
+    ],
+    "BAPIADPAG": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COUNTRYISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PAGER_TYPE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "PAGER",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "PAGER_NO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CALLER_NO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "R_3_USER",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 11,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 15,
+        "type": "C"
+      }
+    ],
+    "BAPIADPRT": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PRINT_DEST",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 9,
+        "type": "C"
+      }
+    ],
+    "BAPIADRFC": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "LOG_DEST",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "R_3_USER",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 10,
+        "type": "C"
+      }
+    ],
+    "BAPIADRML": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYMB_DEST",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "REC_TYPE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "R_MAIL_CLT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "R_MAIL",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "R_3_USER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 9,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 13,
+        "type": "C"
+      }
+    ],
+    "BAPIADSMTP": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 241,
+        "name": "E_MAIL",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "EMAIL_SRCH",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "R_3_USER",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ENCODE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TNEF",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 9,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 13,
+        "type": "C"
+      }
+    ],
+    "BAPIADSSF": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DUMMY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "RFCDEST",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 132,
+        "name": "SSFIDSHORT",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SSF_NS",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 132,
+        "name": "SSF_PROF",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "SSFIDPART1",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "SSFIDPART2",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "SSFIDPART3",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "SSFIDPART4",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "SSFIDPART5",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "SSFIDPART6",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "SSFIDPART7",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "SSFIDPART8",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 48,
+        "name": "SSFIDPART9",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 22,
+        "type": "C"
+      }
+    ],
+    "BAPIADTEL": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COUNTRYISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "TELEPHONE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "EXTENSION",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "TEL_NO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CALLER_NO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "R_3_USER",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 11,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 15,
+        "type": "C"
+      }
+    ],
+    "BAPIADTLX": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COUNTRYISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "TELEX_NO",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "R_3_USER",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 8,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 12,
+        "type": "C"
+      }
+    ],
+    "BAPIADTTX": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COUNTRYISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "TELETEX",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "R_3_USER",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 8,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 12,
+        "type": "C"
+      }
+    ],
+    "BAPIADURI": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "URI_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 132,
+        "name": "URI",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "URI_PART1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "URI_PART2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "URI_PART3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "URI_PART4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "URI_PART5",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "URI_PART6",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "URI_PART7",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 250,
+        "name": "URI_PART8",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 48,
+        "name": "URI_PART9",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 19,
+        "type": "C"
+      }
+    ],
+    "BAPIADUSE": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COMM_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COMM_USAGE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEF_USAGE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 7,
+        "type": "C"
+      }
+    ],
+    "BAPIADX400": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_NO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COUNTRYISO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "ADM_DOM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "PRIV_DOM",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 64,
+        "name": "ORGANIZATN",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "ORG_UNIT_1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "ORG_UNIT_2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "ORG_UNIT_3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "ORG_UNIT_4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LASTNAME",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FIRSTNAME",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "INITIALS",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "GENERATION",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "X_121_ADDR",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "TERM_ID",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TERM_TYPE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "UANID",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DDA_TYPE1",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 128,
+        "name": "DDA_VALUE1",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DDA_TYPE2",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 128,
+        "name": "DDA_VALUE2",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DDA_TYPE3",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 128,
+        "name": "DDA_VALUE3",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DDA_TYPE4",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 128,
+        "name": "DDA_VALUE4",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STD_RECIP",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "R_3_USER",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TXT_ENCODE",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TNEF",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HOME_FLAG",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 32,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLG_NOUSE",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_FROM",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "VALID_TO",
+        "position": 36,
+        "type": "C"
+      }
+    ],
+    "BAPIAD_REM": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADDR_VERS",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGU_ISO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "ADR_NOTES",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPIBUS1006_ADDRESS": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STANDARDADDRESS",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "C_O_NAME",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "CITY",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "DISTRICT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REGIOGROUP",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "POSTL_COD1",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "POSTL_COD2",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "POSTL_COD3",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PCODE1_EXT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PCODE2_EXT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PCODE3_EXT",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PO_BOX",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PO_W_O_NO",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "PO_BOX_CIT",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PO_BOX_REG",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "POBOX_CTRY",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PO_CTRYISO",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "STREET",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "STR_ABBR",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "HOUSE_NO",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "HOUSE_NO2",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "HOUSE_NO3",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STR_SUPPL1",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STR_SUPPL2",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STR_SUPPL3",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LOCATION",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "BUILDING",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FLOOR",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROOM_NO",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "COUNTRYISO",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "REGION",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "TIME_ZONE",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "HOME_CITY",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRANSPZONE",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGUISO",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COMM_TYPE",
+        "position": 39,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "EXTADDRESSNUMBER",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DONT_USE_P",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DONT_USE_S",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "MOVE_DATE",
+        "position": 43,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MOVE_ADDRESS",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALIDFROMDATE",
+        "position": 45,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "VALIDTODATE",
+        "position": 46,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "MOVE_ADDR_GUID",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CITY_NO",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DISTRCT_NO",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHCKSTATUS",
+        "position": 50,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "PBOXCIT_NO",
+        "position": 51,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "STREET_NO",
+        "position": 52,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "HOMECITYNO",
+        "position": 53,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "PO_BOX_LOBBY",
+        "position": 54,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DELI_SERV_TYPE",
+        "position": 55,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "DELI_SERV_NUMBER",
+        "position": 56,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "COUNTY",
+        "position": 57,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "COUNTY_NO",
+        "position": 58,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "TOWNSHIP",
+        "position": 59,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TOWNSHIP_NO",
+        "position": 60,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADDR_SCREENING_STATUS",
+        "position": 61,
+        "type": "C"
+      }
+    ],
+    "BAPIBUS1006_ADDRESS_DUPLICATES": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ADDRNUMBER",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PERSNUMBER",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PERCENTAGE",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUSINESSPARTNER",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "ADDRESSGUID",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PERCENT_COMPL",
+        "position": 6,
+        "type": "P"
+      }
+    ],
+    "BAPIBUS1006_ADDR_DEP_ATT": [
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLUDE",
+        "position": 1,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "LOCATION_1",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "LOCATION_2",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LOCATION_3",
+        "position": 4,
+        "type": "N"
+      }
+    ],
+    "BAPIBUS1006_CENTRAL": [
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "SEARCHTERM1",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "SEARCHTERM2",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PARTNERTYPE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "AUTHORIZATIONGROUP",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PARTNERLANGUAGE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PARTNERLANGUAGEISO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "DATAORIGINTYPE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CENTRALARCHIVINGFLAG",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CENTRALBLOCK",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TITLE_KEY",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CONTACTALLOWANCE",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "PARTNEREXTERNAL",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "TITLELETTER",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NOTRELEASED",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COMM_TYPE",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRINT_MODE",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SCREENING_STATUS",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SCR_REQ_ID",
+        "position": 18,
+        "type": "C"
+      }
+    ],
+    "BAPIBUS1006_CENTRAL_GROUP": [
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAMEGROUP1",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAMEGROUP2",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "GROUPTYPE",
+        "position": 3,
+        "type": "C"
+      }
+    ],
+    "BAPIBUS1006_CENTRAL_ORGAN": [
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME1",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME2",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME3",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME4",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LEGALFORM",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INDUSTRYSECTOR",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "FOUNDATIONDATE",
+        "position": 7,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "LIQUIDATIONDATE",
+        "position": 8,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 7,
+        "name": "LOC_NO_1",
+        "position": 9,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "LOC_NO_2",
+        "position": 10,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHK_DIGIT",
+        "position": 11,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LEGALORG",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DC_NOT_REQ",
+        "position": 13,
+        "type": "C"
+      }
+    ],
+    "BAPIBUS1006_CENTRAL_PERSON": [
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "FIRSTNAME",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LASTNAME",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "BIRTHNAME",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MIDDLENAME",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SECONDNAME",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TITLE_ACA1",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TITLE_ACA2",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TITLE_SPPL",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PREFIX1",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PREFIX2",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NICKNAME",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INITIALS",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "NAMEFORMAT",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NAMCOUNTRY",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "NAMCOUNTRYISO",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SEX",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "BIRTHPLACE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "BIRTHDATE",
+        "position": 18,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DEATHDATE",
+        "position": 19,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MARITALSTATUS",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CORRESPONDLANGUAGE",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "CORRESPONDLANGUAGEISO",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 80,
+        "name": "FULLNAME",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 35,
+        "name": "EMPLOYER",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "OCCUPATION",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NATIONALITY",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "NATIONALITYISO",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRYORIGIN",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BIRTHDT_STATUS",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GENDER",
+        "position": 30,
+        "type": "C"
+      }
+    ],
+    "BAPIBUS1006_HEAD": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BPARTNER",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PARTN_CAT",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PARTN_TYP",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PARTN_GRP",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARTNERGUID",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "EXTERN_NO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ADDR_NO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "ADDRESSGUID",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "EXTERNALADDRESSNUMBER",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "PARTNERROLE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BANKDETAILID",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "EXTERNALBANKDETAILID",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARTNGUID",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "PARTNROLE",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CONTROLDUPLICATEMESSAGE",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NEWINTERNALMODE",
+        "position": 16,
+        "type": "C"
+      }
+    ],
+    "BAPICOMREM": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COMM_TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGU_ISO",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "COMM_NOTES",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CONSNUMBER",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERRORFLAG",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ]
+  }
+}

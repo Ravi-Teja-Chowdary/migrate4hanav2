@@ -1,0 +1,3223 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_TRIP_CREATE_FROM_DATA",
+  "params": [
+    {
+      "kind": "E",
+      "name": "EMPLOYEENUMBER",
+      "optional": false,
+      "struct": "BAPIEMPL",
+      "text": "Employee's Personnel Number"
+    },
+    {
+      "kind": "E",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRETURN",
+      "text": "Return Value (Instead of Exceptions)"
+    },
+    {
+      "kind": "E",
+      "name": "TRIPNUMBER",
+      "optional": false,
+      "struct": "BAPITRIP",
+      "text": "Trip Number"
+    },
+    {
+      "kind": "I",
+      "name": "BATCH_INPUT_ONLY",
+      "optional": true,
+      "struct": "BAPITRVXXX",
+      "text": "Checkbox"
+    },
+    {
+      "kind": "I",
+      "name": "BATCH_SESSION_NAME",
+      "optional": true,
+      "struct": "APQI",
+      "text": ""
+    },
+    {
+      "kind": "I",
+      "name": "CHANGE",
+      "optional": true,
+      "struct": "BAPITRVHIS",
+      "text": "Entries in Table AEND, Structure for BAPI Interface"
+    },
+    {
+      "kind": "I",
+      "name": "DUTYDATA",
+      "optional": true,
+      "struct": "BAPITRVDUTY",
+      "text": "Start and End of Official Business: Structure for BAPI Interface"
+    },
+    {
+      "kind": "I",
+      "name": "EMPLOYEENUMBER",
+      "optional": false,
+      "struct": "BAPIEMPL",
+      "text": "Employee's Personnel Number"
+    },
+    {
+      "kind": "I",
+      "name": "FRAMEDATA",
+      "optional": false,
+      "struct": "BAPITRMAIN",
+      "text": "General Trip Data"
+    },
+    {
+      "kind": "I",
+      "name": "STATUS",
+      "optional": true,
+      "struct": "BAPITRVSTA",
+      "text": "Trip Status"
+    },
+    {
+      "kind": "T",
+      "name": "ADDINFO",
+      "optional": true,
+      "struct": "BAPITRADDI",
+      "text": "Additional Receipt Information"
+    },
+    {
+      "kind": "T",
+      "name": "ADVANCE",
+      "optional": true,
+      "struct": "BAPITRVSCH",
+      "text": "Advance"
+    },
+    {
+      "kind": "T",
+      "name": "COSTDIST_MILE",
+      "optional": true,
+      "struct": "BAPITRVCOM",
+      "text": "Cost Distribution for Miles/Kms Distribution"
+    },
+    {
+      "kind": "T",
+      "name": "COSTDIST_RECE",
+      "optional": true,
+      "struct": "BAPITRVCOR",
+      "text": "Cost Distribution for Receipts"
+    },
+    {
+      "kind": "T",
+      "name": "COSTDIST_STOP",
+      "optional": true,
+      "struct": "BAPITRVCOS",
+      "text": "Cost Distribution for Stopovers"
+    },
+    {
+      "kind": "T",
+      "name": "COSTDIST_TRIP",
+      "optional": true,
+      "struct": "BAPITRVCOT",
+      "text": "Cost Distribution for Entire Trip"
+    },
+    {
+      "kind": "T",
+      "name": "DEDUCTIONS",
+      "optional": true,
+      "struct": "BAPITRVDED",
+      "text": "Deductions"
+    },
+    {
+      "kind": "T",
+      "name": "MILEAGE",
+      "optional": true,
+      "struct": "BAPITRVMIL",
+      "text": "Miles/Km Distribution"
+    },
+    {
+      "kind": "T",
+      "name": "RECEIPTS",
+      "optional": true,
+      "struct": "BAPITRVREC",
+      "text": "Receipts"
+    },
+    {
+      "kind": "T",
+      "name": "RECEIPTS_JURCODES",
+      "optional": true,
+      "struct": "BAPIJURCODE",
+      "text": "Tax Jurisdiction Codes for the Receipts"
+    },
+    {
+      "kind": "T",
+      "name": "RECEIPTS_SERVICE_PROVIDER",
+      "optional": true,
+      "struct": "BAPIRECPAYOT",
+      "text": "Structure for Service Provider for BAPI"
+    },
+    {
+      "kind": "T",
+      "name": "STOPOVER",
+      "optional": true,
+      "struct": "BAPITRVSTO",
+      "text": "Stopovers"
+    },
+    {
+      "kind": "T",
+      "name": "TEXT",
+      "optional": true,
+      "struct": "BAPITRTEXT",
+      "text": "Trip Text"
+    },
+    {
+      "kind": "T",
+      "name": "TRANSPORT",
+      "optional": true,
+      "struct": "BAPITRVTRN",
+      "text": "Local Public Transport, Journey"
+    }
+  ],
+  "structs": {
+    "APQI": [
+      {
+        "is_key": true,
+        "len": 32,
+        "name": "DESTSYS",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 8,
+        "name": "DESTAPP",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 4,
+        "name": "DATATYP",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 3,
+        "name": "MANDANT",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 12,
+        "name": "GROUPID",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 40,
+        "name": "PROGID",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 30,
+        "name": "FORMID",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 1,
+        "name": "QATTRIB",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": true,
+        "len": 20,
+        "name": "QID",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "QSTATE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "QERASE",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "USERID",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "PASSWD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CREATOR",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CREDATE",
+        "position": 15,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "CRETIME",
+        "position": 16,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "STARTPGID",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STARTMODE",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "STARTDATE",
+        "position": 19,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "STARTTIME",
+        "position": 20,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PUTACTIVE",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PUTPID",
+        "position": 22,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PUTTRANS",
+        "position": 23,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PUTBLOCK",
+        "position": 24,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PUTDATE",
+        "position": 25,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "PUTTIME",
+        "position": 26,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GETACTIVE",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GETPID",
+        "position": 28,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GETTRANS",
+        "position": 29,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "GETBLOCK",
+        "position": 30,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "GETDATE",
+        "position": 31,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "GETTIME",
+        "position": 32,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRANSCNT",
+        "position": 33,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MSGCNT",
+        "position": 34,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRANSCNTE",
+        "position": 35,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MSGCNTE",
+        "position": 36,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRANSCNTD",
+        "position": 37,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MSGCNTD",
+        "position": 38,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRANSCNTF",
+        "position": 39,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "MSGCNTF",
+        "position": 40,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "JOB_TEMPL",
+        "position": 41,
+        "type": "C"
+      }
+    ],
+    "BAPIEMPL": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PERNR",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DATUM",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "NCHMC",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "VNAMC",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "FNAMK",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LNAMK",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "FNAMR",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LNAMR",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORG_SEARK",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "JOB_SEARK",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "POS_SEARK",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "KOSTL",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "GEBNR",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ZIMNR",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "TELNR",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "KFZKZ",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "USRID",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "RETCODE",
+        "position": 18,
+        "type": "C"
+      }
+    ],
+    "BAPIJURCODE": [
+      {
+        "is_key": true,
+        "len": 3,
+        "name": "RECEIPTNO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TAXJURCODE",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPIRECPAYOT": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "RECEIPTNO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PAYOT",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPIRETURN": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CODE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 5,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 9,
+        "type": "C"
+      }
+    ],
+    "BAPITRADDI": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "RECEIPTNO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "NO_BRFT",
+        "position": 2,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "REGION",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TT_COMSP",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "FROM_DATE",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TO_DATE",
+        "position": 7,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "MULTIPLI",
+        "position": 8,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "DESCRIPT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "LOCATION",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "BUS_PURPO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "BUS_REASON",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "CCOMP",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "C_DOC",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "C_TXT",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "P_CTG",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "P_PRV",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "P_DOC",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "N_STF",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "N_PTN",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "N_GST",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "GUID_CCC",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CFIRMA",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ANZLU",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ANZDI",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "BOOKED_PRICE",
+        "position": 26,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "BOOKED_CURR",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "DIFF_AMOUNT",
+        "position": 28,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "DIFF_CURR",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "REASON",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "STCEG",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "STCD1",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "STREET",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "HOUSE_NUM",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "POST_CODE",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "CITY",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "RECEIPT_NO",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "RECEIPT_ITEM",
+        "position": 39,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "FWSTE",
+        "position": 40,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "VAT_SERVICE_CODE",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "VAT_SUB_SRV_CODE",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 100,
+        "name": "VAT_SERVICE_DESC",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "IMAGE_LINK",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FROM_MOBILE",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "AIR_DEPARTURE",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "AIR_ARRIVAL",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "AIRLINE",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AIR_CABIN_CLASS",
+        "position": 49,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "AIR_TICKET_NUMBER_OBSOLET",
+        "position": 50,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CAR_ODOMETER_READING",
+        "position": 51,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SE_NAME",
+        "position": 52,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "SE_STREET",
+        "position": 53,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SE_CITY",
+        "position": 54,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "SE_STATE_PROVINCE",
+        "position": 55,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SE_COUNTRY",
+        "position": 56,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SE_POSTAL_CODE",
+        "position": 57,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "SE_CUSTOMER_SERVICE_PHONE",
+        "position": 58,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "AIR_TICKET_NUMBER",
+        "position": 59,
+        "type": "C"
+      }
+    ],
+    "BAPITRIP": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRIPNO",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DEP_DATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "DEP_TIME",
+        "position": 3,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ARR_DATE",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ARR_TIME",
+        "position": 5,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 17,
+        "name": "CUSTOMER",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 17,
+        "name": "LOCATION",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "REGION",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "APPROVED",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "APPR_TXT",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACCOUNT",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRAN_PAY",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRAN_FI",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRAN_DME",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 17,
+        "name": "ACC_TEXT",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PRINTED",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "PRIN_TXT",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "REPORTFLAG",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLU--AP",
+        "position": 20,
+        "type": ""
+      }
+    ],
+    "BAPITRMAIN": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DEP_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "DEP_TIME",
+        "position": 2,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ARR_DATE",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ARR_TIME",
+        "position": 4,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 59,
+        "name": "CUSTOMER",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 59,
+        "name": "LOCATION",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "REGION",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "OUT_DATE",
+        "position": 9,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "OUT_TIME",
+        "position": 10,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "RET_DATE",
+        "position": 11,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "RET_TIME",
+        "position": 12,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "RET_COUN",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "RET_RGIO",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RET_TTCS",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "T_SCHEMA",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TT_COMSP",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TT_STATU",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "T_ACTYPE",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PD_MEALS",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PD_ACCOM",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "NO_NIGHT",
+        "position": 22,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PSTLZ",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "ORT01",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "STRAS",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STATE",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "REQUEST",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TRAVEL_PLAN",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EXPENSES",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "ORT02",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CITY_CODE",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_PER_DIEM",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_PD_MAN",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_OV_MAN",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "EXCHANGE_DATE",
+        "position": 35,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ROUNDING",
+        "position": 36,
+        "type": "C"
+      }
+    ],
+    "BAPITRTEXT": [
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TEXTID",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 72,
+        "name": "TEXTLINE",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPITRVCOM": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "KEY_MILE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PERC_SHARE",
+        "position": 2,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLUDE",
+        "position": 3,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMP_CODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CO_AREA",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDER",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "COST_OBJ",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "WBS_ELEMT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SALES_ORD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "S_ORD_ITEM",
+        "position": 14,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CO_BUSPROC",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CMMT_ITEM",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "CMMT_ITEM_LONG",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "FUND_LONG",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLU--AP",
+        "position": 24,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PROJECT_GUID",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "PROJECT_EXT_ID",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "TASK_ROLE_GUID",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "TASK_ROLE_EXT_ID",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "OBJECT_TYPE",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CATEGORY",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "KBLNR",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "KBLPOS",
+        "position": 32,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERLKZ",
+        "position": 33,
+        "type": "C"
+      }
+    ],
+    "BAPITRVCOR": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "RECEIPTNO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REC_SHARE",
+        "position": 2,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLUDE",
+        "position": 3,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMP_CODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CO_AREA",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDER",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "COST_OBJ",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "WBS_ELEMT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SALES_ORD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "S_ORD_ITEM",
+        "position": 14,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CO_BUSPROC",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CMMT_ITEM",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "CMMT_ITEM_LONG",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "FUND_LONG",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLU--AP",
+        "position": 24,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PROJECT_GUID",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "PROJECT_EXT_ID",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "TASK_ROLE_GUID",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "TASK_ROLE_EXT_ID",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "OBJECT_TYPE",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CATEGORY",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "KBLNR",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "KBLPOS",
+        "position": 32,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERLKZ",
+        "position": 33,
+        "type": "C"
+      }
+    ],
+    "BAPITRVCOS": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "KEY_STOP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PERC_SHARE",
+        "position": 2,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLUDE",
+        "position": 3,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMP_CODE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CO_AREA",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDER",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "COST_OBJ",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "WBS_ELEMT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SALES_ORD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "S_ORD_ITEM",
+        "position": 14,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CO_BUSPROC",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CMMT_ITEM",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "CMMT_ITEM_LONG",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "FUND_LONG",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLU--AP",
+        "position": 24,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PROJECT_GUID",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "PROJECT_EXT_ID",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "TASK_ROLE_GUID",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "TASK_ROLE_EXT_ID",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "OBJECT_TYPE",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CATEGORY",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "KBLNR",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "KBLPOS",
+        "position": 32,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERLKZ",
+        "position": 33,
+        "type": "C"
+      }
+    ],
+    "BAPITRVCOT": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PERC_SHARE",
+        "position": 1,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLUDE",
+        "position": 2,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "COMP_CODE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "BUS_AREA",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "CO_AREA",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "COSTCENTER",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "ORDER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "COST_OBJ",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "WBS_ELEMT",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "NETWORK",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "ACTIVITY",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SALES_ORD",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "S_ORD_ITEM",
+        "position": 13,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CO_BUSPROC",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNDS_CTR",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 14,
+        "name": "CMMT_ITEM",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "FUND",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "FUNC_AREA",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "GRANT_NBR",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "CMMT_ITEM_LONG",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "FUND_LONG",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "BUDGET_PERIOD",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 0,
+        "name": ".INCLU--AP",
+        "position": 23,
+        "type": ""
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PROJECT_GUID",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "PROJECT_EXT_ID",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "TASK_ROLE_GUID",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 24,
+        "name": "TASK_ROLE_EXT_ID",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "OBJECT_TYPE",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CATEGORY",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "KBLNR",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "KBLPOS",
+        "position": 31,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ERLKZ",
+        "position": 32,
+        "type": "C"
+      }
+    ],
+    "BAPITRVDED": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DED_DATE",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BREAK_DE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LUNCH_DE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DINNE_DE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LU_COUPN",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NIGHT_DE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "BRFT_TIME",
+        "position": 7,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LNCH_TIME",
+        "position": 8,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "DINN_TIME",
+        "position": 9,
+        "type": "T"
+      }
+    ],
+    "BAPITRVDUTY": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DATV1_DIENST",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "UHRV1_DIENST",
+        "position": 2,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DATB1_DIENST",
+        "position": 3,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "UHRB1_DIENST",
+        "position": 4,
+        "type": "T"
+      }
+    ],
+    "BAPITRVHIS": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "CH_ON",
+        "position": 1,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "CH_ON_TIME",
+        "position": 2,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGED_BY",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "CHANGED_BY_REPORT",
+        "position": 4,
+        "type": "C"
+      }
+    ],
+    "BAPITRVMIL": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "KEY_MILE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "MIL_DATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "M_TOTAL",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "M_DOMEST",
+        "position": 4,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "LIC_PLAT",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 17,
+        "name": "CAR_MAKE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PASSENGE",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "BAG_WGHT",
+        "position": 8,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADD_FLRA",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VEH_TYPE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "VEH_CLAS",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "REGION",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TT_COMSP",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "KEY_STOP",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 59,
+        "name": "LOC_FROM",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 59,
+        "name": "LOC_TO",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CONSUMPTION_TYPE",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FUEL_RCPT_EXIST",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "FUEL_PRICE",
+        "position": 20,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "FUEL_PRICE_CURR",
+        "position": 21,
+        "type": "C"
+      }
+    ],
+    "BAPITRVREC": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "RECEIPTNO",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "EXP_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "REC_AMOUNT",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "REC_CURR",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "REC_RATE",
+        "position": 5,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "TAX_CODE",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "REC_DATE",
+        "position": 7,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SHORTTXT",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "KEY_STOP",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHARE_PERC",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "REC_RATE_CM",
+        "position": 11,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PAPER_RECEIPT",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "REC_PAYCURR",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "REC_REFNR",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "RECEIPT_OK",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GENEHM_U_BELEG",
+        "position": 16,
+        "type": "C"
+      }
+    ],
+    "BAPITRVSCH": [
+      {
+        "is_key": false,
+        "len": 23,
+        "name": "ADVANCE_AMOUNT",
+        "position": 1,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 9,
+        "name": "EXCH_RATE",
+        "position": 3,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CASH",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PAY_DATE",
+        "position": 5,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "PAYCURR",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "BAPITRVSTA": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "APPROVED",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ACCOUNT",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPITRVSTO": [
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "KEY_STOP",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DEP_DATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "DEP_TIME",
+        "position": 3,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ARR_DATE",
+        "position": 4,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "ARR_TIME",
+        "position": 5,
+        "type": "T"
+      },
+      {
+        "is_key": false,
+        "len": 17,
+        "name": "CUSTOMER",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 17,
+        "name": "LOCATION",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "REGION",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TT_STATU",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TT_COMSP",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "T_ACTYPE",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "NO_NIGHT",
+        "position": 13,
+        "type": "P"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "PSTLZ",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "ORT01",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "STRAS",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "STATE",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "ORT02",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CITY_CODE",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_PER_DIEM",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_PD_MAN",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TAX_OV_MAN",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "KZPRI",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SLEEP_AT_HOME",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "MPD_EXCL",
+        "position": 25,
+        "type": "C"
+      }
+    ],
+    "BAPITRVTRN": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "KEY_TRN",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "TRN_DATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "COUNTRY",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "REGION",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "PUB_TRANS",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "TRN_COUNT",
+        "position": 6,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "TRN_COUND",
+        "position": 7,
+        "type": "P"
+      }
+    ],
+    "BAPITRVXXX": [
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "TRIPNO",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "PERIOD",
+        "position": 2,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BOOLEAN",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SCAN_TRIPS",
+        "position": 4,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 255,
+        "name": "MSG_TEXT",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CCC_PROC",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGU",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHOW_DIALOG",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SET_PRINT_FLAG",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DATE",
+        "position": 10,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CHECK_OVERLAP",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "C_OVERLAP",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ALWAYS_SET_STATUS",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "CURRENT_PERIOD_VERSION",
+        "position": 14,
+        "type": "N"
+      }
+    ]
+  }
+}

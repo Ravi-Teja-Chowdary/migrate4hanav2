@@ -1,0 +1,513 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_OBJCL_CREATE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "CLASSIF_STATUS",
+      "optional": false,
+      "struct": "BAPI1003_KEY",
+      "text": "Classification Status"
+    },
+    {
+      "kind": "I",
+      "name": "CHANGENUMBER",
+      "optional": true,
+      "struct": "BAPI1003_KEY",
+      "text": "Change Number"
+    },
+    {
+      "kind": "I",
+      "name": "CLASSNUMNEW",
+      "optional": false,
+      "struct": "BAPI1003_KEY",
+      "text": "Class Number"
+    },
+    {
+      "kind": "I",
+      "name": "CLASSTYPENEW",
+      "optional": false,
+      "struct": "BAPI1003_KEY",
+      "text": "Class Type"
+    },
+    {
+      "kind": "I",
+      "name": "KEYDATE",
+      "optional": true,
+      "struct": "BAPI1003_KEY",
+      "text": "Date"
+    },
+    {
+      "kind": "I",
+      "name": "NO_DEFAULT_VALUES",
+      "optional": true,
+      "struct": "BAPI1003_KEY",
+      "text": "Default Values"
+    },
+    {
+      "kind": "I",
+      "name": "OBJECTKEYNEW",
+      "optional": true,
+      "struct": "BAPI1003_KEY",
+      "text": "Object Key, Concatenated"
+    },
+    {
+      "kind": "I",
+      "name": "OBJECTKEYNEW_LONG",
+      "optional": true,
+      "struct": "BAPI1003_KEY",
+      "text": ""
+    },
+    {
+      "kind": "I",
+      "name": "OBJECTTABLENEW",
+      "optional": false,
+      "struct": "BAPI1003_KEY",
+      "text": "Object Table"
+    },
+    {
+      "kind": "I",
+      "name": "STANDARDCLASS",
+      "optional": true,
+      "struct": "BAPI1003_KEY",
+      "text": "Indicator: Standard Class"
+    },
+    {
+      "kind": "I",
+      "name": "STATUS",
+      "optional": true,
+      "struct": "BAPI1003_KEY",
+      "text": "Classification Status"
+    },
+    {
+      "kind": "T",
+      "name": "ALLOCVALUESCHAR",
+      "optional": true,
+      "struct": "BAPI1003_ALLOC_VALUES_CHAR",
+      "text": "Assigned CHAR and BOOL Values"
+    },
+    {
+      "kind": "T",
+      "name": "ALLOCVALUESCURR",
+      "optional": true,
+      "struct": "BAPI1003_ALLOC_VALUES_CURR",
+      "text": "Assigned CURR Values"
+    },
+    {
+      "kind": "T",
+      "name": "ALLOCVALUESNUM",
+      "optional": true,
+      "struct": "BAPI1003_ALLOC_VALUES_NUM",
+      "text": "Assigned NUM, DATE, and TIME Values"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Error Messages"
+    }
+  ],
+  "structs": {
+    "BAPI1003_ALLOC_VALUES_CHAR": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARACT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VALUE_CHAR",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INHERITED",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "INSTANCE",
+        "position": 4,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VALUE_NEUTRAL",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARACT_DESCR",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "VALUE_CHAR_LONG",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "VALUE_NEUTRAL_LONG",
+        "position": 8,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_ALLOC_VALUES_CURR": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARACT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "VALUE_FROM",
+        "position": 2,
+        "type": "F"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "VALUE_TO",
+        "position": 3,
+        "type": "F"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VALUE_RELATION",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY_FROM",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY_TO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_FROM_ISO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_TO_ISO",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INHERITED",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "INSTANCE",
+        "position": 10,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARACT_DESCR",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_ALLOC_VALUES_NUM": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARACT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "VALUE_FROM",
+        "position": 2,
+        "type": "F"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "VALUE_TO",
+        "position": 3,
+        "type": "F"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VALUE_RELATION",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_FROM",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_TO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_FROM_ISO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_TO_ISO",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INHERITED",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "INSTANCE",
+        "position": 10,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARACT_DESCR",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPI1003_KEY": [
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "CLASSNUM",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CLASSTYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "OBJECT",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "OBJECTTABLE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "KEYDATE",
+        "position": 5,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGENUMBER",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STDCLASS",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLAG",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "OBJECT_GUID",
+        "position": 10,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 90,
+        "name": "OBJECT_LONG",
+        "position": 11,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ]
+  }
+}

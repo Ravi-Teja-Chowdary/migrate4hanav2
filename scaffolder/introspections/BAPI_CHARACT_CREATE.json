@@ -1,0 +1,853 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_CHARACT_CREATE",
+  "params": [
+    {
+      "kind": "I",
+      "name": "CHANGENUMBER",
+      "optional": true,
+      "struct": "BAPICHARACTKEY",
+      "text": "Change Number"
+    },
+    {
+      "kind": "I",
+      "name": "CHARACTDETAIL",
+      "optional": false,
+      "struct": "BAPICHARACTDETAIL",
+      "text": "Characteristic Attributes"
+    },
+    {
+      "kind": "I",
+      "name": "KEYDATE",
+      "optional": true,
+      "struct": "BAPICHARACTKEY",
+      "text": "Date"
+    },
+    {
+      "kind": "I",
+      "name": "TESTRUN",
+      "optional": true,
+      "struct": "TESTRUN",
+      "text": "Data element for domain BOOLE: TRUE (='X') and FALSE (=' ')"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTDESCR",
+      "optional": false,
+      "struct": "BAPICHARACTDESCR",
+      "text": "Characteristic Descriptions"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTREFERENCES",
+      "optional": true,
+      "struct": "BAPICHARACTREFERENCES",
+      "text": "Entries for Reference Characteristics"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTRESTRICTIONS",
+      "optional": true,
+      "struct": "BAPICHARACTRESTRICTIONS",
+      "text": "Restrictions to Class Types"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTVALUESCHAR",
+      "optional": true,
+      "struct": "BAPICHARACTVALUESCHAR",
+      "text": "Allowed Values for CHAR Characteristics"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTVALUESCURR",
+      "optional": true,
+      "struct": "BAPICHARACTVALUESCURR",
+      "text": "Allowed Values for CURR Characteristics"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTVALUESDESCR",
+      "optional": true,
+      "struct": "BAPICHARACTVALUESDESCR",
+      "text": "Value Descriptions"
+    },
+    {
+      "kind": "T",
+      "name": "CHARACTVALUESNUM",
+      "optional": true,
+      "struct": "BAPICHARACTVALUESNUM",
+      "text": "Allowed Values for NUM Characteristics"
+    },
+    {
+      "kind": "T",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRET2",
+      "text": "Error Messages"
+    }
+  ],
+  "structs": {
+    "BAPICHARACTDESCR": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGUAGE_INT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGUAGE_ISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "DESCRIPTION",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "HEADER1",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "HEADER2",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPICHARACTDETAIL": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARACT_NAME",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "DATA_TYPE",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LENGTH",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DECIMALS",
+        "position": 4,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "CASE_SENSITIV",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "EXPONENT_TYPE",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "EXPONENT",
+        "position": 7,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "TEMPLATE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "WITH_SIGN",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_OF_MEASUREMENT",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_OF_MEASUREMENT_ISO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_ISO",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "STATUS",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "CHARACT_GROUP",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VALUE_ASSIGNMENT",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_ENTRY",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_DISPLAY",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ENTRY_REQUIRED",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INTERVAL_ALLOWED",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SHOW_TEMPLATE",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DISPLAY_VALUES",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ADDITIONAL_VALUES",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENT_NO",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_TYPE",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_PART",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENT_VERSION",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHECK_TABLE",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHECK_FUNCTION",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "PLANT",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "SELECTED_SET",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "ADT_CLASS",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ADT_CLASS_TYPE",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "AGGREGATING",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "BALANCING",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "INPUT_REQUESTED_CONF",
+        "position": 36,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "AUTHORITY_GROUP",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "UNFORMATED",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "TEMPLATE_LONG",
+        "position": 39,
+        "type": "C"
+      }
+    ],
+    "BAPICHARACTKEY": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "CHARACTNAME",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "KEYDATE",
+        "position": 2,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "CHANGENUM",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 18,
+        "name": "DATATYPE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGUAGE",
+        "position": 5,
+        "type": "C"
+      }
+    ],
+    "BAPICHARACTREFERENCES": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "REFERENCE_TABLE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "REFERENCE_FIELD",
+        "position": 2,
+        "type": "C"
+      }
+    ],
+    "BAPICHARACTRESTRICTIONS": [
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CLASS_TYPE",
+        "position": 1,
+        "type": "C"
+      }
+    ],
+    "BAPICHARACTVALUESCHAR": [
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VALUE_CHAR",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VALUE_CHAR_HIGH",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEFAULT_VALUE",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENT_NO",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_TYPE",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_PART",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENT_VERSION",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "VALUE_CHAR_LONG",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "VALUE_CHAR_HIGH_LONG",
+        "position": 9,
+        "type": "C"
+      }
+    ],
+    "BAPICHARACTVALUESCURR": [
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "VALUE_FROM",
+        "position": 1,
+        "type": "F"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "VALUE_TO",
+        "position": 2,
+        "type": "F"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VALUE_RELATION",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY_FROM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 5,
+        "name": "CURRENCY_TO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_FROM_ISO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "CURRENCY_TO_ISO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEFAULT_VALUE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENT_NO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_TYPE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_PART",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENT_VERSION",
+        "position": 12,
+        "type": "C"
+      }
+    ],
+    "BAPICHARACTVALUESDESCR": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "LANGUAGE_INT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGUAGE_ISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "VALUE_CHAR",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "DESCRIPTION",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "VALUE_CHAR_LONG",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 70,
+        "name": "DESCRIPTION_LONG",
+        "position": 6,
+        "type": "C"
+      }
+    ],
+    "BAPICHARACTVALUESNUM": [
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "VALUE_FROM",
+        "position": 1,
+        "type": "F"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "VALUE_TO",
+        "position": 2,
+        "type": "F"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "VALUE_RELATION",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_FROM",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_TO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_FROM_ISO",
+        "position": 6,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "UNIT_TO_ISO",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "DEFAULT_VALUE",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "DOCUMENT_NO",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_TYPE",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "DOCUMENT_PART",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "DOCUMENT_VERSION",
+        "position": 12,
+        "type": "C"
+      }
+    ],
+    "BAPIRET2": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 32,
+        "name": "PARAMETER",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "ROW",
+        "position": 12,
+        "type": "X"
+      },
+      {
+        "is_key": false,
+        "len": 30,
+        "name": "FIELD",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "SYSTEM",
+        "position": 14,
+        "type": "C"
+      }
+    ],
+    "TESTRUN": []
+  }
+}

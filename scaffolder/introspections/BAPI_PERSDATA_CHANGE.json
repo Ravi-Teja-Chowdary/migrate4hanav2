@@ -1,0 +1,964 @@
+{
+  "_target_meta": {
+    "dbsys": "HDB",
+    "host": "vhcals4h",
+    "release": "816",
+    "sid": "S4H"
+  },
+  "bapi": "BAPI_PERSDATA_CHANGE",
+  "params": [
+    {
+      "kind": "E",
+      "name": "RETURN",
+      "optional": false,
+      "struct": "BAPIRETURN1",
+      "text": "Structure for return code"
+    },
+    {
+      "kind": "I",
+      "name": "ACADEMICGRADE",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Title"
+    },
+    {
+      "kind": "I",
+      "name": "ARISTROCRATICTITLE",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Other title"
+    },
+    {
+      "kind": "I",
+      "name": "BIRTHPLACE",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Birthplace"
+    },
+    {
+      "kind": "I",
+      "name": "COUNTRYOFBIRTH",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Country of Birth"
+    },
+    {
+      "kind": "I",
+      "name": "DATEOFBIRTH",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Date of birth"
+    },
+    {
+      "kind": "I",
+      "name": "EMPLOYEENUMBER",
+      "optional": false,
+      "struct": "BAPIP0002",
+      "text": "Personnel number"
+    },
+    {
+      "kind": "I",
+      "name": "FIRSTNAME",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "First Name"
+    },
+    {
+      "kind": "I",
+      "name": "FORMOFADDRESS",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Form-of-address key"
+    },
+    {
+      "kind": "I",
+      "name": "FULLNAME",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Full employee name"
+    },
+    {
+      "kind": "I",
+      "name": "GENDER",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Gender key"
+    },
+    {
+      "kind": "I",
+      "name": "IDNUMBER",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Personnel ID number"
+    },
+    {
+      "kind": "I",
+      "name": "INITIALS",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Employee's Initials"
+    },
+    {
+      "kind": "I",
+      "name": "KNOWNAS",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Known As"
+    },
+    {
+      "kind": "I",
+      "name": "LANGUAGE",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Language key"
+    },
+    {
+      "kind": "I",
+      "name": "LANGUAGE_ISO",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Language according to ISO 639"
+    },
+    {
+      "kind": "I",
+      "name": "LASTNAME",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Last Name"
+    },
+    {
+      "kind": "I",
+      "name": "LOCKINDICATOR",
+      "optional": false,
+      "struct": "BAPIP0002",
+      "text": "Lock indicator for HR master record"
+    },
+    {
+      "kind": "I",
+      "name": "MARITALSTATUS",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Marital status key"
+    },
+    {
+      "kind": "I",
+      "name": "MARITALSTATUSSINCE",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Valid from date of current marital status"
+    },
+    {
+      "kind": "I",
+      "name": "MIDDLENAME",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Middle name"
+    },
+    {
+      "kind": "I",
+      "name": "NAMEATBIRTH",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Name at Birth"
+    },
+    {
+      "kind": "I",
+      "name": "NAME_FORMAT_INDICATOR",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": ""
+    },
+    {
+      "kind": "I",
+      "name": "NATIONALITY",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Nationality"
+    },
+    {
+      "kind": "I",
+      "name": "NOCOMMIT",
+      "optional": true,
+      "struct": "BAPI_STAND",
+      "text": "COMMIT control at BAPI interface"
+    },
+    {
+      "kind": "I",
+      "name": "NUMBEROFCHILDREN",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Number of children"
+    },
+    {
+      "kind": "I",
+      "name": "OBJECTID",
+      "optional": false,
+      "struct": "BAPIP0002",
+      "text": "Object ID"
+    },
+    {
+      "kind": "I",
+      "name": "RECORDNUMBER",
+      "optional": false,
+      "struct": "BAPIP0002",
+      "text": "Number of Infotype Record"
+    },
+    {
+      "kind": "I",
+      "name": "RELIGION",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Religious denomination key"
+    },
+    {
+      "kind": "I",
+      "name": "SECONDACADGRADE",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Second title"
+    },
+    {
+      "kind": "I",
+      "name": "SECONDARISTROTITLE",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Other Title for Birth Name"
+    },
+    {
+      "kind": "I",
+      "name": "SECONDNAME",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Second name"
+    },
+    {
+      "kind": "I",
+      "name": "SECONDNAMEPREFIX",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Second name prefix"
+    },
+    {
+      "kind": "I",
+      "name": "SECONDNATIONALITY",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Second nationality"
+    },
+    {
+      "kind": "I",
+      "name": "STATEOFBIRTH",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "State"
+    },
+    {
+      "kind": "I",
+      "name": "SUBTYPE",
+      "optional": false,
+      "struct": "BAPIP0002",
+      "text": "Subtype"
+    },
+    {
+      "kind": "I",
+      "name": "SURNAMEPREFIX",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Name Prefix"
+    },
+    {
+      "kind": "I",
+      "name": "THIRDNATIONALITY",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Third nationality"
+    },
+    {
+      "kind": "I",
+      "name": "UPDATE_ONLY_GBDAT",
+      "optional": true,
+      "struct": "BAPIP0002",
+      "text": "Flag: Only Update on GBDAT"
+    },
+    {
+      "kind": "I",
+      "name": "VALIDITYBEGIN",
+      "optional": false,
+      "struct": "BAPIP0002",
+      "text": "Valid from date"
+    },
+    {
+      "kind": "I",
+      "name": "VALIDITYEND",
+      "optional": false,
+      "struct": "BAPIP0002",
+      "text": "Valid To Date"
+    }
+  ],
+  "structs": {
+    "BAPIP0002": [
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "PERNR",
+        "position": 1,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "INFTY",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "SUBTY",
+        "position": 3,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "OBJPS",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SPRPS",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "ENDDA",
+        "position": 6,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "BEGDA",
+        "position": 7,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "SEQNR",
+        "position": 8,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "AEDTM",
+        "position": 9,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 12,
+        "name": "UNAME",
+        "position": 10,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "HISTO",
+        "position": 11,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ITXEX",
+        "position": 12,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "REFEX",
+        "position": 13,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ORDEX",
+        "position": 14,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "ITBLD",
+        "position": 15,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PREAS",
+        "position": 16,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLAG1",
+        "position": 17,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLAG2",
+        "position": 18,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLAG3",
+        "position": 19,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FLAG4",
+        "position": 20,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "RESE1",
+        "position": 21,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "RESE2",
+        "position": 22,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 10,
+        "name": "INITS",
+        "position": 23,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NACHN",
+        "position": 24,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NAME2",
+        "position": 25,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NACH2",
+        "position": 26,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "VORNA",
+        "position": 27,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 80,
+        "name": "CNAME",
+        "position": 28,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TITEL",
+        "position": 29,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "TITL2",
+        "position": 30,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "NAMZU",
+        "position": 31,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "VORSW",
+        "position": 32,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "VORS2",
+        "position": 33,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "RUFNM",
+        "position": 34,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "MIDNM",
+        "position": 35,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "KNZNM",
+        "position": 36,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ANRED",
+        "position": 37,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "GESCH",
+        "position": 38,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "GBDAT",
+        "position": 39,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "GBLND",
+        "position": 40,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "GBDEP",
+        "position": 41,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "GBORT",
+        "position": 42,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NATIO",
+        "position": 43,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NATI2",
+        "position": 44,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NATI3",
+        "position": 45,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "SPRSL",
+        "position": 46,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "KONFE",
+        "position": 47,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "FAMST",
+        "position": 48,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "FAMDT",
+        "position": 49,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "ANZKD",
+        "position": 50,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NACON",
+        "position": 51,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "PERMO",
+        "position": 52,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "PERID",
+        "position": 53,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "GBPAS",
+        "position": 54,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "FNAMK",
+        "position": 55,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LNAMK",
+        "position": 56,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "FNAMR",
+        "position": 57,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "LNAMR",
+        "position": 58,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NABIK",
+        "position": 59,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NABIR",
+        "position": 60,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NICKK",
+        "position": 61,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 40,
+        "name": "NICKR",
+        "position": 62,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 4,
+        "name": "GBJHR",
+        "position": 63,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GBMON",
+        "position": 64,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "GBTAG",
+        "position": 65,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "NCHMC",
+        "position": 66,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "VNAMC",
+        "position": 67,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "SPRSL_ISO",
+        "position": 68,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "NAMEOFANRED",
+        "position": 69,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 60,
+        "name": "NAMEOFGESCH",
+        "position": 70,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "NAMEOFGBDEP",
+        "position": 71,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "NAMEOFGBLND",
+        "position": 72,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "NAMEOFFAMST",
+        "position": 73,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 25,
+        "name": "NAMEOFKONFE",
+        "position": 74,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 16,
+        "name": "NAMEOFSPRSL",
+        "position": 75,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "NAMEOFNATIO",
+        "position": 76,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "NAMEOFNATI2",
+        "position": 77,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "NAMEOFNATI3",
+        "position": 78,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 8,
+        "name": "DELIMIT_DATE",
+        "position": 79,
+        "type": "D"
+      },
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "ONLY_GBDAT",
+        "position": 80,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 15,
+        "name": "NAMZ2",
+        "position": 81,
+        "type": "C"
+      }
+    ],
+    "BAPIRETURN1": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "TYPE",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "ID",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "NUMBER",
+        "position": 3,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 220,
+        "name": "MESSAGE",
+        "position": 4,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 20,
+        "name": "LOG_NO",
+        "position": 5,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 6,
+        "name": "LOG_MSG_NO",
+        "position": 6,
+        "type": "N"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V1",
+        "position": 7,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V2",
+        "position": 8,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V3",
+        "position": 9,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 50,
+        "name": "MESSAGE_V4",
+        "position": 10,
+        "type": "C"
+      }
+    ],
+    "BAPI_STAND": [
+      {
+        "is_key": false,
+        "len": 1,
+        "name": "NO_COMMIT",
+        "position": 1,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 2,
+        "name": "LANGU_ISO",
+        "position": 2,
+        "type": "C"
+      },
+      {
+        "is_key": false,
+        "len": 3,
+        "name": "LINE_SIZE",
+        "position": 3,
+        "type": "N"
+      }
+    ]
+  }
+}
