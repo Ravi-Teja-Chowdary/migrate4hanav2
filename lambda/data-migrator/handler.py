@@ -797,6 +797,106 @@ def lambda_handler(event, context):
         return _phase_b_validate_generated(event, run_id)
     if mode == "phase_c_mc_trigger":
         return _phase_c_mc_trigger(event, run_id)
+    if mode == "bapi_lane_scale_probe":
+        # End-to-end BAPI-lane scale probe: pick a Tier-1 promoted spine
+        # and run N synthetic rows through extract -> transform -> validate
+        # -> BAPI call -> S/4 create -> result aggregation. Measures
+        # per-row latency + total throughput + dead-letter rate. Used as
+        # the gating end-to-end validation before Customer Zero.
+        import time as _time
+        object_type = event.get("object_type", "DocumentInfoRecord")
+        row_count   = int(event.get("row_count", 100))
+        target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+
+        from base_spine_orchestrator import _SPINE_REGISTRY
+        cls = _SPINE_REGISTRY.get(object_type)
+        if cls is None:
+            return {"status": "error", "phase": "bapi_lane_scale_probe", "run_id": run_id,
+                    "error": f"object_type '{object_type}' not in spine registry"}
+
+        try:
+            tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+            from pyrfc import Connection
+            tconn = Connection(ashost=tsec["ashost"], sysnr=tsec.get("sysnr","00"),
+                               client=tsec["client"], user=tsec["user"],
+                               passwd=tsec.get("passwd") or tsec.get("password"), lang="EN")
+        except Exception as e:
+            return {"status": "error", "phase": "bapi_lane_scale_probe", "run_id": run_id,
+                    "error": f"target_connection failed: {type(e).__name__}: {str(e)[:200]}"}
+
+        spine = cls(tconn, dry_run=False)
+
+        # Build synthetic rows. Same shape as synth_good in the validate
+        # generated test — only DQ-gated fields get typed values; source
+        # key digit-only so it round-trips through CHAR and NUMC fields.
+        RULE_VALUE = {
+            "non_empty": "value", "positive_number": "1", "iso_date": "20251115",
+            "sap_unit_of_measure": "EA", "currency_iso_4217": "USD",
+            "material_number_format": "MAT_T0001", "bukrs_company_code": "1710",
+            "werks_plant": "1710", "langu_code": "EN", "sap_client_3char": "100",
+            "decimal_max_digits": "100.00", "regex_match": "value",
+        }
+        try:
+            from importlib import import_module
+            mod_name = cls.__module__
+            spine_mod = import_module(mod_name)
+            dq_gates = getattr(spine_mod, "DQ_GATES", [])
+        except Exception:
+            dq_gates = []
+
+        rows = []
+        for i in range(row_count):
+            row = {spine.source_key_field: f"{i:010d}"}
+            for gate in dq_gates:
+                field = gate[0] if isinstance(gate, (tuple, list)) else gate.get("field")
+                rule  = gate[1] if isinstance(gate, (tuple, list)) else gate.get("rule")
+                val = RULE_VALUE.get(rule, "VALUE")
+                if rule == "in_set":
+                    args = gate[2] if isinstance(gate, (tuple, list)) else gate.get("rule_args", {})
+                    values = (args or {}).get("values") or []
+                    if values: val = values[0]
+                row[field] = val
+            row[spine.source_key_field] = f"{i:010d}"
+            rows.append(row)
+
+        t_start = _time.time()
+        results = spine.load_many(rows)
+        t_elapsed = _time.time() - t_start
+
+        stats = spine.stats.to_dict() if hasattr(spine.stats, "to_dict") else {}
+        created     = stats.get("created", 0)
+        matched     = stats.get("matched_existing", 0)
+        dead_letter = stats.get("dead_letter", 0)
+        failed      = stats.get("failed", 0)
+        attempted   = stats.get("attempted", row_count)
+
+        # Capture sample dispositions + first dead-letter message for diag
+        sample_creates = []
+        first_dl = None
+        for r in (results or [])[:10]:
+            if hasattr(r, "to_dict"): r = r.to_dict()
+            if isinstance(r, dict):
+                d = r.get("disposition") or r.get("status") or ""
+                if d in ("created", "created_dry_run") and len(sample_creates) < 5:
+                    sample_creates.append({"src": r.get("source_key"), "tgt": r.get("target_key")})
+                if d == "dead_letter" and not first_dl:
+                    first_dl = {"src": r.get("source_key"),
+                                "msgs": (r.get("messages") or [])[:3]}
+
+        return {"status": "ok", "phase": "bapi_lane_scale_probe", "run_id": run_id,
+                "object_type": object_type, "row_count": row_count,
+                "elapsed_secs": round(t_elapsed, 3),
+                "rows_per_sec": round(row_count / t_elapsed, 2) if t_elapsed > 0 else None,
+                "attempted":   attempted,
+                "created":     created,
+                "matched_existing": matched,
+                "dead_letter": dead_letter,
+                "failed":      failed,
+                "sample_creates": sample_creates,
+                "first_dead_letter": first_dl,
+                "target": {"ashost": tsec.get("ashost"), "sid": tsec.get("sid",""),
+                           "client": tsec.get("client")}}
+
     if mode == "mc_lane_scale_probe":
         # 100K-row MC-lane throughput probe. Synthesizes rows that pass
         # the spine's mandatory-column validator, runs them through
