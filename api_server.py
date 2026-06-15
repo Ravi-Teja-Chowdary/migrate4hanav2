@@ -1124,6 +1124,274 @@ async def list_operations():
 
 
 # =============================================================================
+# WIZARD STATE (per-user, per-run, DDB-backed)
+# =============================================================================
+_wizard_store = None
+
+
+def _get_wizard_store():
+    global _wizard_store
+    if _wizard_store is None:
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from wizard_state import WizardStore
+        _wizard_store = WizardStore()
+    return _wizard_store
+
+
+class WizardCreate(BaseModel):
+    client_id: Optional[str] = None
+    page:      Optional[str] = "wizard-1-versions"
+    body:      Optional[dict] = None
+
+
+class WizardPatch(BaseModel):
+    page:                      Optional[str] = None
+    ecc_version:               Optional[str] = None
+    s4_version:                Optional[str] = None
+    migration_type:            Optional[str] = None
+    selective_objects:         Optional[List[str]] = None
+    ecc_conn:                  Optional[dict] = None
+    s4_conn:                   Optional[dict] = None
+    connection_test_results:   Optional[dict] = None
+    permission_check_results:  Optional[dict] = None
+    started_at:                Optional[str] = None
+
+
+@app.post("/api/wizard", dependencies=[Depends(require_auth)])
+async def wizard_create(body: WizardCreate, request: Request):
+    """Create a new wizard run for the current user. Returns the run_id
+    the UI uses for subsequent /api/wizard/{run_id} calls."""
+    from wizard_state import new_run_id
+    p = _principal_from_request(request)
+    email = p.get("email")
+    if not email:
+        raise HTTPException(status_code=401,
+                            detail={"error": "user identity unavailable"})
+    run_id = new_run_id()
+    state = {
+        "run_id":     run_id,
+        "user_email": email,
+        "client_id":  body.client_id or (p.get("scopes") or [""])[0],
+        "page":       body.page or "wizard-1-versions",
+        **(body.body or {}),
+    }
+    saved = _get_wizard_store().put(state)
+    return {"ok": True, "run_id": run_id, "state": saved}
+
+
+@app.get("/api/wizard", dependencies=[Depends(require_auth)])
+async def wizard_list(request: Request):
+    """In-flight wizards for the current user, newest first."""
+    p = _principal_from_request(request)
+    email = p.get("email")
+    if not email:
+        return {"wizards": []}
+    return {"wizards": _get_wizard_store().list_for_user(email)}
+
+
+@app.get("/api/wizard/{run_id}", dependencies=[Depends(require_auth)])
+async def wizard_get(run_id: str, request: Request):
+    p = _principal_from_request(request)
+    email = p.get("email")
+    state = _get_wizard_store().get(email, run_id)
+    if not state:
+        raise HTTPException(status_code=404, detail={"error": "wizard not found"})
+    return state
+
+
+@app.patch("/api/wizard/{run_id}", dependencies=[Depends(require_auth)])
+async def wizard_patch(run_id: str, body: WizardPatch, request: Request):
+    p = _principal_from_request(request)
+    email = p.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail={"error": "user identity unavailable"})
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    return {"ok": True, "state": _get_wizard_store().patch(email, run_id, **fields)}
+
+
+@app.delete("/api/wizard/{run_id}", dependencies=[Depends(require_auth)])
+async def wizard_delete(run_id: str, request: Request):
+    p = _principal_from_request(request)
+    email = p.get("email")
+    ok = _get_wizard_store().delete(email, run_id)
+    return {"ok": ok}
+
+
+# =============================================================================
+# CONNECTION + PERMISSION VALIDATION (perm-aware test for the wizard)
+# =============================================================================
+class ConnectionTestRequest(BaseModel):
+    creds:             dict
+    migration_type:    str = "full"            # "full" | "selective"
+    selected_objects:  Optional[List[str]] = None
+
+
+@app.post("/api/connections/ecc/test-with-permissions",
+           dependencies=[Depends(require_auth)])
+async def connection_test_ecc_permaware(body: ConnectionTestRequest):
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from connection_validator import validate_ecc
+    return validate_ecc(body.creds, migration_type=body.migration_type,
+                        selected_objects=body.selected_objects)
+
+
+@app.post("/api/connections/s4/test-with-permissions",
+           dependencies=[Depends(require_auth)])
+async def connection_test_s4_permaware(body: ConnectionTestRequest):
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from connection_validator import validate_s4
+    return validate_s4(body.creds, migration_type=body.migration_type,
+                       selected_objects=body.selected_objects)
+
+
+# =============================================================================
+# CONVERSION MAPPING (the simplified dashboard's data source)
+# =============================================================================
+@app.get("/api/mapping", dependencies=[Depends(require_auth)])
+async def mapping_all():
+    """Full curated source->target mapping catalog."""
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from conversion_mapping import list_all_mappings, list_by_category
+    return {"mappings": list_all_mappings(),
+            "by_category": list_by_category()}
+
+
+@app.get("/api/mapping/{object_name}", dependencies=[Depends(require_auth)])
+async def mapping_one(object_name: str):
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from conversion_mapping import get_mapping
+    m = get_mapping(object_name)
+    if not m:
+        raise HTTPException(status_code=404,
+                            detail={"error": "unknown object", "object": object_name})
+    return m
+
+
+@app.get("/api/mapping-by-ecc-table/{table}", dependencies=[Depends(require_auth)])
+async def mapping_reverse(table: str):
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from conversion_mapping import find_by_ecc_table
+    return {"table": table, "matches": find_by_ecc_table(table)}
+
+
+@app.get("/api/runs/{run_id}/conversion-progress",
+         dependencies=[Depends(require_auth)])
+async def conversion_progress(run_id: str):
+    """Live conversion dashboard data: each mapping entry merged with the
+    per-object progress for this run."""
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from conversion_mapping import summarise_run
+    # Pull whatever per-object progress the run has emitted. The
+    # existing /api/progress endpoint already aggregates this from the
+    # spine telemetry; we read it and pass to summarise_run.
+    per_object = {}
+    try:
+        # _progress_steps is module-global state populated by the runtime
+        # as the run reports progress; each step has {step, status, details}.
+        # The conversion-progress shape we want is {object: {rows_loaded,
+        # rows_total, rps, status}}, which the spine emits as steps named
+        # spine.<Object>.progress with the relevant payload.
+        for step in _progress_steps:
+            name = step.get("step", "")
+            details = step.get("details") or {}
+            if name.startswith("spine.") and ".progress" in name:
+                obj = name.split(".", 2)[1]
+                per_object[obj] = {
+                    "rows_loaded": int(details.get("rows_loaded", 0)),
+                    "rows_total":  int(details.get("rows_total", 0)),
+                    "rps":         float(details.get("rps", 0) or 0),
+                    "status":      details.get("status", "running"),
+                }
+    except Exception:
+        per_object = {}
+    return {"run_id": run_id, "rows": summarise_run(per_object)}
+
+
+# =============================================================================
+# SUPERUSER COMMAND BOARD (root-only)
+# =============================================================================
+@app.get("/api/admin/commands",
+         dependencies=[Depends(require_role("root"))])
+async def admin_list_commands(category: Optional[str] = None):
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from superuser_commands import list_commands, categories
+    return {"commands": list_commands(category=category),
+            "categories": categories()}
+
+
+@app.get("/api/admin/commands/{command_id}",
+         dependencies=[Depends(require_role("root"))])
+async def admin_get_command(command_id: str):
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from superuser_commands import get_command
+    cmd = get_command(command_id)
+    if not cmd:
+        raise HTTPException(status_code=404,
+                            detail={"error": "unknown command_id"})
+    return cmd
+
+
+class CommandExecuteRequest(BaseModel):
+    params: Optional[dict] = None
+
+
+@app.post("/api/admin/commands/{command_id}/execute",
+          dependencies=[Depends(require_role("root"))])
+async def admin_execute_command(command_id: str, body: CommandExecuteRequest):
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from superuser_commands import get_command, validate_params
+    cmd = get_command(command_id)
+    if not cmd:
+        raise HTTPException(status_code=404,
+                            detail={"error": "unknown command_id"})
+    supplied = body.params or {}
+    val = validate_params(command_id, supplied)
+    if not val.get("ok"):
+        raise HTTPException(status_code=400, detail={"error": "invalid params",
+                                                       **val})
+    # Dispatch — wired conservatively. Each branch is a SAFE-EXECUTE
+    # path that the existing infra already supports; we never invent a
+    # new shell call from user input.
+    runs = cmd.get("runs")
+    target = cmd.get("run_target", "")
+    if runs == "lambda":
+        import boto3
+        try:
+            payload = dict(cmd.get("payload") or {})
+            payload.update(supplied)
+            resp = boto3.client("lambda").invoke(
+                FunctionName=target,
+                InvocationType="RequestResponse",
+                Payload=json.dumps(payload).encode("utf-8"))
+            body_bytes = resp["Payload"].read() if resp.get("Payload") else b""
+            try:
+                result = json.loads(body_bytes.decode("utf-8") or "null")
+            except Exception:
+                result = {"raw": body_bytes.decode("utf-8", errors="replace")}
+            return {"ok": True, "command_id": command_id,
+                    "lambda": target, "result": result}
+        except Exception as e:
+            raise HTTPException(status_code=502,
+                                detail={"error": "lambda invoke failed",
+                                        "message": str(e)[:200]})
+    if runs == "api":
+        # API target is a server-side route the caller can hit; we don't
+        # try to internally re-dispatch (avoids re-entrancy + auth issues).
+        return {"ok": True, "command_id": command_id,
+                "next_call": target,
+                "hint": "Issue a subsequent request to next_call from the UI."}
+    if runs == "shell":
+        # Shell scripts are NOT dispatched by the API server (the api-server
+        # task does not have a shell to PowerShell into). Return the script
+        # path + the supplied params so the operator runs it locally.
+        return {"ok": True, "command_id": command_id, "runs": "shell",
+                "script": target, "params": supplied,
+                "hint": "Run this script locally with the supplied params."}
+    raise HTTPException(status_code=500,
+                        detail={"error": f"unknown runs type: {runs}"})
+
+
+# =============================================================================
 # ROUTES - CONNECTIONS (authenticated)
 # =============================================================================
 @app.get("/api/connections", dependencies=[Depends(require_auth)])
