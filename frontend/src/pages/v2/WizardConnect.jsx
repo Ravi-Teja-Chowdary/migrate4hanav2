@@ -231,8 +231,19 @@ function TestVerdict({ r }) {
   if (klass === 'sdk_missing') {
     return <span className="text-amber-700 text-sm font-medium">⚠ SAP NW RFC SDK missing on this host</span>;
   }
-  if (klass === 'host_unreachable' || !r.host_reachable) {
+  if (klass === 'bad_input') {
+    return <span className="text-amber-700 text-sm font-medium">⚠ connection field empty or malformed</span>;
+  }
+  if (klass === 'host_unreachable') {
     return <span className="text-red-700 text-sm font-medium">✗ host unreachable</span>;
+  }
+  if (!r.host_reachable && klass === 'unknown') {
+    // Generic fall-through — surface as "couldn't connect" rather than
+    // pretending we know it's a network problem.
+    return <span className="text-red-700 text-sm font-medium">✗ couldn't connect (see details)</span>;
+  }
+  if (!r.host_reachable) {
+    return <span className="text-red-700 text-sm font-medium">✗ couldn't connect (see details)</span>;
   }
   if (r.missing_auths?.length) {
     return <span className="text-amber-700 text-sm font-medium">✗ {r.missing_auths.length} permission(s) missing</span>;

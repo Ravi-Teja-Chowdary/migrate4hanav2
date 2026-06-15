@@ -192,13 +192,29 @@ def _open_connection(creds: dict) -> Any:
     except Exception:
         pass   # not bundled in this env → let pyrfc try with system PATH
     from pyrfc import Connection
-    return Connection(
-        ashost=creds["ashost"], sysnr=creds["sysnr"],
-        client=creds["client"], user=creds["user"],
-        passwd=creds["passwd"],
-        saprouter=creds.get("saprouter") or None,
-        gwhost=creds.get("gwhost") or None,
-        gwserv=creds.get("gwserv") or None)
+    # pyrfc.Connection() does not tolerate kwargs whose value is None - it
+    # passes them straight to the SAP NW RFC SDK which calls .encode() and
+    # raises AttributeError. Drop empty/None optionals BEFORE calling.
+    raw = {
+        "ashost":    creds.get("ashost"),
+        "sysnr":     creds.get("sysnr"),
+        "client":    creds.get("client"),
+        "user":      creds.get("user"),
+        "passwd":    creds.get("passwd"),
+        "saprouter": creds.get("saprouter"),
+        "gwhost":    creds.get("gwhost"),
+        "gwserv":    creds.get("gwserv"),
+        "lang":      creds.get("lang") or "EN",
+    }
+    kw = {k: str(v) for k, v in raw.items() if v not in (None, "")}
+    # Required: ashost + user + passwd. If anything is missing we'd rather
+    # surface a clean error here than let pyrfc throw NoneType.encode.
+    for required in ("ashost", "user", "passwd"):
+        if required not in kw:
+            raise ValueError(
+                f"missing required connection field: {required} "
+                f"(supplied keys: {sorted(kw)})")
+    return Connection(**kw)
 
 
 def _run_probes(probes: List[Probe], conn: Any) -> Tuple[List[dict], List[str]]:
@@ -298,6 +314,15 @@ def _validate_system(label: str, creds: dict, migration_type: str,
                              "on Windows ensure sapnwrfc package + DLLs are "
                              "installed, or run inside the Lambda where they "
                              "are bundled")
+        elif "attributeerror" in low and "encode" in low:
+            # Classic pyrfc symptom for a None or wrong-typed connection
+            # field. Don't lie and say the host is unreachable.
+            out["failure_class"] = "bad_input"
+            out["error"] = (msg + "  |  hint: one of the connection fields "
+                             "is empty or not a string. Re-check ashost / "
+                             "sysnr / client / user / passwd are all filled in.")
+        elif "missing required connection field" in low:
+            out["failure_class"] = "bad_input"
         elif any(s in low for s in ("timed out", "connection refused",
                                      "connection reset", "host not found",
                                      "no route to host", "network is unreachable",
