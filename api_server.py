@@ -839,14 +839,25 @@ def _parse_pipeline_output(line):
 
     # "  status=success" / "  status=blocked" follow a [stageN] line; update
     # the most recently emitted stage row in place so the tracker flips to
-    # SUCCESS/ERROR instead of staying IN_PROGRESS.
-    m_status = _re.match(r"^status=([a-z_]+)$", low)
+    # SUCCESS/ERROR instead of staying IN_PROGRESS. Be liberal about what
+    # counts as success - handlers return many synonyms ("ok",
+    # "completed", "success", "done", "no_op") and we don't want a parser
+    # miss to keep a finished stage stuck on IN_PROGRESS.
+    m_status = _re.match(r"^status=([a-z0-9_-]+)$", low)
     if m_status:
         outcome = m_status.group(1)
-        status_map = {"success": "SUCCESS", "ok": "SUCCESS",
-                       "blocked": "ERROR", "error": "ERROR", "failed": "ERROR",
-                       "skipped": "WARNING"}
-        target = status_map.get(outcome, "IN_PROGRESS")
+        FAILURE = {"blocked", "error", "failed", "fatal", "aborted"}
+        WARNING = {"skipped", "noop", "no_op", "partial"}
+        if outcome in FAILURE:
+            target = "ERROR"
+        elif outcome in WARNING:
+            target = "WARNING"
+        else:
+            # Anything not explicitly failure/warning is treated as success.
+            # Handlers return success under many names; matching the full
+            # set is brittle, and the alternative (stages stuck on
+            # IN_PROGRESS after a clean run) is much worse for the operator.
+            target = "SUCCESS"
         last = _parse_state.get("last_stage_step")
         if last:
             last["status"] = target
@@ -855,16 +866,27 @@ def _parse_pipeline_output(line):
             _add_progress_step("stage-outcome", f"status={outcome}", target)
         return
 
-    # "Run <id> finished rc=N" - the final marker. rc!=0 means the entire
-    # pipeline failed; whichever stage was last in flight inherits ERROR.
+    # "Run <id> finished rc=N" - the final marker.
     m_finish = _re.match(r"^run\s+\S+\s+finished\s+rc=(\d+)$", low)
     if m_finish:
         rc = int(m_finish.group(1))
-        if rc != 0:
-            last = _parse_state.get("last_stage_step")
-            if last and last.get("status") == "IN_PROGRESS":
-                last["status"] = "ERROR"
-                last["details"] = {**(last.get("details") or {}), "outcome": f"rc={rc}"}
+        # Reconcile straggler stages whose status line we missed. On a
+        # clean exit (rc=0) every is_stage row stuck on IN_PROGRESS is a
+        # parse miss - mark them SUCCESS so the Project tracker matches
+        # the subprocess's own verdict. On failure, only the in-flight
+        # stage inherits ERROR; earlier in-flight rows are ambiguous so
+        # leave them alone.
+        for s in _progress_steps:
+            if not (s.get("details") or {}).get("is_stage"):
+                continue
+            if s.get("status") != "IN_PROGRESS":
+                continue
+            if rc == 0:
+                s["status"] = "SUCCESS"
+                s["details"] = {**(s.get("details") or {}), "outcome": "rc=0 reconciled"}
+            elif s is _parse_state.get("last_stage_step"):
+                s["status"] = "ERROR"
+                s["details"] = {**(s.get("details") or {}), "outcome": f"rc={rc}"}
         _add_progress_step("runner",
                             f"Run finished rc={rc}",
                             "SUCCESS" if rc == 0 else "ERROR")
