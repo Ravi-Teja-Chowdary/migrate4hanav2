@@ -1555,18 +1555,21 @@ async def mapping_reverse(table: str):
          dependencies=[Depends(require_auth)])
 async def conversion_progress(run_id: str):
     """Live conversion dashboard data: each mapping entry merged with the
-    per-object progress for this run."""
+    per-object progress for this run.
+
+    Two sources, merged with file-on-disk winning:
+    1. local-staging/m4h-local/runs/<run_id>/data-migrator/summary.json
+       - written by stage13 (extract) + stage15 (templates). Authoritative
+         once those stages run; per-object row_count + status.
+    2. Live spine.<Object>.progress events from _progress_steps - used while
+       a stage is mid-flight before the summary file lands.
+    """
     sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
     from conversion_mapping import summarise_run
-    # Pull whatever per-object progress the run has emitted. The
-    # existing /api/progress endpoint already aggregates this from the
-    # spine telemetry; we read it and pass to summarise_run.
     per_object = {}
+
+    # ── Source 1: live spine events ────────────────────────────────────
     try:
-        # _progress_steps carries normalised step rows (see _add_progress_step).
-        # We accept any of: step row's `step` (e.g. "spine.Customer.progress"),
-        # or the legacy {stage, action} combination, so spines that emit
-        # either shape are picked up.
         for step in _progress_steps:
             name = step.get("step") or f"{step.get('stage','')}.{step.get('action','')}"
             details = step.get("details") or {}
@@ -1581,7 +1584,42 @@ async def conversion_progress(run_id: str):
                         "status":      details.get("status", "running"),
                     }
     except Exception:
-        per_object = {}
+        pass
+
+    # ── Source 2: data-migrator summary on disk ────────────────────────
+    summary_path = os.path.join(
+        PROJECT_DIR, "local-staging", "m4h-local",
+        "runs", run_id, "data-migrator", "summary.json"
+    )
+    if os.path.isfile(summary_path):
+        try:
+            with open(summary_path, "r", encoding="utf-8") as f:
+                summary = json.load(f)
+            for r in (summary.get("results") or []):
+                if not isinstance(r, dict):
+                    continue
+                obj = r.get("object")
+                if not obj:
+                    continue
+                rows = int(r.get("row_count") or 0)
+                outcome = (r.get("status") or "").lower()
+                # data-migrator's stage13/15 are extract-and-stage-CSV
+                # operations; "ok" means rows landed in the staging CSV
+                # ready for the MC import. We expose this as rows_loaded
+                # against rows_total for parity with the dashboard's
+                # progress-bar model.
+                status_map = {"ok": "complete", "partial": "running",
+                                "error": "failed", "skipped": "pending"}
+                per_object[obj] = {
+                    "rows_loaded": rows if outcome in ("ok", "partial") else 0,
+                    "rows_total":  rows,
+                    "rps":         per_object.get(obj, {}).get("rps", 0),
+                    "status":      status_map.get(outcome, "pending"),
+                }
+        except Exception as exc:
+            log.warning("conversion-progress: failed to read %s: %s",
+                        summary_path, exc)
+
     return {"run_id": run_id, "rows": summarise_run(per_object)}
 
 
