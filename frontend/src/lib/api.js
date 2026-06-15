@@ -1,135 +1,180 @@
-// Real API client for the Migrate4HANA FastAPI backend (api_server.py on :8000).
-// In dev, Vite proxies /api -> http://localhost:8000 (see vite.config.js),
-// so we use relative paths and never touch mock data.
+// Migrate4HANA API client — UI rebuild 2026-06-15.
+//
+// Auth model: real per-user JWT (root or IAM) stored in localStorage.
+// The old "auto-token" flow (POST /api/auth/token at page load) is gone —
+// every page is behind <ProtectedRoute>; users must log in first.
 
 export const API_BASE = import.meta.env.VITE_API_BASE ?? '';
+const TOKEN_KEY = 'm4h.token.v2';
+const USER_KEY  = 'm4h.user.v2';
+const CLIENT_KEY = 'm4h.active_client.v2';
 
-let _token = null;
-let _tokenPromise = null;
-
-async function getToken() {
-  if (_token) return _token;
-  if (_tokenPromise) return _tokenPromise;
-  _tokenPromise = fetch(`${API_BASE}/api/auth/token`, { method: 'POST' })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((d) => { _token = d?.token || null; _tokenPromise = null; return _token; })
-    .catch(() => { _tokenPromise = null; return null; });
-  return _tokenPromise;
+// ── token + user storage (read by the auth context) ──────────────────────
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || '';
 }
 
-/** Authenticated fetch returning parsed JSON. Throws on network/HTTP error.
- *  Automatically attaches X-Client-Id so the api-server can scope tenant data. */
+export function setToken(token) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getStoredUser() {
+  try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); }
+  catch { return null; }
+}
+
+export function setStoredUser(user) {
+  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+  else localStorage.removeItem(USER_KEY);
+}
+
+export function getActiveClient() {
+  return localStorage.getItem(CLIENT_KEY) || '';
+}
+
+export function setActiveClient(client_id) {
+  if (client_id) localStorage.setItem(CLIENT_KEY, client_id);
+  else localStorage.removeItem(CLIENT_KEY);
+}
+
+export function clearSession() {
+  setToken('');
+  setStoredUser(null);
+  setActiveClient('');
+}
+
+// ── core fetch ───────────────────────────────────────────────────────────
 export async function apiFetch(path, opts = {}) {
-  const token = await getToken();
+  const token = getToken();
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  // Lazy-import activeClient to avoid an init-order cycle when apiFetch is
-  // imported before the React provider mounts.
-  try {
-    const { getActiveClientId } = await import('./activeClient.jsx');
-    const cid = getActiveClientId();
-    if (cid) headers['X-Client-Id'] = cid;
-  } catch { /* ignore — single-tenant fallback */ }
+  const cid = getActiveClient();
+  if (cid) headers['X-Client-Id'] = cid;
   const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
   if (!res.ok) {
-    const msg = data?.detail || data?.error || `HTTP ${res.status}`;
-    const err = new Error(msg);
+    const msg = data?.detail?.error || data?.detail || data?.error || `HTTP ${res.status}`;
+    const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
     err.status = res.status;
     err.data = data;
+    if (res.status === 401) {
+      // Auto-logout on 401; the ProtectedRoute will redirect to /login.
+      clearSession();
+    }
     throw err;
   }
   return data;
 }
 
 export async function authUrl(path) {
-  const token = await getToken();
-  return `${API_BASE}${path}${path.includes('?') ? '&' : '?'}token=${token || ''}`;
+  const token = getToken();
+  return `${API_BASE}${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(token || '')}`;
 }
 
-/** Liveness probe — used to show an honest "API offline" banner. */
 export async function ping() {
   try {
     const r = await fetch(`${API_BASE}/api/health`);
     return r.ok ? await r.json() : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-// ── typed endpoint helpers ────────────────────────────────────────────────
+// ── typed helpers ────────────────────────────────────────────────────────
 export const api = {
   health: () => apiFetch('/api/health'),
 
-  // ── Clients (multi-tenant) ──
+  // ── Auth ──
+  loginRoot: (email, password) =>
+    apiFetch('/api/auth/login', {
+      method: 'POST', body: JSON.stringify({ email, password }),
+    }),
+  loginIAM: (email, password, client_id) =>
+    apiFetch('/api/auth/iam-login', {
+      method: 'POST', body: JSON.stringify({ email, password, client_id }),
+    }),
+  me:     () => apiFetch('/api/auth/me'),
+  logout: () => apiFetch('/api/auth/logout', { method: 'POST' }),
+
+  // ── User management (root only) ──
+  listUsers:  () => apiFetch('/api/users'),
+  createUser: (payload) => apiFetch('/api/users',
+    { method: 'POST', body: JSON.stringify(payload) }),
+  updateUser: (email, payload) => apiFetch(`/api/users/${encodeURIComponent(email)}`,
+    { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteUser: (email) => apiFetch(`/api/users/${encodeURIComponent(email)}`,
+    { method: 'DELETE' }),
+  operations: () => apiFetch('/api/operations'),
+
+  // ── Clients ──
   listClients:  () => apiFetch('/api/clients'),
   createClient: (payload) => apiFetch('/api/clients',
-                  { method: 'POST', body: JSON.stringify(payload) }),
+    { method: 'POST', body: JSON.stringify(payload) }),
   deleteClient: (id) => apiFetch(`/api/clients/${encodeURIComponent(id)}`,
-                  { method: 'DELETE' }),
+    { method: 'DELETE' }),
 
-  // ── Connections (interactive) ──
-  connections: () => apiFetch('/api/connections'),
-  eccStatus:   () => apiFetch('/api/connections/ecc/status'),
-  saveEcc:     (payload) => apiFetch('/api/connections/ecc',
-                  { method: 'POST', body: JSON.stringify(payload) }),
-  testEcc:     (payload) => apiFetch('/api/connections/ecc/test',
-                  { method: 'POST', body: JSON.stringify(payload) }),
-  saveS4:      (payload) => apiFetch('/api/connections/s4hana',
-                  { method: 'POST', body: JSON.stringify(payload) }),
-  testS4:      (payload) => apiFetch('/api/connections/s4hana/test',
-                  { method: 'POST', body: JSON.stringify(payload) }),
-  saveLiftAndShiftTarget: (payload) => apiFetch('/api/connections/lift-and-shift-target',
-                  { method: 'POST', body: JSON.stringify(payload) }),
+  // ── Wizard ──
+  wizardCreate: (payload = {}) => apiFetch('/api/wizard',
+    { method: 'POST', body: JSON.stringify(payload) }),
+  wizardList:   () => apiFetch('/api/wizard'),
+  wizardGet:    (run_id) => apiFetch(`/api/wizard/${encodeURIComponent(run_id)}`),
+  wizardPatch:  (run_id, payload) =>
+    apiFetch(`/api/wizard/${encodeURIComponent(run_id)}`,
+      { method: 'PATCH', body: JSON.stringify(payload) }),
+  wizardDelete: (run_id) =>
+    apiFetch(`/api/wizard/${encodeURIComponent(run_id)}`, { method: 'DELETE' }),
 
-  // ── Pipeline + runs ──
-  stages:   () => apiFetch('/api/pipeline/lift-and-shift/stages'),
-  status:   () => apiFetch('/api/status'),
-  progress: (since = 0) => apiFetch(`/api/progress?since=${since}`),
-  spineProgress: () => apiFetch('/api/spine/progress'),
-  runs:     () => apiFetch('/api/runs'),
-  run:      (id) => apiFetch(`/api/runs/${id}`),
-
-  // ── Gates ──
-  gates:       () => apiFetch('/api/gates'),
-  approveGate: (id, decided_by) =>
-    apiFetch(`/api/gates/${id}/approve`, { method: 'POST', body: JSON.stringify({ decided_by }) }),
-  rejectGate: (id, decided_by) =>
-    apiFetch(`/api/gates/${id}/reject`, { method: 'POST', body: JSON.stringify({ decided_by }) }),
-
-  // ── Pipeline triggers ──
-  trigger: (mode) => apiFetch(`/api/pipeline/${mode}`, { method: 'POST' }),
-  triggerLiftAndShift: (payload = {}) =>
-    apiFetch('/api/pipeline/lift-and-shift', { method: 'POST', body: JSON.stringify(payload) }),
-  triggerLiftAndShiftAssess: () =>
-    apiFetch('/api/pipeline/lift-and-shift/assess', { method: 'POST' }),
-  triggerLiftAndShiftCode: () =>
-    apiFetch('/api/pipeline/lift-and-shift/code', { method: 'POST' }),
-  triggerLiftAndShiftData: () =>
-    apiFetch('/api/pipeline/lift-and-shift/data', { method: 'POST' }),
-
-  // ── F6 Version compatibility matrix ──
+  // ── Versions ──
   versionsSupported: () => apiFetch('/api/versions/supported'),
   versionsDetected:  () => apiFetch('/api/versions/detected'),
-  versionsSelected:  () => apiFetch('/api/versions/selected'),
-  saveVersions: (payload) =>
-    apiFetch('/api/versions/selected', { method: 'POST', body: JSON.stringify(payload) }),
 
-  // ── Script runner (whitelisted server-side scripts) ──
-  scriptList:  () => apiFetch('/api/scripts/list'),
-  scriptRun:   (script_id, params = {}) =>
-    apiFetch('/api/scripts/run', { method: 'POST', body: JSON.stringify({ script_id, params }) }),
-  scriptOutput: (job_id) => apiFetch(`/api/scripts/output/${job_id}`),
+  // ── Perm-aware connection test ──
+  testEccPermAware: (creds, migration_type, selected_objects) =>
+    apiFetch('/api/connections/ecc/test-with-permissions', {
+      method: 'POST',
+      body: JSON.stringify({ creds, migration_type, selected_objects }),
+    }),
+  testS4PermAware: (creds, migration_type, selected_objects) =>
+    apiFetch('/api/connections/s4/test-with-permissions', {
+      method: 'POST',
+      body: JSON.stringify({ creds, migration_type, selected_objects }),
+    }),
+  saveEcc: (payload) => apiFetch('/api/connections/ecc',
+    { method: 'POST', body: JSON.stringify(payload) }),
+  saveS4:  (payload) => apiFetch('/api/connections/s4hana',
+    { method: 'POST', body: JSON.stringify(payload) }),
 
-  // ── PDF reports ──
-  reportVolumes: (run_id) => apiFetch(`/api/v1/reports/${run_id}/volumes`),
-  reportSections: (run_id) => apiFetch(`/api/runs/${run_id}/report`),
+  // ── Conversion mapping ──
+  mappingAll: () => apiFetch('/api/mapping'),
+  mappingOne: (object_name) => apiFetch(`/api/mapping/${encodeURIComponent(object_name)}`),
+  conversionProgress: (run_id) =>
+    apiFetch(`/api/runs/${encodeURIComponent(run_id)}/conversion-progress`),
 
-  // ── Logs (CloudWatch + local) ──
+  // ── Runs ──
+  runs:     () => apiFetch('/api/runs'),
+  run:      (id) => apiFetch(`/api/runs/${encodeURIComponent(id)}`),
+  progress: (since = 0) => apiFetch(`/api/progress?since=${since}`),
+  spineProgress: () => apiFetch('/api/spine/progress'),
+  status:   () => apiFetch('/api/status'),
+
+  // ── Pipeline triggers ──
+  triggerLiftAndShift: (payload = {}) =>
+    apiFetch('/api/pipeline/lift-and-shift',
+      { method: 'POST', body: JSON.stringify(payload) }),
+
+  // ── Gates ──
+  gates: () => apiFetch('/api/gates'),
+  approveGate: (id, decided_by) =>
+    apiFetch(`/api/gates/${id}/approve`,
+      { method: 'POST', body: JSON.stringify({ decided_by }) }),
+  rejectGate: (id, decided_by) =>
+    apiFetch(`/api/gates/${id}/reject`,
+      { method: 'POST', body: JSON.stringify({ decided_by }) }),
+
+  // ── Logs ──
   logSources: () => apiFetch('/api/logs/sources'),
-  logTail:    ({ source = 'sfn', run_id, next_token, start_ms, limit = 500, q } = {}) => {
+  logTail: ({ source = 'sfn', run_id, next_token, start_ms, limit = 500, q } = {}) => {
     const p = new URLSearchParams();
     p.set('source', source);
     if (run_id)     p.set('run_id', run_id);
@@ -139,22 +184,32 @@ export const api = {
     if (q)          p.set('q', q);
     return apiFetch(`/api/logs/tail?${p.toString()}`);
   },
+
+  // ── Reports ──
+  reportSections: (run_id) =>
+    apiFetch(`/api/runs/${encodeURIComponent(run_id)}/report`),
+
+  // ── Admin (root only) ──
+  adminCommands: (category) => {
+    const q = category ? `?category=${encodeURIComponent(category)}` : '';
+    return apiFetch(`/api/admin/commands${q}`);
+  },
+  adminCommand: (id) => apiFetch(`/api/admin/commands/${encodeURIComponent(id)}`),
+  adminExecute: (id, params = {}) =>
+    apiFetch(`/api/admin/commands/${encodeURIComponent(id)}/execute`,
+      { method: 'POST', body: JSON.stringify({ params }) }),
 };
 
-/** Trigger a browser download of a PDF (or any file) at the given API path.
- *  Uses an authenticated fetch + blob URL so the browser downloads it.
- *  Falls back to opening the authUrl in a new tab if blob fetch fails.
- */
+// ── PDF download helpers ─────────────────────────────────────────────────
 export async function downloadFile(path, filename) {
-  const token = await getToken();
+  const token = getToken();
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) {
-      const txt = await res.text().catch(() => '');
       let msg = `HTTP ${res.status}`;
-      try { msg = JSON.parse(txt).detail || msg; } catch { /* ignore */ }
+      try { msg = JSON.parse(await res.text()).detail || msg; } catch { /* */ }
       throw new Error(msg);
     }
     const blob = await res.blob();
@@ -167,14 +222,12 @@ export async function downloadFile(path, filename) {
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
     return true;
   } catch (e) {
-    // Fall back: open in new tab with token query param
     const u = await authUrl(path);
     window.open(u, '_blank');
     throw e;
   }
 }
 
-/** Open a PDF in a new tab (read-only preview) with auth via query param. */
 export async function openInTab(path) {
   const u = await authUrl(path);
   window.open(u, '_blank');

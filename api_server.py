@@ -40,7 +40,7 @@ import secrets
 import time
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import List, Optional
 
 # Windows Python 3.7 uses SelectorEventLoop by default, which does not support
 # asyncio.create_subprocess_exec. Switch to ProactorEventLoop on Windows.
