@@ -498,7 +498,11 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
         global _active_run
         try:
             runner = "run_local_lift_and_shift.py" if pipeline_kind == "lift_and_shift" else "run_local_pipeline.py"
-            cmd = [sys.executable, os.path.join(PROJECT_DIR, runner)]
+            # `-u` = unbuffered binary stdout/stderr. Without this, Windows
+            # Python pipes block-buffer print() and the UI sees zero events
+            # for ~30s while discovery scans 20k+ programs. PYTHONUNBUFFERED=1
+            # below covers any nested subprocess too.
+            cmd = [sys.executable, "-u", os.path.join(PROJECT_DIR, runner)]
 
             # Determine if live ECC connection is available
             conns = _load_connections()
@@ -562,7 +566,8 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
 
             _add_progress_step("extraction", "Starting ECC data extraction", "IN_PROGRESS")
 
-            env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+            env = {**os.environ, "PYTHONIOENCODING": "utf-8",
+                    "PYTHONUNBUFFERED": "1"}
             if use_live:
                 env["M4H_ECC_PASSWD"] = _ecc_passwd
                 if _s4_passwd:
@@ -593,7 +598,12 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                 cwd=PROJECT_DIR, env=env)
 
-            # Read stdout lines in real-time for progress updates
+            # Stream BOTH stdout and stderr line-by-line. Discovery uses
+            # logger.info(...) which goes to stderr, so if we don't drain
+            # stderr live the UI sees nothing during a 30s scan and then
+            # everything in a burst at the end.
+            stderr_lines = []
+
             async def _read_stdout():
                 while True:
                     line = await proc.stdout.readline()
@@ -602,19 +612,52 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                     text = line.decode("utf-8", errors="replace").strip()
                     if not text:
                         continue
-                    # Parse pipeline output for meaningful progress steps
                     _parse_pipeline_output(text)
 
             async def _read_stderr():
-                data = await proc.stderr.read()
-                return data.decode("utf-8", errors="replace") if data else ""
+                while True:
+                    line = await proc.stderr.readline()
+                    if not line:
+                        break
+                    text = line.decode("utf-8", errors="replace").rstrip()
+                    if not text:
+                        continue
+                    stderr_lines.append(text)
+                    # Surface notable stderr lines as live progress so the
+                    # operator watches discovery happen in Live Ops instead
+                    # of staring at a frozen window. Filter out the SDK's
+                    # chatty boto/timer noise.
+                    if any(k in text for k in
+                            ("INFO:", "WARNING:", "ERROR:", "scan_",
+                             "Scanning", "Found", "Discovery", "rc=",
+                             "key=", "RFC ")):
+                        _add_progress_step("runner", text[:200], "INFO")
 
+            # Heartbeat: every 15s while the subprocess is alive, emit a
+            # "still scanning..." event so the operator knows we haven't
+            # frozen even if a long RFC call is in flight.
+            async def _heartbeat():
+                t0 = time.time()
+                while proc.returncode is None:
+                    await asyncio.sleep(15)
+                    if proc.returncode is None:
+                        elapsed = int(time.time() - t0)
+                        _add_progress_step("runner",
+                                           f"Subprocess alive, {elapsed}s elapsed "
+                                           f"(discovery typically takes ~30s)",
+                                           "IN_PROGRESS")
+
+            heartbeat_task = asyncio.create_task(_heartbeat())
             stderr_task = asyncio.create_task(_read_stderr())
             try:
                 await asyncio.wait_for(_read_stdout(), timeout=600)
             except asyncio.TimeoutError:
                 pass
-            stderr_text = await stderr_task
+            await stderr_task
+            stderr_text = "\n".join(stderr_lines)
+            heartbeat_task.cancel()
+            try: await heartbeat_task
+            except (asyncio.CancelledError, Exception): pass
             await asyncio.wait_for(proc.wait(), timeout=30)
 
             if proc.returncode != 0:
