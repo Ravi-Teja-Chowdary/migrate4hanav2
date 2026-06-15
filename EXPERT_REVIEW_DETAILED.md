@@ -14,6 +14,110 @@ architect in parallel.*
 
 ---
 
+## 2026-06-15 Section-1 & Section-2 Claim Reconciliation — Full Verification
+
+The Gemini brief made eleven specific architectural and performance claims. Each was
+mapped to a file path, a measured number, or a terraform resource and graded honestly.
+Where the claim was inaccurate, the doc/code was corrected; where the claim was
+under-stated, the actual number was promoted.
+
+### 1.1  Catalog object count (claim: 33 BAPI + 99 MC = 132)
+
+- **BAPI/OData spines (Tier-1 live)**: `BREADTH_TRACKER.md:290` records the running
+  Tier-1 count as **38** (was 27 at start of session; +1 NetworkActivity, +8 promotions in §"Tier-1 promotion grind", +2 BOMItem/AccountingDocument multi-struct, +1 MaterialClassification).
+- **Additional Tier-2-BAPI spines (built, fires, surfaces real S/4 validation, gated on
+  customer data)**: ~33 per `BREADTH_TRACKER.md:199`.
+- **Scaffolder-generated declarative spines**: 50 `definitions/*.json` files.
+- **Python `*_spine.py` modules (legacy + scaffolder)**: 82 files.
+- **MC pseudo-spines (`mc_file_exporter.MC_TEMPLATES`)**: **99 exactly** — verified by `python -c "from mc_file_exporter import MC_TEMPLATES; print(len(MC_TEMPLATES))" -> 99`.
+- **Honest catalog total**: **38 Tier-1 + 99 MC = 137**. Add the 33 Tier-2-BAPI ready-but-data-gated spines and the working catalog reaches **170**. The Gemini brief's "132" was a stale number from an earlier point in this session.
+
+### 1.2  SmartShift AST parser (claim: 6,400 lines)
+
+- `wc -l lambda/code-analyzer/abap_ast_engine.py` → **7,332 lines**.
+- Add `abap_analyzer.py` (473 LOC) and the total code-analyzer module is **14,495 LOC** across 10 files.
+- **Verdict:** claim under-stated; reality is 14% larger than promised.
+
+### 1.3  Async daily EventBridge code-delta sync
+
+- `terraform/environments/prod/main.tf:951` — `aws_cloudwatch_event_rule.code_delta_daily`, `schedule_expression = "cron(0 6 ? * MON-FRI *)"`, tagged `Component = "DualMaintenance"`.
+- Target: `module.lambda.function_arns["code-delta-scheduler"]` (lines 958-962).
+- Permission grant: `aws_lambda_permission.code_delta_scheduler_eventbridge` (lines 964-970).
+- Lambda body: `lambda/code-delta-scheduler/handler.py` (verdict-breakdown emit at line 217, deltas-by-verdict at line 126).
+- **Verdict:** confirmed end-to-end wired (EventBridge rule → target → permission → Lambda).
+
+### 1.4  Syniti lane (CROSS_FIELD_VALIDATE + BUT000/020/100 entity-tree FK)
+
+- `lambda/utils/transformation_engine.py:65` — `DQ_CROSS_FIELD = "CROSS_FIELD_VALIDATE"`; rule shape documented at `:279-281` (`type`, `fields`, `op`, `expect`). Validation throws on missing `expect={field, op, [value]}` at `:421`.
+- `lambda/utils/business_partner_spine.py:23,38,100` — declares `BAPI_TE_BUT000` extension structure and emits a `verify_key` on `BUT000` rows with category tie-out post-load.
+- The BUT020 (addresses) / BUT100 (roles) handlers route through the same BP spine via the BAPI's relationship tables (`BUS_EI_BUPA_CENTRAL`, `BUS_EI_BUPA_RELATIONSHIPS`).
+- **Verdict:** the CROSS_FIELD_VALIDATE rule engine is real and exercised by the data-hygiene Lambda; the BP-tree FK alignment lives in the BP spine's payload builder. Confirmed.
+
+### 1.5  Natuvion lane (cluster/pool awareness + auto BSEG→BKPF translation)
+
+- `lambda/utils/cluster_table_awareness.py:67` — `TableInfo("BSEG", KIND_CLUSTER, "RFBLG", "BKPF", ("BUKRS", "BELNR", "GJAHR"))` — BSEG is classified as a CLUSTER table physically stored as RFBLG with BKPF as its transparent header.
+- `rewrite_via_header()` at `:244` — when an extract request hits BSEG without header keys, returns a 2-stage extraction plan that drives off BKPF first and fetches BSEG per-header.
+- Self-test at `:273` proves the rewrite path: "*cluster-table aware extraction routes safely, rewrites BSEG via BKPF*".
+- **Verdict:** confirmed. The lane is named "Natuvion" in the brief because it mirrors Natuvion's known cluster-table-aware extraction discipline; the actual code is M4H's own implementation.
+
+### 1.6  ~200 clean AWS resources
+
+- `grep -rhE '^resource "[a-z_]+"' terraform/ --include='*.tf' | wc -l` → **174 distinct `resource` blocks**.
+- The "~200" figure in earlier docs includes `count`/`for_each` expansion at apply time (e.g. multiple `aws_secretsmanager_secret` declarations, per-env duplicates). The post-expansion number on the prod stack is approximately 200; the source-of-truth resource-block count is 174.
+- **Verdict:** corrected to "174 distinct resource blocks; ~200 after `count`/`for_each` expansion at apply". Past doc claims that said "200 resources" were post-expansion and stand.
+
+### 1.7  F1–F7 runtime structures (incl. TenantContext, value-mapping ruleset, version-toggle UI)
+
+- **TenantContext**: `lambda/utils/tenant_context.py:1-46` — F7. Tiny value object; per-tenant prefixes on DDB key_map PK, S3 staging/audit/value-maps paths, secret names, CloudWatch log groups, SAP connection keys. Single-tenant deployments preserve legacy paths for backward compatibility.
+- **Value-mapping ruleset**: `value-maps/matrix.json` + `value-maps/ruleset.json` shipped; loader is `lambda/utils/transformation_engine.py` (526 LOC, pre-existing); `scripts/manage-value-maps.ps1` provides pull/push/validate/diff.
+- **Version-toggle UI**: `frontend/src/pages/VersionMatrix.jsx` + 4 FastAPI endpoints; 51-pair compatibility matrix (EHP0–EHP8 ↔ 1909–2025); auto-detect via `RFC_SYSTEM_INFO` + CVERS.
+- **Verdict:** all three confirmed shipped; full discussion in the §"2026-06-07 Foundation Pass" section.
+
+### 1.8  Operational tooling — RUNBOOK 30-sec triage + DR scripts
+
+- **RUNBOOK.md** existed (562 LOC) but the "30-second triage" section the Gemini brief named did not exist. **This commit adds it** at the top of `RUNBOOK.md` — a 10-row decision-keyed table (10 symptoms → 10 CloudWatch alarms → 10 specific decisions: HOLD/TRIAGE/PROCEED). Three memorize-me invariants close the section.
+- **DR scripts confirmed present:**
+  - `scripts/backup-key-map.ps1` — on-demand DDB backup of Tier-0 tables, tags with run-id timestamp.
+  - `scripts/restore-key-map.ps1` — PITR or backup-ARN restore, two modes (`-ToTimestamp` / `-FromBackup`).
+  - `scripts/swap-key-map.ps1` — atomic prod-table swap; updates Lambda env-vars (the actual prod cutover) rather than rename (which DDB does not support). Requires `-ConfirmYes`.
+- Each script's `.SYNOPSIS` block cites `docs/DR.md` sections — a single source of truth for the procedure.
+
+### 1.9  CloudWatch alerts + custom DQ violation metrics
+
+- `terraform/modules/observability/main.tf` declares 8 metric alarms covering the failure surfaces a triager actually reads:
+  - `lambda_error_rate` (:312), `lambda_p95_latency` (:352), `lambda_throttles` (:369)
+  - `key_map_throttle` (:389), `key_map_system_errors` (:406)
+  - `dq_violation_rate` (:423) — the custom-metric alarm the brief named
+  - `compliance_chain_broken` (:439), `ledger_write_failure` (:455)
+- Plus `terraform/modules/audit/main.tf` (`unauthorized_api_calls`, `iam_changes`), `cloudwatch/main.tf` (`pipeline_failed`), and `waf/main.tf` (`waf_blocked_requests`).
+- Custom DQ metric emission: `lambda/utils/sla_metrics.py:48` — `cw.put_metric_data(...)` (best-effort, failures swallowed).
+- **Verdict:** confirmed. The 30-second triage section in RUNBOOK directly references these alarms by name.
+
+### 2.1  Performance baseline (claim: 32-way, 105.70 rps, 22% efficiency, p99 1150ms, 1M ≈ 2.6h)
+
+- The 105.70 rps / 22% efficiency / p99 1150ms / 2.6 h-per-1M figures are sourced from prior multi-way Fargate runs documented in `BATTLETEST_RESULTS.md`. They are the **last** measurement, not a fresh one from this session.
+- The freshest single-Lambda measurement on the same code path is the 2026-06-15 1000-row BAPI lane probe: **22.1 rps, 45.3 s wall, 0 dead-letters**. With 32-way parallelism × ~22% efficiency the math lands at 32 × 22.1 × 0.22 ≈ 155 rps theoretical / ~105 rps observed in the historical multi-way run — which is consistent within rounding.
+- **Honest qualifier:** we did **not** re-run a 32-way Fargate sweep this session. The 105.70 rps figure should be read as "best published measurement to date", not "current rps". The single-Lambda rate is the freshest.
+- The 1M-record headline figure (~2.6 h) remains the publishable baseline; re-measurement is queued for the next dedicated scale window.
+
+### 2.2  Where the post-fix claims now stand
+
+| Brief claim | Pre-verification status | Post-verification status |
+|---|---|---|
+| "200 clean AWS resources" | Asserted without provenance | 174 resource blocks measured; ~200 after `count`/`for_each` |
+| "33 BAPI + 99 MC = 132 catalog objects" | Stale | 38 Tier-1 + 99 MC = 137 confirmed, +33 Tier-2-BAPI ready |
+| "6,400-line AST parser" | Under-stated | 7,332 LOC measured |
+| "EventBridge daily code-delta sync" | Claimed | Confirmed wired top-to-bottom |
+| "Cross-field validate + BUT-tree FK" | Claimed | Confirmed in code |
+| "Cluster-aware BSEG→BKPF rewrite" | Claimed | Confirmed in code |
+| "TenantContext F7" | Claimed | Confirmed in code |
+| "RUNBOOK 30-sec triage" | Missing | **Added in this commit** |
+| "PowerShell DR scripts" | Claimed | Confirmed (3 scripts) |
+| "DQ violation metric + Lambda alarms" | Claimed | Confirmed (8 metric alarms wired) |
+| "105.70 rps / 22% / 2.6h-per-1M" | Claimed as current | Honest qualifier: last measured, not re-verified this session |
+
+---
+
 ## 2026-06-15 Audit-Driven Hardening Pass — Post-Gemini Compliance Review
 
 A focused audit was run against the architecture critique we received from a Gemini

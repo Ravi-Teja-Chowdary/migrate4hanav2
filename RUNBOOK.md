@@ -17,6 +17,36 @@
 
 ---
 
+# 30-Second Triage — When something is on fire
+
+Use this section when a run is failing in prod and you have to decide in seconds whether to
+**hold the pipeline**, **roll back**, or **proceed with a warning**. Each numbered question
+maps to one CloudWatch alarm and one remediation path. Stop at the first YES; the line tells
+you exactly what to do next.
+
+| # | Symptom (5-sec read) | Where to look (CloudWatch) | Decision |
+|---|---|---|---|
+| 1 | **Hash chain broken?** | alarm `compliance_chain_broken` (any block != `ok`) | **HOLD** — `HashChainLedger.verify()` shows `broken_at`; do not progress past the post-validate gate. Root-cause the writer that emitted a divergent block. |
+| 2 | **Ledger write failure spike?** | alarm `ledger_write_failure` | **HOLD** — DDB throttled or `put_item` permission revoked. Check `key_map_throttle` next; if both fire, scale DDB on-demand or raise provisioned WCU. |
+| 3 | **Cutover verdict NO_GO?** | run `evidence_pack.cutover_verdict` block (see `lambda/utils/reconciler.py::_compute_cutover_verdict`) | **HOLD** — the SAP-spool precedence rule blocks; do NOT let the tool override. Read the `reasons[]` array: missing FAGLB03/MB5B, LTMC pending, or balance variance — each has a separate remediation. |
+| 4 | **Lambda error rate > 1%?** | alarm `lambda_error_rate` | **TRIAGE** — open the most-recent failed invocation; if dead-letters are typed (`DATA_QUALITY_REJECTION` / `MISSING_DEPENDENCY` / `BAPI_FAILURE`), the spine is doing its job — those are quarantined, not pipeline-failures. If the alarm is from `Errors` metric (untyped), pull the stack trace. |
+| 5 | **Lambda p95 latency > 1.5s?** | alarm `lambda_p95_latency` | **PROCEED** with warning — heavy SAP number-range contention; backpressure with `WorkloadThrottle`. Set `M4H_BAPI_CONCURRENCY=8` and resume. |
+| 6 | **DQ violation rate spike?** | alarm `dq_violation_rate` | **TRIAGE** — open the value-maps; a recently-edited `value-maps/matrix.json` likely dropped a key. `git log --oneline value-maps/` shows the last edit. |
+| 7 | **Lambda throttles > 0?** | alarm `lambda_throttles` | **PROCEED** with warning — concurrency cap reached; raise reserved concurrency or backoff. |
+| 8 | **WAF block spike on the API?** | alarm `waf_blocked_requests` | **TRIAGE** — UI traffic blocked by WAF rate-rule; if legitimate, raise the rate; if attack-shaped, leave the rule. |
+| 9 | **Unauthorized API call?** | alarm `unauthorized_api_calls` (CloudTrail-driven) | **HOLD** — likely IAM drift or compromised credential. Lock the run via the cutover gate before progressing. |
+| 10 | **None of the above firing but a run feels stuck?** | look at the Step Functions execution `…__post_data_prep` task token | **TRIAGE** — a gate is waiting on a human. Read `gates.json` for the pending HMAC-signed gate; the `approve_url` from `build_gate_alert()` is your `/api/spine/approve` POST target. |
+
+**Three numbers a triager memorizes:**
+
+- **SAP-spool precedence > tool ledger.** If FAGLB03 or MB5B is missing, the verdict is NO_GO. The tool cannot override.
+- **`load_one()` never raises.** Any per-record failure becomes a typed `LoadResult` dead-letter. A crashing record does NOT take down the batch.
+- **DR for the key-map is 3 commands.** `backup-key-map.ps1` → `restore-key-map.ps1` → `swap-key-map.ps1` (atomic). See `docs/DR.md` and the scripts' `.SYNOPSIS` blocks.
+
+If none of the above resolves it within 30 seconds, escalate to the §Part-B per-stage runbook (`LIFT-AND-SHIFT-RUNBOOK.md`) — that doc covers per-handler failure modes in depth.
+
+---
+
 # Part A — Pre-flight (one-time, on your laptop)
 
 Do this once. Subsequent runs only need the env vars (§A.6) re-set in a new shell.
