@@ -178,7 +178,19 @@ RfcFactory = Callable[[Dict[str, Any]], Any]
 
 def _open_connection(creds: dict) -> Any:
     """Default factory: open a real pyrfc.Connection. Tests pass their
-    own factory and never reach this code path."""
+    own factory and never reach this code path.
+
+    Windows note: the bundled SAP NW RFC SDK ships with our `sapnwrfc`
+    package; importing it sets SAPNWRFC_HOME + PATH so pyrfc finds the
+    DLLs. Without this, `from pyrfc import Connection` raises on Windows
+    even when the host is fully reachable, which the wizard then surfaces
+    as "host unreachable". Linux Lambdas also work — the package no-ops
+    when the SDK is already on LD_LIBRARY_PATH.
+    """
+    try:
+        import sapnwrfc  # noqa: F401 - side-effect import: configures DLL paths
+    except Exception:
+        pass   # not bundled in this env → let pyrfc try with system PATH
     from pyrfc import Connection
     return Connection(
         ashost=creds["ashost"], sysnr=creds["sysnr"],
@@ -266,7 +278,33 @@ def _validate_system(label: str, creds: dict, migration_type: str,
         out["host_reachable"] = True
         out["login_ok"] = True
     except Exception as e:
-        out["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+        msg = f"{type(e).__name__}: {str(e)[:300]}"
+        out["error"] = msg
+        # Classify the failure so the UI can render the right message instead
+        # of always saying "host unreachable" - which is misleading when
+        # the host IS reachable but the credentials or the SDK are wrong.
+        low = msg.lower()
+        if any(s in low for s in ("name or password is incorrect",
+                                    "user is locked",
+                                    "password logon no longer possible",
+                                    "rfc_error_logon_failure")):
+            out["host_reachable"] = True
+            out["login_ok"] = False
+            out["failure_class"] = "login_failed"
+        elif any(s in low for s in ("dll", "sapnwrfc", "could not be loaded",
+                                     "library", "no module named 'pyrfc'")):
+            out["failure_class"] = "sdk_missing"
+            out["error"] = (msg + "  |  hint: SAP NW RFC SDK not loaded; "
+                             "on Windows ensure sapnwrfc package + DLLs are "
+                             "installed, or run inside the Lambda where they "
+                             "are bundled")
+        elif any(s in low for s in ("timed out", "connection refused",
+                                     "connection reset", "host not found",
+                                     "no route to host", "network is unreachable",
+                                     "partner not reached")):
+            out["failure_class"] = "host_unreachable"
+        else:
+            out["failure_class"] = "unknown"
         return out
 
     try:

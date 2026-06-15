@@ -217,22 +217,41 @@ function Instructions({ text }) {
 }
 
 function TestVerdict({ r }) {
-  if (!r.host_reachable) {
-    return <span className="text-red-700 text-sm font-medium">✗ host unreachable</span>;
-  }
-  if (!r.login_ok) {
-    return <span className="text-red-700 text-sm font-medium">✗ login failed</span>;
-  }
   if (r.ok) {
     return <span className="text-emerald-700 text-sm font-medium">✓ all permissions OK</span>;
   }
-  return <span className="text-amber-700 text-sm font-medium">✗ {r.missing_auths?.length || 0} permission(s) missing</span>;
+  // Use the explicit failure_class set by the server when available;
+  // it disambiguates "host unreachable" (TCP/network), "login_failed"
+  // (RFC negotiated, credentials wrong), and "sdk_missing" (pyrfc /
+  // SAP NW RFC SDK not loaded — typical on first Windows run).
+  const klass = r.failure_class;
+  if (klass === 'login_failed' || (!klass && r.host_reachable && !r.login_ok)) {
+    return <span className="text-red-700 text-sm font-medium">✗ login failed (user or password)</span>;
+  }
+  if (klass === 'sdk_missing') {
+    return <span className="text-amber-700 text-sm font-medium">⚠ SAP NW RFC SDK missing on this host</span>;
+  }
+  if (klass === 'host_unreachable' || !r.host_reachable) {
+    return <span className="text-red-700 text-sm font-medium">✗ host unreachable</span>;
+  }
+  if (r.missing_auths?.length) {
+    return <span className="text-amber-700 text-sm font-medium">✗ {r.missing_auths.length} permission(s) missing</span>;
+  }
+  return <span className="text-red-700 text-sm font-medium">✗ failed</span>;
 }
 
 function TestDetails({ r }) {
-  if (!r.probes?.length) return null;
+  // Always show the raw error string if the connection itself failed,
+  // even when no probes ran. That's the part you act on.
+  const errorBlock = r.error ? (
+    <div className="text-xs font-mono bg-red-50 border border-red-200 rounded p-2 text-red-800 mb-2 whitespace-pre-wrap">
+      {r.error}
+    </div>
+  ) : null;
+  if (!r.probes?.length) return errorBlock;
   return (
     <div className="mt-3 bg-white border border-slate-200 rounded p-3">
+      {errorBlock}
       <div className="text-xs font-semibold mb-2">Probes</div>
       <ul className="text-xs space-y-1">
         {r.probes.map((p, i) => (
