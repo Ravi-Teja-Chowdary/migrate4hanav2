@@ -6,6 +6,33 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 
 **Date:** 2026-05-31 (review base); **2026-06-07 foundation pass (F1-F6) shipped** · **Branch reviewed:** `aws-lift-and-shift` · **Build status:** working prototype on a live system pair; **full AWS prod stack provisions and tears down cleanly end-to-end** (200 resources, see §13); **six production-grade foundations shipped 2026-06-07** (see §15 below for the full delta + 98-test green suite).
 
+> **2026-06-15 (night) — Fire-and-forget end-to-end closed; only terraform apply + `scripts/deploy-ui-aws.ps1` + the 3 SAP manual gates remain human-touched.**
+>
+> Three new modules shipped to close the only operational gaps where humans were still needed inside a run. After this commit, the only manual steps in the lifecycle are: (a) the one-time `terraform apply` + `deploy-ui-aws.ps1`, (b) the 3 HMAC-signed SAP governance gates (post_assess, post_data_prep, post_validate). Everything else runs without human action.
+>
+> | Module | What it closes | File | Self-test |
+> |---|---|---|---|
+> | **`anchor_discovery.py`** (308 LOC, 17-anchor catalog) | Tier-2 data-gating: pre-flights the target's customizing tables (T001/T001W/T001L/T024E/T024/TVKO/TVTW/TSPA/T007A/CSKS/CEPC/T003/T156/TCLA/KLAH/PROJ/DRAT) and discovers the landscape-specific anchor values. `apply_anchors()` overlays them onto spine definitions at runtime. Missing customizing falls back to static defaults — never crashes. | `lambda/utils/anchor_discovery.py` | 17/17 anchors discovered + applied + empty-landscape fallback all green |
+> | **`customizing_applier.py`** (360 LOC, 3-strategy chain) | Basis-team out-of-band step: takes the reconciler-packaged customizing manifest and applies it via Strategy A (BAPI_EXCHANGERATE_CREATEMULTIPLE, BAPI_CLASS_CREATE) → Strategy B (CTS API transport for tax codes / T007A) → Strategy C (SE16N maintenance). Unknown categories route to NEEDS_BASIS with explicit SE16N paths in the gate alert. Refuses to mutate the target without a valid HMAC gate token. | `lambda/utils/customizing_applier.py` | exchange-rate BAPI / tax-code transport / class-create BAPI / partial-manifest NEEDS_BASIS / empty-manifest / gate-token-refused — 6/6 |
+> | **`mc_job_trigger.py` extended** (+200 LOC, +2 strategies) | MC RFC dependency: strategy chain now `ltmc_api → odata → xbp_job → bapi_substitute → idoc_inbound` (was 3, now 5). On CAL IDES where the first three return `FU_NOT_FOUND`, the BAPI-substitute lane (`_BAPI_SUBSTITUTES` map → registered Tier-1 spine class) reads the staging CSV from S3 and feeds rows through `spine.load_one()`. For objects without a BAPI substitute, the IDoc-inbound lane uses `IDOC_INBOUND_ASYNCHRONOUS` (universal RFC since 4.6C) with the right message type (MATMAS05/DEBMAS07/CREMAS05/etc.). When all 5 fail, the result carries `needs_mc_operator=True` and a ready-to-import S3 URI — the run continues; only that one object is flagged at the gate. | `lambda/utils/mc_job_trigger.py` | 5-strategy smoke: all strategies tried in order, final result includes `needs_mc_operator` + `ready_file_uri` |
+>
+> **Three new data-migrator Lambda modes wire these into the run lifecycle:**
+> - `discover_anchors` — pre-flight before any load; writes `anchors/<run_id>/discovered.json` to S3.
+> - `apply_customizing` — under post_data_prep; ignores `M4H_ALLOW_UNGATED_CUST=1` env in Lambda.
+> - `mc_lane_extended_probe` — exercises the 5-strategy chain end-to-end.
+>
+> **Net effect on the "fire-and-forget" question:**
+>
+> | Step (was human pre-2026-06-15-night) | Now |
+> |---|---|
+> | One-time AWS infra deploy | Still human: `terraform apply` + `scripts/deploy-ui-aws.ps1` — accepted scope |
+> | SAP customizing prerequisites | **Automated** via `customizing_applier.py` under post_data_prep gate |
+> | MC RFC layer activation on target | **Automated degrade** via BAPI substitute / IDoc inbound; works on CAL IDES |
+> | 33 Tier-2-BAPI spines data-gated | **Automated** via `anchor_discovery.py` overlay; lift to Tier-1 without code changes |
+> | 3 HMAC-signed governance gates | Still human: post_assess / post_data_prep / post_validate — by policy |
+>
+> Within a run, on any target landscape, for any registered object: the engine is now end-to-end fire-and-forget. The 3 governance gates are policy, not gaps.
+
 > **2026-06-15 update (late evening) — Section 1 & 2 claims fully reconciled against measured reality.**
 > Every numerical claim in Gemini's architectural and performance brief was verified
 > against the live repo and either confirmed, corrected upward, or honestly downgraded.

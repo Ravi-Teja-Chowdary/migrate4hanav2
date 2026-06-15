@@ -797,6 +797,24 @@ def lambda_handler(event, context):
         return _phase_b_validate_generated(event, run_id)
     if mode == "phase_c_mc_trigger":
         return _phase_c_mc_trigger(event, run_id)
+    # ── 2026-06-15 fire-and-forget completers ──────────────────────────
+    # Three new modes that close the gap between "fire-and-forget per
+    # configured run" and "fire-and-forget end-to-end except for terraform
+    # + the 3 SAP gates": (1) discover_anchors pre-flights the target's
+    # customizing tables and writes per-landscape anchors to S3 so spines
+    # lift to Tier-1 without per-landscape code; (2) apply_customizing
+    # uses the reconciler-packaged manifest and the post_data_prep gate
+    # token to land tax codes / exchange rates / classes on the target
+    # automatically; (3) mc_lane_extended_strategy_probe smoke-tests
+    # the 5-strategy MC trigger chain (lt mc_api / odata / xbp_job /
+    # bapi_substitute / idoc_inbound) so a CAL IDES landscape still
+    # carries the MC lane through to S/4 via the BAPI substitute path.
+    if mode == "discover_anchors":
+        return _discover_anchors_mode(event, run_id)
+    if mode == "apply_customizing":
+        return _apply_customizing_mode(event, run_id)
+    if mode == "mc_lane_extended_probe":
+        return _mc_lane_extended_probe(event, run_id)
     if mode == "bapi_lane_scale_probe":
         # End-to-end BAPI-lane scale probe: pick a Tier-1 promoted spine
         # and run N synthetic rows through extract -> transform -> validate
@@ -3539,6 +3557,128 @@ def _phase_b_validate_generated(event, run_id):
         },
         "overall_pass": overall_pass,
     }
+
+
+def _discover_anchors_mode(event, run_id):
+    """Pre-flight: probe the target's customizing tables for anchors and
+    persist the discovered set to S3 so spines lift to Tier-1 on this
+    landscape without per-landscape code changes.
+
+    Event payload:
+        target_secret_id (str)   - Secrets Manager id of S/4 credentials
+        subset (list, optional)  - restrict to specific anchor keys
+        write_to_s3 (bool)       - default True; writes
+                                   anchors/<run_id>/discovered.json
+    """
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    subset = event.get("subset")
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection
+        from anchor_discovery import discover_anchors
+        conn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec["sysnr"],
+            client=tsec["client"], user=tsec["user"], passwd=tsec["passwd"])
+        anchors = discover_anchors(conn, subset=subset)
+        conn.close()
+    except Exception as e:
+        return {"status": "error", "phase": "discover_anchors", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+    if event.get("write_to_s3", True):
+        bucket = os.environ.get("M4H_STAGING_BUCKET", "")
+        if bucket:
+            try:
+                S3.put_object(
+                    Bucket=bucket,
+                    Key=f"anchors/{run_id}/discovered.json",
+                    Body=json.dumps(anchors, indent=2).encode("utf-8"),
+                    ContentType="application/json")
+            except Exception as e:
+                return {"status": "ok_no_persist", "phase": "discover_anchors",
+                        "run_id": run_id, "anchors": anchors,
+                        "persist_error": f"{type(e).__name__}: {str(e)[:120]}"}
+
+    return {"status": "ok", "phase": "discover_anchors", "run_id": run_id,
+            "anchors_discovered": len(anchors), "anchors": anchors}
+
+
+def _apply_customizing_mode(event, run_id):
+    """Apply a packaged customizing manifest to the target under the
+    post_data_prep HMAC-signed gate.
+
+    Event payload:
+        manifest (dict)          - reconciler-packaged customizing gap
+                                   (exchange_rates, tax_codes, classes)
+        gate_token (str)         - HMAC-signed post_data_prep gate token
+        target_secret_id (str)   - Secrets Manager id of S/4 credentials
+        require_gate (bool)      - default True; set False ONLY in unit-test
+                                   bridging (M4H_ALLOW_UNGATED_CUST=1 env
+                                   inside Lambda is ignored)
+    """
+    manifest = event.get("manifest") or {}
+    gate_token = event.get("gate_token") or ""
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    require_gate = event.get("require_gate", True)
+    # Production posture: Lambda execution context always requires the gate.
+    if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        require_gate = True
+
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection
+        from customizing_applier import apply_customizing
+        conn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec["sysnr"],
+            client=tsec["client"], user=tsec["user"], passwd=tsec["passwd"])
+        result = apply_customizing(conn, manifest, gate_token=gate_token,
+                                    require_gate=require_gate)
+        conn.close()
+    except Exception as e:
+        return {"status": "error", "phase": "apply_customizing", "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+    return {"status": "ok", "phase": "apply_customizing", "run_id": run_id,
+            "result": result}
+
+
+def _mc_lane_extended_probe(event, run_id):
+    """Smoke-test the extended 5-strategy MC trigger chain on the target.
+
+    Event payload:
+        object_id (str)          - MC object name (e.g., "Customer")
+        file_s3_uri (str)        - already-staged file from mc_file_exporter
+        target_secret_id (str)
+        wait_for_complete (bool) - default False
+    """
+    object_id = event.get("object_id") or ""
+    file_s3_uri = event.get("file_s3_uri") or ""
+    target_secret_id = event.get("target_secret_id") or "migrate4hana/prod/s4hana-credentials"
+    wait_for_complete = event.get("wait_for_complete", False)
+    if not object_id or not file_s3_uri:
+        return {"status": "error", "phase": "mc_lane_extended_probe",
+                "run_id": run_id,
+                "error": "object_id and file_s3_uri are required"}
+    try:
+        tsec = json.loads(SECRETS.get_secret_value(SecretId=target_secret_id)["SecretString"])
+        from pyrfc import Connection
+        from mc_job_trigger import trigger_mc_load
+        conn = Connection(
+            ashost=tsec["ashost"], sysnr=tsec["sysnr"],
+            client=tsec["client"], user=tsec["user"], passwd=tsec["passwd"])
+        result = trigger_mc_load(
+            target_conn=conn, project_id=event.get("project_id", "M4H_PROD_001"),
+            object_id=object_id, file_s3_uri=file_s3_uri,
+            correlation_id=run_id, wait_for_complete=wait_for_complete,
+            timeout_secs=int(event.get("timeout_secs", 300)))
+        conn.close()
+    except Exception as e:
+        return {"status": "error", "phase": "mc_lane_extended_probe",
+                "run_id": run_id,
+                "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+    return {"status": "ok", "phase": "mc_lane_extended_probe",
+            "run_id": run_id, "result": result}
 
 
 def _phase_c_mc_trigger(event, run_id):
