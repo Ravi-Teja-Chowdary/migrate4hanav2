@@ -677,12 +677,46 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
             else:
                 _add_progress_step("extraction", "ECC data extraction completed", "SUCCESS")
 
-            runs = list_runs()
-            latest = runs[0] if runs else None
+            # Locate the run output. The two runners write to different roots:
+            #   classic run_local_pipeline.py -> outputs/run_<ts>/final-report.json
+            #   run_local_lift_and_shift.py   -> local-staging/m4h-local/runs/<run_id>/
+            # so we check the lift-and-shift path explicitly when the runner
+            # was the lift-and-shift one. Otherwise fall through to list_runs.
+            latest = None
+            if pipeline_kind == "lift_and_shift":
+                ls_root = os.path.join(PROJECT_DIR, "local-staging", "m4h-local",
+                                        "runs", str(pipeline_run_id))
+                if os.path.isdir(ls_root):
+                    # Build a minimal "results" dict by listing the per-stage
+                    # subdirectories the runner wrote. Each one corresponds to
+                    # a handler that produced artifacts.
+                    artefacts = sorted(
+                        d for d in os.listdir(ls_root)
+                        if os.path.isdir(os.path.join(ls_root, d))
+                    )
+                    pdf_existing = os.path.join(ls_root, "report", "migration-report.pdf")
+                    latest = {
+                        "id": str(pipeline_run_id),
+                        "results": {"kind": "lift_and_shift",
+                                     "artefact_dirs": artefacts,
+                                     "report_pdf": pdf_existing if os.path.isfile(pdf_existing) else None,
+                                     "root": ls_root},
+                    }
+            if latest is None:
+                runs = list_runs()
+                latest = runs[0] if runs else None
 
-            # Generate PDF if requested
+            # Generate PDF if requested. For lift-and-shift the runner's
+            # stage27 already wrote one, so we just confirm it landed.
             pdf_generated = False
-            if latest and generate_pdf_after:
+            if latest and pipeline_kind == "lift_and_shift":
+                pdf_path = (latest.get("results") or {}).get("report_pdf")
+                if pdf_path and os.path.isfile(pdf_path):
+                    pdf_generated = True
+                    _add_progress_step("pdf-generation",
+                                       f"PDF report ready ({os.path.getsize(pdf_path) // 1024} KB)",
+                                       "SUCCESS", {"path": pdf_path})
+            elif latest and generate_pdf_after:
                 _add_progress_step("pdf-generation", "Generating PDF report", "IN_PROGRESS")
                 t0 = time.time()
                 try:
@@ -699,7 +733,10 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                     _add_progress_step("pdf-generation", f"PDF generation failed: {str(e)[:200]}", "ERROR")
 
             async with _lock:
-                if latest:
+                # Honest verdict: the subprocess rc is the source of truth.
+                # If rc==0 AND we found a run directory, it's a success even
+                # if the legacy list_runs() can't see it.
+                if proc.returncode == 0 and latest:
                     _active_run = {"status": "completed", "run_id": latest["id"],
                                    "results": latest["results"], "mode": mode,
                                    "duration": time.time() - _active_run.get("started", time.time()),
@@ -707,11 +744,17 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                     _add_progress_step("pipeline", "Pipeline completed successfully", "SUCCESS",
                                        {"run_id": latest["id"], "pdf_generated": pdf_generated},
                                        duration_ms=int(_active_run["duration"] * 1000))
-                else:
+                elif proc.returncode == 0:
+                    # rc=0 but no output dir found - genuinely unusual; surface it.
                     err_msg = (stderr_text or "Pipeline produced no output").strip()[-500:]
                     _active_run = {"status": "failed", "error": f"Pipeline failed: {err_msg}", "results": None}
-                    _add_progress_step("pipeline", "Pipeline failed — no output produced", "ERROR",
-                                       {"error": err_msg[:200]})
+                    _add_progress_step("pipeline", "Pipeline finished cleanly but no run directory was written",
+                                       "ERROR", {"error": err_msg[:200]})
+                else:
+                    # rc!=0 - the earlier 'Pipeline failed (exit N)' step
+                    # already carries the operator-actionable message.
+                    err_msg = (stderr_text or "Subprocess returned non-zero").strip()[-500:]
+                    _active_run = {"status": "failed", "error": f"Pipeline failed: {err_msg}", "results": None}
         except asyncio.TimeoutError:
             try:
                 proc.kill()
@@ -2264,6 +2307,14 @@ async def get_run_pdf(run_id: str, request: Request):
         run_id = runs[0]["id"] if runs else None
     if not run_id:
         raise HTTPException(status_code=404, detail="No runs found")
+    # Lift-and-shift runs land here first: the runner's stage27 already wrote
+    # the PDF to local-staging/m4h-local/runs/<run_id>/report/migration-report.pdf
+    # before exiting, so we don't need to regenerate it.
+    ls_pdf = os.path.join(PROJECT_DIR, "local-staging", "m4h-local",
+                           "runs", run_id, "report", "migration-report.pdf")
+    if os.path.isfile(ls_pdf):
+        return FileResponse(ls_pdf, media_type="application/pdf",
+                            filename=f"migration-report-{run_id}.pdf")
     pdf_path = generate_pdf_for_run(run_id)
     if pdf_path and os.path.isfile(pdf_path):
         return FileResponse(pdf_path, media_type="application/pdf",
