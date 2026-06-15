@@ -654,17 +654,40 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                                            "IN_PROGRESS")
 
             heartbeat_task = asyncio.create_task(_heartbeat())
-            stderr_task = asyncio.create_task(_read_stderr())
+
+            # ROOT CAUSE FIX (commit 25daadd added a 600s wait_for around
+            # _read_stdout; lift-and-shift runs take ~13min on a 20k-program
+            # ECC, so stdout reading was being CANCELLED mid-run. The final
+            # "[stageN]" + "Run X finished rc=0" markers - which trigger the
+            # Project tracker reconciliation - were never read, even though
+            # the subprocess finished cleanly and stderr kept flowing).
+            #
+            # Now we drain both pipes concurrently with a generous wall-clock
+            # cap, so both naturally terminate when the subprocess closes
+            # them on exit.
+            PIPELINE_MAX_SECONDS = 3600  # 1 hour - covers worst-case real ECCs
             try:
-                await asyncio.wait_for(_read_stdout(), timeout=600)
+                await asyncio.wait_for(
+                    asyncio.gather(_read_stdout(), _read_stderr()),
+                    timeout=PIPELINE_MAX_SECONDS,
+                )
             except asyncio.TimeoutError:
-                pass
-            await stderr_task
+                # Genuine wall-clock timeout: kill the subprocess so proc.wait
+                # below doesn't hang. Caller branch handles the error verdict.
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
             stderr_text = "\n".join(stderr_lines)
             heartbeat_task.cancel()
             try: await heartbeat_task
             except (asyncio.CancelledError, Exception): pass
-            await asyncio.wait_for(proc.wait(), timeout=30)
+            # Subprocess has already exited (or been killed) - this is just
+            # the final reap so proc.returncode is populated.
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=30)
+            except asyncio.TimeoutError:
+                pass
 
             if proc.returncode != 0:
                 err_msg = (stderr_text or "Unknown error").strip()[-500:]
