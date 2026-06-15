@@ -4,15 +4,28 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, downloadFile } from '../../lib/api';
 
+// The 8 phases the lift-and-shift runner actually emits. Stage IDs (stage1..
+// stage27, gate1/2/3) map to these phases server-side via _STAGE_PHASE_MAP
+// in api_server.py. The Project tracker shows ONE row per phase, rolled up
+// from however many stages it contains.
 const STAGES = [
-  { id: 'pre',        label: 'Pre-flight (anchor discovery + customizing check)' },
-  { id: 'extract',    label: 'Extract from ECC' },
-  { id: 'transform',  label: 'Transform + DQ' },
-  { id: 'load_bapi',  label: 'Load via BAPI lane' },
-  { id: 'load_mc',    label: 'Load via Migration Cockpit lane' },
-  { id: 'reconcile',  label: 'Reconcile + audit chain' },
-  { id: 'spool',      label: 'Capture FAGLB03 / MB5B spools' },
-  { id: 'verdict',    label: 'Cutover verdict (precedence rule)' },
+  { id: 'ASSESS',    label: 'Assess - discovery, sizing, object routing' },
+  { id: 'PROVISION', label: 'Provision - target system + basis gate' },
+  { id: 'CODE',      label: 'Code - analyze, remediate, transport, import' },
+  { id: 'CONFIG',    label: 'Config - replicate customizing + BC sets' },
+  { id: 'DATA_PREP', label: 'Data prep - extract, hygiene, templates' },
+  { id: 'DATA_LOAD', label: 'Data load - Migration Cockpit / LTMOM / IDoc' },
+  { id: 'VALIDATE',  label: 'Validate - completeness + pre-cutover gate' },
+  { id: 'CUTOVER',   label: 'Cutover - lock ECC, delta, final go-live' },
+];
+const ALL_STAGE_IDS = [
+  'stage1','stage2','stage3','stage4','gate1','stage5',
+  'stage6','stage7','stage8','stage9a','stage9b','stage9c',
+  'stage10','stage11','stage12','stage12a','stage12b','stage12c',
+  'stage13','stage14','stage15','stage16','stage17','stage18',
+  'stage19','stage20','stage21','gate2',
+  'stage22','stage23','stage24','stage25','stage26','gate3',
+  'stage27',
 ];
 
 export default function Project() {
@@ -177,26 +190,43 @@ function StageList({ steps }) {
       </div>
     );
   }
-  // Steps carry both `step` (e.g. "pre.scan") and `stage` (e.g. "pre");
-  // we group by the leading stage segment. Be tolerant of either shape.
-  const byStage = {};
-  for (const s of steps) {
-    const stageId = s.stage
-      || (typeof s.step === 'string' ? s.step.split('.')[0] : '')
-      || '';
-    if (stageId) byStage[stageId] = s;
+  // Only consider "real stage" rows - the api_server tags these with
+  // details.is_stage === true. Everything else (runner log echoes from
+  // streamed stderr) is just noise for this view; Live Ops shows that.
+  const stageRows = steps.filter(
+    (s) => s?.details?.is_stage || STAGES.some((st) => st.id === s.stage)
+  );
+  // Roll up by PHASE id. A phase is COMPLETE only if at least one stage
+  // ran AND none of its stages ended in ERROR; otherwise it inherits the
+  // worst outcome we've seen.
+  const byPhase = {};
+  for (const s of stageRows) {
+    const phaseId = s.stage;
+    if (!STAGES.some((st) => st.id === phaseId)) continue;
+    const cur = byPhase[phaseId] || { count: 0, hasErr: false, hasRun: false, last: null };
+    cur.count += 1;
+    cur.hasErr = cur.hasErr || normalizeStatus(s.status) === 'failed';
+    cur.hasRun = cur.hasRun || ['running', 'complete', 'failed'].includes(normalizeStatus(s.status));
+    cur.last = s;
+    byPhase[phaseId] = cur;
   }
   return (
     <ul className="space-y-2">
       {STAGES.map((st) => {
-        const s = byStage[st.id];
-        const status = normalizeStatus(s?.status);
+        const ph = byPhase[st.id];
+        let status = 'pending';
+        if (ph) {
+          if (ph.hasErr) status = 'failed';
+          else if (ph.last && normalizeStatus(ph.last.status) === 'complete') {
+            status = 'complete';
+          } else if (ph.hasRun) status = 'running';
+        }
         return (
           <li key={st.id} className="flex items-center gap-3">
             <Badge status={status} />
             <span className="text-sm flex-1">{st.label}</span>
-            {s?.duration_ms != null && (
-              <span className="text-xs text-slate-400">{s.duration_ms} ms</span>
+            {ph?.count != null && (
+              <span className="text-xs text-slate-400">{ph.count} stage{ph.count === 1 ? '' : 's'}</span>
             )}
           </li>
         );
@@ -231,17 +261,21 @@ function Badge({ status }) {
 }
 
 function Stats({ stats, steps }) {
-  const total = steps?.length || 0;
-  const done = (steps || []).filter((s) => {
+  // Count REAL stages only - the runner has 35 stages incl. gates. Log-echo
+  // rows from streamed stderr (one per ABAP file, one per scan line, etc.)
+  // are NOT counted - that was the "2/38277" bug.
+  const stageRows = (steps || []).filter((s) => s?.details?.is_stage);
+  const total = ALL_STAGE_IDS.length;
+  const done = stageRows.filter((s) => {
     const t = String(s.status || '').toUpperCase();
     return t === 'COMPLETE' || t === 'OK' || t === 'SUCCESS';
   }).length;
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <Stat label="Steps complete" value={`${done}/${total}`} />
-      <Stat label="Rows extracted" value={stats?.rows_extracted ?? '—'} />
-      <Stat label="Rows loaded"    value={stats?.rows_loaded ?? '—'} />
-      <Stat label="Dead-lettered"  value={stats?.dead_letters ?? '—'} />
+      <Stat label="Stages complete" value={`${done}/${total}`} />
+      <Stat label="Rows extracted"  value={stats?.rows_extracted ?? '—'} />
+      <Stat label="Rows loaded"     value={stats?.rows_loaded ?? '—'} />
+      <Stat label="Dead-lettered"   value={stats?.dead_letters ?? '—'} />
     </div>
   );
 }

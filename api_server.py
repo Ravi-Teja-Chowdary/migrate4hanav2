@@ -489,8 +489,14 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                        "started": time.time(), "mode": mode,
                        "generate_pdf_after": generate_pdf_after}
 
-    # Clear old progress steps
+    # Clear old progress steps + reset the parser state used by
+    # _parse_pipeline_output (phase tracker, last-stage-step pointer).
     _progress_steps.clear()
+    try:
+        _parse_state["phase"] = None
+        _parse_state["last_stage_step"] = None
+    except NameError:
+        pass
     _add_progress_step("pipeline", "Pipeline started", "IN_PROGRESS",
                         {"mode": mode, "kind": pipeline_kind})
 
@@ -726,37 +732,116 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
     return {"status": "started", "mode": mode, "run_id": pipeline_run_id}
 
 
-def _parse_pipeline_output(line):
-    """Parse a line of pipeline stdout and emit meaningful progress steps."""
-    low = line.lower()
+import re as _re
 
-    # Detect stage headers
-    if "[stage " in low or "stage " in low and "/17]" in low:
-        _add_progress_step("pipeline-stage", line.strip(" =\t"), "IN_PROGRESS")
-    elif "phase " in low and (":" in line or "--" in line):
-        _add_progress_step("pipeline-phase", line.strip(" =\t"), "IN_PROGRESS")
-    # Detect completion markers
-    elif any(kw in low for kw in ["complete", "finished", "done", "saved", "generated"]):
-        _add_progress_step("pipeline-step", line.strip(), "SUCCESS")
-    # Detect warnings
-    elif any(kw in low for kw in ["warning", "caution", "deprecated"]):
-        _add_progress_step("pipeline-step", line.strip(), "WARNING")
-    # Detect errors
-    elif any(kw in low for kw in ["error", "failed", "exception", "traceback"]):
-        _add_progress_step("pipeline-step", line.strip(), "ERROR")
-    # Detect scanning/analysis actions
-    elif any(kw in low for kw in ["scanning", "analyzing", "extracting", "checking",
-                                   "validating", "running", "processing", "loading",
-                                   "reconcil", "migrat", "converting"]):
-        _add_progress_step("pipeline-step", line.strip(), "IN_PROGRESS")
-    # Detect section markers (lines with ">" prefix from pipeline)
-    elif line.strip().startswith(">"):
-        _add_progress_step("pipeline-section", line.strip().lstrip("> "), "IN_PROGRESS")
-    # Status lines with checkmarks or bullet markers
-    elif any(line.strip().startswith(m) for m in ["V ", "o ", "! ", "X "]):
-        marker = line.strip()[0]
-        status = {"V": "SUCCESS", "o": "IN_PROGRESS", "!": "WARNING", "X": "ERROR"}.get(marker, "IN_PROGRESS")
-        _add_progress_step("pipeline-detail", line.strip()[2:].strip(), status)
+# Map a runner stage id (stage1, stage9a, gate1, ...) to its PHASE id (ASSESS,
+# CODE, ...) so the UI can roll up 28 stages into 8 high-level buckets without
+# the api_server having to know the full STAGES table.
+_STAGE_PHASE_MAP = {
+    "stage1": "ASSESS", "stage2": "ASSESS", "stage3": "ASSESS",
+    "stage4": "PROVISION", "gate1": "PROVISION", "stage5": "PROVISION",
+    "stage6": "CODE", "stage7": "CODE", "stage8": "CODE",
+    "stage9a": "CODE", "stage9b": "CODE", "stage9c": "CODE",
+    "stage10": "CONFIG", "stage11": "CONFIG", "stage12": "CONFIG",
+    "stage12a": "CONFIG", "stage12b": "CONFIG", "stage12c": "CONFIG",
+    "stage13": "DATA_PREP", "stage14": "DATA_PREP", "stage15": "DATA_PREP",
+    "stage16": "DATA_LOAD", "stage17": "DATA_LOAD", "stage18": "DATA_LOAD",
+    "stage19": "VALIDATE", "stage20": "VALIDATE", "stage21": "VALIDATE",
+    "gate2": "VALIDATE",
+    "stage22": "CUTOVER", "stage23": "CUTOVER", "stage24": "CUTOVER",
+    "stage25": "CUTOVER", "stage26": "CUTOVER", "gate3": "CUTOVER",
+    "stage27": "RUN",
+}
+
+# Mutable state owned by _parse_pipeline_output - tracks the current PHASE
+# and the most recent stage row so `status=success` can update the right one.
+_parse_state = {"phase": None, "last_stage_step": None}
+
+
+def _parse_pipeline_output(line):
+    """Parse a line of pipeline stdout and emit progress steps.
+
+    Two flavors of step are emitted:
+    - "real stage" rows (details.is_stage == True) - one per [stageN] header,
+      keyed by PHASE id so the Project tracker can roll up 28 stages into 8
+      buckets. These are what the Project counter ("3/28 stages") reads.
+    - "log echo" rows (the rest) for the Live Ops feed - chatty but useful
+      for showing the user the pipeline is alive. Project ignores these.
+    """
+    stripped = line.strip()
+    low = stripped.lower()
+
+    # === PHASE X === banner from the runner
+    m_phase = _re.match(r"^=+\s*phase\s+([a-z_]+)\s*=+$", low)
+    if m_phase:
+        _parse_state["phase"] = m_phase.group(1).upper()
+        _add_progress_step("phase-banner",
+                           f"Entering phase {_parse_state['phase']}", "IN_PROGRESS",
+                           details={"phase": _parse_state["phase"]})
+        return
+
+    # [stageN] handler.module - a real stage starting
+    m_stage = _re.match(r"^\[([a-z0-9]+)\]\s+(.+?)$", stripped, _re.IGNORECASE)
+    if m_stage:
+        sid = m_stage.group(1).lower()
+        handler = m_stage.group(2).strip()
+        phase_id = _STAGE_PHASE_MAP.get(sid) or _parse_state.get("phase") or "UNKNOWN"
+        step = _add_progress_step(
+            phase_id, f"{sid}: {handler}", "IN_PROGRESS",
+            details={"is_stage": True, "stage_id": sid, "phase": phase_id,
+                      "handler": handler}
+        )
+        _parse_state["last_stage_step"] = step
+        return
+
+    # "  status=success" / "  status=blocked" follow a [stageN] line; update
+    # the most recently emitted stage row in place so the tracker flips to
+    # SUCCESS/ERROR instead of staying IN_PROGRESS.
+    m_status = _re.match(r"^status=([a-z_]+)$", low)
+    if m_status:
+        outcome = m_status.group(1)
+        status_map = {"success": "SUCCESS", "ok": "SUCCESS",
+                       "blocked": "ERROR", "error": "ERROR", "failed": "ERROR",
+                       "skipped": "WARNING"}
+        target = status_map.get(outcome, "IN_PROGRESS")
+        last = _parse_state.get("last_stage_step")
+        if last:
+            last["status"] = target
+            last["details"] = {**(last.get("details") or {}), "outcome": outcome}
+        else:
+            _add_progress_step("stage-outcome", f"status={outcome}", target)
+        return
+
+    # "Run <id> finished rc=N" - the final marker. rc!=0 means the entire
+    # pipeline failed; whichever stage was last in flight inherits ERROR.
+    m_finish = _re.match(r"^run\s+\S+\s+finished\s+rc=(\d+)$", low)
+    if m_finish:
+        rc = int(m_finish.group(1))
+        if rc != 0:
+            last = _parse_state.get("last_stage_step")
+            if last and last.get("status") == "IN_PROGRESS":
+                last["status"] = "ERROR"
+                last["details"] = {**(last.get("details") or {}), "outcome": f"rc={rc}"}
+        _add_progress_step("runner",
+                            f"Run finished rc={rc}",
+                            "SUCCESS" if rc == 0 else "ERROR")
+        return
+
+    # Everything else: low-volume log echo for Live Ops (Project ignores it).
+    if any(kw in low for kw in ["warning:", "caution"]):
+        _add_progress_step("runner", stripped, "WARNING")
+    elif any(kw in low for kw in ["error:", "exception in", "traceback"]):
+        _add_progress_step("runner", stripped, "ERROR")
+    elif stripped.startswith(">"):
+        _add_progress_step("runner", stripped.lstrip("> "), "IN_PROGRESS")
+    elif any(stripped.startswith(m) for m in ["V ", "o ", "! ", "X "]):
+        marker = stripped[0]
+        status = {"V": "SUCCESS", "o": "IN_PROGRESS",
+                   "!": "WARNING", "X": "ERROR"}.get(marker, "IN_PROGRESS")
+        _add_progress_step("runner", stripped[2:].strip(), status)
+    else:
+        # Plain prints - useful as crumbs in Live Ops, not Project.
+        _add_progress_step("runner", stripped, "INFO")
 
 
 def generate_pdf_for_run(run_id):
