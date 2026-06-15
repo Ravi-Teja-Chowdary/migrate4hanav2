@@ -70,6 +70,11 @@ class Probe:
     description: str = ""
     required_for: Tuple[str, ...] = ("full", "selective")
     fix_hint:    str = ""
+    # critical=True  -> must pass; failure blocks the wizard's Next button.
+    # critical=False -> reported but informational only; doesn't block.
+    #                   Use for probes that confirm something nice-to-have
+    #                   (e.g. a read API the migration loop doesn't need).
+    critical:    bool = True
 
 
 # Probes the ECC source must answer. Read-only side; lighter requirements.
@@ -132,11 +137,26 @@ _S4_PROBES_FULL: List[Probe] = [
           {"JOBNAME": "M4H_PROBE", "EXTERNAL_USER_NAME": "M4H_PROBE"},
           "Open a background job. Required for spool capture (FAGLB03/MB5B).",
           required_for=("full",),
+          # Advisory because spool capture is itself optional on CAL / dev
+          # landscapes; the migration loop runs without it (just no auditor
+          # spool sealed into the chain). Auditor closes still require it
+          # in real prod - the gate alert is the right place to enforce.
+          critical=False,
           fix_hint="Grant S_BTCH_JOB + S_BTCH_NAM with JOBGROUP=M4H_*"),
     Probe("bapi_call_currency", "BAPI_EXCHANGERATE_GETLIST",
           {"DATE_FROM": "20260101", "MAX_NUMBER_OF_RECORDS": 1},
-          "Read exchange rates. Confirms customising-read RFC works.",
-          fix_hint="Grant S_TABU_DIS DICBERCLS=FC + ACTVT=03"),
+          "Read exchange rates. Advisory - the ExchangeRate spine WRITES "
+          "via BAPI_EXCHANGERATE_CREATEMULTIPLE; this read probe just "
+          "confirms the customising-read surface.",
+          # Advisory: the migration uses the CREATE BAPI on write side; the
+          # read side runs through RFC_READ_TABLE on TCURR which is already
+          # covered by the read_t000 / read_t001 probes above. FU_NOT_FOUND
+          # on this read endpoint is common on locked-down S/4 and does NOT
+          # block the migration.
+          critical=False,
+          fix_hint="Grant S_TABU_DIS DICBERCLS=FC + ACTVT=03 (only if you "
+                    "plan to use the live read-rates lookup; not required for "
+                    "migration)"),
 ]
 
 
@@ -217,18 +237,24 @@ def _open_connection(creds: dict) -> Any:
     return Connection(**kw)
 
 
-def _run_probes(probes: List[Probe], conn: Any) -> Tuple[List[dict], List[str]]:
-    """Run each probe; return (per-probe results, missing-auths list)."""
+def _run_probes(probes: List[Probe], conn: Any) -> Tuple[List[dict], List[str], List[str]]:
+    """Run each probe; return (per-probe results, blocking_failures,
+    advisory_warnings).
+
+    A blocking failure means a critical probe failed -> the wizard cannot
+    advance. An advisory warning is an informational probe that failed
+    but does NOT block the migration loop.
+    """
     results: List[dict] = []
-    missing: List[str] = []
+    blocking: List[str] = []
+    advisory: List[str] = []
     for p in probes:
         rec: Dict[str, Any] = {
             "name": p.name, "rfc": p.rfc_fn, "description": p.description,
+            "critical": p.critical,
         }
         try:
             resp = conn.call(p.rfc_fn, **p.args)
-            # Convention: a list of {"TYPE": "E", "MESSAGE": "..."} in RETURN
-            # is how SAP signals failure even when the RFC itself returned OK.
             ret = resp.get("RETURN") if isinstance(resp, dict) else None
             err_rows = []
             if isinstance(ret, list):
@@ -241,17 +267,41 @@ def _run_probes(probes: List[Probe], conn: Any) -> Tuple[List[dict], List[str]]:
                 rec["ok"] = False
                 rec["error"] = err_rows[0].get("MESSAGE", "")[:200]
                 rec["fix_hint"] = p.fix_hint
-                missing.append(f"{p.name}: {rec['error']}")
+                rec["error_class"] = "sap_error"
+                _route(rec, p, blocking, advisory)
             else:
                 rec["ok"] = True
                 rec["sample"] = _trim_sample(resp)
         except Exception as e:
+            err_str = str(e)
             rec["ok"] = False
-            rec["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+            rec["error"] = f"{type(e).__name__}: {err_str[:200]}"
             rec["fix_hint"] = p.fix_hint
-            missing.append(f"{p.name}: {rec['error']}")
+            low = err_str.lower()
+            # Tell the operator WHICH category they're in. FU_NOT_FOUND
+            # means the function module is not released for RFC on this
+            # S/4 - not an auth issue, the SAP basis team has to expose it
+            # in SE37 / SAP table TFDIR. The MC RFC layer is the same shape.
+            if "fu_not_found" in low or "function module" in low:
+                rec["error_class"] = "fu_not_found"
+                rec["error"] = (rec["error"] +
+                                 "  |  hint: this RFC is not exposed on this "
+                                 "S/4; basis team would activate it in SE37, "
+                                 "but the migration does not require it.")
+            elif "authorization" in low or "auth_check_failed" in low:
+                rec["error_class"] = "auth_denied"
+            elif "rfc_error_communication" in low or "partner not reached" in low:
+                rec["error_class"] = "rfc_comm"
+            else:
+                rec["error_class"] = "unknown"
+            _route(rec, p, blocking, advisory)
         results.append(rec)
-    return results, missing
+    return results, blocking, advisory
+
+
+def _route(rec: dict, p: Probe, blocking: List[str], advisory: List[str]) -> None:
+    line = f"{p.name}: {rec.get('error', '')}"
+    (blocking if p.critical else advisory).append(line)
 
 
 def _trim_sample(resp: Any) -> Any:
@@ -346,10 +396,13 @@ def _validate_system(label: str, creds: dict, migration_type: str,
         else:
             probes = [p for p in full_probes
                        if migration_type in p.required_for]
-        results, missing = _run_probes(probes, conn)
+        results, blocking, advisory = _run_probes(probes, conn)
         out["probes"] = results
-        out["missing_auths"] = missing
-        out["ok"] = len(missing) == 0
+        out["missing_auths"]      = blocking   # blocking (back-compat key)
+        out["advisory_warnings"]  = advisory   # informational only
+        # ok=True iff no CRITICAL probe failed. Advisory failures are
+        # surfaced in the UI but do not block the wizard's Next button.
+        out["ok"] = len(blocking) == 0
     finally:
         try:
             if hasattr(conn, "close"):
@@ -436,15 +489,16 @@ if __name__ == "__main__":
     # XBP probe should NOT fire (full-only)
     assert not any(p["name"] == "bapi_call_xbp_job" for p in res["probes"])
 
-    # ── 5) S4 full but XBP job auth denied
+    # ── 5) S4 full but XBP job auth denied -- XBP is now ADVISORY so this
+    # should still produce ok=True with a warning in advisory_warnings.
     conn = FakeConn(deny=["BAPI_XBP_JOB_OPEN"])
     res = validate_s4({"ashost": "y"}, migration_type="full",
                        rfc_factory=lambda c: conn)
-    assert not res["ok"]
+    assert res["ok"]   # advisory failure does NOT block
+    assert res["advisory_warnings"]
     xbp = [p for p in res["probes"] if p["name"] == "bapi_call_xbp_job"][0]
-    assert not xbp["ok"]
-    assert "S_BTCH_JOB" in xbp["fix_hint"]
-    print(f"[5] S4 XBP denied: ok={res['ok']} XBP.fix_hint='{xbp['fix_hint']}'")
+    assert not xbp["ok"] and xbp["critical"] is False
+    print(f"[5] S4 XBP advisory: ok={res['ok']} advisory={len(res['advisory_warnings'])} critical=False")
 
     # ── 6) Dead host
     res = validate_s4({"ashost": "z"}, migration_type="full",

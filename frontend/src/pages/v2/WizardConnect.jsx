@@ -218,7 +218,19 @@ function Instructions({ text }) {
 
 function TestVerdict({ r }) {
   if (r.ok) {
-    return <span className="text-emerald-700 text-sm font-medium">✓ all permissions OK</span>;
+    // Even when ok=true we may have non-blocking advisories - surface them
+    // so the operator knows what's degraded but didn't block.
+    const adv = r.advisory_warnings?.length || 0;
+    return (
+      <span className="text-emerald-700 text-sm font-medium">
+        ✓ all critical permissions OK
+        {adv > 0 && (
+          <span className="ml-2 text-amber-700">
+            ({adv} advisory warning{adv > 1 ? 's' : ''})
+          </span>
+        )}
+      </span>
+    );
   }
   // Use the explicit failure_class set by the server when available;
   // it disambiguates "host unreachable" (TCP/network), "login_failed"
@@ -265,25 +277,39 @@ function TestDetails({ r }) {
       {errorBlock}
       <div className="text-xs font-semibold mb-2">Probes</div>
       <ul className="text-xs space-y-1">
-        {r.probes.map((p, i) => (
-          <li key={i} className="flex items-start gap-2">
-            <span className={p.ok ? 'text-emerald-600' : 'text-red-600'}>
-              {p.ok ? '✓' : '✗'}
-            </span>
-            <div className="flex-1">
-              <div>
-                <span className="font-mono">{p.name}</span>{' '}
-                <span className="text-slate-500">— {p.description}</span>
-              </div>
-              {!p.ok && (
-                <div className="text-red-700 mt-0.5">
-                  {p.error}
-                  {p.fix_hint && <span className="text-slate-700"> · fix: {p.fix_hint}</span>}
+        {r.probes.map((p, i) => {
+          const failedCritical   = !p.ok && p.critical !== false;
+          const failedAdvisory   = !p.ok && p.critical === false;
+          return (
+            <li key={i} className="flex items-start gap-2">
+              <span className={
+                p.ok            ? 'text-emerald-600' :
+                failedAdvisory  ? 'text-amber-600'   :
+                                   'text-red-600'
+              }>
+                {p.ok ? '✓' : failedAdvisory ? '⚠' : '✗'}
+              </span>
+              <div className="flex-1">
+                <div>
+                  <span className="font-mono">{p.name}</span>{' '}
+                  {failedAdvisory && (
+                    <span className="text-[10px] uppercase font-semibold text-amber-700 bg-amber-50 px-1 rounded">advisory</span>
+                  )}
+                  {p.error_class === 'fu_not_found' && (
+                    <span className="ml-1 text-[10px] uppercase font-semibold text-slate-700 bg-slate-100 px-1 rounded">FU_NOT_FOUND</span>
+                  )}{' '}
+                  <span className="text-slate-500">— {p.description}</span>
                 </div>
-              )}
-            </div>
-          </li>
-        ))}
+                {!p.ok && (
+                  <div className={failedAdvisory ? 'text-amber-800 mt-0.5' : 'text-red-700 mt-0.5'}>
+                    {p.error}
+                    {p.fix_hint && <span className="text-slate-700"> · fix: {p.fix_hint}</span>}
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
       {r.missing_auths?.length > 0 && (
         <div className="mt-3 text-xs">
