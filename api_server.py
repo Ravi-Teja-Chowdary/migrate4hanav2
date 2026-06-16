@@ -475,7 +475,7 @@ def get_run(run_id, client_id: str = "default"):
 
 
 async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_kind="in_place",
-                                 run_id=None):
+                                 run_id=None, load_to_s4=False):
     global _active_run
     # The wizard hands us its own run_id (e.g. wiz-20260615T120117Z-b539783e);
     # keep it so logs/state files/UI all use the same identifier instead of
@@ -578,6 +578,26 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
                 env["M4H_ECC_PASSWD"] = _ecc_passwd
                 if _s4_passwd:
                     env["M4H_TARGET_PASSWD"] = _s4_passwd
+
+            # Data-migrator behaviour: extract-only (writes Migration Cockpit
+            # CSV templates, no S/4 writes) vs live load (calls BAPIs against
+            # S/4 immediately). Flipping load_to_s4=True causes real writes -
+            # an explicit progress banner so the operator can see the choice
+            # they made reflected in Live Ops.
+            if load_to_s4:
+                env["M4H_LOAD_TO_S4"] = "1"
+                _add_progress_step("mode",
+                                   "LIVE LOAD enabled: data-migrator will call "
+                                   "BAPIs against S/4HANA. Writes are not reversible.",
+                                   "WARNING",
+                                   {"load_to_s4": True})
+            else:
+                _add_progress_step("mode",
+                                   "EXTRACT-ONLY mode: data lands in Migration Cockpit "
+                                   "CSV templates under local-staging/. No S/4 writes "
+                                   "until you re-run with Load to S/4HANA enabled.",
+                                   "INFO",
+                                   {"load_to_s4": False})
 
             # Non-Unicode ECC handshake. Default to codepage 1100 (SAP_LATIN1)
             # which is what every IDES EHP < 8 Unicode-disabled system runs;
@@ -2041,6 +2061,18 @@ class _LiftAndShiftRequest(BaseModel):
     selective_objects: Optional[List[str]] = None
     ecc_version: Optional[str] = None
     s4_version:  Optional[str] = None
+    # load_to_s4 toggles the data-migrator from extract-only (writes CSV
+    # templates for Migration Cockpit upload, no S/4 writes) to live load
+    # (calls BAPIs against S/4 immediately). Default OFF for safety: the
+    # extract-only mode is reversible; live load is not.
+    load_to_s4: Optional[bool] = False
+
+
+def _ls_args(body):
+    """Pluck the wizard payload fields start_pipeline_async cares about."""
+    if not body:
+        return {"run_id": None, "load_to_s4": False}
+    return {"run_id": body.run_id, "load_to_s4": bool(body.load_to_s4)}
 
 
 @app.post("/api/pipeline/lift-and-shift", dependencies=[Depends(require_auth)])
@@ -2051,28 +2083,28 @@ async def pipeline_lift_and_shift(body: Optional[_LiftAndShiftRequest] = None):
     CTS+/tp - we never call BAPIs against the target. See
     MIGRATE4HANA-LIFT-AND-SHIFT.md for the architecture charter."""
     return await start_pipeline_async(mode="full", pipeline_kind="lift_and_shift",
-                                       run_id=(body.run_id if body else None))
+                                       **_ls_args(body))
 
 
 @app.post("/api/pipeline/lift-and-shift/assess", dependencies=[Depends(require_auth)])
 async def pipeline_lift_and_shift_assess(body: Optional[_LiftAndShiftRequest] = None):
     """Phase 0 only - discovery, sizing, object routing. No writes."""
     return await start_pipeline_async(mode="assess", pipeline_kind="lift_and_shift",
-                                       run_id=(body.run_id if body else None))
+                                       **_ls_args(body))
 
 
 @app.post("/api/pipeline/lift-and-shift/code", dependencies=[Depends(require_auth)])
 async def pipeline_lift_and_shift_code(body: Optional[_LiftAndShiftRequest] = None):
     """Phases 0-2 only - up through code transport import + verify."""
     return await start_pipeline_async(mode="code", pipeline_kind="lift_and_shift",
-                                       run_id=(body.run_id if body else None))
+                                       **_ls_args(body))
 
 
 @app.post("/api/pipeline/lift-and-shift/data", dependencies=[Depends(require_auth)])
 async def pipeline_lift_and_shift_data(body: Optional[_LiftAndShiftRequest] = None):
     """Phases 0-5 - up through data load via MC/LTMOM/IDoc lanes."""
     return await start_pipeline_async(mode="data", pipeline_kind="lift_and_shift",
-                                       run_id=(body.run_id if body else None))
+                                       **_ls_args(body))
 
 
 @app.get("/api/pipeline/lift-and-shift/stages", dependencies=[Depends(require_auth)])

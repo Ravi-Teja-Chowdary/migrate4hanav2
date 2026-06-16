@@ -35,9 +35,17 @@ export default function Project() {
   const [starting, setStarting] = useState(false);
   const [activeRun, setActiveRun] = useState(null);   // pipeline run id
   const [err, setErr] = useState('');
+  // Defaults to false (extract-only) for safety - flipping this on writes
+  // to S/4HANA via BAPIs and is not reversible. We hydrate from wizard
+  // state so the choice survives page refresh.
+  const [loadToS4, setLoadToS4] = useState(false);
+  const [confirmingLive, setConfirmingLive] = useState(false);
 
   useEffect(() => {
-    api.wizardGet(runId).then(setWizard).catch((e) => setErr(e.message));
+    api.wizardGet(runId).then((w) => {
+      setWizard(w);
+      if (typeof w?.load_to_s4 === 'boolean') setLoadToS4(w.load_to_s4);
+    }).catch((e) => setErr(e.message));
   }, [runId]);
 
   // Poll live progress when a run is active.
@@ -56,6 +64,14 @@ export default function Project() {
   }, [activeRun]);
 
   const startMigration = async () => {
+    // Block accidental live load - require an explicit confirm step when
+    // load_to_s4 is on. The confirm modal sets confirmingLive=false then
+    // re-enters this function.
+    if (loadToS4 && !confirmingLive) {
+      setConfirmingLive(true);
+      return;
+    }
+    setConfirmingLive(false);
     setStarting(true); setErr('');
     try {
       const r = await api.triggerLiftAndShift({
@@ -64,12 +80,14 @@ export default function Project() {
         selective_objects: wizard.selective_objects || [],
         ecc_version: wizard.ecc_version,
         s4_version:  wizard.s4_version,
+        load_to_s4:  loadToS4,
       });
       const pipeline_run_id = r.run_id || r.execution_id || runId;
       setActiveRun(pipeline_run_id);
       await api.wizardPatch(runId, {
         page: 'project',
         pipeline_run_id,
+        load_to_s4: loadToS4,
         started_at: new Date().toISOString(),
       });
     } catch (e) {
@@ -90,6 +108,12 @@ export default function Project() {
 
   return (
     <div>
+      <ConfirmLiveLoad
+        open={confirmingLive}
+        onCancel={() => setConfirmingLive(false)}
+        onConfirm={startMigration}
+        wizard={wizard}
+      />
       <Crumb runId={runId} />
       <h1 className="text-2xl font-semibold mb-1">{runId}</h1>
       <div className="text-sm text-slate-500 mb-6">
@@ -114,14 +138,32 @@ export default function Project() {
         <Stats stats={progress.stats} steps={progress.steps} />
       </Section>
 
+      <Section title="What this run will do">
+        <LoadModeChooser
+          loadToS4={loadToS4}
+          setLoadToS4={setLoadToS4}
+          disabled={!!activeRun || starting}
+        />
+      </Section>
+
       <Section title="Actions">
         <div className="flex flex-wrap gap-3 items-center">
           <button
             onClick={startMigration}
             disabled={starting || activeRun}
-            className="px-5 py-2.5 rounded bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium"
+            className={`px-5 py-2.5 rounded text-white font-medium ${
+              loadToS4
+                ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'
+                : 'bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300'
+            }`}
           >
-            {starting ? 'Starting…' : activeRun ? 'Running' : 'Start migration'}
+            {starting
+              ? 'Starting…'
+              : activeRun
+                ? 'Running'
+                : loadToS4
+                  ? 'Start migration + load to S/4HANA'
+                  : 'Start migration (extract-only)'}
           </button>
 
           {activeRun && (
@@ -157,6 +199,120 @@ export default function Project() {
           completes, the PDF is the full final report.
         </div>
       </Section>
+    </div>
+  );
+}
+
+function LoadModeChooser({ loadToS4, setLoadToS4, disabled }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <ModeCard
+        title="Extract-only"
+        subtitle="Safe default — no S/4 writes"
+        body={[
+          'Reads from ECC, transforms, and stages Migration Cockpit CSV templates under local-staging/.',
+          'You (or basis) import the CSVs via Migration Cockpit when ready.',
+          'Reversible: nothing changes on S/4HANA.',
+        ]}
+        accent="blue"
+        selected={!loadToS4}
+        onClick={() => setLoadToS4(false)}
+        disabled={disabled}
+      />
+      <ModeCard
+        title="Extract + load to S/4HANA"
+        subtitle="Calls BAPIs against S/4 — writes real data"
+        body={[
+          'Runs every extract-only step, then calls released BAPIs to write into ACDOCA / BUT000 / MARA / etc.',
+          'Use this for cutover. The Go-Live Scorecard can only reach Grade A/B when this lane runs end-to-end.',
+          'NOT reversible: rows land in S/4. Make sure your S/4 client is non-production OR you have authorisation for cutover.',
+        ]}
+        accent="red"
+        selected={loadToS4}
+        onClick={() => setLoadToS4(true)}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+function ModeCard({ title, subtitle, body, accent, selected, onClick, disabled }) {
+  const accents = {
+    blue: selected
+      ? 'border-blue-500 bg-blue-50'
+      : 'border-slate-200 hover:border-blue-300',
+    red: selected
+      ? 'border-red-500 bg-red-50'
+      : 'border-slate-200 hover:border-red-300',
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`text-left border-2 rounded-lg p-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${accents[accent]}`}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <div className="font-semibold">{title}</div>
+        {selected && (
+          <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+            accent === 'red' ? 'bg-red-200 text-red-900' : 'bg-blue-200 text-blue-900'
+          }`}>
+            selected
+          </span>
+        )}
+      </div>
+      <div className={`text-xs mb-2 ${
+        accent === 'red' ? 'text-red-700' : 'text-blue-700'
+      }`}>
+        {subtitle}
+      </div>
+      <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+        {body.map((line, i) => <li key={i}>{line}</li>)}
+      </ul>
+    </button>
+  );
+}
+
+function ConfirmLiveLoad({ open, onCancel, onConfirm, wizard }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+        <div className="text-lg font-semibold text-red-700 mb-2">
+          Confirm live load to S/4HANA
+        </div>
+        <div className="text-sm text-slate-700 leading-relaxed space-y-2 mb-4">
+          <p>
+            This will call <strong>BAPIs against your saved S/4HANA system</strong>
+            {' '}({wizard?.s4_version || '—'}) and write real rows into ACDOCA,
+            BUT000, MARA, and the other target tables for{' '}
+            <strong>
+              {wizard?.migration_type === 'selective'
+                ? `${wizard?.selective_objects?.length || 0} selected object(s)`
+                : 'every catalog object'}
+            </strong>.
+          </p>
+          <p className="text-red-700 font-medium">
+            Writes are not reversible. Confirm you are running against a
+            non-production client OR you have explicit cutover authorisation.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm rounded border border-slate-300 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm rounded bg-red-600 hover:bg-red-700 text-white font-medium"
+          >
+            Yes, start live load
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
