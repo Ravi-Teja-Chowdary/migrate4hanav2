@@ -8,15 +8,19 @@ import { api, downloadFile } from '../../lib/api';
 // stage27, gate1/2/3) map to these phases server-side via _STAGE_PHASE_MAP
 // in api_server.py. The Project tracker shows ONE row per phase, rolled up
 // from however many stages it contains.
+// `expected` is the number of real stages the lift-and-shift runner emits
+// for each phase (kept in sync with _STAGE_PHASE_MAP in api_server.py).
+// Sum is 35, matching ALL_STAGE_IDS below.
 const STAGES = [
-  { id: 'ASSESS',    label: 'Assess - discovery, sizing, object routing' },
-  { id: 'PROVISION', label: 'Provision - target system + basis gate' },
-  { id: 'CODE',      label: 'Code - analyze, remediate, transport, import' },
-  { id: 'CONFIG',    label: 'Config - replicate customizing + BC sets' },
-  { id: 'DATA_PREP', label: 'Data prep - extract, hygiene, templates' },
-  { id: 'DATA_LOAD', label: 'Data load - Migration Cockpit / LTMOM / IDoc' },
-  { id: 'VALIDATE',  label: 'Validate - completeness + pre-cutover gate' },
-  { id: 'CUTOVER',   label: 'Cutover - lock ECC, delta, final go-live' },
+  { id: 'ASSESS',    label: 'Assess - discovery, sizing, object routing',     expected: 3 },
+  { id: 'PROVISION', label: 'Provision - target system + basis gate',         expected: 3 },
+  { id: 'CODE',      label: 'Code - analyze, remediate, transport, import',   expected: 6 },
+  { id: 'CONFIG',    label: 'Config - replicate customizing + BC sets',       expected: 6 },
+  { id: 'DATA_PREP', label: 'Data prep - extract, hygiene, templates',        expected: 3 },
+  { id: 'DATA_LOAD', label: 'Data load - Migration Cockpit / LTMOM / IDoc',   expected: 3 },
+  { id: 'VALIDATE',  label: 'Validate - completeness + pre-cutover gate',     expected: 4 },
+  { id: 'CUTOVER',   label: 'Cutover - lock ECC, delta, final go-live',       expected: 6 },
+  { id: 'RUN',       label: 'Run - PDF report + archive',                     expected: 1 },
 ];
 const ALL_STAGE_IDS = [
   'stage1','stage2','stage3','stage4','gate1','stage5',
@@ -352,42 +356,101 @@ function StageList({ steps }) {
   const stageRows = steps.filter(
     (s) => s?.details?.is_stage || STAGES.some((st) => st.id === s.stage)
   );
-  // Roll up by PHASE id. A phase is COMPLETE only if at least one stage
-  // ran AND none of its stages ended in ERROR; otherwise it inherits the
-  // worst outcome we've seen.
+  // Roll up by PHASE id. Per-stage status drives both the phase badge AND
+  // the percentage: each stage in a phase contributes 1/expected of that
+  // phase's progress, and the overall % is the average across all phases.
   const byPhase = {};
   for (const s of stageRows) {
     const phaseId = s.stage;
     if (!STAGES.some((st) => st.id === phaseId)) continue;
-    const cur = byPhase[phaseId] || { count: 0, hasErr: false, hasRun: false, last: null };
-    cur.count += 1;
-    cur.hasErr = cur.hasErr || normalizeStatus(s.status) === 'failed';
-    cur.hasRun = cur.hasRun || ['running', 'complete', 'failed'].includes(normalizeStatus(s.status));
+    const cur = byPhase[phaseId] || {
+      seen: 0, done: 0, hasErr: false, hasRun: false, last: null,
+    };
+    cur.seen += 1;
+    const norm = normalizeStatus(s.status);
+    if (norm === 'complete')    cur.done   += 1;
+    if (norm === 'failed')      cur.hasErr  = true;
+    if (norm === 'running' || norm === 'complete' || norm === 'failed') cur.hasRun = true;
     cur.last = s;
     byPhase[phaseId] = cur;
   }
+
+  // Build per-phase progress + overall total
+  let totalDone = 0;
+  const totalExpected = STAGES.reduce((acc, st) => acc + st.expected, 0);
+  const rows = STAGES.map((st) => {
+    const ph = byPhase[st.id];
+    const done = Math.min(ph?.done || 0, st.expected);
+    totalDone += done;
+    const percent = Math.round((done / st.expected) * 100);
+    let status = 'pending';
+    if (ph) {
+      if (ph.hasErr) status = 'failed';
+      else if (done >= st.expected) status = 'complete';
+      else if (ph.hasRun) status = 'running';
+    }
+    return { st, done, percent, status };
+  });
+  const overallPct = Math.round((totalDone / totalExpected) * 100);
+
   return (
-    <ul className="space-y-2">
-      {STAGES.map((st) => {
-        const ph = byPhase[st.id];
-        let status = 'pending';
-        if (ph) {
-          if (ph.hasErr) status = 'failed';
-          else if (ph.last && normalizeStatus(ph.last.status) === 'complete') {
-            status = 'complete';
-          } else if (ph.hasRun) status = 'running';
-        }
-        return (
-          <li key={st.id} className="flex items-center gap-3">
-            <Badge status={status} />
-            <span className="text-sm flex-1">{st.label}</span>
-            {ph?.count != null && (
-              <span className="text-xs text-slate-400">{ph.count} stage{ph.count === 1 ? '' : 's'}</span>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+    <div className="space-y-3">
+      <OverallProgress percent={overallPct} done={totalDone} total={totalExpected} />
+      <ul className="space-y-2">
+        {rows.map(({ st, done, percent, status }) => (
+          <PhaseRow key={st.id} st={st} done={done} percent={percent} status={status} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function OverallProgress({ percent, done, total }) {
+  // Colour the overall bar by overall status: green if 100%, blue while
+  // in flight, slate before anything starts.
+  const bar = percent >= 100 ? 'bg-emerald-500'
+            : percent > 0    ? 'bg-blue-500'
+                              : 'bg-slate-300';
+  return (
+    <div className="mb-2">
+      <div className="flex items-baseline justify-between mb-1">
+        <div className="text-sm font-medium text-slate-700">Overall progress</div>
+        <div className="text-sm font-semibold text-slate-900">
+          {percent}% <span className="text-slate-400 font-normal">· {done}/{total} stages</span>
+        </div>
+      </div>
+      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+        <div
+          className={`h-full ${bar} transition-all duration-300`}
+          style={{ width: `${Math.min(100, percent)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PhaseRow({ st, done, percent, status }) {
+  // Phase bar colour follows row status so the eye groups colour=meaning.
+  const bar = status === 'complete' ? 'bg-emerald-500'
+            : status === 'failed'   ? 'bg-red-500'
+            : status === 'running'  ? 'bg-blue-500'
+                                    : 'bg-slate-200';
+  return (
+    <li>
+      <div className="flex items-center gap-3">
+        <Badge status={status} />
+        <span className="text-sm flex-1">{st.label}</span>
+        <span className="text-xs text-slate-400 tabular-nums whitespace-nowrap">
+          {done}/{st.expected} · {percent}%
+        </span>
+      </div>
+      <div className="h-1 mt-1.5 rounded-full bg-slate-100 overflow-hidden ml-[3.25rem]">
+        <div
+          className={`h-full ${bar} transition-all duration-300`}
+          style={{ width: `${Math.min(100, percent)}%` }}
+        />
+      </div>
+    </li>
   );
 }
 
@@ -426,9 +489,10 @@ function Stats({ stats, steps }) {
     const t = String(s.status || '').toUpperCase();
     return t === 'COMPLETE' || t === 'OK' || t === 'SUCCESS';
   }).length;
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <Stat label="Stages complete" value={`${done}/${total}`} />
+      <Stat label="Stages complete" value={`${done}/${total} · ${percent}%`} />
       <Stat label="Rows extracted"  value={stats?.rows_extracted ?? '—'} />
       <Stat label="Rows loaded"     value={stats?.rows_loaded ?? '—'} />
       <Stat label="Dead-lettered"   value={stats?.dead_letters ?? '—'} />
