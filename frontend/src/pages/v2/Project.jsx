@@ -43,7 +43,14 @@ export default function Project() {
   // to S/4HANA via BAPIs and is not reversible. We hydrate from wizard
   // state so the choice survives page refresh.
   const [loadToS4, setLoadToS4] = useState(false);
+  // Simulation mode routes live BAPIs through TEST_RUN + staging tables;
+  // it's only meaningful when loadToS4=true. Default true when the user
+  // first flips on live-load, so the very first live run is safe by default.
+  const [simulationMode, setSimulationMode] = useState(true);
   const [confirmingLive, setConfirmingLive] = useState(false);
+  // Aggregated telemetry + error buckets — populated by /telemetry poll.
+  const [telemetry, setTelemetry] = useState(null);
+  const [errorBuckets, setErrorBuckets] = useState([]);
 
   useEffect(() => {
     api.wizardGet(runId).then((w) => {
@@ -52,14 +59,23 @@ export default function Project() {
     }).catch((e) => setErr(e.message));
   }, [runId]);
 
-  // Poll live progress when a run is active.
+  // Poll live progress AND aggregated telemetry + error buckets while a
+  // run is active. Telemetry is what drives the metric cards; the raw
+  // progress steps still power the phase tracker below.
   useEffect(() => {
     let cancelled = false;
     let timer = null;
     async function poll() {
       try {
-        const p = await api.progress(0);
-        if (!cancelled) setProgress({ steps: p.steps || [], stats: p.stats });
+        const [p, t, eb] = await Promise.all([
+          api.progress(0),
+          activeRun ? api.runTelemetry(activeRun) : Promise.resolve(null),
+          activeRun ? api.runErrorBuckets(activeRun) : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        setProgress({ steps: p.steps || [], stats: p.stats });
+        if (t) setTelemetry(t);
+        if (eb) setErrorBuckets(eb.buckets || []);
       } catch { /* network blip is fine */ }
       if (!cancelled) timer = setTimeout(poll, 3000);
     }
@@ -85,6 +101,7 @@ export default function Project() {
         ecc_version: wizard.ecc_version,
         s4_version:  wizard.s4_version,
         load_to_s4:  loadToS4,
+        simulation_mode: loadToS4 && simulationMode,
       });
       const pipeline_run_id = r.run_id || r.execution_id || runId;
       setActiveRun(pipeline_run_id);
@@ -134,6 +151,12 @@ export default function Project() {
         </div>
       )}
 
+      {activeRun && telemetry && (
+        <Section title="Live telemetry">
+          <TelemetryCards t={telemetry} />
+        </Section>
+      )}
+
       <Section title="Project tracker">
         <StageList steps={progress.steps} />
       </Section>
@@ -142,12 +165,39 @@ export default function Project() {
         <Stats stats={progress.stats} steps={progress.steps} />
       </Section>
 
+      {activeRun && errorBuckets.length > 0 && (
+        <Section title="Errors — triage">
+          <ErrorBucketsList
+            buckets={errorBuckets}
+            runId={activeRun}
+          />
+        </Section>
+      )}
+
       <Section title="What this run will do">
         <LoadModeChooser
           loadToS4={loadToS4}
           setLoadToS4={setLoadToS4}
           disabled={!!activeRun || starting}
         />
+        {loadToS4 && (
+          <label className="mt-4 flex items-start gap-3 p-3 border-2 border-blue-200 bg-blue-50 rounded text-sm">
+            <input
+              type="checkbox"
+              checked={simulationMode}
+              onChange={(e) => setSimulationMode(e.target.checked)}
+              disabled={!!activeRun || starting}
+              className="mt-0.5 accent-blue-600"
+            />
+            <span>
+              <strong>Simulation mode (dry run)</strong> — call BAPIs with{' '}
+              <code>TEST_RUN</code> and staging tables. Nothing commits to S/4HANA.{' '}
+              <span className="text-slate-500">
+                Recommended for the first live-load run.
+              </span>
+            </span>
+          </label>
+        )}
       </Section>
 
       <Section title="Actions">
@@ -196,15 +246,144 @@ export default function Project() {
           >
             Download PDF snapshot
           </button>
+
+          {activeRun && (
+            <button
+              onClick={() => downloadFile(
+                `/api/runs/${encodeURIComponent(activeRun)}/evidence-pack`,
+                `evidence_pack_${activeRun}.json`)
+                .catch((e) => setErr(e.message))}
+              className="px-4 py-2 rounded border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm font-medium hover:bg-emerald-100"
+              title="Cryptographically-sealed audit manifest (SHA-256 chain, WORM-eligible)"
+            >
+              Download Compliance Evidence
+            </button>
+          )}
         </div>
         <div className="text-xs text-slate-500 mt-3 leading-relaxed">
           The PDF can be downloaded any time during the run — each download
           captures the comprehensive state up to that moment. After the run
-          completes, the PDF is the full final report.
+          completes, the PDF is the full final report. The Compliance Evidence
+          pack is a tamper-proof JSON manifest (SHA-256 hash chain) for auditors.
         </div>
       </Section>
     </div>
   );
+}
+
+function TelemetryCards({ t }) {
+  const pct = Math.max(0, Math.min(100, Number(t?.percentage_complete) || 0));
+  const barColor = t?.status === 'Failed'    ? 'bg-red-500'
+                 : t?.status === 'Completed' ? 'bg-emerald-500'
+                 : t?.status === 'Simulating'? 'bg-amber-500'
+                                              : 'bg-blue-500';
+  const statusPillClasses = t?.status === 'Failed'
+    ? 'bg-red-100 text-red-800'
+    : t?.status === 'Completed'
+      ? 'bg-emerald-100 text-emerald-800'
+      : t?.status === 'Simulating'
+        ? 'bg-amber-100 text-amber-800'
+        : 'bg-blue-100 text-blue-800';
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded ${statusPillClasses}`}>
+            {t?.status || '—'}
+          </span>
+          <span className="text-sm text-slate-600">
+            {pct.toFixed(1)}% complete
+          </span>
+        </div>
+        <span className="text-xs text-slate-500 tabular-nums">
+          runtime {formatElapsed(t?.runtime_elapsed_seconds || 0)}
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-slate-100 overflow-hidden mb-4">
+        <div className={`h-full ${barColor} transition-all duration-300`}
+             style={{ width: `${pct}%` }} />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MetricCard label="Total records"       value={fmt(t?.total_records)} />
+        <MetricCard label="Processed successfully" value={fmt(t?.processed_successfully)} tone="ok" />
+        <MetricCard label="Failed records"      value={fmt(t?.failed_records)}
+                    tone={t?.failed_records ? 'bad' : 'ok'} />
+        <MetricCard label="Runtime"             value={formatElapsed(t?.runtime_elapsed_seconds || 0)} />
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, tone = 'neutral' }) {
+  const tones = {
+    ok:      'text-emerald-800 bg-emerald-50 border-emerald-200',
+    bad:     'text-red-800 bg-red-50 border-red-200',
+    neutral: 'text-slate-800 bg-slate-50 border-slate-200',
+  };
+  return (
+    <div className={`border rounded-lg p-3 ${tones[tone] || tones.neutral}`}>
+      <div className="text-xs uppercase tracking-wide opacity-70">{label}</div>
+      <div className="text-2xl font-semibold tabular-nums mt-1">{value}</div>
+    </div>
+  );
+}
+
+function ErrorBucketsList({ buckets, runId }) {
+  return (
+    <div>
+      <div className="space-y-2 mb-3">
+        {buckets.map((b, i) => (
+          <ErrorBucketCard key={i} b={b} />
+        ))}
+      </div>
+      <button
+        onClick={() => downloadFile(
+          `/api/runs/${encodeURIComponent(runId)}/failed-records.csv`,
+          `failed-records-${runId}.csv`)}
+        className="px-4 py-2 rounded border border-red-300 bg-red-50 text-red-800 text-sm font-medium hover:bg-red-100"
+      >
+        Download Failed Records ({buckets.reduce((s, b) => s + b.count, 0)} rows)
+      </button>
+    </div>
+  );
+}
+
+function ErrorBucketCard({ b }) {
+  return (
+    <div className="border border-red-200 bg-red-50 rounded p-3">
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <div className="text-sm font-medium text-red-900 flex-1">{b.error}</div>
+        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-200 text-red-900 tabular-nums">
+          {b.count} rows
+        </span>
+      </div>
+      <div className="text-xs text-slate-600 leading-relaxed">
+        <strong>Fix:</strong> {b.remediation}
+      </div>
+      {b.objects?.length > 0 && (
+        <div className="text-xs text-slate-500 mt-1">
+          Objects: {b.objects.join(', ')}
+          {b.sample_source_keys?.length > 0 && (
+            <> · Sample keys: <span className="font-mono">{b.sample_source_keys.join(', ')}</span></>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function fmt(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString();
+}
+
+function formatElapsed(seconds) {
+  const s = Math.max(0, Math.floor(seconds || 0));
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}h ${m % 60}m ${s % 60}s`;
+  if (m > 0) return `${m}m ${s % 60}s`;
+  return `${s}s`;
 }
 
 function LoadModeChooser({ loadToS4, setLoadToS4, disabled }) {

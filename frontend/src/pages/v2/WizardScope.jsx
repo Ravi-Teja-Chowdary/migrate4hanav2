@@ -93,6 +93,10 @@ export default function WizardScope() {
         </div>
       )}
 
+      <div className="mt-6">
+        <MappingUpload />
+      </div>
+
       <WizardNav
         onBack={() => nav(`/wizard/${runId}/versions`)}
         onNext={onNext}
@@ -101,6 +105,100 @@ export default function WizardScope() {
         Next: connect
       </WizardNav>
     </WizardStep>
+  );
+}
+
+// Small self-contained widget: download the mapping template, edit in Excel,
+// drop it back onto the zone. Validation runs server-side (rules from the
+// backend transformation_engine) and results render inline. Optional: the
+// wizard flow does not require this to proceed.
+function MappingUpload() {
+  const [state, setState] = useState({ status: 'idle', result: null, filename: '' });
+  const inputRef = React.useRef(null);
+
+  const onFile = async (file) => {
+    if (!file) return;
+    setState({ status: 'validating', result: null, filename: file.name });
+    try {
+      const text = await file.text();
+      const result = await api.validateMapping(text);
+      setState({ status: result.ok ? 'ok' : 'error', result, filename: file.name });
+    } catch (e) {
+      setState({ status: 'error',
+                 result: { ok: false, row_count: 0,
+                           errors: [{ row: 0, column: '', message: e.message }] },
+                 filename: file.name });
+    }
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    onFile(e.dataTransfer.files?.[0]);
+  };
+
+  return (
+    <div className="border-t border-slate-200 pt-5">
+      <div className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-2">
+        Optional — Custom field mappings
+      </div>
+      <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+        Download the template, add source-field → target-field pairs in Excel,
+        and drop it back here. Validation runs against the target metadata; you
+        get a pass/fail list with row-specific callouts before the migration
+        touches anything.
+      </p>
+      <div className="flex items-start gap-4 flex-wrap">
+        <a
+          href={api.mappingTemplatePath()}
+          className="px-3 py-2 rounded border border-slate-300 text-sm hover:bg-slate-50"
+          download
+        >
+          Download template
+        </a>
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          className="flex-1 min-w-[240px] border-2 border-dashed border-slate-300 rounded p-4 text-center text-sm text-slate-500 cursor-pointer hover:border-blue-400 hover:bg-blue-50"
+        >
+          {state.filename
+            ? `Selected: ${state.filename}`
+            : 'Drop mapping CSV here, or click to browse'}
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={(e) => onFile(e.target.files?.[0])}
+          />
+        </div>
+      </div>
+
+      {state.status === 'validating' && (
+        <div className="mt-3 text-sm text-slate-500">Validating…</div>
+      )}
+      {state.status === 'ok' && (
+        <div className="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          ✓ Mapping valid — {state.result.row_count} rows accepted.
+        </div>
+      )}
+      {state.status === 'error' && (
+        <div className="mt-3 text-sm bg-red-50 border border-red-200 rounded px-3 py-2">
+          <div className="font-medium text-red-800 mb-1">
+            {state.result.errors.length} validation error{state.result.errors.length === 1 ? '' : 's'}
+          </div>
+          <ul className="space-y-0.5 max-h-40 overflow-y-auto text-xs text-red-700">
+            {state.result.errors.map((e, i) => (
+              <li key={i}>
+                <span className="font-mono">row {e.row}</span>
+                {e.column ? <> · <span className="font-mono">{e.column}</span></> : null}
+                : {e.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 

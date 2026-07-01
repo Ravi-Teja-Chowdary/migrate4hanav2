@@ -475,7 +475,7 @@ def get_run(run_id, client_id: str = "default"):
 
 
 async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_kind="in_place",
-                                 run_id=None, load_to_s4=False):
+                                 run_id=None, load_to_s4=False, simulation_mode=False):
     global _active_run
     # The wizard hands us its own run_id (e.g. wiz-20260615T120117Z-b539783e);
     # keep it so logs/state files/UI all use the same identifier instead of
@@ -487,7 +487,9 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
         _active_run = {"status": "running", "results": None,
                        "run_id": pipeline_run_id,
                        "started": time.time(), "mode": mode,
-                       "generate_pdf_after": generate_pdf_after}
+                       "generate_pdf_after": generate_pdf_after,
+                       "load_to_s4": load_to_s4,
+                       "simulation_mode": simulation_mode}
 
     # Clear old progress steps + reset the parser state used by
     # _parse_pipeline_output (phase tracker, last-stage-step pointer).
@@ -586,18 +588,31 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
             # they made reflected in Live Ops.
             if load_to_s4:
                 env["M4H_LOAD_TO_S4"] = "1"
-                _add_progress_step("mode",
-                                   "LIVE LOAD enabled: data-migrator will call "
-                                   "BAPIs against S/4HANA. Writes are not reversible.",
-                                   "WARNING",
-                                   {"load_to_s4": True})
+                if simulation_mode:
+                    # Route through BAPI TEST_RUN + staging tables (spines
+                    # already honour this env; nothing commits). Kept as an
+                    # env var, not a runner CLI flag, so the same value flows
+                    # through every subprocess boundary.
+                    env["M4H_SIMULATE"] = "1"
+                    _add_progress_step("mode",
+                                       "SIMULATION mode: BAPIs called with TEST_RUN, "
+                                       "staging tables used - no commits to S/4HANA.",
+                                       "INFO",
+                                       {"load_to_s4": True, "simulation_mode": True})
+                else:
+                    env.pop("M4H_SIMULATE", None)
+                    _add_progress_step("mode",
+                                       "LIVE LOAD enabled: data-migrator will call "
+                                       "BAPIs against S/4HANA. Writes are not reversible.",
+                                       "WARNING",
+                                       {"load_to_s4": True, "simulation_mode": False})
             else:
                 _add_progress_step("mode",
                                    "EXTRACT-ONLY mode: data lands in Migration Cockpit "
                                    "CSV templates under local-staging/. No S/4 writes "
                                    "until you re-run with Load to S/4HANA enabled.",
                                    "INFO",
-                                   {"load_to_s4": False})
+                                   {"load_to_s4": False, "simulation_mode": False})
 
             # Non-Unicode ECC handshake. Default to codepage 1100 (SAP_LATIN1)
             # which is what every IDES EHP < 8 Unicode-disabled system runs;
@@ -1155,7 +1170,9 @@ def _get_user_store():
         try:
             ensure_root_user(_user_store)
         except Exception as e:
-            log.warning("root bootstrap skipped: %s", e)
+            import logging as _logging
+            _logging.getLogger("api_server").warning(
+                "root bootstrap skipped: %s", e)
     return _user_store
 
 
@@ -2066,13 +2083,20 @@ class _LiftAndShiftRequest(BaseModel):
     # (calls BAPIs against S/4 immediately). Default OFF for safety: the
     # extract-only mode is reversible; live load is not.
     load_to_s4: Optional[bool] = False
+    # simulation_mode is the safety gate for live load: when True, spines
+    # call the BAPIs' TEST_RUN mode where supported and staging tables
+    # otherwise; nothing commits. Ignored (no effect) when load_to_s4 is
+    # False since extract-only is already non-committing.
+    simulation_mode: Optional[bool] = False
 
 
 def _ls_args(body):
     """Pluck the wizard payload fields start_pipeline_async cares about."""
     if not body:
-        return {"run_id": None, "load_to_s4": False}
-    return {"run_id": body.run_id, "load_to_s4": bool(body.load_to_s4)}
+        return {"run_id": None, "load_to_s4": False, "simulation_mode": False}
+    return {"run_id": body.run_id,
+            "load_to_s4": bool(body.load_to_s4),
+            "simulation_mode": bool(body.simulation_mode)}
 
 
 @app.post("/api/pipeline/lift-and-shift", dependencies=[Depends(require_auth)])
@@ -2435,6 +2459,168 @@ async def get_run_pdf(run_id: str, request: Request):
         return FileResponse(pdf_path, media_type="application/pdf",
                             filename=f"migration-report-{run_id}.pdf")
     raise HTTPException(status_code=404, detail="Report not available for this run")
+
+
+def _ls_run_dir(run_id: str) -> str:
+    return os.path.join(PROJECT_DIR, "local-staging", "m4h-local", "runs", run_id)
+
+
+@app.get("/api/runs/{run_id}/telemetry", dependencies=[Depends(require_auth)])
+async def get_run_telemetry(run_id: str):
+    """Slim aggregated JSON for the dashboard metric cards.
+
+    Shape is spec-locked in lambda/utils/telemetry.aggregate_run_telemetry
+    (see tests/test_telemetry.py). The frontend polls this at ~2Hz instead
+    of reading raw stderr, so payload size stays under 300 bytes.
+    """
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from telemetry import aggregate_run_telemetry
+    # Only pass the active-run state when its run_id matches; otherwise a
+    # stale in-memory pointer would leak "Processing" into a completed run's
+    # dashboard.
+    active = _active_run if _active_run.get("run_id") == run_id else None
+    return aggregate_run_telemetry(_ls_run_dir(run_id), active_state=active)
+
+
+@app.get("/api/runs/{run_id}/error-buckets", dependencies=[Depends(require_auth)])
+async def get_run_error_buckets(run_id: str):
+    """Group identical failure signatures into triage cards.
+
+    Sorted by count desc; each entry carries the operator remediation hint,
+    the set of objects that hit it, and up to 3 sample source keys.
+    """
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from telemetry import bucket_errors
+    return {"run_id": run_id, "buckets": bucket_errors(_ls_run_dir(run_id))}
+
+
+@app.get("/api/runs/{run_id}/failed-records.csv",
+         dependencies=[Depends(require_auth)])
+async def get_run_failed_records_csv(run_id: str):
+    """Download exactly the failing rows as a CSV the operator can open in
+    Excel, fix, and hand back to the migration lead."""
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from telemetry import failed_records_csv
+    data = failed_records_csv(_ls_run_dir(run_id))
+    from fastapi.responses import Response as _Resp
+    fname = f"failed-records-{run_id}.csv"
+    return _Resp(content=data, media_type="text/csv; charset=utf-8",
+                 headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+@app.get("/api/runs/{run_id}/evidence-pack",
+         dependencies=[Depends(require_auth)])
+async def get_run_evidence_pack(run_id: str):
+    """Return the tamper-proof evidence manifest for the run.
+
+    The manifest is built by lambda/utils/reconciler.EvidencePack from the
+    run's data-migrator summary + audit chain and cached under
+    <run>/report/evidence_pack_<run_id>.json. If it isn't on disk yet
+    (older runs) we build it on the fly from whatever artefacts exist.
+    """
+    run_dir = _ls_run_dir(run_id)
+    report_dir = os.path.join(run_dir, "report")
+    cached = os.path.join(report_dir, f"evidence_pack_{run_id}.json")
+    if not os.path.isfile(cached):
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        try:
+            from reconciler import EvidencePack
+        except Exception as e:
+            raise HTTPException(status_code=500,
+                                detail={"error": "reconciler module unavailable",
+                                        "message": str(e)[:200]})
+        # Pull summary + audit chain if present; missing pieces just render
+        # empty in the manifest (evidence is honest, not fabricated).
+        summary_path = os.path.join(run_dir, "data-migrator", "summary.json")
+        try:
+            summary = json.loads(open(summary_path, encoding="utf-8").read()) \
+                if os.path.isfile(summary_path) else {}
+        except Exception:
+            summary = {}
+        pack = EvidencePack(run_id=run_id, chain=None)
+        manifest = pack.build_manifest(
+            system_config={"run_id": run_id},
+            data_quality=summary.get("data_quality") or {},
+            reconciliation=summary.get("reconciliation") or {},
+        )
+        pack.write(manifest, out_dir=report_dir)
+    return FileResponse(cached, media_type="application/json",
+                        filename=f"evidence_pack_{run_id}.json")
+
+
+@app.get("/api/mapping-template.csv",
+         dependencies=[Depends(require_auth)])
+async def get_mapping_template():
+    """Emit a blank field-mapping template built from the conversion catalog.
+
+    Each row is one migratable object; operators fill the `target_field` /
+    `transformation` columns and re-upload via /api/mapping/validate.
+    """
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from conversion_mapping import list_all_mappings
+    import io as _io
+    import csv as _csv
+    buf = _io.StringIO()
+    w = _csv.writer(buf, lineterminator="\n")
+    w.writerow(["object", "category", "ecc_tables", "s4_targets",
+                "source_field", "target_field", "transformation", "notes"])
+    for m in list_all_mappings():
+        w.writerow([
+            m.get("object", ""),
+            m.get("category", ""),
+            "|".join(m.get("ecc_tables") or []),
+            "|".join(m.get("s4_targets") or []),
+            "", "", "", "",   # operator-filled columns
+        ])
+    from fastapi.responses import Response as _Resp
+    return _Resp(content=buf.getvalue().encode("utf-8"),
+                 media_type="text/csv; charset=utf-8",
+                 headers={"Content-Disposition":
+                          'attachment; filename="mapping-template.csv"'})
+
+
+@app.post("/api/mapping-validate",
+          dependencies=[Depends(require_auth)])
+async def validate_mapping_upload(request: Request):
+    """Accept an uploaded CSV of field mappings and return a pass/fail list.
+
+    Slim payload:
+        {ok: bool, row_count: N, errors: [{row, column, message}, ...]}
+    """
+    import io as _io
+    import csv as _csv
+    sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+    from conversion_mapping import list_all_mappings
+
+    body = await request.body()
+    try:
+        text = body.decode("utf-8-sig")
+    except Exception:
+        return {"ok": False, "row_count": 0,
+                "errors": [{"row": 0, "column": "", "message": "not valid UTF-8"}]}
+    try:
+        reader = list(_csv.DictReader(_io.StringIO(text)))
+    except Exception as e:
+        return {"ok": False, "row_count": 0,
+                "errors": [{"row": 0, "column": "", "message": f"CSV parse: {e}"}]}
+    known_objects = {m["object"] for m in list_all_mappings()}
+    errors = []
+    for idx, row in enumerate(reader, start=2):  # header is row 1
+        obj = (row.get("object") or "").strip()
+        if not obj:
+            errors.append({"row": idx, "column": "object",
+                           "message": "object is required"})
+            continue
+        if obj not in known_objects:
+            errors.append({"row": idx, "column": "object",
+                           "message": f"unknown object: {obj}"})
+        tf = (row.get("target_field") or "").strip()
+        sf = (row.get("source_field") or "").strip()
+        # If the operator filled EITHER side of a mapping, both must be present.
+        if (tf and not sf) or (sf and not tf):
+            errors.append({"row": idx, "column": "source_field/target_field",
+                           "message": "source_field and target_field must be paired"})
+    return {"ok": not errors, "row_count": len(reader), "errors": errors}
 
 
 @app.get("/api/runs/{run_id}/report", dependencies=[Depends(require_auth)])

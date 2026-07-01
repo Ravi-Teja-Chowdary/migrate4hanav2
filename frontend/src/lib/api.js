@@ -158,6 +158,24 @@ export const api = {
   spineProgress: () => apiFetch('/api/spine/progress'),
   status:   () => apiFetch('/api/status'),
 
+  // ── Aggregated per-run telemetry (dashboard cards) ──
+  runTelemetry: (run_id) =>
+    apiFetch(`/api/runs/${encodeURIComponent(run_id)}/telemetry`),
+  runErrorBuckets: (run_id) =>
+    apiFetch(`/api/runs/${encodeURIComponent(run_id)}/error-buckets`),
+  // downloadFailedRecords / downloadEvidencePack are handled via downloadFile
+  // (already exported from this module) using these paths:
+  failedRecordsCsvPath: (run_id) =>
+    `/api/runs/${encodeURIComponent(run_id)}/failed-records.csv`,
+  evidencePackPath: (run_id) =>
+    `/api/runs/${encodeURIComponent(run_id)}/evidence-pack`,
+
+  // ── Mapping upload flow ──
+  mappingTemplatePath: () => '/api/mapping-template.csv',
+  validateMapping: (csvText) =>
+    apiFetch('/api/mapping-validate',
+      { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: csvText }),
+
   // ── Pipeline triggers ──
   triggerLiftAndShift: (payload = {}) =>
     apiFetch('/api/pipeline/lift-and-shift',
