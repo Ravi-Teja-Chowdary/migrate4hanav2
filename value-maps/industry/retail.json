@@ -1,0 +1,67 @@
+{
+  "_meta": {
+    "variant": "retail",
+    "description": "Retail industry addenda: EAN types, seasons, colour + size grids, article categories.",
+    "version": "2026-07-03",
+    "merges_over": "matrix.json"
+  },
+
+  "material_type_map": {
+    "_doc": "Retail overlays HAWA-heavy assortments. Add IBAU/VOLL article-hierarchy types and legacy Z article types.",
+    "ZFG": "FERT",
+    "ZHA": "HALB",
+    "ZHB": "HAWA",
+    "ZRO": "ROH",
+    "ZSE": "DIEN",
+    "ZART": "HAWA",
+    "ZVOL": "VOLL",
+    "ZIB":  "IBAU",
+    "FERT": "FERT",
+    "HALB": "HALB",
+    "HAWA": "HAWA",
+    "VOLL": "VOLL",
+    "IBAU": "IBAU"
+  },
+
+  "ean_category_map": {
+    "_doc": "MARA.EAN11 category to S/4 EAN category (UPC-A/EAN13/EAN8/HR).",
+    "IE1": "IE",
+    "UP1": "UC",
+    "EA1": "EA",
+    "HR1": "HR"
+  },
+
+  "season_map": {
+    "_doc": "Retail season code from ECC MARA extension to S/4 WSTFTS group.",
+    "SS": "SS",
+    "FW": "FW",
+    "AW": "AW",
+    "PY": "PY",
+    "SPRING": "SS",
+    "FALL":   "FW",
+    "AUTUMN": "FW",
+    "WINTER": "FW"
+  },
+
+  "colour_map": {
+    "_doc": "Retail colour code to S/4 colour characteristic value.",
+    "01": "BLK",
+    "02": "WHT",
+    "03": "RED",
+    "04": "BLU",
+    "05": "GRN",
+    "10": "GRY",
+    "99": "MLT"
+  },
+
+  "size_grid_map": {
+    "_doc": "Retail size grid ECC -> S/4 (letter grid; numeric grid handled by unit conversion).",
+    "XS":  "XS",
+    "S":   "S",
+    "M":   "M",
+    "L":   "L",
+    "XL":  "XL",
+    "XXL": "XXL",
+    "3XL": "3XL"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "_doc_missing_intent_note": "Utility (electric / gas / water) addenda: functional location categories, meter types, service territory, tariff categories.",
+  "_meta": {
+    "variant": "utility",
+    "description": "Utility industry addenda: functional-loc types, meter categories, service territories.",
+    "version": "2026-07-03",
+    "merges_over": "matrix.json"
+  },
+
+  "funcloc_category_map": {
+    "_doc": "FLOC.FLTYP -> S/4 (utilities have long substation + line-segment hierarchies).",
+    "1":     "1",
+    "2":     "2",
+    "ELEC":  "1",
+    "GAS":   "2",
+    "WATER": "3",
+    "SUBST": "SUBSTN",
+    "LINE":  "LINE",
+    "METER": "METER"
+  },
+
+  "meter_type_map": {
+    "_doc": "Utility meter category -> S/4 IS-U device category.",
+    "SM":  "SMART",
+    "AN":  "ANALOG",
+    "DG":  "DIGITAL",
+    "PRE": "PREPAID"
+  },
+
+  "service_territory_map": {
+    "_doc": "ECC service-territory code -> S/4 IS-U service-territory group.",
+    "NE":  "NORTHEAST",
+    "SE":  "SOUTHEAST",
+    "MW":  "MIDWEST",
+    "NW":  "NORTHWEST",
+    "SW":  "SOUTHWEST",
+    "PAC": "PACIFIC",
+    "MTN": "MOUNTAIN"
+  },
+
+  "tariff_category_map": {
+    "_doc": "ECC customer class -> IS-U tariff category (residential / commercial / industrial).",
+    "R1":  "RES_STANDARD",
+    "R2":  "RES_TOU",
+    "C1":  "COM_STANDARD",
+    "C2":  "COM_LARGE",
+    "I1":  "IND_STANDARD",
+    "I2":  "IND_LARGE"
+  },
+
+  "meter_reading_reason_map": {
+    "_doc": "ECC reading reason -> S/4 IS-U reason code.",
+    "01": "SCHEDULED",
+    "02": "MOVE_IN",
+    "03": "MOVE_OUT",
+    "04": "MANUAL",
+    "05": "ESTIMATE",
+    "06": "REPLACE"
+  }
+}

@@ -64,36 +64,119 @@ class DependencyDAG:
     def from_defaults(cls) -> "DependencyDAG":
         # Curated SAP migration order. Conservative - if in doubt, the dep is
         # declared so the later object waits. Override by mutating in caller.
+        # Expanded 2026-07-03 to cover the full transactional envelope needed
+        # for a production-grade cutover (was 28 nodes; now covers the
+        # ~60 objects that actually gate on order-of-operations).
         edges = {
-            # Masters
-            "Customer":        {"BusinessPartner"},
-            "Vendor":          {"BusinessPartner"},
-            "Material":        set(),
-            "GLAccount":       set(),
-            "CostCenter":      {"GLAccount"},
-            "ProfitCenter":    {"GLAccount"},
-            "CostElementGroup": {"GLAccount"},
-            "ProfitCenterGroup": {"ProfitCenter"},
-            "InternalOrder":   {"CostCenter"},
-            "FixedAsset":      {"CostCenter", "GLAccount"},
-            "Bank":            set(),
-            "ExchangeRates":   set(),
-            "Equipment":       {"Material"},
+            # ── Foundation masters ─────────────────────────────────────────
+            "Plant":              set(),
+            "GLAccount":          set(),
+            "Bank":               set(),
+            "ExchangeRates":      set(),
+            "Characteristic":     set(),
             "FunctionalLocation": set(),
-            "Project":         {"WBS"},
-            "WBS":             {"CostCenter"},
-            "Characteristic":  set(),
-            "Class":           {"Characteristic"},
-            "Batch":           {"Material"},
-            "InventoryBalance": {"Material", "Plant"},
-            "Plant":           set(),
-            # Transactionals
-            "OpenAR":          {"GLAccount", "Customer"},
-            "OpenAP":          {"GLAccount", "Vendor"},
-            "OpenPO":          {"Material", "Vendor"},
+
+            # ── Core master data ───────────────────────────────────────────
+            "BusinessPartner":    set(),
+            "Customer":           {"BusinessPartner"},
+            "Vendor":             {"BusinessPartner"},
+            "Material":           set(),
+            "MaterialClassification": {"Material", "Class"},
+
+            # ── CO objects ─────────────────────────────────────────────────
+            "CostCenter":         {"GLAccount"},
+            "ProfitCenter":       {"GLAccount"},
+            "CostElementGroup":   {"GLAccount"},
+            "ProfitCenterGroup":  {"ProfitCenter"},
+            "InternalOrder":      {"CostCenter"},
+
+            # ── FI (extended) ──────────────────────────────────────────────
+            "FixedAsset":         {"CostCenter", "GLAccount"},
+
+            # ── PS / project ───────────────────────────────────────────────
+            "ProjectDefinition":  set(),
+            "WBS":                {"ProjectDefinition", "CostCenter"},
+            "Project":            {"WBS"},
+            "NetworkActivity":    {"WBS"},
+            "NetworkComponent":   {"NetworkActivity", "Material"},
+
+            # ── Classification / batches ──────────────────────────────────
+            "Class":              {"Characteristic"},
+            "Batch":              {"Material"},
+            "BatchClassification": {"Batch", "Class"},
+
+            # ── Inventory ──────────────────────────────────────────────────
+            "InventoryBalance":   {"Material", "Plant"},
+            "InventoryReservation": {"Material", "Plant"},
+            "MovementType":       {"Material"},
+            "ProjectStock":       {"Material", "Plant", "WBS"},
+            "SerialNumber":       {"Material"},
+            "HandlingUnit":       {"Material", "Plant"},
+
+            # ── PM / EAM ───────────────────────────────────────────────────
+            "Equipment":          {"Material", "FunctionalLocation"},
+            "MeasurementPoint":   {"Equipment"},
+            "MeasurementDocument": {"MeasurementPoint"},
+            "MaintenancePlan":    {"Equipment"},
+            "MaintenanceItem":    {"MaintenancePlan"},
+            "Notification":       {"Equipment"},
+            "Warranty":           {"Equipment"},
+
+            # ── MM: PR / PO / IR ───────────────────────────────────────────
+            "InfoRecord":         {"Material", "Vendor"},
+            "SourceListLegacy":   {"Material", "Vendor"},
             "PurchaseRequisition": {"Material"},
-            "PurchaseContract": {"Material", "Vendor"},
-            "SalesOrder":      {"Material", "Customer"},
+            "PurchaseContract":   {"Material", "Vendor"},
+            "OpenPO":             {"Material", "Vendor"},
+            "ScheduleAgreementMM": {"Material", "Vendor"},
+            "SubcontractingPO":   {"OpenPO"},
+            "StockTransferOrder": {"Material", "Plant"},
+            "GoodsReceipt":       {"OpenPO"},
+            "IncomingInvoice":    {"OpenPO", "GoodsReceipt"},
+            "ServiceEntrySheet":  {"OpenPO"},
+
+            # ── SD ─────────────────────────────────────────────────────────
+            "Inquiry":            {"Material", "Customer"},
+            "Quotation":          {"Inquiry", "Material", "Customer"},
+            "SalesContract":      {"Material", "Customer"},
+            "ScheduleAgreementSD": {"Material", "Customer"},
+            "SalesOrder":         {"Material", "Customer"},
+            "OutboundDelivery":   {"SalesOrder", "Plant"},
+            "Shipment":           {"OutboundDelivery"},
+            "CreditMemoRequest":  {"SalesOrder"},
+            "ReturnsOrderSD":     {"SalesOrder"},
+            "RebateAgreement":    {"Customer"},
+
+            # ── PP / manufacturing ─────────────────────────────────────────
+            "BOMItem":            {"Material"},
+            "ProductionVersion":  {"Material"},
+            "MasterRecipe":       {"Material"},
+            "PlannedOrder":       {"Material", "Plant"},
+            "ProductionOrder":    {"Material", "Plant"},
+            "ProcessOrder":       {"MasterRecipe", "Material", "Plant"},
+            "ProductionOrderConfirmation": {"ProductionOrder"},
+            "ProductionOrderTimeTicket":   {"ProductionOrder"},
+
+            # ── QM ─────────────────────────────────────────────────────────
+            "CatalogCode":        set(),
+            "InspectionCharacteristic": {"Material"},
+            "SamplingProcedure":  set(),
+            "ControlPlan":        {"Material", "InspectionCharacteristic"},
+
+            # ── Documents ──────────────────────────────────────────────────
+            "DocumentInfoRecord": set(),
+
+            # ── HR (rare-lane) ─────────────────────────────────────────────
+            "HRMaster":           set(),
+
+            # ── FI open items / postings ───────────────────────────────────
+            "OpenAR":             {"GLAccount", "Customer"},
+            "OpenAP":             {"GLAccount", "Vendor"},
+            "AccountingDocument": {"GLAccount"},
+
+            # ── Legacy / requirements ──────────────────────────────────────
+            "Requirement":        {"Material", "Plant"},
+            "RequisitionLegacy":  {"Material"},
         }
         nodes = set(edges) | {n for deps in edges.values() for n in deps}
         return cls(edges=edges, nodes=nodes)

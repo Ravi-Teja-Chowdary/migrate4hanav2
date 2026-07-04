@@ -1,0 +1,64 @@
+{
+  "_meta": {
+    "variant": "discrete_mfg",
+    "description": "Discrete-manufacturing addenda: BOM usage, engineering change (ECR/ECO), lot size, phantom items.",
+    "version": "2026-07-03",
+    "merges_over": "matrix.json"
+  },
+
+  "bom_usage_map": {
+    "_doc": "Ecc STLAN BOM usage -> S/4 (same codes, but tolerate legacy Z codes).",
+    "1":  "1",
+    "2":  "2",
+    "3":  "3",
+    "4":  "4",
+    "5":  "5",
+    "6":  "6",
+    "7":  "7",
+    "ZR": "1",
+    "ZE": "3"
+  },
+
+  "lot_size_procedure_map": {
+    "_doc": "MRP lot size (MARC.DISLS): map legacy Z lot codes to standard EX/HB/PK etc.",
+    "EX":  "EX",
+    "HB":  "HB",
+    "PK":  "PK",
+    "ZEX": "EX",
+    "ZPK": "PK",
+    "ZHB": "HB"
+  },
+
+  "mrp_type_map": {
+    "_doc": "MARC.DISMM MRP type ECC -> S/4.",
+    "PD":  "PD",
+    "M0":  "M0",
+    "MD":  "MD",
+    "R1":  "R1",
+    "V1":  "V1",
+    "VB":  "VB"
+  },
+
+  "engineering_change_map": {
+    "_doc": "ECC ECR/ECO ECR change type -> S/4 change management category.",
+    "ECR": "ECR",
+    "ECO": "ECO",
+    "PDN": "ECR",
+    "REV": "ECO"
+  },
+
+  "phantom_item_map": {
+    "_doc": "STPO.DUMPS phantom flag ECC -> S/4.",
+    "X":  "X",
+    " ":  "",
+    "":   ""
+  },
+
+  "production_scheduler_map": {
+    "_doc": "MARC.FEVOR production scheduler -> S/4 planner group.",
+    "001": "001",
+    "002": "002",
+    "003": "003",
+    "099": "MISC"
+  }
+}

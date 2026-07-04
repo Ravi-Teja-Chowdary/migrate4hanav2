@@ -1,0 +1,58 @@
+{
+  "_meta": {
+    "variant": "pharma",
+    "description": "Pharmaceutical addenda: GMP compliance, batch handling, drug schedule, DEA classification.",
+    "version": "2026-07-03",
+    "merges_over": "matrix.json"
+  },
+
+  "material_type_map": {
+    "_doc": "Pharma adds active-pharmaceutical-ingredient (API/WIRK) and finished-goods drug (FERT with pharma classification).",
+    "ZFG": "FERT",
+    "ZAPI": "WIRK",
+    "ZDRUG": "FERT",
+    "ZINT": "HALB",
+    "FERT": "FERT",
+    "HALB": "HALB",
+    "WIRK": "WIRK",
+    "ROH":  "ROH"
+  },
+
+  "batch_status_map": {
+    "_doc": "MCHA batch status ECC -> S/4 QM inspection status. Pharma requires QC-cleared before use.",
+    "REL":  "RELEASED",
+    "BLK":  "BLOCKED",
+    "QI":   "QC_INSPECT",
+    "REJ":  "REJECTED",
+    "R":    "RELEASED",
+    "B":    "BLOCKED",
+    "L":    "BLOCKED"
+  },
+
+  "shelf_life_precision_map": {
+    "_doc": "Shelf-life precision from MARA.RESTLIFE granularity (D/M/Y).",
+    "D": "DAY",
+    "M": "MONTH",
+    "Y": "YEAR"
+  },
+
+  "controlled_substance_map": {
+    "_doc": "US DEA schedule (I-V) or EU controlled-substance flag; empty for uncontrolled.",
+    "1":   "DEA_I",
+    "2":   "DEA_II",
+    "2N":  "DEA_IIN",
+    "3":   "DEA_III",
+    "3N":  "DEA_IIIN",
+    "4":   "DEA_IV",
+    "5":   "DEA_V",
+    "":    "NONE"
+  },
+
+  "gmp_indicator_map": {
+    "_doc": "GMP compliance flag on the material master (customer Z field -> S/4 SNP).",
+    "GMP":    "X",
+    "NON-GMP": "",
+    "N":      "",
+    "Y":      "X"
+  }
+}

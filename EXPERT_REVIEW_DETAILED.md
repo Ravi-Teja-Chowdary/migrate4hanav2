@@ -6,11 +6,195 @@ limitation named, every gap honestly graded. Written to be read end-to-end by
 a Big-4-class peer reviewer, an SAP functional lead, and a cloud-security
 architect in parallel.*
 
-**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass landed (F1-F6); 2026-06-15 fire-and-forget loop closed**
+**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass landed (F1-F6); 2026-06-15 fire-and-forget loop closed; 2026-07-03 enterprise-hardening pass landed**
 **Branch:** `aws-lift-and-shift`
-**Latest commit covered:** `3bfd70a` — anchor discovery + customizing applier + MC auto-degrade
+**Latest commit covered:** enterprise-hardening pass — mc-project-provisioner + salesforce upsert + snowpipe + extended catalogs/DAG + dry-run transport
 **Repo:** GitHub `Ravi-Teja-Chowdary/migrate4hanav2`
 **Stack maturity:** prototype, AWS prod stack applies/destroys cleanly (174 resource blocks; ~200 after `count`/`for_each` expansion), in-AWS-only execution verified; **live ECC↔AWS connectivity proven via ngrok bridge 2026-06-02** (19,575 customer rows extracted from local IDES via Lambda); **six production-grade foundations shipped 2026-06-07** with 98/98 unit tests green (see §25). **As of 2026-06-15 (night) the only human touchpoints in the lifecycle are: (a) one-time `terraform apply` + `scripts/deploy-ui-aws.ps1`, (b) the 3 HMAC-signed SAP governance gates (post_assess / post_data_prep / post_validate).** Everything between is fire-and-forget.
+
+---
+
+## 2026-07-03  Enterprise-hardening pass — Basis-safe automation + content depth + sink hardening
+
+Response to an enterprise-ready gap-closure prompt covering (§1) SAP Basis
+automation, (§2) pre-built content for 127 objects, and (§3) post-migration
+sink hardening. Every item was triaged for SAP-support risk before
+implementation. **Two items were deliberately refused because they would
+put the customer's SAP system outside SAP support coverage.**
+
+### Refused (would void SAP support)
+
+| Prompt ask | Why refused |
+|---|---|
+| pyrfc call to `STMS_IMPORT_REQUESTS` / `STMS_IMPORT_REQUEST` for auto transport import | These are internal STMS/TP kernel FMs, NOT in the SAP-released customer-callable RFC set. Invoking them externally is unsanctioned; the SAP-canonical import path IS `tp import`, which is what our existing `transport-import-executor` uses via SSM. Adding a raw-FM shortcut would be a governance regression. |
+| Custom Z-ABAPs calling `TH_ENABLE_WP_TYPE` / `TH_DISABLE_WP_TYPE` for cutover WP freeze | `TH_*` are internal SAP kernel FMs (thread handling). Freezing WPs programmatically can corrupt the distributed lock table, ITS/gateway, and update-work-process chains. Any incident on a system where customer Z-code has manipulated WP state is uncoverable by SAP support. The `cutover-orchestrator` retains its SM02/SU10/RZ04 runbook — the SAP-doctrine cutover path. |
+
+Both refusals are documented in `docs/PRODUCTION_DEPLOYMENT_GUIDE.md`
+under "What this guide does NOT cover (deliberately refused)" so future
+reviewers see the reasoning without having to reconstruct it.
+
+### Shipped
+
+**§1.2 — MC project auto-provisioner.**
+`lambda/mc-project-provisioner/handler.py` (~360 LOC). Uses ONLY the OData
+services documented under SAP Note 2462327
+(`/sap/opu/odata4/sap/api_migrationcockpit_project`,
+`api_migrationcockpit_object_runtime`, `api_migrationcockpit_mapping`).
+No LTR_*/LTMC_*/DMC_* RFC calls. Strategy A = OData; Strategy B = runbook
+fallback on 4xx/5xx. Always produces a runbook artefact regardless of
+which strategy landed. Writes a hash-chain audit block (`block_type =
+mc_project_provisioner`) to the `compliance-ledger` DDB table per
+attempt, linked to the run's chain via `prev_hash`. Idempotent: existing
+projects are detected via GET before POST; `force_recreate: true`
+sequences DELETE+POST. Exponential-backoff retries on 5xx (3 tries,
+0.5s base). `M4H_ODATA_INSECURE=1` opt-in for lab systems with
+self-signed TLS.
+
+**§2.1 — Extended BAPI field catalog + generator.**
+`lambda/utils/bapi_field_catalog.py` extended from 24 to 40+ objects
+covering the full transactional envelope (Quotation, Inquiry,
+SalesContract, ScheduleAgreement, OutboundDelivery, Shipment,
+GoodsReceipt, IncomingInvoice, ProductionOrder, ProcessOrder,
+MaintenancePlan, InfoRecord, AccountingDocument, MaterialClassification,
+BatchClassification, BOMItem, etc.). `scripts/generate_field_catalog.ps1`
+regenerates the catalog against a live target using
+`RFC_GET_FUNCTION_INTERFACE` + `DDIF_FIELDINFO_GET` — both in the
+SAP-released customer-callable RFC set. Read-only; no writes to target.
+Output goes to `value-maps/bapi_field_catalog.<release>.json`; wired to
+Lambda via `M4H_BAPI_FIELD_CATALOG_JSON` env var (already-supported
+env-driven addendum mechanism, no new code path needed).
+
+**§2.2 — Value-mapping industry variants.**
+`value-maps/industry/{retail,pharma,discrete_mfg,utility}.json` + README.
+Deep-merged over `matrix.json` at runtime when `M4H_INDUSTRY_VARIANT` is
+set. Retail = EAN types + seasons + colour + size grids; Pharma = GMP +
+batch status + DEA schedule; Discrete Mfg = BOM usage + lot size + MRP
+type + engineering-change codes; Utility = funcloc + meter types + service
+territory + tariff. Base `matrix.json` untouched; industry files only ship
+overrides + additions.
+
+**§2.3 — Extended `DependencyDAG` + visualiser.**
+`lambda/utils/dependency_dag.py::DependencyDAG.from_defaults()` extended
+from 28 to 78 nodes. Full transactional envelope declared:
+Inquiry→Quotation→SalesContract→SO→OutboundDelivery→Shipment;
+PR→PO→GR→InvoiceReceipt; PlannedOrder→ProductionOrder→Confirmation→
+TimeTicket; MaintenancePlan→MaintenanceItem; MeasurementPoint→
+MeasurementDocument; MasterRecipe→ProcessOrder; BOM/ProductionVersion
+under Material; ProjectDefinition→WBS→NetworkActivity→NetworkComponent.
+Cycle-free (validated via existing `validate()`); topological sort
+respects masters-before-transactionals. `scripts/visualize_dag.py` emits
+Graphviz DOT with lane colouring (blue=BAPI, purple=MC-file,
+orange=IDoc); scope-limited render supported.
+
+**§2.4 — MC template extension schema.**
+`lambda/utils/mc_file_exporter.py` extended:
+- New `mc_should_include_row(object_type, row)` helper applies template
+  `filter_condition` at extract time. Predicate forms: scalar equality,
+  list/set membership, `{op: startswith|gt|lt|in|eq, val: ...}`. Filtered
+  rows are extract-skipped (NOT dead-lettered — that would inflate the
+  DQ counter with rows that were never in scope).
+- New `register_template_extension(object_type, filter_condition,
+  default_values)` widens a template at deploy time without editing
+  source. Both dicts are additive on repeat calls.
+- `build_payload` honours `default_values`: source-row-missing columns
+  are backfilled from `spec["default_values"]` at row-projection time so
+  runtime registrations are visible.
+
+**§3.1 — Salesforce sink hardening.**
+`lambda/utils/sink_router.py::SalesforceSink` fully rewritten while
+preserving backwards-compat (`writes_for_test()` still returns the
+in-memory queue). Live path: OAuth2 client-credentials → cached token
+with 60s pre-expiry refresh → `PATCH /services/data/v60.0/sobjects/
+<Object>/External_Id__c/<id>` (idempotent upsert; 201=insert, 204=update,
+4xx=FAILED with SF error body captured). DDB `salesforce_sync_status`
+tracker records every attempt with `last_status`, `attempt_count`,
+`payload_json` (cached for retry), and — on SYNCED — `sf_id` +
+`last_synced_at`. `retry_failed(tenant_id, max_rows)` re-drives PENDING/
+FAILED rows via a GSI query (`by_tenant_status`) without re-deriving
+the payload — idempotent, safe on a cron.
+
+**§3.2 — Snowpipe stack.**
+`terraform/modules/snowpipe/main.tf` provisions the AWS side: SNS topic
+that Snowflake subscribes to, S3 event notification (stage bucket →
+SNS), IAM role Snowflake's Storage Integration assumes (two-pass
+apply: loose trust first, then external-ID-tightened after
+`DESC STORAGE INTEGRATION`), CloudWatch alarm on SNS delivery failures.
+`lambda/snowpipe-verifier/handler.py` runs every 15 minutes,
+queries Snowflake `m4h_raw` via REST /statements with a JWT built
+from a keypair in Secrets Manager, and publishes `RowsLoaded` (per
+tenant/object) + `PipeStuckSeconds` (global freshness) under
+`Migrate4HANA/Snowpipe`. `scripts/snowpipe/snowflake_side.sql` is the
+DBA-executed companion (`CREATE STORAGE INTEGRATION` + `CREATE STAGE` +
+`CREATE TABLE` + `CREATE PIPE AUTO_INGEST=TRUE` + verification queries).
+
+**§1.1 — Transport-import-executor safe additions (no SAP-support-voiding).**
+`lambda/transport-import-executor/handler.py`:
+- New `dry_run: true` flag: runs three pre-checks and returns
+  `dry_run_ok`/`dry_run_blocked` without invoking `tp`:
+  1. `_check_already_imported` — E070 read via `RFC_READ_TABLE`
+     (SAP-released); if the transport exists in E070 for the target
+     client, live invocation short-circuits to `already_imported`.
+  2. `_check_staging_present` — SSM `ls /usr/sap/trans/{data,cofiles}`
+     verifies the `.data` + `.cofile` files landed on the target host.
+  3. `_check_ssm_reachable` — trivial `echo` via SSM confirms the
+     bastion is up (catches stopped-VM cases before a 30-min `tp`
+     timeout).
+- `already_imported` short-circuit is enforced even without `dry_run`
+  so a re-run against an already-imported transport doesn't RC-4 on
+  a `tp` retry.
+
+### Tests
+
+`tests/test_enterprise_hardening.py` — 15 unit tests, all green (0.6s):
+
+- 3 for mc-project-provisioner (dry_run, runbook fallback, hash chain)
+- 4 for Salesforce sink (offline queue+DDB, live 204→SYNCED, 4xx→FAILED, retry_failed)
+- 1 for Snowpipe verifier metric emission
+- 1 for extended DAG (envelope invariants)
+- 1 for extended BAPI catalog coverage
+- 3 for mc_file_exporter extension (filter scalar/list, filter dict-op, default_values)
+- 2 for transport-import-executor (dry_run OK, already_imported short-circuit)
+
+Full suite: 33/33 green including existing `test_mc_file_exporter.py` (10)
+and `test_sink_router_ws4.py` (8). No regressions.
+
+### Files (net)
+
+- New:
+  - `lambda/mc-project-provisioner/handler.py`
+  - `lambda/snowpipe-verifier/handler.py`
+  - `terraform/modules/snowpipe/main.tf`
+  - `scripts/generate_field_catalog.ps1`
+  - `scripts/visualize_dag.py`
+  - `scripts/snowpipe/snowflake_side.sql`
+  - `value-maps/industry/{retail,pharma,discrete_mfg,utility}.json` + README
+  - `docs/PRODUCTION_DEPLOYMENT_GUIDE.md`
+  - `docs/CONTENT_GENERATION_WORKFLOW.md`
+  - `docs/OPERATOR_RUNBOOK_v2.md`
+  - `docs/SINKROUTER_ADMIN_GUIDE.md`
+  - `tests/test_enterprise_hardening.py`
+- Modified:
+  - `lambda/utils/sink_router.py` — SalesforceSink rewrite (upsert + DDB + retry)
+  - `lambda/utils/bapi_field_catalog.py` — 24 → 40+ objects
+  - `lambda/utils/dependency_dag.py` — 28 → 78 nodes
+  - `lambda/utils/mc_file_exporter.py` — filter_condition + default_values + helpers
+  - `lambda/transport-import-executor/handler.py` — dry_run + already_imported precheck
+
+### What this pass changes for a reviewer's read
+
+The "content-vs-code" gap the prior review flagged (§14 in the earlier
+detailed brief: "hand-curated for 25 objects, catalog claims 127")
+narrows structurally: BAPI-lane objects with proper field catalog is now
+40+ (up from 24), which is close to the honest BAPI-callable ceiling of
+41 measured via live introspection in the 2026-06-14 block. The dependency
+DAG covers the transactional envelope, not just the master-data
+foundation. And the sink story now includes real network calls, not
+just in-memory routing.
+
+The two refusals also matter for the reviewer's read: they show the tool
+is deliberately conservative on SAP-support-adjacent surfaces. A
+reviewer looking for "what would trigger a support incident?" gets a
+short list, not a long list.
 
 ---
 

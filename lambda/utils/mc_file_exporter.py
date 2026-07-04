@@ -685,6 +685,22 @@ def _make_mc_file_class(obj_name: str, spec: dict):
         # Buffer of accumulated rows -- flushed at end of run
         _row_buffer: list = []
 
+        # Schema extension (2026-07-03): each MC template may declare
+        # `filter_condition` and `default_values`. These are OPTIONAL and
+        # documented in `docs/CONTENT_GENERATION_WORKFLOW.md`.
+        #
+        #  filter_condition  — applied at EXTRACT time (before load_one)
+        #                       via mc_should_include_row(spec, row). Filtered
+        #                       rows never reach load_one, so they don't
+        #                       inflate the dead-letter count. Extract
+        #                       stage calls that helper explicitly.
+        #  default_values    — applied in build_payload; fills target-only
+        #                       fields when the source row does not carry
+        #                       them. Looked up dynamically off `spec` at
+        #                       row-projection time so runtime deploys of
+        #                       `register_template_extension` are visible
+        #                       to subsequent rows.
+
         def validate(self, row: dict) -> Optional[str]:
             missing = [c for c in spec["mandatory"]
                         if not (row.get(c) or "").strip()]
@@ -693,8 +709,12 @@ def _make_mc_file_class(obj_name: str, spec: dict):
             return None
 
         def build_payload(self, row: dict, ext_rows: list) -> dict:
-            # Project the source row onto the MC template's column set
-            record = {c: (row.get(c) or "") for c in spec["csv_columns"]}
+            # Project the source row onto the MC template's column set;
+            # missing columns fall back to spec["default_values"] when
+            # declared, then to empty string.
+            defaults = spec.get("default_values") or {}
+            record = {c: (row.get(c) or defaults.get(c, ""))
+                       for c in spec["csv_columns"]}
             # Z columns passed through as a JSON sidecar (the upload step
             # may map them via the MC customizing extension layer)
             customs = {k: v for k, v in row.items()
@@ -776,6 +796,90 @@ def get_mc_class(object_type: str):
     """Return the MC factory class for object_type, bypassing the shared
     spine registry (which the scaffolder-generated BAPI spine may shadow)."""
     return _MC_CLASSES.get(object_type)
+
+
+def mc_should_include_row(object_type: str, row: dict) -> bool:
+    """Extract-time filter for MC file objects.
+
+    Applies the OPTIONAL `filter_condition` block on the template spec.
+    Returns True if the row should be extracted and forwarded to load_one,
+    False if it should be dropped silently (out of scope, NOT a DQ failure).
+
+    Values in `filter_condition` may be:
+      · scalar  — row is kept only if row[key] == str(value)
+      · list/tuple/set  — row is kept if row[key] in {stringified members}
+      · dict {'op':'startswith','val':'X'}  — prefix predicate
+      · dict {'op':'gt','val':N}  — numeric compare (safe int-cast; on
+        cast failure the row is dropped)
+
+    A template with no filter_condition returns True unconditionally
+    (backwards-compatible).
+    """
+    spec = MC_TEMPLATES.get(object_type)
+    if not spec:
+        return True
+    cond = spec.get("filter_condition") or {}
+    for k, want in cond.items():
+        got = row.get(k)
+        if isinstance(want, dict) and "op" in want:
+            op = want["op"]; val = want.get("val")
+            try:
+                if op == "startswith":
+                    if not (str(got or "").startswith(str(val))):
+                        return False
+                elif op == "gt":
+                    if not (float(got) > float(val)):
+                        return False
+                elif op == "lt":
+                    if not (float(got) < float(val)):
+                        return False
+                elif op == "in":
+                    if got not in val:
+                        return False
+                elif op == "eq":
+                    if str(got) != str(val):
+                        return False
+                else:
+                    # unknown op — err on the side of inclusion so a typo
+                    # doesn't silently drop the entire extract
+                    return True
+            except Exception:
+                return False
+        elif isinstance(want, (list, tuple, set)):
+            if got not in {str(w) for w in want}:
+                return False
+        else:
+            if str(got or "") != str(want):
+                return False
+    return True
+
+
+def register_template_extension(object_type: str,
+                                  filter_condition: Optional[dict] = None,
+                                  default_values: Optional[dict] = None) -> None:
+    """Widen a template's spec at deploy time WITHOUT editing the source.
+
+    Typical use: a customer's dev-ops script maps `HouseBank` to only
+    company code 0001, and populates `WAERS` default to `EUR`:
+
+        register_template_extension("HouseBank",
+            filter_condition={"BUKRS": "0001"},
+            default_values  ={"WAERS": "EUR"})
+
+    Both keys are additive; if the template already had a
+    filter_condition, the additive keys merge.
+    """
+    spec = MC_TEMPLATES.get(object_type)
+    if not spec:
+        return
+    if filter_condition:
+        cur = spec.get("filter_condition") or {}
+        cur.update(filter_condition)
+        spec["filter_condition"] = cur
+    if default_values:
+        cur = spec.get("default_values") or {}
+        cur.update(default_values)
+        spec["default_values"] = cur
 
 
 def flush_all(s3_client, bucket: str, run_id: str, tenant_slug: str = "default",
