@@ -37,11 +37,21 @@ RUN if [ -d /opt/sapnwrfc/lib ]; then \
         echo "/opt/sapnwrfc/lib" > /etc/ld.so.conf.d/sapnwrfc.conf && ldconfig ; \
     fi
 
-# Python deps. We use a slim requirements file that omits pyrfc — see
-# requirements-api-server.txt for the rationale (pyrfc is yanked from PyPI
-# and the cloud api-server routes RFC work through Lambdas anyway).
+# Python deps. requirements-api-server.txt omits pyrfc because pyrfc 3.x
+# is yanked from PyPI. We bundle the pre-built pyrfc from layer-build/
+# below — same wheel the Lambdas use, compiled for python:3.11 + Linux
+# x86_64 which matches this base image.
 COPY requirements-api-server.txt /app/requirements-api-server.txt
 RUN pip install -r /app/requirements-api-server.txt
+
+# pyrfc (compiled) + dist-info dropped straight into site-packages. Pairs
+# with the SAP NW RFC SDK shared libs at /opt/sapnwrfc/lib already picked
+# up by ldconfig above. Design comment in requirements-api-server.txt said
+# "cloud routes RFC work through Lambdas" — that never actually got wired,
+# so /api/connections/ecc/test-with-permissions was returning sdk_missing
+# on Fargate. Bundling closes the gap without a Lambda round-trip.
+COPY layer-build/build/python/pyrfc               /usr/local/lib/python3.11/site-packages/pyrfc
+COPY layer-build/build/python/pyrfc-3.3.1.dist-info /usr/local/lib/python3.11/site-packages/pyrfc-3.3.1.dist-info
 
 # Application source. Keep this layer last so source edits don't bust the
 # heavier dep layer above.

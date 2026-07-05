@@ -54,6 +54,39 @@ variable "anthropic_secret_arn" {
   default = ""
 }
 
+variable "jwt_secret_arn" {
+  type        = string
+  default     = ""
+  description = "Secrets Manager ARN for HS256 JWT signing key. Required in prod (api_server.py _ensure_jwt_secret fails closed if missing)."
+}
+
+variable "root_user_secret_arn" {
+  type        = string
+  default     = ""
+  description = "Secrets Manager ARN for the JSON secret {M4H_ROOT_EMAIL, M4H_ROOT_PASSWORD} used by ensure_root_user() on first start."
+}
+
+variable "host_aliases" {
+  type        = map(any)
+  default     = {}
+  description = <<-EOT
+    Server-side SAP host aliases. The wizard user enters a friendly host
+    (typically a private VMware IP like 192.168.100.170); connection_validator
+    rewrites it to the actual reachable tunnel target before calling pyrfc.
+    Each alias value is an object with any subset of {ashost, gwhost, gwserv,
+    sysnr}. See lambda/utils/connection_validator.py::_resolve_host_alias.
+
+    Example:
+      host_aliases = {
+        "192.168.100.170" = {
+          ashost = "0.tcp.ap.ngrok.io"
+          gwhost = "0.tcp.ap.ngrok.io"
+          gwserv = "17291"
+        }
+      }
+  EOT
+}
+
 variable "image_tag" {
   type    = string
   default = "latest"
@@ -152,6 +185,39 @@ resource "aws_iam_role_policy_attachment" "execution_managed" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# ECS injects the container's `secrets` block via the execution role, not the
+# task role. Grant read on the secrets we source env vars from. Scoped to the
+# specific ARNs so a compromised execution role cannot enumerate other secrets.
+#
+# No `count` guard here: the guarded version broke `terraform destroy` because
+# count depended on other resources' ARN attributes (unknown at destroy plan
+# time). Both ARNs are always populated by prod/main.tf, so we always create.
+# `compact()` filters empties for the hypothetical case where a caller passes
+# only one — never happens in this stack today.
+data "aws_iam_policy_document" "execution_secrets" {
+  statement {
+    effect  = "Allow"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = compact([
+      var.root_user_secret_arn,
+      var.jwt_secret_arn,
+    ])
+  }
+}
+
+resource "aws_iam_role_policy" "execution_secrets" {
+  name   = "migrate4hana-api-server-exec-secrets-${var.environment}"
+  role   = aws_iam_role.execution.id
+  policy = data.aws_iam_policy_document.execution_secrets.json
+}
+
+# The count-guarded version briefly landed in state as .execution_secrets[0].
+# `moved` teaches Terraform to renumber it in state instead of destroy+recreate.
+moved {
+  from = aws_iam_role_policy.execution_secrets[0]
+  to   = aws_iam_role_policy.execution_secrets
+}
+
 resource "aws_iam_role" "task" {
   name               = "migrate4hana-api-server-task-${var.environment}"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
@@ -237,6 +303,19 @@ data "aws_iam_policy_document" "task_policy" {
       "logs:FilterLogEvents",
       "logs:GetLogEvents",
       "logs:StartLiveTail",
+    ]
+    resources = ["*"]
+  }
+  # ECS Exec (`aws ecs execute-command`) session channels. Required so ops
+  # can `aws ecs execute-command --interactive` into a running task for
+  # live diagnostics (verified pyrfc, poke the venv, tail /proc, etc).
+  statement {
+    effect = "Allow"
+    actions = [
+      "ssmmessages:CreateControlChannel",
+      "ssmmessages:CreateDataChannel",
+      "ssmmessages:OpenControlChannel",
+      "ssmmessages:OpenDataChannel",
     ]
     resources = ["*"]
   }
@@ -377,6 +456,8 @@ resource "aws_ecs_task_definition" "api_server" {
       { name = "S3_STAGING_BUCKET", value = var.staging_bucket },
       { name = "M4H_KEYMAP_TABLE", value = var.key_map_table },
       { name = "M4H_ANTHROPIC_SECRET_ARN", value = var.anthropic_secret_arn },
+      { name = "M4H_JWT_SECRET_ARN", value = var.jwt_secret_arn },
+      { name = "M4H_HOST_ALIASES", value = jsonencode(var.host_aliases) },
       # ── 2026-06-15 UI rebuild: auth store, client store, wizard state ──
       { name = "M4H_USERS_TABLE", value = var.users_table },
       { name = "M4H_CLIENTS_TABLE", value = var.clients_table },
@@ -384,6 +465,14 @@ resource "aws_ecs_task_definition" "api_server" {
       { name = "M4H_ENV", value = var.environment },
       { name = "PYTHONUNBUFFERED", value = "1" },
     ]
+    # Secrets sourced from Secrets Manager JSON keys. ECS injects these as
+    # environment variables at container start (indistinguishable from
+    # `environment` entries from the app's perspective). Bootstraps the root
+    # user on first login via lambda/utils/auth_users.py::ensure_root_user.
+    secrets = var.root_user_secret_arn != "" ? [
+      { name = "M4H_ROOT_EMAIL", valueFrom = "${var.root_user_secret_arn}:M4H_ROOT_EMAIL::" },
+      { name = "M4H_ROOT_PASSWORD", valueFrom = "${var.root_user_secret_arn}:M4H_ROOT_PASSWORD::" },
+    ] : []
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -408,11 +497,12 @@ resource "aws_ecs_task_definition" "api_server" {
 }
 
 resource "aws_ecs_service" "api_server" {
-  name            = "migrate4hana-api-server-${var.environment}"
-  cluster         = var.ecs_cluster_arn
-  task_definition = aws_ecs_task_definition.api_server.arn
-  desired_count   = var.desired_count
-  launch_type     = "FARGATE"
+  name                   = "migrate4hana-api-server-${var.environment}"
+  cluster                = var.ecs_cluster_arn
+  task_definition        = aws_ecs_task_definition.api_server.arn
+  desired_count          = var.desired_count
+  launch_type            = "FARGATE"
+  enable_execute_command = true
 
   network_configuration {
     subnets          = var.private_subnet_ids
@@ -440,6 +530,37 @@ resource "aws_ecs_service" "api_server" {
     Component   = "ApiServer"
     Environment = var.environment
   }
+}
+
+# ── Auto-roll on task def change ───────────────────────────────────────────
+# The service has `ignore_changes = [task_definition]` so `deploy-ui-aws.ps1`
+# can push new images without terraform fighting it. That means a plain
+# `terraform apply` that only changes the task def (env vars, secrets, IAM)
+# would leave the service pinned to the old revision — the exact failure
+# mode that produced the 2026-07-04 JWT-gate incident. This null_resource
+# closes the gap: whenever terraform replaces the task def (new revision
+# arn), it fires a force-new-deployment. Rev-change-only trigger, so image
+# pushes from the deploy script don't cause a redundant second roll.
+resource "null_resource" "roll_on_taskdef_change" {
+  triggers = {
+    task_definition_arn = aws_ecs_task_definition.api_server.arn
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["pwsh", "-NoProfile", "-Command"]
+    command     = <<-EOT
+      aws ecs update-service `
+        --cluster ${var.ecs_cluster_arn} `
+        --service ${aws_ecs_service.api_server.name} `
+        --task-definition ${aws_ecs_task_definition.api_server.family} `
+        --force-new-deployment `
+        --region us-east-1 `
+        --query 'service.deployments[0].{status:status,taskDef:taskDefinition}' `
+        --output json
+    EOT
+  }
+
+  depends_on = [aws_ecs_service.api_server]
 }
 
 # ── Auto-scaling ───────────────────────────────────────────────────────────

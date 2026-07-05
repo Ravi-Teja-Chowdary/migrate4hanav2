@@ -577,6 +577,31 @@ resource "aws_secretsmanager_secret_version" "anthropic_api_key" {
   secret_string = jsonencode({ api_key = var.anthropic_api_key })
 }
 
+# ── JWT signing secret for api_server.py ──────────────────────────────────
+# HS256 signing key used by api_server.py's _ensure_jwt_secret(). Owned
+# end-to-end by Terraform so a clean-slate apply produces a working app
+# without any manual `aws secretsmanager create-secret` step.
+#
+# 2026-07-04: recovered from the "container exits code 3 in prod" incident
+# caused by JWT gate landing in api_server.py without matching Terraform
+# wiring. Now impossible to redeploy prod without a JWT source configured.
+resource "random_password" "jwt_secret" {
+  length  = 64
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "jwt_signing_key" {
+  name                    = "migrate4hana-jwt-secret-${var.environment}"
+  description             = "HS256 JWT signing key for api_server.py (rotate: taint + apply)"
+  recovery_window_in_days = 0
+  tags                    = { Component = "ApiServer", Purpose = "JWTSigning" }
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_signing_key" {
+  secret_id     = aws_secretsmanager_secret.jwt_signing_key.id
+  secret_string = random_password.jwt_secret.result
+}
+
 # ─────────────────────────────────────────────
 # DynamoDB — Rules Routing & State
 # ─────────────────────────────────────────────
@@ -725,10 +750,13 @@ module "api_server" {
   ecs_cluster_arn      = module.ecs.cluster_arn
   staging_bucket       = module.s3_staging.bucket_name
   key_map_table        = aws_dynamodb_table.key_map.name
-  users_table          = aws_dynamodb_table.m4h_users.name
-  clients_table        = aws_dynamodb_table.m4h_clients.name
-  wizard_state_table   = aws_dynamodb_table.m4h_wizard_state.name
+  users_table          = module.dynamodb_rules.users_table_name
+  clients_table        = module.dynamodb_rules.clients_table_name
+  wizard_state_table   = module.dynamodb_rules.wizard_state_table_name
   anthropic_secret_arn = aws_secretsmanager_secret.anthropic_api_key.arn
+  jwt_secret_arn       = aws_secretsmanager_secret.jwt_signing_key.arn
+  root_user_secret_arn = aws_secretsmanager_secret.root_user_credentials.arn
+  host_aliases         = var.ecc_host_aliases
 }
 
 module "ui_hosting" {
@@ -758,6 +786,33 @@ output "ui_cloudfront_distribution_id" {
 output "api_server_ecr_url" {
   description = "ECR repo the deploy script docker-pushes the api-server image to."
   value       = module.api_server.ecr_repository_url
+}
+
+# ─────────────────────────────────────────────
+# First-login runbook — printed by `terraform apply` so you never have to
+# hunt for creds again. Root email is `alert_email` from tfvars; password
+# is a random 32-char string Terraform generated and stored in Secrets Mgr.
+# ─────────────────────────────────────────────
+output "login_instructions" {
+  description = "How to log in as the root user for the first time."
+  value = <<-EOT
+
+    ────────────────────────────────────────────────────────────
+      Migrate4HANA — root login
+    ────────────────────────────────────────────────────────────
+      URL:      ${module.ui_hosting.ui_url}
+      Email:    ${var.alert_email}
+      Password: (fetch with the command below)
+
+      aws secretsmanager get-secret-value \
+        --secret-id migrate4hana/${var.environment}/root-user \
+        --region us-east-1 \
+        --query 'SecretString' --output text | ConvertFrom-Json
+
+      The first login also bootstraps the root user in DynamoDB.
+      Rotate password: taint random_password.root_password + apply.
+    ────────────────────────────────────────────────────────────
+    EOT
 }
 
 output "api_server_alb_dns" {
@@ -834,55 +889,12 @@ resource "aws_dynamodb_table" "key_map" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Auth + wizard tables — 2026-06-15 UI rebuild
+# Auth + wizard tables — 2026-06-15 UI rebuild.
+# NOTE: canonical declarations live in modules/dynamodb/main.tf. The root
+# duplicates that used to live here were removed in the 2026-07-04 fix — they
+# were creating "ResourceInUseException: Table already exists" collisions on
+# `terraform apply`. Callers now reference `module.dynamodb_rules.<x>_table_name`.
 # ─────────────────────────────────────────────────────────────────────────────
-resource "aws_dynamodb_table" "m4h_users" {
-  name         = "migrate4hana-users-${var.environment}"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "email"
-  attribute {
-    name = "email"
-    type = "S"
-  }
-  point_in_time_recovery { enabled = true }
-  server_side_encryption { enabled = true }
-  tags = { Component = "AuthUserStore" }
-}
-
-resource "aws_dynamodb_table" "m4h_clients" {
-  name         = "migrate4hana-clients-${var.environment}"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "client_id"
-  attribute {
-    name = "client_id"
-    type = "S"
-  }
-  point_in_time_recovery { enabled = true }
-  server_side_encryption { enabled = true }
-  tags = { Component = "AuthClientStore" }
-}
-
-resource "aws_dynamodb_table" "m4h_wizard_state" {
-  name         = "migrate4hana-wizard-state-${var.environment}"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "user_email"
-  range_key    = "run_id"
-  attribute {
-    name = "user_email"
-    type = "S"
-  }
-  attribute {
-    name = "run_id"
-    type = "S"
-  }
-  ttl {
-    attribute_name = "expires_at"
-    enabled        = true
-  }
-  point_in_time_recovery { enabled = true }
-  server_side_encryption { enabled = true }
-  tags = { Component = "WizardState" }
-}
 
 # Root-user bootstrap credentials. The api-server reads these via
 # M4H_ROOT_EMAIL / M4H_ROOT_PASSWORD on first start and writes the

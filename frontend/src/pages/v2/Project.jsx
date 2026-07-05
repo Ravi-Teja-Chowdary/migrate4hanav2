@@ -47,6 +47,10 @@ export default function Project() {
   // it's only meaningful when loadToS4=true. Default true when the user
   // first flips on live-load, so the very first live run is safe by default.
   const [simulationMode, setSimulationMode] = useState(true);
+  // Per-object row cap. Blank = use server default (M4H_LOAD_MAX_ROWS in
+  // lambda/data-migrator/handler.py). Wizard user can bump for a bigger
+  // sample without editing env vars. Server clamps to [1, 1_000_000].
+  const [maxRows, setMaxRows] = useState('');
   const [confirmingLive, setConfirmingLive] = useState(false);
   // Aggregated telemetry + error buckets — populated by /telemetry poll.
   const [telemetry, setTelemetry] = useState(null);
@@ -102,6 +106,7 @@ export default function Project() {
         s4_version:  wizard.s4_version,
         load_to_s4:  loadToS4,
         simulation_mode: loadToS4 && simulationMode,
+        max_rows: maxRows === '' ? null : Number(maxRows),
       });
       const pipeline_run_id = r.run_id || r.execution_id || runId;
       setActiveRun(pipeline_run_id);
@@ -198,6 +203,31 @@ export default function Project() {
             </span>
           </label>
         )}
+
+        <div className="mt-4 flex flex-col gap-2 p-3 border border-slate-200 bg-slate-50 rounded text-sm">
+          <label className="flex items-center gap-3 flex-wrap">
+            <span className="font-medium text-slate-700">Rows per object</span>
+            <input
+              type="number"
+              min="1"
+              max="1000000"
+              step="1"
+              value={maxRows}
+              placeholder="server default (10)"
+              onChange={(e) => setMaxRows(e.target.value)}
+              disabled={!!activeRun || starting}
+              className="input w-40"
+            />
+            <span className="text-slate-500">
+              Cap on records per object type sent to S/4HANA this run.
+            </span>
+          </label>
+          <span className="text-xs text-slate-500 pl-1">
+            Leave blank to use the server default. Range: 1–1,000,000. Values
+            outside the range are clamped. Overrides <code>M4H_LOAD_MAX_ROWS</code>{' '}
+            for this run only.
+          </span>
+        </div>
       </Section>
 
       <Section title="Actions">

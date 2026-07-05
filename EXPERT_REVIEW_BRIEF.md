@@ -1037,3 +1037,34 @@ table catalog per ECC release, CVI fuzzy-match rules per locale, DAG additions
 per industry, NRIV / TH_WPINFO thresholds per landscape) and **live-volume
 verification** — both of which benefit from a customer engagement and a real
 system pair, not more engineering.
+
+---
+
+## 15. 2026-07-04 — Prod-incident recovery + operability hardening
+
+**Incident**: every login on the prod CloudFront UI returned `HTTP 503`. Container was exiting code 3 within seconds of task start; ALB target group had no healthy instance.
+
+**Root cause**: commit `6f7a6a6` ("UI rebuild Layer 1") added two prod-hard-fail gates to `api_server.py` — `_ensure_jwt_secret()` (fails closed if no `M4H_JWT_SECRET_ARN`) and `ensure_root_user()` (needs `M4H_ROOT_EMAIL`/`M4H_ROOT_PASSWORD`) — but the ECS task definition in `terraform/modules/api-server/` never got the matching env or secret-injection wiring. `terraform apply` succeeded (Terraform can't see runtime failures); container failed on startup; failure mode invisible in normal deploy logs.
+
+**Fixes shipped (single commit on `aws-lift-and-shift`)**:
+
+| # | Fix | Prevents |
+|---|---|---|
+| 1 | JWT secret Terraform-managed (`random_password` + `aws_secretsmanager_secret_version`), ARN passed to task def as env | Same failure on any clean-slate apply |
+| 2 | Root-user creds injected via ECS `secrets` block (`valueFrom` JSON keys) | 401 "invalid root credentials" on every login |
+| 3 | Execution role scoped `secretsmanager:GetSecretValue` on exact ARNs | Silent secret-fetch failures at container start |
+| 4 | `null_resource.roll_on_taskdef_change` — `local-exec` force-new-deployment when task def ARN changes | Config-only Terraform apply leaving service pinned to old rev |
+| 5 | CloudFront `origin_read_timeout = 60` (up from 30s default) | Legitimate long-tail SAP calls (RFC, MC provisioning) 504-ing at CF edge |
+| 6 | ECS Exec + `ssmmessages:*` on task role | Blind debugging during next incident |
+| 7 | `login_instructions` Terraform output (URL + credential-fetch command) | Post-apply hunt for "which secret was the password in?" |
+| 8 | pyrfc bundled in api-server container (`Dockerfile.api-server`) | `sdk_missing` on every ECC connection test from Fargate |
+| 9 | Server-side host-alias translator (`_resolve_host_alias` reads `M4H_HOST_ALIASES` env) | Wizard user has to know about ngrok gwhost/gwserv gymnastics |
+| 10 | `count → moved` fix on execution_secrets policy | `terraform destroy` blocked with "Invalid count argument" |
+| 11 | `ddb_deletion_protection` variable on ws4 module (default false) | `terraform destroy` blocked by hard-coded ws4 deletion protection |
+
+**Operability improvements shipped alongside**:
+
+- **Per-run row cap in the wizard UI** — `Rows per object` input on the Project page, plumbed through `_LiftAndShiftRequest.max_rows` → `start_pipeline_async` → `env["M4H_LOAD_MAX_ROWS"]` with a server-side `[1, 1_000_000]` clamp. Emits a LiveOps progress event so the choice is visible.
+- **Default row cap doubled** — `M4H_LOAD_MAX_ROWS` default 5 → 10; cutover-phase fallback 3 → 6.
+
+**Residual risk not addressed today**: the class of failure that produced this incident — "app code adds a prod-fail-closed gate without matching Terraform" — is not systemically prevented. Every future prod gate still needs its Terraform side written in the same commit. A CI-side container smoke-boot with the real prod env shape (assert `/api/health` returns 200) would catch this class. Not shipped.

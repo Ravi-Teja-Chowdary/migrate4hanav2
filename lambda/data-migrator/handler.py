@@ -80,7 +80,7 @@ MAX_ROWS_PER_TEMPLATE = int(os.environ.get("MAX_ROWS_PER_TEMPLATE", "50000"))
 
 # Actually post extracted data into S/4 (via idoc_loader) when M4H_LOAD_TO_S4=1.
 LOAD_TO_S4 = os.environ.get("M4H_LOAD_TO_S4", "0") == "1"
-LOAD_MAX_ROWS = int(os.environ.get("M4H_LOAD_MAX_ROWS", "5"))
+LOAD_MAX_ROWS = int(os.environ.get("M4H_LOAD_MAX_ROWS", "10"))
 OWN_LOGICAL_SYSTEM = os.environ.get("M4H_TARGET_LOGSYS", "S4HCLNT100")
 IDOC_SENDER = os.environ.get("M4H_IDOC_SENDER", "M4HSENDER")
 

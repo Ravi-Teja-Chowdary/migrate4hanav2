@@ -475,7 +475,8 @@ def get_run(run_id, client_id: str = "default"):
 
 
 async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_kind="in_place",
-                                 run_id=None, load_to_s4=False, simulation_mode=False):
+                                 run_id=None, load_to_s4=False, simulation_mode=False,
+                                 max_rows=None):
     global _active_run
     # The wizard hands us its own run_id (e.g. wiz-20260615T120117Z-b539783e);
     # keep it so logs/state files/UI all use the same identifier instead of
@@ -586,6 +587,19 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
             # S/4 immediately). Flipping load_to_s4=True causes real writes -
             # an explicit progress banner so the operator can see the choice
             # they made reflected in Live Ops.
+            # Per-object row cap from the wizard — overrides the data-migrator
+            # env default. Clamped defensively; a bad payload from the UI
+            # should never widen the cap beyond a sane ceiling.
+            if max_rows is not None:
+                try:
+                    cap = max(1, min(1_000_000, int(max_rows)))
+                    env["M4H_LOAD_MAX_ROWS"] = str(cap)
+                    _add_progress_step("mode",
+                                       f"Row cap set from wizard: {cap:,} rows/object",
+                                       "INFO", {"max_rows": cap})
+                except Exception:
+                    pass  # bad value → fall back to Lambda's own default
+
             if load_to_s4:
                 env["M4H_LOAD_TO_S4"] = "1"
                 if simulation_mode:
@@ -2088,15 +2102,21 @@ class _LiftAndShiftRequest(BaseModel):
     # otherwise; nothing commits. Ignored (no effect) when load_to_s4 is
     # False since extract-only is already non-committing.
     simulation_mode: Optional[bool] = False
+    # Per-object row cap (M4H_LOAD_MAX_ROWS). Wizard user sets this before
+    # clicking "Start migration". None => use the data-migrator default
+    # (see lambda/data-migrator/handler.py:83). Clamped to [1, 1_000_000].
+    max_rows: Optional[int] = None
 
 
 def _ls_args(body):
     """Pluck the wizard payload fields start_pipeline_async cares about."""
     if not body:
-        return {"run_id": None, "load_to_s4": False, "simulation_mode": False}
+        return {"run_id": None, "load_to_s4": False, "simulation_mode": False,
+                "max_rows": None}
     return {"run_id": body.run_id,
             "load_to_s4": bool(body.load_to_s4),
-            "simulation_mode": bool(body.simulation_mode)}
+            "simulation_mode": bool(body.simulation_mode),
+            "max_rows": body.max_rows}
 
 
 @app.post("/api/pipeline/lift-and-shift", dependencies=[Depends(require_auth)])

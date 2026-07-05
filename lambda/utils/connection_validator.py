@@ -50,11 +50,53 @@ DESIGN
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("connection_validator")
+
+
+def _resolve_host_alias(creds: dict) -> dict:
+    """Rewrite user-facing SAP host aliases to their real network target.
+
+    Motivation: laptop-hosted ECC lives on a private VMware host-only IP
+    (e.g. 192.168.100.170) which Fargate cannot reach. We tunnel it through
+    ngrok (public tcp://…ngrok.io:<random_port>) or a bastion, but the
+    wizard user shouldn't have to know that. The api-server task ships an
+    env var `M4H_HOST_ALIASES` (JSON: {vm_ip: {ashost, gwhost, gwserv}})
+    that this function consults; the wizard sees the VM IP, pyrfc sees the
+    tunnel target. If no alias is configured, creds pass through unchanged.
+
+    Keys allowed in an alias entry: ashost, gwhost, gwserv, sysnr. Anything
+    else in the entry is ignored. The caller's dict is NOT mutated.
+    """
+    ashost = (creds.get("ashost") or "").strip()
+    if not ashost:
+        return creds
+    raw = os.environ.get("M4H_HOST_ALIASES", "").strip()
+    if not raw:
+        return creds
+    try:
+        alias_map = json.loads(raw)
+    except Exception as e:
+        logger.warning("M4H_HOST_ALIASES parse failed (%s) — passing creds through", e)
+        return creds
+    entry = alias_map.get(ashost)
+    if not isinstance(entry, dict):
+        return creds
+    rewritten = dict(creds)
+    for k in ("ashost", "gwhost", "gwserv", "sysnr"):
+        v = entry.get(k)
+        if v:
+            rewritten[k] = str(v)
+    logger.info(
+        "host alias applied: %s -> ashost=%s gwhost=%s gwserv=%s",
+        ashost, rewritten.get("ashost"), rewritten.get("gwhost"),
+        rewritten.get("gwserv"))
+    return rewritten
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO)
 
@@ -212,6 +254,9 @@ def _open_connection(creds: dict) -> Any:
     except Exception:
         pass   # not bundled in this env → let pyrfc try with system PATH
     from pyrfc import Connection
+    # Server-side alias translation: laptop VM IP → ngrok/bastion target.
+    # See _resolve_host_alias docstring for the M4H_HOST_ALIASES env var.
+    creds = _resolve_host_alias(creds)
     # pyrfc.Connection() does not tolerate kwargs whose value is None - it
     # passes them straight to the SAP NW RFC SDK which calls .encode() and
     # raises AttributeError. Drop empty/None optionals BEFORE calling.

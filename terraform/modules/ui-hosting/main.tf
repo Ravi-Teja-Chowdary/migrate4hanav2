@@ -133,6 +133,18 @@ resource "aws_cloudfront_distribution" "ui" {
       https_port             = 443
       origin_protocol_policy = "http-only"     # ALB has HTTP listener; CF→ALB stays inside AWS
       origin_ssl_protocols   = ["TLSv1.2"]
+
+      # ── Long-tail SAP calls (60s max without an AWS support ticket) ──
+      # Default is 30s. ECC / S/4 connection tests, BAPI probes, and MC
+      # provisioning legitimately take longer than 30s when the RFC round-trip
+      # hits a laptop-side ECC via ngrok or a slow CAL S/4. Any SAP-side call
+      # timing out here surfaces as an opaque HTTP 504 to the wizard, which
+      # is what we hit on 2026-07-04.
+      # ALB idle_timeout is set to 120s in the api-server module — this is
+      # the tighter cap. AWS raises the ceiling above 60s only via support
+      # request, so use 60s here and design further slow paths as async.
+      origin_read_timeout      = 60
+      origin_keepalive_timeout = 60
     }
   }
 

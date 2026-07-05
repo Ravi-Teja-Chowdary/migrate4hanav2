@@ -3168,6 +3168,95 @@ This is a CAL-IDES-appliance constraint, not a tool gap. The strategy chain (LTM
 
 ---
 
+## 2026-07-04 — Prod-incident recovery + operability hardening
+
+### The incident
+
+Live-prod symptom: **every login attempt on the CloudFront UI returned HTTP `503`.** Container was exiting code 3 within seconds of task start; ALB target group had no healthy instance; CloudFront had no origin to hit.
+
+Root cause was drift between the app and its Terraform. Commit `6f7a6a6` ("UI rebuild Layer 1: AWS-style auth backend + DDB tables") added two prod-hard-fail gates to `api_server.py`:
+
+1. `_ensure_jwt_secret()` at `api_server.py:184-209` — **raises `RuntimeError` in prod** if neither `M4H_JWT_SECRET` nor `M4H_JWT_SECRET_ARN` is configured. Plaintext file fallback is intentionally disabled when `M4H_ENV == "prod"`.
+2. `ensure_root_user()` at `lambda/utils/auth_users.py:372-395` — reads `M4H_ROOT_EMAIL` + `M4H_ROOT_PASSWORD` on first startup and bootstraps the initial root user. Without those, no user is ever written and every login returns `401 "invalid root credentials"`.
+
+The same commit added `aws_secretsmanager_secret.root_user_credentials` to Terraform (root main.tf) — but the **api-server module task definition never referenced it**, and there was no JWT secret resource at all. Every fresh deploy produced a container with none of the required environment variables. FastAPI's `lifespan()` context called `_ensure_jwt_secret()`, saw prod, saw no source, raised, uvicorn logged `ERROR: Application startup failed. Exiting.` and the container terminated with exit 3. ECS restarted the task; identical failure; ALB never picked up a healthy target.
+
+The failure mode was invisible in normal apply logs because Terraform itself succeeds — the container never gets far enough to produce a runtime error visible to the plan.
+
+### Fixes shipped (in order applied)
+
+**1. JWT signing key — Terraform-managed with `random_password` (`terraform/environments/prod/main.tf:574-598`).**
+
+```hcl
+resource "random_password" "jwt_secret"        { length = 64, special = false }
+resource "aws_secretsmanager_secret"          "jwt_signing_key" { ... }
+resource "aws_secretsmanager_secret_version"  "jwt_signing_key" { secret_string = random_password.jwt_secret.result }
+```
+
+Passed into the api-server module as `jwt_secret_arn`; task def env var `M4H_JWT_SECRET_ARN` set from it (module `main.tf:397`). Container's `_ensure_jwt_secret` fetches via `boto3.client("secretsmanager").get_secret_value()`. Fresh apply produces a working JWT source from moment zero; no manual step needed.
+
+**2. Root user bootstrap — ECS `secrets` injection from the existing Secrets Manager JSON secret (module `main.tf:400-407`).**
+
+```hcl
+secrets = var.root_user_secret_arn != "" ? [
+  { name = "M4H_ROOT_EMAIL",    valueFrom = "${var.root_user_secret_arn}:M4H_ROOT_EMAIL::" },
+  { name = "M4H_ROOT_PASSWORD", valueFrom = "${var.root_user_secret_arn}:M4H_ROOT_PASSWORD::" },
+] : []
+```
+
+ECS-native JSON-key extraction: the secret's `M4H_ROOT_EMAIL` and `M4H_ROOT_PASSWORD` JSON fields become container env vars at startup, indistinguishable from `environment` from the app's perspective. `ensure_root_user()` picks them up on first login → writes the initial root user to DDB → subsequent logins succeed.
+
+**3. Execution role secrets grant (module `main.tf:170-190`).** ECS injects the `secrets` block via the task **execution** role, not the task role. The standard `AmazonECSTaskExecutionRolePolicy` managed policy does not include Secrets Manager. Added an inline policy scoping `secretsmanager:GetSecretValue` to exactly the two ARNs (JWT + root-user). No wildcard; a compromised execution role cannot enumerate other secrets.
+
+**4. Auto-roll on task definition change (module `main.tf:492-517`).** The service has `lifecycle { ignore_changes = [task_definition] }` so `scripts/deploy-ui-aws.ps1` can push new images without Terraform fighting it. That leaves a gap for config-only changes: a Terraform apply that only changes env/secrets/IAM would create a new task def revision but leave the service pinned to the old one. Added a `null_resource` with `triggers = { task_definition_arn = aws_ecs_task_definition.api_server.arn }` and a `local-exec` provisioner that runs `aws ecs update-service --force-new-deployment` whenever the ARN changes. Rev-change-only trigger, so image pushes from the deploy script don't cause a redundant second roll.
+
+**5. `origin_read_timeout = 60` on CloudFront custom origin (`terraform/modules/ui-hosting/main.tf:131-149`).** Default is 30s. ECC / S/4 connection tests, BAPI probes, and MC provisioning legitimately take longer than 30s when the RFC round-trip hits a laptop-side ECC via ngrok or a slow CAL S/4. Anything timing out at CloudFront surfaces as an opaque HTTP `504` to the wizard — which we hit repeatedly on 2026-07-04 diagnosing the ECC test. 60s is the AWS-imposed ceiling without a support ticket; ALB idle_timeout is set to 120s and is now the tighter cap.
+
+**6. ECS Exec enabled (module `main.tf:459 + IAM `main.tf:249-260`).** Added `enable_execute_command = true` on the service plus the four `ssmmessages:*` actions on the task role. Enables `aws ecs execute-command --interactive` for live diagnosis (verify pyrfc, inspect env, tail /proc) without redeploying.
+
+**7. `login_instructions` Terraform output (`terraform/environments/prod/main.tf:800-825`).** `terraform apply` now prints the UI URL + email + the exact `aws secretsmanager get-secret-value ... | ConvertFrom-Json` command needed to fetch the root password. Removes the "which secret was that in?" hunt after every fresh deploy.
+
+**8. pyrfc bundled into api-server container (`Dockerfile.api-server:47-54`).** `requirements-api-server.txt` intentionally omits pyrfc with a design comment saying "the cloud api-server routes RFC work through Lambdas anyway" — but the code at `api_server.py:1554` calls `validate_ecc()` in-process, and the Lambda proxy was never wired. Every ECC test on Fargate returned `failure_class = "sdk_missing"`. The pre-built pyrfc 3.3.1 layer already exists at `layer-build/build/python/pyrfc/` (Python 3.11, x86_64 Linux — matches the container base). One `COPY` into `/usr/local/lib/python3.11/site-packages/pyrfc` closes the gap without a Lambda round-trip. Verified locally: `docker run … -c "python -c 'from pyrfc import Connection'"` succeeds.
+
+**9. Server-side host-alias translator (`lambda/utils/connection_validator.py:53-91`).** New `_resolve_host_alias(creds)` reads env var `M4H_HOST_ALIASES` (JSON of `{friendly_host: {ashost, gwhost, gwserv, sysnr}}`) and rewrites creds inside `_open_connection` before every `pyrfc.Connection(...)` call. Motivation: laptop-hosted ECC lives on a private VMware host-only IP (`192.168.100.170`); Fargate can't reach it. We tunnel via ngrok (`0.tcp.ap.ngrok.io:<random_port>`), but a customer-facing wizard shouldn't have to know that. The wizard user enters the VM IP; pyrfc dials the tunnel target. Configured via `ecc_host_aliases` Terraform variable (`terraform/environments/prod/variables.tf` + `terraform.tfvars`). Preserves the caller's dict (no mutation), logs the translation, falls through cleanly if no alias configured.
+
+**10. `count → moved` fix on the execution_secrets policy (module `main.tf:162-190 + 209-215`).** The initial `count = var.root_user_secret_arn != "" || var.jwt_secret_arn != "" ? 1 : 0` guard broke `terraform destroy`: those variables come from other resources' `.arn` attributes, unknown at destroy-plan time → `Error: Invalid count argument`. Dropped the count (both ARNs are always passed in this stack), added a `moved {}` block so state can renumber from `.execution_secrets[0]` to `.execution_secrets` without destroy+recreate.
+
+**11. `ddb_deletion_protection` variable on ws4 module (`terraform/modules/ws4/main.tf:99-109 + 132/163`).** The `dq_findings` and `compliance_ledger` tables previously had `deletion_protection_enabled = true` hard-coded. That blocks `terraform destroy` even on dev/staging where no real compliance data exists. Variable-gated with `default = false` so dev/staging destroy cleanly; prod-with-live-audit-data flips it in tfvars. Toggling is an in-place update, no data movement.
+
+### Operability improvements shipped alongside
+
+**Per-run row cap in the wizard UI (`frontend/src/pages/v2/Project.jsx:51-54 + 103-105 + 201-224`).** Previously `M4H_LOAD_MAX_ROWS` was env-only — for a live demo run with a bigger sample, an operator would have to edit tfvars and re-deploy the Lambda. Now the Project page has an "Rows per object" input right below the Load-to-S/4 toggle; blank uses the server default (bumped 5 → 10 alongside), typed value clamps server-side to `[1, 1_000_000]`. `_LiftAndShiftRequest.max_rows` (`api_server.py:2091`) plumbs through to `start_pipeline_async` and injects `env["M4H_LOAD_MAX_ROWS"]` for the subprocess. A progress event is emitted ("Row cap set from wizard: N rows/object") so the choice shows up in LiveOps.
+
+**Default row cap doubled (`lambda/data-migrator/handler.py:83`, `cutover.py:48`).** Main default 5 → 10 (safety-first for the wizard's "start migration" click, but still meaningful for a demo). Cutover phase 3 → 6. Both are env-overridable per-run.
+
+### Files touched (single commit `<hash>` on branch `aws-lift-and-shift`)
+
+| File | Change |
+|---|---|
+| `Dockerfile.api-server` | Bundle pre-built pyrfc into site-packages |
+| `api_server.py` | `_LiftAndShiftRequest.max_rows`; `start_pipeline_async(max_rows=...)`; env injection with clamp |
+| `cutover.py` | `M4H_LOAD_MAX_ROWS` fallback 3 → 6 |
+| `frontend/src/pages/v2/Project.jsx` | Rows-per-object input in "What this run will do" section |
+| `lambda/data-migrator/handler.py` | `M4H_LOAD_MAX_ROWS` default 5 → 10 |
+| `lambda/utils/connection_validator.py` | `_resolve_host_alias`; wired into `_open_connection` |
+| `terraform/environments/prod/main.tf` | JWT secret resources; `login_instructions` output; no more count blockers |
+| `terraform/environments/prod/terraform.tfvars` | Default `ecc_host_aliases` for the laptop-VM setup |
+| `terraform/environments/prod/variables.tf` | `ecc_host_aliases` variable |
+| `terraform/modules/api-server/main.tf` | `jwt_secret_arn` + `root_user_secret_arn` + `host_aliases` vars; ECS `secrets` block; execution-role IAM; `null_resource.roll_on_taskdef_change`; ECS exec; `moved {}` block |
+| `terraform/modules/ui-hosting/main.tf` | CloudFront `origin_read_timeout = 60` |
+| `terraform/modules/ws4/main.tf` | `ddb_deletion_protection` variable |
+
+### What a reviewer should verify
+
+- `terraform apply` from a clean state produces a working stack with **no manual `aws secretsmanager create-secret`, no manual `aws ecs update-service`, and no runbook step between apply and first successful login**. The `login_instructions` output shows the URL + credential-fetch command; the container starts cleanly on first task; the null_resource fires the initial roll; CloudFront distribution is created with the 60s origin timeout baked in.
+- `terraform destroy` from a live state completes with zero errors (previously blocked on the `count` argument, and on `deletion_protection_enabled = true` if ws4 was deployed).
+- The `_resolve_host_alias` function preserves the caller's dict on the pass-through path (no mutation), and the wizard row-cap clamps defensively at the server (a compromised UI can't bypass the 1M ceiling).
+
+The class of failure that produced today's incident — "app code adds a prod-fail-closed gate without matching Terraform" — is not systemically prevented by these changes. Every future prod gate still needs its Terraform side written at the same time. A stronger control would be a container-startup smoke test in CI that boots the image with the real prod env shape and asserts `/api/health` returns 200 before promoting the image to `:latest`. Not shipped today.
+
+---
+
 *End of detailed review brief. For executive summary, see `EXPERT_REVIEW_BRIEF.md`.
 For operational runbooks, see `HOW-TO-RUN.md` and `LIFT-AND-SHIFT-RUNBOOK.md`.
 For per-object live-proof trail, see `BREADTH_TRACKER.md`. For per-foundation

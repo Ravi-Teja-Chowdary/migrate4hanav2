@@ -246,3 +246,24 @@ variable "ui_acm_cert_arn_us_east_1" {
   default     = ""
   description = "ACM cert ARN in us-east-1 for ui_custom_domain. CloudFront requires the cert in us-east-1 specifically. Only consulted when ui_custom_domain is set."
 }
+
+variable "ecc_host_aliases" {
+  type        = map(any)
+  default     = {}
+  description = <<-EOT
+    Server-side SAP host aliases for connection tests. Wizard user enters
+    a friendly ECC VM IP (e.g. 192.168.100.170); connection_validator
+    rewrites to the actual reachable target (ngrok / bastion / private-IP
+    over VPN) before calling pyrfc. Leave empty when ECC has a public IP
+    already. See _resolve_host_alias in lambda/utils/connection_validator.py.
+
+    Example (ngrok bridge for a laptop VM):
+      ecc_host_aliases = {
+        "192.168.100.170" = {
+          ashost = "0.tcp.ap.ngrok.io"
+          gwhost = "0.tcp.ap.ngrok.io"
+          gwserv = "17291"  # ngrok's assigned TCP port — updates via terraform apply on ngrok restart
+        }
+      }
+  EOT
+}

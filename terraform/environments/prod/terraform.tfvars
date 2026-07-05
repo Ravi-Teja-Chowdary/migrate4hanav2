@@ -33,3 +33,17 @@ s4_public_ip = "35.168.102.2"
 # business content lives in client 800. Hostname follows vhcal<sid>ci convention.
 cal_ecc_public_ip = "44.205.3.93"
 cal_ecc_hostname  = "vhcalabaci"
+
+# ── Wizard host aliases ──────────────────────────────────────────────────
+# Let the connect wizard user enter their laptop VM IP (192.168.100.170)
+# and have the api-server silently route through ngrok. If ngrok is
+# restarted the port changes — update gwserv here and run `terraform apply`
+# (task def env var change → auto-roll via null_resource).
+# Leave as {} once ECC has a real public IP (CAL, direct-attach, etc).
+ecc_host_aliases = {
+  "192.168.100.170" = {
+    ashost = "0.tcp.ap.ngrok.io"
+    gwhost = "0.tcp.ap.ngrok.io"
+    gwserv = "17291"
+  }
+}

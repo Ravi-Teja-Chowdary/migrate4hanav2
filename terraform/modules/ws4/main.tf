@@ -94,6 +94,17 @@ variable "lambda_timeout" {
   default = 300
 }
 
+# Deletion protection on the two compliance DDB tables. Off by default so
+# dev/staging/CI can `terraform destroy` cleanly. Flip to true in
+# environments/<env>/terraform.tfvars for a real prod tenant whose
+# compliance-ledger + dq-findings hold audit data — belt-and-braces against
+# a fat-finger destroy. Toggling is an in-place update, no data movement.
+variable "ddb_deletion_protection" {
+  type        = bool
+  default     = false
+  description = "true = dq_findings + compliance_ledger tables refuse to be deleted (guardrail for prod audit data). false = destroyable (dev/staging default)."
+}
+
 locals {
   prefix      = "migrate4hana"
   archive_bkt = "${local.prefix}-compliance-archive-${var.environment}"
@@ -129,7 +140,7 @@ resource "aws_dynamodb_table" "dq_findings" {
     enabled     = true
     kms_key_arn = var.kms_key_arn != "" ? var.kms_key_arn : null
   }
-  deletion_protection_enabled = true
+  deletion_protection_enabled = var.ddb_deletion_protection
 
   tags = {
     Environment = var.environment
@@ -160,7 +171,7 @@ resource "aws_dynamodb_table" "compliance_ledger" {
     enabled     = true
     kms_key_arn = var.kms_key_arn != "" ? var.kms_key_arn : null
   }
-  deletion_protection_enabled = true
+  deletion_protection_enabled = var.ddb_deletion_protection
 
   tags = {
     Environment = var.environment

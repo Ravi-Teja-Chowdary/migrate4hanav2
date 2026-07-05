@@ -45,7 +45,7 @@ def _run_phase(label, run_id, extra_env):
     _ensure_dag(run_id)
     env = dict(os.environ)
     env.setdefault("SAPNWRFC_HOME", "sapnwrfc")
-    env.update({"M4H_LOAD_TO_S4": "1", "M4H_LOAD_MAX_ROWS": env.get("M4H_LOAD_MAX_ROWS", "3")})
+    env.update({"M4H_LOAD_TO_S4": "1", "M4H_LOAD_MAX_ROWS": env.get("M4H_LOAD_MAX_ROWS", "6")})
     env.update(extra_env)
     print(f"\n=== PHASE: {label}  (run-id {run_id}) ===")
     subprocess.run([sys.executable, str(ROOT / "run_local_lift_and_shift.py"),
