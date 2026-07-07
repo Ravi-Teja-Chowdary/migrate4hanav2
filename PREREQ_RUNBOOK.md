@@ -1,5 +1,13 @@
 # Prereq Closer Runbook — customizing gaps blocking S/4 loads
 
+> **📢 2026-07-07 (afternoon) — full-breadth coverage now visible in wizard.**
+> Project page top now shows a *Migration coverage* panel with the full
+> catalog of 135 objects and their tier badge (Tier-1 verified /
+> Tier-2 awaiting verification / MC-lane / Blocked). Click *Show detail*
+> to see which BAPI each spine uses and which are blocked on what. The
+> auto-generated prep script covers 40+ customizing tables now (up from
+> 12) and closes the target-side gap for most Tier-1 + Tier-2 objects.
+
 > **📢 2026-07-07 update — automated path now available.** The wizard's
 > *Prepare S/4 target* section (Project page, appears when *Load to S/4* is
 > ticked) auto-generates a self-contained ABAP report that creates every

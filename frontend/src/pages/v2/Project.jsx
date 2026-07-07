@@ -66,6 +66,12 @@ export default function Project() {
   const [prepAutoRunResult, setPrepAutoRunResult] = useState(null);
   const [prepConfirmedRun, setPrepConfirmedRun] = useState(false);
   const [prepCopyOk, setPrepCopyOk] = useState(false);
+  // Honest breadth report — every object the tool knows about, with a tier
+  // badge (Tier-1 verified, Tier-2 awaiting live verification, MC-lane
+  // template, or blocked on customizing/data). Lazy-loaded on demand.
+  const [coverage, setCoverage] = useState(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [coverageOpen, setCoverageOpen] = useState(false);
   const [confirmingLive, setConfirmingLive] = useState(false);
   // Aggregated telemetry + error buckets — populated by /telemetry poll.
   const [telemetry, setTelemetry] = useState(null);
@@ -135,6 +141,17 @@ export default function Project() {
     } catch (e) {
       setErr(e.message);
     } finally { setStarting(false); }
+  };
+
+  const loadCoverage = async () => {
+    if (coverage) { setCoverageOpen((v) => !v); return; }
+    setCoverageLoading(true); setErr('');
+    try {
+      const r = await api.coverage();
+      setCoverage(r);
+      setCoverageOpen(true);
+    } catch (e) { setErr(e.message); }
+    finally { setCoverageLoading(false); }
   };
 
   const downloadPdf = async () => {
@@ -235,6 +252,80 @@ export default function Project() {
           {err}
         </div>
       )}
+
+      <Section title="Migration coverage (what this tool knows about)">
+        <div className="flex items-start gap-3 flex-wrap">
+          <button
+            onClick={loadCoverage}
+            disabled={coverageLoading}
+            className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-900 disabled:bg-slate-400 text-white text-sm font-medium"
+          >
+            {coverageLoading
+              ? 'Loading…'
+              : coverage
+                ? (coverageOpen ? 'Hide detail' : 'Show detail')
+                : 'Show what will be migrated'}
+          </button>
+          {coverage?.totals && (
+            <div className="text-xs text-slate-600 flex flex-wrap gap-3 items-center">
+              <span>Total objects: <strong>{coverage.totals.total_objects}</strong></span>
+              <span className="text-emerald-700">Tier-1 (live BAPI, verified): <strong>{coverage.totals.tier_1}</strong></span>
+              <span className="text-blue-700">Tier-2 (live BAPI, awaiting verify): <strong>{coverage.totals.tier_2}</strong></span>
+              <span className="text-slate-600">MC-lane (template): <strong>{coverage.totals.pseudo_spine_mc}</strong></span>
+              <span className="text-amber-700">Blocked: <strong>{coverage.totals.blocked}</strong></span>
+              <span className="text-slate-500">Registered spines: <strong>{coverage.totals.registered_spines}</strong></span>
+            </div>
+          )}
+        </div>
+        {coverage?.objects && coverageOpen && (
+          <div className="mt-3 border border-slate-200 rounded overflow-hidden">
+            <div className="overflow-auto max-h-96">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-100 sticky top-0">
+                  <tr className="text-left">
+                    <th className="px-2 py-1.5 font-semibold">Object</th>
+                    <th className="px-2 py-1.5 font-semibold">Tier</th>
+                    <th className="px-2 py-1.5 font-semibold">DAG</th>
+                    <th className="px-2 py-1.5 font-semibold">Extract</th>
+                    <th className="px-2 py-1.5 font-semibold">BAPI / Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coverage.objects.map((o) => (
+                    <tr key={o.name} className="border-t border-slate-100 hover:bg-slate-50">
+                      <td className="px-2 py-1 font-mono">{o.name}</td>
+                      <td className="px-2 py-1">
+                        <span className={`px-1.5 py-0.5 rounded text-white text-[10px] ${
+                          o.tier === 'T1' ? 'bg-emerald-600' :
+                          o.tier === 'T2' ? 'bg-blue-600' :
+                          o.tier === 'MC' ? 'bg-slate-500' :
+                          o.tier === 'BLOCKED' ? 'bg-amber-600' :
+                          'bg-slate-300'
+                        }`}>{o.tier}</span>
+                      </td>
+                      <td className="px-2 py-1">{o.in_dag ? '✓' : '·'}</td>
+                      <td className="px-2 py-1">
+                        {o.extractable
+                          ? <span className="text-slate-600"><code>{o.extract_table}</code> <span className="text-slate-400">({o.extract_lane})</span></span>
+                          : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-2 py-1 text-slate-500">
+                        {o.bapi ? <code>{o.bapi}</code> : o.blocked_reason || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="text-[11px] text-slate-500 px-2 py-1.5 bg-slate-50 border-t border-slate-200">
+              <strong>T1</strong> = verified landing on live S/4. {' '}
+              <strong>T2</strong> = spine written, awaits per-object BAPI verification (attempted during run; success promotes to T1). {' '}
+              <strong>MC</strong> = Migration Cockpit / LTMOM template lane (no live BAPI needed). {' '}
+              <strong>BLOCKED</strong> = target-side customizing or missing source data — see <code>PREREQ_RUNBOOK.md</code>.
+            </div>
+          </div>
+        )}
+      </Section>
 
       {activeRun && telemetry && (
         <Section title="Live telemetry">

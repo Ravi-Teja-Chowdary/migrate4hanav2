@@ -272,6 +272,13 @@ DEFAULT_OBJECT_TABLES = {
     "ReturnsOrderSD":    {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR", "WAERK"], "where": "VBTYP = 'H'", "lane": "BAPI"},
     "CreditMemoRequest": {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR", "WAERK"], "where": "VBTYP = 'K'", "lane": "BAPI"},
     "DebitMemoRequest":  {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR", "WAERK"], "where": "VBTYP = 'L'", "lane": "BAPI"},
+    # 2026-07-07 breadth wire-up — remaining registered spines that were
+    # missing an extract mapping. Without an entry here the runner treats
+    # the object as "skipped: no source-table mapping".
+    "PurchaseOrder":     {"table": "EKKO",  "fields": ["EBELN", "BSART", "BUKRS", "EKORG", "EKGRP", "LIFNR", "WAERS"], "where": "BSTYP = 'F'", "lane": "BAPI"},
+    "ProductionBOM":     {"table": "STKO",  "fields": ["STLNR", "STLAL", "BMENG", "BMEIN", "STLST", "DATUV", "STATU"], "lane": "BAPI"},
+    "WarrantyClaim":     {"table": "PWTY",  "fields": ["WTYID", "OBJNR", "IWERK", "MATNR", "SERNR"], "lane": "BAPI"},
+    "FixedAssetOvertake": {"table": "ANLA", "fields": ["BUKRS", "ANLN1", "ANLN2", "ANLKL", "AKTIV", "ZUJHR", "TXT50"], "where": "AKTIV <> ''", "lane": "BAPI"},
     "PurchaseContract":  {"table": "EKKO", "fields": ["EBELN", "BSART", "LIFNR", "EKORG", "WAERS"], "where": "BSTYP = 'K'", "lane": "MC"},
     "Batch":             {"table": "MCH1", "fields": ["MATNR", "CHARG"], "lane": "MC"},
     "InventoryBalance":  {"table": "MARD", "fields": ["MATNR", "WERKS", "LGORT", "LABST"], "where": "LABST > '0'", "lane": "MC"},

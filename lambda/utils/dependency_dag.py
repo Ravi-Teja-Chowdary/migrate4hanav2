@@ -177,6 +177,23 @@ class DependencyDAG:
             # ── Legacy / requirements ──────────────────────────────────────
             "Requirement":        {"Material", "Plant"},
             "RequisitionLegacy":  {"Material"},
+
+            # ── 2026-07-07 breadth wire-up: remaining registered spines ────
+            # Objects whose spine files exist but weren't in the DAG yet.
+            # Dependencies chosen conservatively: masters before transactionals,
+            # and any FK the BAPI resolves through the key map is declared.
+            # These are wired even when Tier-2 (extract-and-stage) so the
+            # topological order still respects them for MC-lane deployments.
+            "BillingDocument":    {"SalesOrder"},          # VBRK/VBRP, refs SO or delivery
+            "WorkCenter":         {"Plant"},               # CRHD, plant-scoped
+            "Network":            {"Project"},             # AUFK/AUTYP=20, PS network
+            "WBSElement":         {"WBS", "CostCenter"},   # PRPS row-level element
+            "ProductionBOM":      {"Material", "Plant"},   # STKO
+            "WarrantyClaim":      {"Equipment"},           # BAPI_WARRANTY_CREATE
+            "FixedAssetOvertake": {"FixedAsset"},          # asset takeover variant
+            "ServiceMaster":      set(),                   # ASMD, standalone
+            "SourceList":         {"Material", "Vendor"},  # EORD, MM lane
+            "PurchaseOrder":      {"Material", "Vendor"},  # EKKO general (vs OpenPO's BSTYP='F' filter)
         }
         nodes = set(edges) | {n for deps in edges.values() for n in deps}
         return cls(edges=edges, nodes=nodes)

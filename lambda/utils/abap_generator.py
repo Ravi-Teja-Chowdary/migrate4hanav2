@@ -140,6 +140,143 @@ SCAN_SPEC = {
         "rowcount": 200,
         "key_fields": ["FKART"],
     },
+    # ── 2026-07-07 breadth expansion — customizing tables the wider spine
+    # catalog references. Grouped by object class so a diff on this dict
+    # reads like a coverage map for the migration domain.
+
+    # Sales area structure — SO/Contract/Delivery/Billing need these tuples
+    "TVKO": {
+        "description": "Sales organizations",
+        "fields": ["VKORG", "WAERS", "KALSM", "VKOFI", "BUKRS", "ADRNR"],
+        "where": "", "rowcount": 100, "key_fields": ["VKORG"],
+    },
+    "TVTW": {
+        "description": "Distribution channels",
+        "fields": ["VTWEG", "BEZEI"],
+        "where": "", "rowcount": 50, "key_fields": ["VTWEG"],
+    },
+    "TSPA": {
+        "description": "Divisions",
+        "fields": ["SPART", "BEZEI"],
+        "where": "", "rowcount": 50, "key_fields": ["SPART"],
+    },
+    "TVKOV": {
+        "description": "Sales area assignment (VKORG-VTWEG)",
+        "fields": ["VKORG", "VTWEG"],
+        "where": "", "rowcount": 500, "key_fields": ["VKORG", "VTWEG"],
+    },
+    "TVTA": {
+        "description": "Sales area (VKORG-VTWEG-SPART)",
+        "fields": ["VKORG", "VTWEG", "SPART", "BUKRS", "KALKS"],
+        "where": "", "rowcount": 1000, "key_fields": ["VKORG", "VTWEG", "SPART"],
+    },
+
+    # Purchasing org structure — PO/Contract/InfoRecord/SourceList
+    "T024E": {
+        "description": "Purchasing organizations",
+        "fields": ["EKORG", "EKOTX", "EKORS", "BUKRS"],
+        "where": "", "rowcount": 100, "key_fields": ["EKORG"],
+    },
+    "T024": {
+        "description": "Purchasing groups",
+        "fields": ["EKGRP", "EKNAM", "EKTEL"],
+        "where": "", "rowcount": 200, "key_fields": ["EKGRP"],
+    },
+
+    # Material master customizing
+    "T134": {
+        "description": "Material types",
+        "fields": ["MTART", "MTREF", "MTPOS", "MTBEZ"],
+        "where": "", "rowcount": 200, "key_fields": ["MTART"],
+    },
+    "T134T": {
+        "description": "Material types (short text)",
+        "fields": ["SPRAS", "MTART", "MTBEZ"],
+        "where": "SPRAS = 'E'", "rowcount": 500, "key_fields": ["SPRAS", "MTART"],
+    },
+    "T137": {
+        "description": "Material status",
+        "fields": ["MMSTA", "SPRAS", "MMSTB"],
+        "where": "", "rowcount": 100, "key_fields": ["MMSTA", "SPRAS"],
+    },
+    "T023T": {
+        "description": "Material group descriptions",
+        "fields": ["SPRAS", "MATKL", "WGBEZ"],
+        "where": "SPRAS = 'E'", "rowcount": 1000, "key_fields": ["SPRAS", "MATKL"],
+    },
+
+    # PP customizing — production order type, work centre etc.
+    "T003O": {
+        "description": "Order types (PP/PM/PS)",
+        "fields": ["AUART", "AUTYP", "BEZEI"],
+        "where": "", "rowcount": 200, "key_fields": ["AUART"],
+    },
+    "T430": {
+        "description": "Status profile assignments",
+        "fields": ["OBJTP", "STSMA", "BEZEI"],
+        "where": "", "rowcount": 200, "key_fields": ["OBJTP", "STSMA"],
+    },
+
+    # FI / CO customizing beyond the base four
+    "T003": {
+        "description": "FI document types",
+        "fields": ["BLART", "LTEXT", "NUMKR", "XKOPF"],
+        "where": "", "rowcount": 200, "key_fields": ["BLART"],
+    },
+    "T077K": {
+        "description": "Customer account groups",
+        "fields": ["KTOKD", "TEXT30", "XCPDD", "SPBUP"],
+        "where": "", "rowcount": 100, "key_fields": ["KTOKD"],
+    },
+    "T077Y": {
+        "description": "Vendor account groups",
+        "fields": ["KTOKK", "TEXT30", "XCPDK"],
+        "where": "", "rowcount": 100, "key_fields": ["KTOKK"],
+    },
+    "T052": {
+        "description": "Payment terms",
+        "fields": ["ZTERM", "TAGE2", "TAGE3", "PRZ1", "PRZ2"],
+        "where": "", "rowcount": 500, "key_fields": ["ZTERM"],
+    },
+    "TFACT": {
+        "description": "Factory calendar assignments per plant",
+        "fields": ["WERKS", "FABKL"],
+        "where": "", "rowcount": 500, "key_fields": ["WERKS"],
+    },
+
+    # Country / language / currency reference
+    "T005": {
+        "description": "Countries",
+        "fields": ["LAND1", "LANDK", "ISO3", "NATIO"],
+        "where": "", "rowcount": 500, "key_fields": ["LAND1"],
+    },
+    "T005S": {
+        "description": "Regions (states/provinces)",
+        "fields": ["LAND1", "BLAND", "BEZEI"],
+        "where": "", "rowcount": 3000, "key_fields": ["LAND1", "BLAND"],
+    },
+    "TCURC": {
+        "description": "Currency codes",
+        "fields": ["WAERS", "ISOCD", "ALTWR", "GDATU"],
+        "where": "", "rowcount": 300, "key_fields": ["WAERS"],
+    },
+    "T006": {
+        "description": "Units of measure",
+        "fields": ["MSEHI", "KZKEH", "KZWOB", "DECAN", "ISOCODE"],
+        "where": "", "rowcount": 500, "key_fields": ["MSEHI"],
+    },
+
+    # QM customizing
+    "TQ15": {
+        "description": "QM catalog types",
+        "fields": ["KATALOGART", "KATALOGART_TX"],
+        "where": "", "rowcount": 50, "key_fields": ["KATALOGART"],
+    },
+    "TQ16": {
+        "description": "QM code groups",
+        "fields": ["KATALOGART", "CODEGRUPPE", "STATUS"],
+        "where": "", "rowcount": 500, "key_fields": ["KATALOGART", "CODEGRUPPE"],
+    },
 }
 
 # Fields that hold external-number-range interval codes. When the wizard's

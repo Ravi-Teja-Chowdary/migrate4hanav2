@@ -2178,6 +2178,28 @@ async def pipeline_lift_and_shift_stages():
 
 
 # =============================================================================
+# ROUTES - MIGRATION COVERAGE (honest breadth reporter for the wizard)
+# =============================================================================
+@app.get("/api/pipeline/coverage", dependencies=[Depends(require_auth)])
+async def pipeline_coverage():
+    """Return the full spine catalog with tier + status per object.
+
+    Cross-references spine registry, dependency DAG, extraction catalog, and
+    the curated Tier-1 verified list from BREADTH_TRACKER.md. Wizard shows a
+    summary chip + collapsible detail table so the operator can see the
+    breadth of what a run will attempt — no need to trawl the tracker file.
+    """
+    try:
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from coverage_summary import compute_coverage  # type: ignore
+        return compute_coverage(project_dir=PROJECT_DIR)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={
+            "totals": {}, "objects": [],
+            "error": f"{type(e).__name__}: {e}"})
+
+
+# =============================================================================
 # ROUTES - S/4 PREP-SCRIPT GENERATION (auto-generated ABAP for SE38 or auto-run)
 # =============================================================================
 # Turns "connect + click migrate" into a truly one-click flow. Before the

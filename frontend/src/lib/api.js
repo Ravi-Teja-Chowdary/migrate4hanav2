@@ -181,6 +181,11 @@ export const api = {
     apiFetch('/api/pipeline/lift-and-shift',
       { method: 'POST', body: JSON.stringify(payload) }),
 
+  // ── Migration coverage report ──
+  // Full spine catalog with tier badges (T1/T2/MC/BLOCKED). Wizard uses
+  // this to render the honest breadth panel.
+  coverage: () => apiFetch('/api/pipeline/coverage'),
+
   // ── S/4 prep script (auto-generated ABAP) ──
   // Scans ECC customizing and emits an ABAP report the S/4 admin runs in
   // SE38 to set up target customizing referenced by the ECC data. Returned
