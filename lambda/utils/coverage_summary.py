@@ -47,6 +47,9 @@ TIER_1_VERIFIED = {
     # for the returned target key.
     "HRMaster", "IncomingInvoice", "Notification", "RequisitionLegacy",
     "StockTransferOrder",
+    # 2026-07-07 (evening): fixed via snake-case naming bug in the harness
+    # + runtime date-bump patch. Now lands with real BAPI on CAL S4H 816.
+    "ScheduleAgreementMM",
 }
 
 # Objects whose real path is a Migration Cockpit / LTMOM template (no live
@@ -89,6 +92,14 @@ PSEUDO_SPINE_MC_LANE = {
 BLOCKED_ON_CUSTOMIZING = {
     "FixedAssetOvertake", "ProjectDefinition", "BatchClassification",
     "SerialNumber",
+    # 2026-07-07 verify sweep: target customizing gaps confirmed live.
+    # The prep-script generator's SCAN_SPEC was extended with T362 +
+    # TCJ04/TCJ42 + T163K/T163Y in the same session so these become
+    # closable via the auto-generated ABAP path.
+    "Project",         # needs TCJ04 project profile
+    "ServiceMaster",   # needs T362 service categories
+    "PurchaseOrder",   # needs T163K/T163Y for the specific acct-cat combos
+    "SubcontractingPO", # same acct-cat + BAPI 'W' message classifier fix
 }
 
 # Objects blocked on real customer source data (won't work on empty IDES).

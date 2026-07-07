@@ -277,6 +277,53 @@ SCAN_SPEC = {
         "fields": ["KATALOGART", "CODEGRUPPE", "STATUS"],
         "where": "", "rowcount": 500, "key_fields": ["KATALOGART", "CODEGRUPPE"],
     },
+
+    # ── 2026-07-07 (evening) additions from verify_tier2_local.py findings.
+    # Each of these customizing tables blocks a specific Tier-2 spine from
+    # landing on target. Adding them here makes the auto-generated prep
+    # script close the gap without SPRO clicks.
+
+    # ServiceMaster BAPI ('BAPI_SRV_SERVICE_CREATE') requires an entry in
+    # T362 (service categories) for the requested service category code.
+    "T362": {
+        "description": "Service categories (BAPI_SRV_SERVICE_CREATE dependency)",
+        "fields": ["ASGRP", "TEXT30", "ASNKL"],
+        "where": "", "rowcount": 200, "key_fields": ["ASGRP"],
+    },
+    "T362T": {
+        "description": "Service category descriptions",
+        "fields": ["SPRAS", "ASGRP", "TEXT30"],
+        "where": "SPRAS = 'E'", "rowcount": 500, "key_fields": ["SPRAS", "ASGRP"],
+    },
+
+    # Project spine ('BAPI_BUS2001_CREATE') fails with 'no target project
+    # profile discovered' — TCJ04 holds project profiles, TCJ42 activity
+    # profiles. Seeding these means the wizard's *Preserve source project
+    # numbers* toggle can round-trip cleanly.
+    "TCJ04": {
+        "description": "Project profiles (BAPI_BUS2001_CREATE dependency)",
+        "fields": ["PROFIDPROJ", "BEZEI", "KOKRS", "PSPRB"],
+        "where": "", "rowcount": 100, "key_fields": ["PROFIDPROJ"],
+    },
+    "TCJ42": {
+        "description": "Network / activity profiles",
+        "fields": ["NPLPR", "BEZEI"],
+        "where": "", "rowcount": 100, "key_fields": ["NPLPR"],
+    },
+
+    # PurchaseOrder + SubcontractingPO 'faulty items' failures point at
+    # missing account assignment categories in T163K + missing acct-cat
+    # + item-cat combos in T163Y.
+    "T163K": {
+        "description": "Purchasing account assignment categories",
+        "fields": ["KNTTP", "BEZEI"],
+        "where": "", "rowcount": 100, "key_fields": ["KNTTP"],
+    },
+    "T163Y": {
+        "description": "Item category / acct-assignment combos",
+        "fields": ["PSTYP", "KNTTP"],
+        "where": "", "rowcount": 200, "key_fields": ["PSTYP", "KNTTP"],
+    },
 }
 
 # Fields that hold external-number-range interval codes. When the wizard's

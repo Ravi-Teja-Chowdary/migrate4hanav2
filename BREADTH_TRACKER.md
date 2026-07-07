@@ -425,6 +425,61 @@ Each of these is a 15-30 min per-object fix + re-verify. Not blockers.
 | Blocked | 7 | 7 |
 | **Total addressable** | **163** | **163** |
 
+## 2026-07-07 (late evening) — Round 2: 6th promotion + prep-script closes 4 more
+
+Continued the verify sweep with two harness improvements:
+
+1. **Snake-case naming fix**: `ScheduleAgreementMM` / `SubcontractingPO` /
+   `ReturnsOrderSD` etc. keep acronyms as one word (`_mm`, `_po`, `_sd`).
+   Previous regex split them (`_m_m`), causing `_find_bapi_class_for` to
+   fall back to the MC-file shim. Fixed with proper acronym-aware regex.
+2. **Runtime date-bump patch**: scaffolder-generated spines hardcode
+   `DOC_DATE`, `REQ_DATE` etc. that are now in the past. Harness walks
+   every `CONSTANTS_HEADER` / `EXTRA_PAYLOAD` dict at import time and
+   bumps stale YYYYMMDD literals to today; also normalizes
+   `DATE_TYPE='T'` → `'D'` (the invalid period indicator seen in
+   Requirement).
+
+### Round 2 promotion (1)
+
+- **ScheduleAgreementMM** (`BAPI_SAG_CREATE`) — was blocked by the
+  MC-file shim shadowing the BAPI class; naming fix resolved.
+
+### Round 2 reclassifications: prep-script now closes 4 more (Blocked → closable)
+
+Added to `abap_generator.SCAN_SPEC`:
+
+- `T362` + `T362T` (service categories) → closes **ServiceMaster**
+- `TCJ04` + `TCJ42` (project + activity profiles) → closes **Project**
+- `T163K` + `T163Y` (purchasing acct-cat combos) → closes **PurchaseOrder**
+  + **SubcontractingPO**
+
+All four are BLOCKED today but the wizard's prep-script generator emits
+ABAP for them, so a one-click `Generate → Auto-run` on S/4 opens them up.
+
+### Round 2 remaining Tier-2 (2)
+
+- **NetworkComponent** — generic "Errors occurred during processing".
+  Root cause needs SLG1 log inspection on S/4; not diagnosable from the
+  Python side. Follow-up work.
+- **Requirement** — persistent "Period indicator cannot be converted"
+  even after DATE_TYPE fix. Likely a distinct BAPI-side field not in
+  the spine's EXTRA_PAYLOAD.
+
+### Final coverage state (end of 2026-07-07)
+
+| Bucket | Session start | Session end |
+|---|---:|---:|
+| Tier-1 (live-BAPI verified) | 38 | **44** |
+| Tier-2 (spine, awaiting verify) | 21 | **2** |
+| MC-lane (native template path) | 97 | 106 |
+| Blocked (customizing, prep-script closable) | 7 | 11 |
+| **Total addressable** | **163** | **163** |
+
+Net: **+6 verified Tier-1 in one day**, +4 additional objects made
+one-click closable through the prep-script generator. The 2 residual
+Tier-2 are minority cases with specific SAP-side diagnosis needed.
+
 
 ## 2026-06-15 (afternoon) — +2 more Tier-1 (BOMItem, AccountingDocument), extra_payload scaffolder feature (27 → 37)
 

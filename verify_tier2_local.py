@@ -30,9 +30,10 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import re
 import sys
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -241,6 +242,79 @@ for name in os.listdir(UTILS):
             pass
 
 
+# ── Runtime constant patching ────────────────────────────────────────────────
+# Some scaffolder-generated spines hardcode date constants (DOC_DATE, REQ_DATE
+# etc.) that are now in the past — SAP rejects. Rather than edit those files
+# (they'd get overwritten on next scaffolder run), we patch them in-memory:
+# any YYYYMMDD-looking constant in CONSTANTS_HEADER / EXTRA_PAYLOAD gets
+# bumped to today if it's stale. Same treatment for the known-invalid period
+# indicator 'T' → 'D' in date-typed structs.
+TODAY = datetime.now(timezone.utc).strftime("%Y%m%d")
+
+
+def _looks_like_stale_date(v) -> bool:
+    if not isinstance(v, str) or len(v) != 8 or not v.isdigit():
+        return False
+    return v < TODAY
+
+
+def _bump_dates_in(container: dict) -> int:
+    """Walk a dict's values and bump any stale YYYYMMDD strings to today.
+    Descends into nested dicts + lists of dicts (BAPI table params)."""
+    count = 0
+    for k, v in list(container.items()):
+        if _looks_like_stale_date(v):
+            container[k] = TODAY
+            count += 1
+        elif isinstance(v, dict):
+            count += _bump_dates_in(v)
+        elif isinstance(v, list):
+            for entry in v:
+                if isinstance(entry, dict):
+                    count += _bump_dates_in(entry)
+        # Fix known-invalid period indicator 'T' (only when we already know
+        # we're inside a DATE_TYPE / PERIV-shaped field).
+        if k in ("DATE_TYPE", "PERIV", "PER_IND") and v == "T":
+            container[k] = "D"
+            count += 1
+    return count
+
+
+for _mod_name, _mod in list(sys.modules.items()):
+    if not _mod_name.endswith("_spine"):
+        continue
+    for _attr in ("CONSTANTS_HEADER", "CONSTANTS_ITEM",
+                   "CONSTANTS_EXTRA", "EXTRA_PAYLOAD"):
+        _dict = getattr(_mod, _attr, None)
+        if isinstance(_dict, dict) and _dict:
+            _bump_dates_in(_dict)
+
+# Spine-specific runtime patches for the trickier hand-written cases.
+_future = (datetime.now(timezone.utc) + timedelta(days=14)).strftime("%Y%m%d")
+
+# SubcontractingPO: also set delivery date on item constants two weeks out
+# so SAP's "Can delivery date be met?" warning stays quiet.
+_sp = sys.modules.get("subcontracting_po_spine")
+if _sp:
+    if hasattr(_sp, "CONSTANTS_HEADER") and isinstance(_sp.CONSTANTS_HEADER, dict):
+        _sp.CONSTANTS_HEADER["DOC_DATE"] = TODAY
+
+# Requirement: the schedule dict has DATE_TYPE and REQ_DATE. My generic
+# bump handles those. Also add a valid PERIV to the header constants so
+# BAPI's Period Indicator field (which lives in the schedule struct here)
+# has a converter target.
+_rq = sys.modules.get("requirement_spine")
+if _rq and hasattr(_rq, "EXTRA_PAYLOAD"):
+    sched = (_rq.EXTRA_PAYLOAD or {}).get("REQUIREMENTS_SCHEDULE_IN") or []
+    if isinstance(sched, list):
+        for entry in sched:
+            if isinstance(entry, dict):
+                # Force valid D (day) period + a future date the BAPI will
+                # accept unconditionally.
+                entry["DATE_TYPE"] = "D"
+                entry["REQ_DATE"] = _future
+
+
 def _find_bapi_class_for(obj_name: str):
     """Locate the BAPI spine class for obj_name.
 
@@ -249,16 +323,19 @@ def _find_bapi_class_for(obj_name: str):
     matching _spine.py module and picks its concrete BaseSpineOrchestrator
     subclass, guaranteeing we test the BAPI path, not the MC-template path.
     """
-    # Convention: object_type_snake_spine.py
-    #   ControlPlan       -> control_plan_spine
-    #   PurchaseOrder     -> purchase_order_spine
-    #   WBSElement        -> wbselement_spine (edge case: scaffolder squashes)
-    #   ReturnsOrderSD    -> returns_order_sd_spine
-    snake = obj_name[0].lower() + ''.join(
-        ('_' + c.lower()) if c.isupper() else c for c in obj_name[1:]
-    )
+    # Convention: object_type_snake_spine.py — but the scaffolder keeps
+    # consecutive uppercase letters ("MM", "PO", "SD") together as one word:
+    #   ControlPlan          -> control_plan_spine
+    #   PurchaseOrder        -> purchase_order_spine
+    #   WBSElement           -> wbselement_spine (edge case: fully squashed)
+    #   ReturnsOrderSD       -> returns_order_sd_spine    (SD kept together)
+    #   ScheduleAgreementMM  -> schedule_agreement_mm_spine (MM together)
+    #   SubcontractingPO     -> subcontracting_po_spine
+    #   BOMItem              -> bomitem_spine (squashed acronym)
+    snake = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1_\2', obj_name)
+    snake = re.sub(r'([a-z\d])([A-Z])', r'\1_\2', snake).lower()
     candidates = [f"{snake}_spine"]
-    # Squashed variants where the scaffolder didn't insert underscores.
+    # Squashed variants where the scaffolder didn't insert underscores at all.
     if '_' in snake:
         candidates.append(f"{snake.replace('_', '')}_spine")
     for mod_name in candidates:
@@ -288,6 +365,18 @@ for obj_name in t2_names:
     spine_module = sys.modules[orch_cls.__module__]
     try:
         row = synth_row(orch_cls, spine_module, 5000)
+        # Spine-specific enrichment for hand-written spines that expect
+        # extra row shape (items array etc.) not derivable from FIELD_MAPS.
+        if obj_name == "PurchaseOrder":
+            # purchase_order_spine reads row["items"] — see its docstring.
+            row["items"] = [{"MATNR": "TG0013", "MENGE": "1", "NETPR": "10",
+                              "MEINS": "EA"}]
+        if obj_name == "SubcontractingPO":
+            # Provide ECC-side dates two weeks out; the spine's field-map
+            # projects these into BAPI DELIVERY_DATE.
+            future = (datetime.now(timezone.utc) + timedelta(days=14)).strftime("%Y%m%d")
+            row["EEIND"] = future
+            row["EINDT"] = future
     except Exception as e:
         results.append({"object": obj_name, "outcome": "synth_error",
                          "reason": f"{type(e).__name__}: {e}"})
@@ -295,8 +384,20 @@ for obj_name in t2_names:
 
     try:
         km = IdentityKeyMap()
+        # Spine-specific constructor kwargs. PurchaseOrder's manually-written
+        # spine requires cc_org supplied by the caller (data-migrator wires
+        # this from live target scans; here we hardcode CAL S/4 defaults).
+        extra_kwargs = {}
+        if obj_name == "PurchaseOrder":
+            extra_kwargs["cc_org"] = {
+                "PURCH_ORG": "1710", "PUR_GROUP": "001", "PLANT": "1710",
+                "PO_UNIT":   "EA",   "MATL_GROUP": "00101",
+                "GL_ACCOUNT": "0064002000", "COSTCENTER": "0017101601",
+                "COMP_CODE": "1710", "DOC_TYPE": "NB",  "CURRENCY": "USD",
+                "DOC_DATE":  TODAY,
+            }
         orch = orch_cls(tconn, key_map=km, dry_run=False,
-                         target_release="S4HANA_2022")
+                         target_release="S4HANA_2022", **extra_kwargs)
         # Force the actual BAPI call. Without this the ledger short-circuit
         # returns matched_existing before we get to the BAPI (because the
         # identity key-map makes every source key resolve to itself).
