@@ -46,6 +46,9 @@ def _run_phase(label, run_id, extra_env):
     env = dict(os.environ)
     env.setdefault("SAPNWRFC_HOME", "sapnwrfc")
     env.update({"M4H_LOAD_TO_S4": "1", "M4H_LOAD_MAX_ROWS": env.get("M4H_LOAD_MAX_ROWS", "6")})
+    # Cutover rehearsal honours external-number preservation when the wizard
+    # (or a caller) sets M4H_PRESERVE_SRC_NUMBERS=1 — passed through as-is.
+    env.setdefault("M4H_PRESERVE_SRC_NUMBERS", env.get("M4H_PRESERVE_SRC_NUMBERS", "0"))
     env.update(extra_env)
     print(f"\n=== PHASE: {label}  (run-id {run_id}) ===")
     subprocess.run([sys.executable, str(ROOT / "run_local_lift_and_shift.py"),

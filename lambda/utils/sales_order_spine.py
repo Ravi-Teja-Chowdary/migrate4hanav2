@@ -170,6 +170,14 @@ class SalesOrderSpineOrchestrator(BaseSpineOrchestrator):
         tgt_cust = payload.pop("_tgt_cust", "")
         cdisp    = payload.pop("_cdisp", "registry")
 
+        # External number preservation: when the wizard toggle is on and the
+        # target sales-doc type is marked "external number range" in VOV8,
+        # SALESDOCUMENTIN is honoured and the S/4 SO gets the same VBELN as
+        # ECC. When the doc type is internal-range, the BAPI silently ignores
+        # this field and assigns from its own range — no error.
+        if self.preserve_source_numbers and src_so:
+            payload["SALESDOCUMENTIN"] = str(src_so).zfill(10)
+
         resp = self.c.call("BAPI_SALESORDER_CREATEFROMDAT2", **payload)
         ret = resp.get("RETURN") or []
         if isinstance(ret, dict):

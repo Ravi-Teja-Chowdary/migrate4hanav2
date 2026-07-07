@@ -38,6 +38,7 @@ The rest is provided by the base. That's the promotion factory.
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -359,6 +360,15 @@ class BaseSpineOrchestrator(ABC):
         self.tenant_id     = tenant_id
         self.stats         = SpineStats()
         self._lock         = threading.Lock()
+        # When set (via M4H_PRESERVE_SRC_NUMBERS=1), transactional spines pass
+        # the source document number into the BAPI's external-number field so
+        # the S/4 record inherits the ECC number (VBELN, EBELN, etc.) instead
+        # of getting a fresh internal-range number. Prereq on the target: the
+        # relevant document type must be marked external number range (VN01
+        # / OVAZ / OVA8 depending on doc class).
+        self.preserve_source_numbers = os.environ.get(
+            "M4H_PRESERVE_SRC_NUMBERS", "0"
+        ).strip() == "1"
 
     # ── per-record entry point ────────────────────────────────────────────────
     def load_one(self, row: dict) -> LoadResult:

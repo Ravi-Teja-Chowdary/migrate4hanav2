@@ -74,6 +74,12 @@ class OutboundDeliverySpineOrchestrator(BaseSpineOrchestrator):
         src_so  = payload.pop("_src_so", "")
         tgt_so  = payload.pop("_tgt_so", "")
 
+        # External number preservation for delivery: DELIVERY parameter is the
+        # BAPI's external-number input. Honoured only when the delivery type
+        # (LFART) is set to external range in T-code 0VLK.
+        if self.preserve_source_numbers and src_dlv:
+            payload["DELIVERY"] = str(src_dlv).zfill(10)
+
         resp = self.c.call("BAPI_OUTB_DELIVERY_CREATESLS", **payload)
         ret = resp.get("RETURN") or []
         if isinstance(ret, dict):

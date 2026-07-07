@@ -181,6 +181,18 @@ export const api = {
     apiFetch('/api/pipeline/lift-and-shift',
       { method: 'POST', body: JSON.stringify(payload) }),
 
+  // ── S/4 prep script (auto-generated ABAP) ──
+  // Scans ECC customizing and emits an ABAP report the S/4 admin runs in
+  // SE38 to set up target customizing referenced by the ECC data. Returned
+  // payload includes the ABAP source (for inline display + copy button) and
+  // a download URL that streams the same source as a .abap file.
+  generatePrepScript: (payload = {}) =>
+    apiFetch('/api/pipeline/prep-script/generate',
+      { method: 'POST', body: JSON.stringify(payload) }),
+  autoRunPrepScript: (run_id) =>
+    apiFetch('/api/pipeline/prep-script/auto-run',
+      { method: 'POST', body: JSON.stringify({ run_id }) }),
+
   // ── Gates ──
   gates: () => apiFetch('/api/gates'),
   approveGate: (id, decided_by) =>

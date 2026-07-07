@@ -136,6 +136,81 @@ CONFIG_TABLES = {
                 "fields": ["MTART", "MTREF", "MBREF", "WBREF"],
                 "key": "MTART",
             },
+            # 2026-07-06: added after wiz-20260705T151739Z run showed 50 Material
+            # rows dead-lettered on "MATKL/MATL_GROUP value 00101 not allowed"
+            # — target S/4 missing the material-group value from ECC's T023.
+            "T023": {
+                "description": "Material Groups",
+                "fields": ["MATKL", "WGBEZ", "WGBEZ60", "BKLAS_INT"],
+                "key": "MATKL",
+            },
+        },
+    },
+    "currency_config": {
+        # 2026-07-06: added after wiz-20260705T151739Z run showed ~45
+        # ExchangeRates dead-lettered on "rate type 001 not defined in target
+        # (TCURV)" and "rate type 1001 lacks TCURF factor settings" — the
+        # ExchangeRates spine cannot post rates without the type registered
+        # first (memory: [exchange-rates-customizing]).
+        "description": "Currency + Exchange Rate Customizing",
+        "tables": {
+            "TCURV": {
+                "description": "Exchange Rate Types",
+                "fields": ["KURST", "GKUZU", "BWAER", "XINVR", "XSFIX",
+                           "XEURO"],
+                "key": "KURST",
+            },
+            "TCURF": {
+                "description": "Exchange Rate Factors (per rate type + currency pair)",
+                "fields": ["KURST", "FCURR", "TCURR", "GDATU", "FFACT",
+                           "TFACT", "ABWCT"],
+                "key": "KURST,FCURR,TCURR,GDATU",
+            },
+            "TCURC": {
+                "description": "Currency Codes",
+                "fields": ["WAERS", "ISOCD", "ALTWR", "GDATU", "PRIMARY"],
+                "key": "WAERS",
+            },
+            "TCURW": {
+                "description": "Exchange Rate Type Assignment to Ledger",
+                "fields": ["KURST", "BWKRS"],
+                "key": "KURST,BWKRS",
+            },
+        },
+    },
+    "calendars": {
+        # 2026-07-06: added after wiz-20260705T151739Z run showed OpenPO
+        # dead-lettered on "Valid system settings have not been made for
+        # calendar 01" — S/4 missing factory calendar 01 that ECC references.
+        "description": "Factory + Holiday Calendars",
+        "tables": {
+            "TFACD": {
+                "description": "Factory Calendar Definitions",
+                "fields": ["IDENT", "FEDAT", "TXT", "BEGDA", "ENDDA",
+                           "HOLID"],
+                "key": "IDENT",
+            },
+            "TFAIN": {
+                "description": "Factory Calendar Intervals (per year)",
+                "fields": ["IDENT", "GYEAR", "GKALV", "GKALB", "GKALE"],
+                "key": "IDENT,GYEAR",
+            },
+            "THOC": {
+                "description": "Holiday Calendar Definitions",
+                "fields": ["IDENT", "FEDAT", "TXT"],
+                "key": "IDENT",
+            },
+            "THOL": {
+                "description": "Holiday Definitions",
+                "fields": ["FEIID", "TXT", "MODUS", "MONTH", "DAY",
+                           "WKDAY"],
+                "key": "FEIID",
+            },
+            "THOCD": {
+                "description": "Holiday-Calendar → Holiday Assignments",
+                "fields": ["IDENT", "FEIID"],
+                "key": "IDENT,FEIID",
+            },
         },
     },
     "sales_distribution": {

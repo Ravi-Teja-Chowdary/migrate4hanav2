@@ -476,7 +476,7 @@ def get_run(run_id, client_id: str = "default"):
 
 async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_kind="in_place",
                                  run_id=None, load_to_s4=False, simulation_mode=False,
-                                 max_rows=None):
+                                 max_rows=None, preserve_source_numbers=False):
     global _active_run
     # The wizard hands us its own run_id (e.g. wiz-20260615T120117Z-b539783e);
     # keep it so logs/state files/UI all use the same identifier instead of
@@ -590,6 +590,13 @@ async def start_pipeline_async(mode="full", generate_pdf_after=False, pipeline_k
             # Per-object row cap from the wizard — overrides the data-migrator
             # env default. Clamped defensively; a bad payload from the UI
             # should never widen the cap beyond a sane ceiling.
+            if preserve_source_numbers:
+                env["M4H_PRESERVE_SRC_NUMBERS"] = "1"
+                _add_progress_step(
+                    "mode",
+                    "Source document numbers will be preserved on S/4 (external "
+                    "number range required per PREREQ_RUNBOOK.md §C).",
+                    "INFO", {"preserve_source_numbers": True})
             if max_rows is not None:
                 try:
                     cap = max(1, min(1_000_000, int(max_rows)))
@@ -2106,17 +2113,24 @@ class _LiftAndShiftRequest(BaseModel):
     # clicking "Start migration". None => use the data-migrator default
     # (see lambda/data-migrator/handler.py:83). Clamped to [1, 1_000_000].
     max_rows: Optional[int] = None
+    # Preserve source document numbers (VBELN, EBELN, delivery/billing nums).
+    # When True, transactional spines pass the source doc number into the
+    # BAPI's external-number field so the S/4 record inherits the ECC number
+    # instead of getting a fresh internal-range number. Prereq: the target
+    # S/4 doc types must be marked external range (see PREREQ_RUNBOOK.md §C).
+    preserve_source_numbers: Optional[bool] = False
 
 
 def _ls_args(body):
     """Pluck the wizard payload fields start_pipeline_async cares about."""
     if not body:
         return {"run_id": None, "load_to_s4": False, "simulation_mode": False,
-                "max_rows": None}
+                "max_rows": None, "preserve_source_numbers": False}
     return {"run_id": body.run_id,
             "load_to_s4": bool(body.load_to_s4),
             "simulation_mode": bool(body.simulation_mode),
-            "max_rows": body.max_rows}
+            "max_rows": body.max_rows,
+            "preserve_source_numbers": bool(body.preserve_source_numbers)}
 
 
 @app.post("/api/pipeline/lift-and-shift", dependencies=[Depends(require_auth)])
@@ -2161,6 +2175,188 @@ async def pipeline_lift_and_shift_stages():
                             for sid, phase, mod, extra in _stages]}
     except Exception as e:
         return {"error": str(e), "stages": []}
+
+
+# =============================================================================
+# ROUTES - S/4 PREP-SCRIPT GENERATION (auto-generated ABAP for SE38 or auto-run)
+# =============================================================================
+# Turns "connect + click migrate" into a truly one-click flow. Before the
+# wizard's Start button unlocks, the user (or the tool itself, if auto-run
+# is enabled) needs the S/4 target to have the customizing rows the ECC data
+# references. This route family does:
+#   POST /api/pipeline/prep-script/generate  - scan ECC + emit ABAP report
+#   GET  /api/runs/{run_id}/prep-script.abap      - download prep script
+#   GET  /api/runs/{run_id}/prep-script-undo.abap - download rollback script
+#   POST /api/pipeline/prep-script/auto-run  - optional: exec on S/4 via RFC
+class _PrepScriptRequest(BaseModel):
+    run_id:                  Optional[str] = None
+    preserve_source_numbers: Optional[bool] = False
+
+
+def _prep_dir(run_id: str) -> str:
+    d = os.path.join(PROJECT_DIR, "local-staging", "m4h-local",
+                     "runs", run_id, "prep-script")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+@app.post("/api/pipeline/prep-script/generate",
+          dependencies=[Depends(require_auth)])
+async def prep_script_generate(body: Optional[_PrepScriptRequest] = None):
+    """Scan ECC customizing and emit a self-contained ABAP report the S/4
+    admin runs in SE38 to create every customizing row the migration will
+    reference. Saves to `runs/<run_id>/prep-script/` and returns the source
+    text + summary for inline display in the wizard."""
+    body = body or _PrepScriptRequest()
+    run_id = body.run_id or f"prep-{int(time.time())}"
+    preserve_nums = bool(body.preserve_source_numbers)
+
+    conns = _load_connections()
+    ecc_conf = conns.get("ecc") or {}
+    s4_conf  = conns.get("s4hana") or {}
+    if not (ecc_conf.get("ashost") and _ecc_passwd):
+        return JSONResponse(status_code=400, content={
+            "status": "error",
+            "message": "No active ECC connection. Save + test an ECC "
+                        "connection first."})
+
+    try:
+        import pyrfc
+    except ImportError:
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "message": "pyrfc unavailable on the server — cannot scan ECC."})
+
+    try:
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from abap_generator import scan_ecc, generate_prep_abap
+    except Exception as e:
+        return JSONResponse(status_code=500, content={
+            "status": "error", "message": f"generator import failed: {e}"})
+
+    conn_params = {"ashost": ecc_conf["ashost"], "sysnr": ecc_conf["sysnr"],
+                    "client": ecc_conf["client"], "user": ecc_conf["user"],
+                    "passwd": _ecc_passwd}
+    if ecc_conf.get("saprouter"):
+        conn_params["saprouter"] = ecc_conf["saprouter"]
+
+    try:
+        conn = pyrfc.Connection(**conn_params)
+        try:
+            scan = scan_ecc(conn)
+        finally:
+            conn.close()
+    except Exception as e:
+        return JSONResponse(status_code=502, content={
+            "status": "error", "message": f"ECC scan failed: {type(e).__name__}: {e}"})
+
+    result = generate_prep_abap(
+        scan, run_id=run_id,
+        ecc_host=ecc_conf.get("ashost", ""),
+        s4_host=s4_conf.get("ashost", ""),
+        preserve_source_numbers=preserve_nums,
+    )
+
+    # Persist so download endpoints can stream the file
+    d = _prep_dir(run_id)
+    prep_path = os.path.join(d, "prep.abap")
+    undo_path = os.path.join(d, "undo.abap")
+    summary_path = os.path.join(d, "summary.json")
+    with open(prep_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(result["abap"])
+    with open(undo_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(result["undo_abap"])
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump({"summary": result["summary"],
+                   "warnings": result["warnings"]}, f, indent=2)
+
+    return {
+        "status": "ok",
+        "run_id": run_id,
+        "abap":   result["abap"],
+        "undo_abap": result["undo_abap"],
+        "summary":   result["summary"],
+        "warnings":  result["warnings"],
+        "download_url":      f"/api/runs/{run_id}/prep-script.abap",
+        "download_undo_url": f"/api/runs/{run_id}/prep-script-undo.abap",
+    }
+
+
+@app.get("/api/runs/{run_id}/prep-script.abap",
+         dependencies=[Depends(require_auth)])
+async def prep_script_download(run_id: str):
+    """Download the generated ABAP prep report for SE38 upload."""
+    p = os.path.join(_prep_dir(run_id), "prep.abap")
+    if not os.path.isfile(p):
+        raise HTTPException(status_code=404,
+                            detail=f"prep script not generated yet for {run_id}")
+    return FileResponse(p, media_type="text/plain",
+                         filename=f"ZM4H_PREP_{run_id}.abap")
+
+
+@app.get("/api/runs/{run_id}/prep-script-undo.abap",
+         dependencies=[Depends(require_auth)])
+async def prep_script_undo_download(run_id: str):
+    """Download the companion undo (rollback) ABAP report."""
+    p = os.path.join(_prep_dir(run_id), "undo.abap")
+    if not os.path.isfile(p):
+        raise HTTPException(status_code=404,
+                            detail=f"undo script not generated yet for {run_id}")
+    return FileResponse(p, media_type="text/plain",
+                         filename=f"ZM4H_UNDO_{run_id}.abap")
+
+
+class _PrepAutoRunRequest(BaseModel):
+    run_id: str
+
+
+@app.post("/api/pipeline/prep-script/auto-run",
+          dependencies=[Depends(require_auth)])
+async def prep_script_auto_run(body: _PrepAutoRunRequest):
+    """Optional: hand the already-generated prep script to S/4 for immediate
+    execution via RFC_ABAP_INSTALL_AND_RUN. Many production S/4 tenants
+    disable this RFC — the response surfaces {status: 'disabled'} in that
+    case so the wizard can prompt for manual SE38 upload instead."""
+    prep_path = os.path.join(_prep_dir(body.run_id), "prep.abap")
+    if not os.path.isfile(prep_path):
+        raise HTTPException(status_code=404,
+                            detail="Generate the prep script first, then auto-run.")
+    with open(prep_path, "r", encoding="utf-8") as f:
+        abap_source = f.read()
+
+    conns = _load_connections()
+    s4_conf = conns.get("s4hana") or {}
+    if not (s4_conf.get("ashost") and _s4_passwd):
+        return JSONResponse(status_code=400, content={
+            "status": "error",
+            "message": "No active S/4 connection. Save + test S/4 first."})
+
+    try:
+        import pyrfc
+        from abap_generator import auto_run_on_s4  # already on sys.path from generate
+    except Exception as e:
+        return JSONResponse(status_code=500, content={
+            "status": "error", "message": f"import failed: {e}"})
+
+    conn_params = {"ashost": s4_conf["ashost"], "sysnr": s4_conf["sysnr"],
+                    "client": s4_conf["client"], "user": s4_conf["user"],
+                    "passwd": _s4_passwd}
+    if s4_conf.get("saprouter"):
+        conn_params["saprouter"] = s4_conf["saprouter"]
+
+    try:
+        conn = pyrfc.Connection(**conn_params)
+        try:
+            outcome = auto_run_on_s4(conn, abap_source)
+        finally:
+            conn.close()
+    except Exception as e:
+        return JSONResponse(status_code=502, content={
+            "status": "error",
+            "message": f"S/4 connection failed: {type(e).__name__}: {e}"})
+
+    outcome["run_id"] = body.run_id
+    return outcome
 
 
 # =============================================================================

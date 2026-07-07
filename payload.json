@@ -1,1 +1,1 @@
-{"where":"LOEKZ <> 'X'","mode":"query_target_table","fields":["PSPID","PROFL"],"table":"PROJ","rowcount":8}
+{"mode":"bapi_lane_scale_probe","object_type":"DocumentInfoRecord","row_count":5000}

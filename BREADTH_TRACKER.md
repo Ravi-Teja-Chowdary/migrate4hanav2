@@ -245,6 +245,37 @@ Plus a new `query_target_table` Lambda handler mode for live RFC_READ_TABLE disc
 
 Tier-1 total: **35** (was 27). Total scaffolder-generated spines unchanged at 54 (no new objects added in this push — only promotions).
 
+## 2026-07-06 — SD document family: number-preservation lane + wizard toggle
+
+Client demo need: every SD document that migrates must show up on S/4 with
+the **same document number** as ECC (so VA03 on the ECC ID opens the S/4
+order). Added:
+
+| Object type | Spine (existing) | Number-preservation param | Extraction added |
+|---|---|---|---|
+| SalesOrder | sales_order_spine | `SALESDOCUMENTIN` | VBAK / VBTYP='C' |
+| ReturnsOrderSD | returns_order_sd_spine | `SALESDOCUMENTIN` | VBAK / VBTYP='H' |
+| CreditMemoRequest | credit_memo_request_spine | `SALESDOCUMENTIN` | VBAK / VBTYP='K' |
+| DebitMemoRequest | (uses returns_order_sd variant) | `SALESDOCUMENTIN` | VBAK / VBTYP='L' |
+| SalesContract | sales_contract_spine | `SALESDOCUMENT` | VBAK / VBTYP='G' (existing) |
+| OutboundDelivery | outbound_delivery_spine | `DELIVERY` | LIKP (existing) |
+| BillingDocument | billing_document_spine | `BILLINGDATAIN[i].DOC_NUMBER` | VBRK (existing) |
+
+Wire-up:
+
+- `base_spine_orchestrator.__init__` reads `M4H_PRESERVE_SRC_NUMBERS` env
+  and exposes `self.preserve_source_numbers`.
+- All 6 SD spines inject the source key into the appropriate BAPI param
+  when the flag is set.
+- Wizard exposes checkbox → `preserve_source_numbers` in POST body →
+  `M4H_PRESERVE_SRC_NUMBERS=1` env in the pipeline subprocess.
+- PREREQ_RUNBOOK.md §C documents the SPRO / VOV8 / 0VLK / VN01 steps
+  needed on S/4 to make external number assignment legal per doc type.
+
+Fail-safe semantics: if a doc type is still internal-range on S/4, the BAPI
+silently keeps its own number; the run does not error. The DDB key-map
+still records the source→target pair so audit is preserved either way.
+
 ## 2026-06-15 (afternoon) — +2 more Tier-1 (BOMItem, AccountingDocument), extra_payload scaffolder feature (27 → 37)
 
 Two more Tier-1 promotions via a single new scaffolder feature that unlocks multi-struct / multi-table BAPIs:

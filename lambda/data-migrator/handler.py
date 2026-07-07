@@ -263,6 +263,15 @@ DEFAULT_OBJECT_TABLES = {
     "Project":           {"table": "PROJ", "fields": ["PSPID", "POST1"], "lane": "MC"},
     "PurchaseRequisition": {"table": "EBAN", "fields": ["BANFN", "BNFPO", "MATNR", "WERKS", "MENGE", "TXZ01", "PREIS"], "where": "LOEKZ = '' AND EBELN = ''", "lane": "MC"},
     "OpenSO":            {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR"], "lane": "MC"},
+    # SD document family — Spine-loaded via BAPI_SALESORDER_CREATEFROMDAT2 with
+    # VBTYP filters distinguishing standard SO (C), return (H), credit-memo
+    # request (K). Contract (G) already exists below. All feed into the same
+    # sales_order_spine / returns_order_sd_spine / credit_memo_request_spine
+    # trio which now honours M4H_PRESERVE_SRC_NUMBERS for external doc numbers.
+    "SalesOrder":        {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR", "WAERK"], "where": "VBTYP = 'C'", "lane": "BAPI"},
+    "ReturnsOrderSD":    {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR", "WAERK"], "where": "VBTYP = 'H'", "lane": "BAPI"},
+    "CreditMemoRequest": {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR", "WAERK"], "where": "VBTYP = 'K'", "lane": "BAPI"},
+    "DebitMemoRequest":  {"table": "VBAK", "fields": ["VBELN", "AUART", "VKORG", "VTWEG", "SPART", "KUNNR", "WAERK"], "where": "VBTYP = 'L'", "lane": "BAPI"},
     "PurchaseContract":  {"table": "EKKO", "fields": ["EBELN", "BSART", "LIFNR", "EKORG", "WAERS"], "where": "BSTYP = 'K'", "lane": "MC"},
     "Batch":             {"table": "MCH1", "fields": ["MATNR", "CHARG"], "lane": "MC"},
     "InventoryBalance":  {"table": "MARD", "fields": ["MATNR", "WERKS", "LGORT", "LABST"], "where": "LABST > '0'", "lane": "MC"},

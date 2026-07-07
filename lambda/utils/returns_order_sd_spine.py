@@ -154,6 +154,13 @@ class ReturnsOrderSDSpineOrchestrator(BaseSpineOrchestrator):
         # Version routing: pick the BAPI per the target release.
         bapi_fn = VERSION_BAPI_MAP.get(self.target_release, DEFAULT_BAPI)
 
+        # External number preservation. Return orders use the same BAPI
+        # (BAPI_SALESORDER_CREATEFROMDAT2) as sales orders, so the external
+        # number field is SALESDOCUMENTIN. Prereq: RE doc type marked
+        # external range in VOV8.
+        if self.preserve_source_numbers and src_key:
+            payload["SALESDOCUMENTIN"] = str(src_key).zfill(10)
+
         resp = self.c.call(bapi_fn, **payload)
 
         # Normalize RETURN to a list (BAPIs send either a single struct or a tbl)

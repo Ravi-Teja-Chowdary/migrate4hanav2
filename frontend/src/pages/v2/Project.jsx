@@ -51,6 +51,21 @@ export default function Project() {
   // lambda/data-migrator/handler.py). Wizard user can bump for a bigger
   // sample without editing env vars. Server clamps to [1, 1_000_000].
   const [maxRows, setMaxRows] = useState('');
+  // When true, transactional spines pass the source doc number into the
+  // BAPI's external-number field so S/4 inherits ECC's VBELN/EBELN/etc.
+  // instead of assigning fresh internal-range numbers. Prereq: target
+  // S/4 doc types must be marked external range — see PREREQ_RUNBOOK.md §C.
+  const [preserveSourceNumbers, setPreserveSourceNumbers] = useState(false);
+  // Auto-generated S/4 prep script (ABAP). The wizard walks through:
+  //   Generate  →  view/copy/download  →  either auto-run or admin runs SE38
+  //   →  ticks "Ran on S/4" checkbox  →  Start migration button unlocks.
+  // Gates the Start button so a run can't kick off against an unprepared S/4.
+  const [prepScript, setPrepScript] = useState(null);       // {abap, summary, warnings, download_url, ...}
+  const [prepGenerating, setPrepGenerating] = useState(false);
+  const [prepAutoRunning, setPrepAutoRunning] = useState(false);
+  const [prepAutoRunResult, setPrepAutoRunResult] = useState(null);
+  const [prepConfirmedRun, setPrepConfirmedRun] = useState(false);
+  const [prepCopyOk, setPrepCopyOk] = useState(false);
   const [confirmingLive, setConfirmingLive] = useState(false);
   // Aggregated telemetry + error buckets — populated by /telemetry poll.
   const [telemetry, setTelemetry] = useState(null);
@@ -107,6 +122,7 @@ export default function Project() {
         load_to_s4:  loadToS4,
         simulation_mode: loadToS4 && simulationMode,
         max_rows: maxRows === '' ? null : Number(maxRows),
+        preserve_source_numbers: preserveSourceNumbers,
       });
       const pipeline_run_id = r.run_id || r.execution_id || runId;
       setActiveRun(pipeline_run_id);
@@ -128,6 +144,70 @@ export default function Project() {
         `/api/runs/${encodeURIComponent(activeRun || runId)}/pdf`,
         `migrate4hana-${activeRun || runId}.pdf`);
     } catch (e) { setErr(e.message); }
+  };
+
+  // Scan ECC + generate S/4 prep ABAP. On success, `prepScript.abap` holds
+  // the SE38-pastable source; `prepScript.download_url` streams the same
+  // as a .abap file. The user then either runs it manually in S/4 or, if
+  // RFC_ABAP_INSTALL_AND_RUN is enabled on the target, clicks Auto-run.
+  const generatePrepScript = async () => {
+    setErr(''); setPrepGenerating(true); setPrepAutoRunResult(null);
+    setPrepConfirmedRun(false);
+    try {
+      const r = await api.generatePrepScript({
+        run_id: runId,
+        preserve_source_numbers: preserveSourceNumbers,
+      });
+      if (r.status === 'error') {
+        setErr(r.message || 'Prep script generation failed.');
+        return;
+      }
+      setPrepScript(r);
+    } catch (e) {
+      setErr(e.message);
+    } finally { setPrepGenerating(false); }
+  };
+
+  const copyPrepScript = async () => {
+    if (!prepScript?.abap) return;
+    try {
+      await navigator.clipboard.writeText(prepScript.abap);
+      setPrepCopyOk(true);
+      setTimeout(() => setPrepCopyOk(false), 2500);
+    } catch (e) { setErr(`Copy failed: ${e.message}`); }
+  };
+
+  const downloadPrepScript = async () => {
+    if (!prepScript?.download_url) return;
+    setErr('');
+    try {
+      await downloadFile(prepScript.download_url,
+                         `ZM4H_PREP_${runId}.abap`);
+    } catch (e) { setErr(e.message); }
+  };
+
+  const downloadUndoScript = async () => {
+    if (!prepScript?.download_undo_url) return;
+    setErr('');
+    try {
+      await downloadFile(prepScript.download_undo_url,
+                         `ZM4H_UNDO_${runId}.abap`);
+    } catch (e) { setErr(e.message); }
+  };
+
+  // Optional: ship the prep script to S/4 via RFC_ABAP_INSTALL_AND_RUN.
+  // If S/4 has this RFC disabled (production-hardened tenants often do),
+  // the response comes back with status='disabled' and the wizard directs
+  // the user to run it manually via SE38 instead.
+  const autoRunPrepScript = async () => {
+    setErr(''); setPrepAutoRunning(true); setPrepAutoRunResult(null);
+    try {
+      const r = await api.autoRunPrepScript(runId);
+      setPrepAutoRunResult(r);
+      if (r.status === 'success') setPrepConfirmedRun(true);
+    } catch (e) {
+      setErr(e.message);
+    } finally { setPrepAutoRunning(false); }
   };
 
   if (!wizard) return <div className="text-slate-500">Loading…</div>;
@@ -228,13 +308,189 @@ export default function Project() {
             for this run only.
           </span>
         </div>
+
+        <div className="mt-3 flex flex-col gap-2 p-3 border border-slate-200 bg-slate-50 rounded text-sm">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={preserveSourceNumbers}
+              onChange={(e) => setPreserveSourceNumbers(e.target.checked)}
+              disabled={!!activeRun || starting}
+              className="mt-1"
+            />
+            <span className="flex flex-col gap-1">
+              <span className="font-medium text-slate-700">
+                Preserve source document numbers (VBELN, EBELN, delivery, billing…)
+              </span>
+              <span className="text-slate-500">
+                When enabled, the S/4 sales order / return / credit-memo /
+                contract / delivery / billing document inherits the ECC number
+                instead of getting a fresh internal-range number. Requires the
+                target S/4 doc types (VA/RE/CR/CQ/LF/F2…) to be marked{' '}
+                <strong>External Number Assignment</strong> in VOV8 / 0VLK / VN01
+                before the run — see <code>PREREQ_RUNBOOK.md §C</code>. If a doc
+                type is still internal-range, the BAPI silently keeps its own
+                number and the run continues (no failure).
+              </span>
+            </span>
+          </label>
+        </div>
       </Section>
 
-      <Section title="Actions">
+      {loadToS4 && !activeRun && (
+        <Section title="Step 1 — Prepare S/4 target (auto-generated ABAP)">
+          <div className="text-sm text-slate-600 mb-3">
+            migrate4hana scans your ECC now, figures out every controlling area,
+            plant, material group, exchange rate, factory calendar, tax code,
+            and (if you ticked the number-preservation box) document-type
+            external-range flag your data will reference — and writes an ABAP
+            report you paste into <code>SE38</code> on S/4. About 30 seconds to
+            run in S/4. Idempotent — safe to re-run.
+          </div>
+
+          {!prepScript && (
+            <button
+              onClick={generatePrepScript}
+              disabled={prepGenerating}
+              className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium"
+            >
+              {prepGenerating
+                ? 'Scanning ECC + generating…'
+                : 'Generate S/4 prep script'}
+            </button>
+          )}
+
+          {prepScript && (
+            <div className="space-y-3">
+              <div className="text-xs text-slate-500 flex flex-wrap gap-3">
+                <span>Tables scanned: <strong>{prepScript.summary.tables_scanned}</strong></span>
+                <span>Tables with data: <strong>{prepScript.summary.tables_covered}</strong></span>
+                <span>Rows to create/update: <strong>{prepScript.summary.total_rows_generated}</strong></span>
+                <span>Report name: <code>{prepScript.summary.report_name}</code></span>
+              </div>
+
+              {prepScript.warnings?.length > 0 && (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+                  <div className="font-medium">Scanner warnings:</div>
+                  <ul className="list-disc ml-5">
+                    {prepScript.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              <div className="border border-slate-300 rounded overflow-hidden">
+                <div className="bg-slate-100 px-3 py-2 flex flex-wrap gap-2 items-center border-b border-slate-300">
+                  <span className="text-xs text-slate-600 font-medium mr-auto">
+                    Preview — {prepScript.summary.report_name}.abap
+                  </span>
+                  <button
+                    onClick={copyPrepScript}
+                    className="px-3 py-1 rounded bg-slate-200 hover:bg-slate-300 text-xs font-medium"
+                  >
+                    {prepCopyOk ? '✓ Copied' : 'Copy to clipboard'}
+                  </button>
+                  <button
+                    onClick={downloadPrepScript}
+                    className="px-3 py-1 rounded bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium"
+                  >
+                    Download .abap
+                  </button>
+                  <button
+                    onClick={downloadUndoScript}
+                    className="px-3 py-1 rounded border border-slate-300 hover:bg-slate-50 text-xs font-medium"
+                    title="Companion rollback report — deletes what the prep script inserted."
+                  >
+                    Download undo
+                  </button>
+                </div>
+                <pre className="max-h-72 overflow-auto text-xs bg-slate-900 text-slate-100 p-3 font-mono leading-snug whitespace-pre">
+{prepScript.abap}
+                </pre>
+              </div>
+
+              <div className="p-3 rounded border border-slate-200 bg-slate-50 text-sm">
+                <div className="font-medium mb-2 text-slate-700">
+                  Run on S/4 — two options:
+                </div>
+                <ol className="list-decimal ml-5 space-y-2 text-slate-600">
+                  <li>
+                    <strong>Manual (recommended for production tenants).</strong>{' '}
+                    In S/4 GUI: <code>SE38</code> → New program{' '}
+                    <code>{prepScript.summary.report_name}</code> → paste the
+                    script above → save → press <code>F8</code> to execute.
+                    Takes ~30 sec.
+                  </li>
+                  <li>
+                    <strong>Automatic (CAL/IDES + tenants that allow RFC_ABAP_INSTALL_AND_RUN).</strong>{' '}
+                    Click the button below — migrate4hana ships the script
+                    over RFC and executes it on S/4 for you. Many
+                    production tenants disable this RFC for security; if
+                    so you'll get a clear message and can fall back to the
+                    manual path.
+                  </li>
+                </ol>
+                <div className="mt-3 flex flex-wrap gap-3 items-center">
+                  <button
+                    onClick={autoRunPrepScript}
+                    disabled={prepAutoRunning}
+                    className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium"
+                  >
+                    {prepAutoRunning
+                      ? 'Executing on S/4…'
+                      : 'Auto-run on S/4 now'}
+                  </button>
+                  {prepAutoRunResult && (
+                    <span className={`text-xs ${
+                      prepAutoRunResult.status === 'success' ? 'text-emerald-700' :
+                      prepAutoRunResult.status === 'disabled' ? 'text-amber-700' :
+                      'text-red-700'
+                    }`}>
+                      {prepAutoRunResult.status === 'success' && '✓ Executed on S/4. '}
+                      {prepAutoRunResult.status === 'disabled' && '⚠️ RFC_ABAP_INSTALL_AND_RUN is disabled on S/4 — use manual path. '}
+                      {prepAutoRunResult.status === 'error' && '✗ Failed: '}
+                      {prepAutoRunResult.message}
+                    </span>
+                  )}
+                </div>
+                {prepAutoRunResult?.output?.length > 0 && (
+                  <pre className="mt-3 max-h-40 overflow-auto text-xs bg-slate-900 text-emerald-200 p-2 font-mono">
+{prepAutoRunResult.output.join('\n')}
+                  </pre>
+                )}
+              </div>
+
+              <label className="flex items-start gap-2 p-3 border border-blue-200 bg-blue-50 rounded text-sm">
+                <input
+                  type="checkbox"
+                  checked={prepConfirmedRun}
+                  onChange={(e) => setPrepConfirmedRun(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <strong>I have run the prep script on S/4</strong> (either
+                  manually via SE38 or via the Auto-run button above), and
+                  the report finished successfully. This unlocks the{' '}
+                  <em>Start migration</em> button below.
+                </span>
+              </label>
+            </div>
+          )}
+        </Section>
+      )}
+
+      <Section title={loadToS4 ? "Step 2 — Actions" : "Actions"}>
+        {loadToS4 && !prepConfirmedRun && (
+          <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+            Generate + run the S/4 prep script above, then tick the
+            confirmation box — the <em>Start migration</em> button unlocks
+            once that's done. Extract-only mode (unset <em>Load to S/4</em>)
+            skips this gate entirely.
+          </div>
+        )}
         <div className="flex flex-wrap gap-3 items-center">
           <button
             onClick={startMigration}
-            disabled={starting || activeRun}
+            disabled={starting || activeRun || (loadToS4 && !prepConfirmedRun)}
             className={`px-5 py-2.5 rounded text-white font-medium ${
               loadToS4
                 ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'

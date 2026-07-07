@@ -52,6 +52,11 @@ class BillingDocumentSpineOrchestrator(BaseSpineOrchestrator):
             "REF_DOC":      tgt_ref,
             "REF_DOC_CA":   "M" if ref_type == "DLV" else "C",  # M=delivery, C=order
         }]
+        # External number preservation for billing docs: DOC_NUMBER on each
+        # BILLINGDATAIN row is the BAPI's external-number input. Honoured only
+        # when the billing type (FKART) is marked external range in VN01.
+        if self.preserve_source_numbers and src_doc:
+            item[0]["DOC_NUMBER"] = str(src_doc).zfill(10)
         payload: dict = {
             "BILLINGDATAIN": item,
             "_src_doc": src_doc,
