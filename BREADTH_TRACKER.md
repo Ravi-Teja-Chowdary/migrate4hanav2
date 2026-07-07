@@ -357,19 +357,73 @@ adjustments or real customer source data:
 These are honestly labelled BLOCKED in the coverage UI, with a link to
 PREREQ_RUNBOOK.md §B for the target-customizing subset.
 
-### The truthful "does it move everything?" answer
+### The truthful "does it move everything?" answer (post live-verify pass)
 
 Yes:
 - 135 objects extractable — every ECC table the tool knows about
 - 88 in DAG — full dependency-ordered load
-- 38 land immediately via live BAPI (Tier-1 verified)
-- 21 attempted via live BAPI (Tier-2, promoted to T1 on success)
-- 97 stream to MC/LTMOM templates for MC-native import on S/4
+- **43** land immediately via live BAPI (Tier-1 verified against CAL S4H 816 on 2026-07-07)
+- 7 attempted via live BAPI (Tier-2, promoted to T1 on success)
+- 106 stream to MC/LTMOM templates for MC-native import on S/4
 - 7 honestly blocked (transparent, with rationale)
 
 That's the honest breadth. What we don't do — and shouldn't claim — is
 guarantee every Tier-2 spine lands on the first try. Live verification
 is the follow-on work.
+
+## 2026-07-07 (evening) — Live-verify sweep against CAL S4H 816
+
+Ran `verify_tier2_local.py` against live S/4 with real BAPI calls (ledger
+short-circuit disabled, identity key-map for FK resolution). Attempted all
+21 Tier-2 spines. Results:
+
+### 5 Tier-1 promotions (live BAPI landed a record)
+
+- **HRMaster** — BAPI_HRMASTER_SAVE_REPL
+- **IncomingInvoice** — BAPI_INCOMINGINVOICE_CREATE
+- **Notification** — BAPI_ALM_NOTIF_CREATE
+- **RequisitionLegacy** — legacy PR path
+- **StockTransferOrder** — BAPI_PO_CREATE1 with DOC_TYPE=UB
+
+### 9 reclassified as MC-lane native (BAPI doesn't exist on this S/4)
+
+All returned `ABAPApplicationError: FU_NOT_FOUND` — the BAPI they call
+isn't shipped in this S/4 release. Migration Cockpit is the native path.
+
+- ControlPlan, MaintenanceItem, MasterRecipe, MeasurementPoint,
+  MovementType, ProjectStock, RebateAgreement, SamplingProcedure,
+  WarrantyClaim
+
+### 7 remaining Tier-2 (real BAPI exists — failure category tells us the fix)
+
+- **NetworkComponent** — generic "errors occurred during processing"; needs
+  SLG1 log detail from the S/4 side.
+- **Project** — "no target project profile discovered" — needs project
+  profile customizing on S/4 (prep-script closable via T-code OPSA).
+- **PurchaseOrder** — custom `cc_org` DQ gate needs BAPI-side field names
+  (PURCH_ORG, PUR_GROUP, PLANT, PO_UNIT, etc.). Spine-side row shape fix.
+- **Requirement** — "Period indicator cannot be converted"; date format
+  issue in the payload. Spine-side field-map fix.
+- **ScheduleAgreementMM** — "mandatory columns missing: BSART, LIFNR" —
+  spine's validate() requires more fields than DQ_GATES declares. Add to
+  the harness or fix the spine's validate contract.
+- **ServiceMaster** — "Service Category doesn't exist in T362" — prep
+  script needs to seed T362 (service categories) on target.
+- **SubcontractingPO** — "mandatory columns missing: BSART" — spine's
+  own required-cols check needs to align with DQ_GATES; same pattern
+  as ScheduleAgreementMM.
+
+Each of these is a 15-30 min per-object fix + re-verify. Not blockers.
+
+### Coverage math after this pass
+
+| Bucket | Before verify | After verify |
+|---|---:|---:|
+| Tier-1 (live-BAPI verified) | 38 | **43** |
+| Tier-2 (spine, awaiting verify) | 21 | 7 |
+| MC-lane (native template path) | 97 | 106 |
+| Blocked | 7 | 7 |
+| **Total addressable** | **163** | **163** |
 
 
 ## 2026-06-15 (afternoon) — +2 more Tier-1 (BOMItem, AccountingDocument), extra_payload scaffolder feature (27 → 37)

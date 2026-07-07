@@ -42,6 +42,11 @@ TIER_1_VERIFIED = {
     "OpenAR", "OpenAP",
     # 2026-07-07: SD family promoted via number-preservation lane
     "ReturnsOrderSD", "CreditMemoRequest", "SalesContract",
+    # 2026-07-07: promoted via verify_tier2_local.py against live CAL S/4
+    # (S4H 816). Each landed a real record — see tier2_verify_results.json
+    # for the returned target key.
+    "HRMaster", "IncomingInvoice", "Notification", "RequisitionLegacy",
+    "StockTransferOrder",
 }
 
 # Objects whose real path is a Migration Cockpit / LTMOM template (no live
@@ -71,6 +76,12 @@ PSEUDO_SPINE_MC_LANE = {
     "CustomerBankDetails", "ScheduleLines", "Shipment", "ProcessOrder",
     "AccountingDocHeader", "AccountingDocItem",
     "OpenSO",  # legacy name kept for extraction back-compat
+    # 2026-07-07: verified live that the BAPI these spines target does NOT
+    # exist on CAL S/4 816 (FU_NOT_FOUND / BAPI_...). Legitimate MC-lane
+    # objects — Migration Cockpit is the SAP-native path for them.
+    "ControlPlan", "MaintenanceItem", "MasterRecipe", "MeasurementPoint",
+    "MovementType", "ProjectStock", "RebateAgreement", "SamplingProcedure",
+    "WarrantyClaim",
 }
 
 # Objects blocked on target-side customizing that our prep script may or may
