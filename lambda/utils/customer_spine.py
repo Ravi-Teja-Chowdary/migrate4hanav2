@@ -66,10 +66,17 @@ class CustomerSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
+    # Customer is a facet of BusinessPartner under CVI — same BAPI, same
+    # external-number field. When PartnerGroup is external range on target
+    # S/4, the ECC KUNNR flows through as the S/4 BP/customer number.
+    external_number_field = "BUSINESSPARTNER"
+
     def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
         from base_spine_orchestrator import DISP_CREATED
         src_kunnr = payload.pop("_src_kunnr", "")
         role      = payload.pop("_role", "FLCU01")
+
+        self.maybe_preserve_source_number(payload, src_kunnr)
 
         # Step 1: create the BP shell
         resp = self.c.call("BAPI_BUPA_CREATE_FROM_DATA", **payload)

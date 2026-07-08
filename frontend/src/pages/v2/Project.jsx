@@ -350,6 +350,12 @@ export default function Project() {
         </Section>
       )}
 
+      {activeRun && (
+        <Section title="Fix &amp; retry — reprocess dead-letters">
+          <ReprocessPanel runId={activeRun} />
+        </Section>
+      )}
+
       <Section title="What this run will do">
         <LoadModeChooser
           loadToS4={loadToS4}
@@ -704,6 +710,166 @@ function MetricCard({ label, value, tone = 'neutral' }) {
     </div>
   );
 }
+
+// Fix-and-retry loop. Three-step operator flow the panel presents:
+//   1. Download either the pre-populated failures Excel or the blank template
+//      (with a sample row per object type)
+//   2. Correct offline in Excel (the format is deliberately Excel so anyone
+//      can fix rows without learning JSON / CLI)
+//   3. Upload the corrected workbook back — tool calls each spine's load_one
+//      for each row and returns a per-object summary
+function ReprocessPanel({ runId }) {
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState('');
+  const fileInputRef = React.useRef(null);
+
+  const dlTemplate = () => downloadFile(
+    api.reprocessTemplateUrl(runId),
+    `M4H_reprocess_template_${runId}.xlsx`);
+  const dlFailures = () => downloadFile(
+    api.reprocessFailuresUrl(runId),
+    `M4H_failures_${runId}.xlsx`);
+
+  const onFilePicked = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErr(''); setUploading(true); setResult(null);
+    try {
+      const r = await api.reprocessUpload(runId, file);
+      setResult(r);
+    } catch (e) { setErr(e.message); }
+    finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
+  };
+
+  return (
+    <div>
+      <div className="text-sm text-slate-600 mb-3">
+        Fix the ECC-data rows that dead-lettered on the last run, then push the
+        corrected records back into S/4HANA — no re-migration of the whole
+        object. Format is standard Excel so any team member can correct
+        without CLI or JSON knowledge.
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="p-3 border border-slate-200 rounded bg-slate-50">
+          <div className="text-xs uppercase tracking-wider text-slate-500 mb-1">
+            Step 1a
+          </div>
+          <div className="font-medium text-slate-700 mb-2">
+            Download failures Excel
+          </div>
+          <div className="text-xs text-slate-500 mb-3">
+            Every dead-letter row with what we had + <code>__failure_reason</code>{' '}
+            column so you know exactly what to fix.
+          </div>
+          <button
+            onClick={dlFailures}
+            className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium w-full"
+          >
+            Download failures.xlsx
+          </button>
+        </div>
+        <div className="p-3 border border-slate-200 rounded bg-slate-50">
+          <div className="text-xs uppercase tracking-wider text-slate-500 mb-1">
+            Step 1b
+          </div>
+          <div className="font-medium text-slate-700 mb-2">
+            Download blank template
+          </div>
+          <div className="text-xs text-slate-500 mb-3">
+            Blank sheets with column headers + a sample row per object type
+            so a fresh corrector knows the format.
+          </div>
+          <button
+            onClick={dlTemplate}
+            className="px-3 py-1.5 rounded border border-slate-300 hover:bg-slate-100 text-slate-700 text-sm font-medium w-full"
+          >
+            Download template.xlsx
+          </button>
+        </div>
+        <div className="p-3 border border-emerald-200 rounded bg-emerald-50">
+          <div className="text-xs uppercase tracking-wider text-emerald-700 mb-1">
+            Step 3
+          </div>
+          <div className="font-medium text-emerald-800 mb-2">
+            Upload corrected Excel
+          </div>
+          <div className="text-xs text-emerald-700 mb-3">
+            After Step 2 (correct offline), upload the workbook — tool loads
+            each row into S/4HANA.
+          </div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={onFilePicked}
+            disabled={uploading}
+            className="text-xs block w-full text-slate-700"
+          />
+        </div>
+      </div>
+
+      {uploading && (
+        <div className="mt-3 text-sm text-slate-600">Uploading + reprocessing…</div>
+      )}
+      {err && (
+        <div className="mt-3 text-sm bg-red-50 border border-red-200 text-red-800 p-2 rounded">
+          {err}
+        </div>
+      )}
+      {result && result.summary && (
+        <div className="mt-4 border border-slate-200 rounded overflow-hidden">
+          <div className="bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 border-b border-slate-200">
+            Reprocess result — {result.summary.attempted} rows attempted
+          </div>
+          <div className="px-3 py-2 text-sm text-slate-600 grid grid-cols-4 gap-3">
+            <div>
+              <div className="text-xs text-slate-500">Attempted</div>
+              <div className="text-lg font-semibold text-slate-800">{result.summary.attempted}</div>
+            </div>
+            <div>
+              <div className="text-xs text-emerald-600">Created</div>
+              <div className="text-lg font-semibold text-emerald-700">{result.summary.created}</div>
+            </div>
+            <div>
+              <div className="text-xs text-blue-600">Matched existing</div>
+              <div className="text-lg font-semibold text-blue-700">{result.summary.matched}</div>
+            </div>
+            <div>
+              <div className="text-xs text-red-600">Still failed</div>
+              <div className="text-lg font-semibold text-red-700">{result.summary.still_failed}</div>
+            </div>
+          </div>
+          {result.per_object && (
+            <table className="w-full text-xs border-t border-slate-200">
+              <thead className="bg-slate-50 text-left">
+                <tr>
+                  <th className="px-2 py-1.5">Object</th>
+                  <th className="px-2 py-1.5">Attempted</th>
+                  <th className="px-2 py-1.5">Created</th>
+                  <th className="px-2 py-1.5">Matched</th>
+                  <th className="px-2 py-1.5">Still failed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(result.per_object).map(([obj, s]) => (
+                  <tr key={obj} className="border-t border-slate-100">
+                    <td className="px-2 py-1 font-mono">{obj}</td>
+                    <td className="px-2 py-1">{s.attempted}</td>
+                    <td className="px-2 py-1 text-emerald-700">{s.created}</td>
+                    <td className="px-2 py-1 text-blue-700">{s.matched}</td>
+                    <td className="px-2 py-1 text-red-700">{s.still_failed}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function ErrorBucketsList({ buckets, runId }) {
   return (

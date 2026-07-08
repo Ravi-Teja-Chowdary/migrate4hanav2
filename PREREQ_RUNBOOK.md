@@ -305,6 +305,160 @@ the client the ledger for provenance.
 Then in S/4 GUI: `VA03` → enter the number that came back from the ledger
 → order opens.
 
+## Section D — Universal source-key preservation (mandatory for enterprise migrations)
+
+The client's ECC Customer 100001 MUST become S/4 Customer 100001. Same for
+Material, Vendor, Sales Order, PO, everything. Number preservation is not
+a per-object toggle — it needs external number-range configuration across
+every number-range object the migration touches.
+
+The auto-generated prep script now emits ABAP to configure this at once.
+It's part of the same `ZM4H_PREP_<runId>.abap` file. Sections:
+
+**D.1. External number range intervals (`A1` covering 1..9,999,999,999)** —
+created on every relevant SNRO object:
+- `RV_BELEG` — SD documents (VBAK, LIKP, VBRK)
+- `BELEG_A` — MM documents (EKKO / purchase orders, agreements, contracts)
+- `BU_PARTNER` — Business Partner (BUT000 — Customer + Vendor derived)
+- `MATBELEG` — Material Master
+- `ANLAGENNR` — Fixed Asset
+- `AUFTRAG` — Internal Order / PP order
+- `EQUIPMENT` — Equipment master
+- `IFLOTX` — Functional Location
+
+**D.2. Doc-type and account-group external-range flags** — updated to point at
+interval A1:
+- `TVAK.NUMKE` — sales doc types (VA / TA / etc.)
+- `TVLK.NUMKE` — delivery types (LF / etc.)
+- `TVFK.NUMKE` — billing types (F2 / etc.)
+- `T161.NUMKE` — MM doc types (NB / UB / etc.)
+- `T077K.NUMKR` — customer account groups
+- `T077Y.NUMKR` — vendor account groups
+- `TB003.NUMKR` — BP groupings (this is what makes BUT000 respect the
+  external BUSINESSPARTNER input)
+- `T134.NUMKR` — material types (FERT, HALB, ROH, etc.)
+- `T003O.NUMKE` — order types (PP/PS/PM/IO)
+- `T093B.NUMKR` — asset accounting
+
+**D.3. Wizard toggle** — tick *Preserve source document numbers* in the
+project page. When on, every spine that inherits from
+`BaseSpineOrchestrator` and declares an `external_number_field` passes
+the source key into that BAPI field. Silent-fallback: if a specific
+doc type is still internal-range, the BAPI keeps its own number without
+erroring; the DDB key-map still records the source→target pair.
+
+**Effect after applying D.1-D.3**: `SE16 → KNA1 → KUNNR = 100001` on your
+S/4 shows the ECC customer with the exact same number. Same for
+Material, Vendor, Sales Order, PO, Delivery, Invoice.
+
+## Section E — Enabling automatic ABAP execution from migrate4hana
+
+`RFC_ABAP_INSTALL_AND_RUN` was deprecated from SAP NetWeaver 7.5 onward and
+is removed on most S/4 tenants. Trying to re-enable it is not the right
+path. The tool falls back to the XBP batch-job mechanism which works on
+every S/4 release from 4.6 onward.
+
+### E.1. One-time SAP-side setup for XBP batch-job auto-run
+
+Ask your Basis team (or do it yourself with SAP_ALL):
+
+1. **Create wrapper program** `Z_M4H_JOB_RUNNER` in `SE38`:
+
+   ```abap
+   REPORT z_m4h_job_runner.
+
+   PARAMETERS: p_srcpth TYPE string LOWER CASE DEFAULT
+                        '/usr/sap/trans/m4h/prep.abap'.
+
+   DATA: lv_source TYPE string,
+         lt_lines  TYPE STANDARD TABLE OF string.
+
+   OPEN DATASET p_srcpth FOR INPUT IN TEXT MODE ENCODING UTF-8.
+   IF sy-subrc <> 0.
+     WRITE: / 'Source file not found:', p_srcpth. STOP.
+   ENDIF.
+
+   DO.
+     READ DATASET p_srcpth INTO DATA(lv_line).
+     IF sy-subrc <> 0. EXIT. ENDIF.
+     APPEND lv_line TO lt_lines.
+   ENDDO.
+   CLOSE DATASET p_srcpth.
+
+   GENERATE SUBROUTINE POOL lt_lines NAME DATA(lv_pool)
+                                     MESSAGE DATA(lv_msg)
+                                     LINE DATA(lv_line_no)
+                                     WORD DATA(lv_word).
+   IF sy-subrc <> 0.
+     WRITE: / 'Compile error at line', lv_line_no, ':', lv_msg.
+     STOP.
+   ENDIF.
+
+   PERFORM main IN PROGRAM (lv_pool) IF FOUND.
+   WRITE: / 'Runner: source executed successfully.'.
+   ```
+
+   Save. Local Change transport is OK for demo.
+
+2. **Grant the MIGRATE_ADMI user** authorization for XBP:
+   - Transaction `PFCG` → find role `SAP_BC_BATCH_ADMIN` (or a copy of it)
+   - Assigned auth objects must include `S_RFC` on `SXBP` + `SXBP_EXT`,
+     `S_BTCH_ADM = Y`, `S_LOG_COM` for `Z_M4H_JOB_RUNNER`.
+   - Assign to MIGRATE_ADMI in `SU01`.
+
+3. **Grant filesystem write** so migrate4hana can drop the ABAP source file:
+   - Create directory `/usr/sap/trans/m4h/` on the S/4 host, owned by
+     `sidadm`, mode 775.
+   - migrate4hana uses `SXPG_COMMAND_EXECUTE` (or SFTP if you prefer) to
+     deposit `prep.abap` there before scheduling the job.
+
+Once these three are done, the wizard's **Auto-run on S/4 now** button
+lights up. The tool schedules a batch job, polls SM37 for completion,
+reads the spool, and shows you the WRITE output — no SE38 clicks.
+
+### E.2. Manual SE38 fallback (always works)
+
+Skip Section E.1 if you'd rather review each ABAP before it runs:
+
+1. In the wizard's *Prepare S/4 target* panel, click **Copy to clipboard**.
+2. `SE38` in S/4 → new program `ZM4H_PREP_<runId>` → paste → save
+   (Local Change) → `F8` execute.
+3. Come back to the wizard, tick *I have run the prep script*, click
+   *Start migration + load to S/4HANA*.
+
+Takes ~30 sec longer than auto-run but requires zero SAP-side setup.
+
+## Section F — Failed-records reprocessing loop
+
+Every enterprise migration has records that need human correction. The
+wizard's *Fix & retry* panel (appears once a run finishes) supports the
+end-to-end loop:
+
+1. **Download failures Excel** — every dead-lettered row, populated with
+   what we had, plus `__failure_reason` and `__failure_code` columns
+   showing exactly what needs fixing.
+2. **OR Download blank template** — for teams where the corrector doesn't
+   want to see the raw failures but wants to add new corrected rows from
+   scratch. Blank sheets with column headers + one italic sample row per
+   object type as a format reference.
+3. **Correct in Excel** — offline, standard Excel, any team member. Fix
+   blank NAME fields, replace bad material groups, fill in missing
+   PROFIT_CTR, whatever the failure reason says.
+4. **Upload corrected Excel** — tool parses the workbook (multi-sheet,
+   one per object type), calls each spine's `load_one(row)` for every
+   row, records outcomes in the key-map registry.
+5. **Review per-object result** — summary chip shows Attempted / Created
+   / Matched / Still-failed. Still-failed rows are re-emitted to a new
+   dead-letter file so the loop continues until zero.
+
+Excel schema (per sheet):
+- Row 1: column headers (source-key first, then DQ gates, then FIELD_MAPS
+  sources, then item fields)
+- Row 2: sample row in italic gray — delete before uploading
+- Row 3+: your data
+- Two trailing columns (`__failure_reason`, `__failure_code`) present in
+  the failures export only — informational; ignored on upload
+
 ## What NOT to do
 
 - **Don't disable the data-quality gate** to force those 377 records through.

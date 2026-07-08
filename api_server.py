@@ -47,9 +47,9 @@ from typing import List, Optional
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from fastapi import FastAPI, Request, HTTPException, Depends, Header
+from fastapi import FastAPI, Request, HTTPException, Depends, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from pydantic import BaseModel
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -2175,6 +2175,150 @@ async def pipeline_lift_and_shift_stages():
                             for sid, phase, mod, extra in _stages]}
     except Exception as e:
         return {"error": str(e), "stages": []}
+
+
+# =============================================================================
+# ROUTES - FAILED-RECORDS REPROCESSING LOOP
+# =============================================================================
+# The wizard offers three actions on a run's dead-letter panel:
+#   GET  /api/runs/{id}/reprocess/template?objects=A,B  - blank Excel with
+#        columns + sample row per object type
+#   GET  /api/runs/{id}/reprocess/failures              - Excel of actual
+#        dead-lettered rows populated for correction
+#   POST /api/runs/{id}/reprocess/upload                - upload corrected
+#        Excel, tool calls each spine.load_one, returns summary
+def _run_dir(run_id: str) -> str:
+    d = os.path.join(PROJECT_DIR, "local-staging", "m4h-local",
+                     "runs", run_id)
+    return d
+
+
+def _failed_records(run_id: str) -> list:
+    p = os.path.join(_run_dir(run_id), "data-migrator", "dead-letter",
+                     "failed_records.json")
+    if not os.path.isfile(p):
+        return []
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else data.get("records", []) or []
+    except Exception:
+        return []
+
+
+@app.get("/api/runs/{run_id}/reprocess/template",
+         dependencies=[Depends(require_auth)])
+async def reprocess_template(run_id: str, objects: Optional[str] = None):
+    """Emit an Excel template with blank rows + a sample row per object
+    type. If `objects` is passed as a comma-separated list, only those
+    objects get a sheet; otherwise all objects that show up in the run's
+    failed_records.json are included."""
+    try:
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from reprocess_manager import write_template_workbook  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"reprocess_manager import: {e}")
+
+    if objects:
+        obj_types = [o.strip() for o in objects.split(",") if o.strip()]
+    else:
+        obj_types = sorted({(r.get("object") or "") for r in _failed_records(run_id)
+                              if r.get("object")}) or ["Customer", "Material"]
+
+    try:
+        xlsx = write_template_workbook(obj_types)
+    except Exception as e:
+        raise HTTPException(status_code=500,
+                             detail=f"template generation failed: {e}")
+    return Response(content=xlsx,
+                     media_type=("application/vnd.openxmlformats-officedocument"
+                                  ".spreadsheetml.sheet"),
+                     headers={"Content-Disposition":
+                                 f'attachment; filename="ZM4H_reprocess_template_{run_id}.xlsx"'})
+
+
+@app.get("/api/runs/{run_id}/reprocess/failures",
+         dependencies=[Depends(require_auth)])
+async def reprocess_failures(run_id: str):
+    """Excel with the run's actual failed rows populated for correction."""
+    try:
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from reprocess_manager import write_failures_workbook  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"reprocess_manager import: {e}")
+    failed = _failed_records(run_id)
+    if not failed:
+        raise HTTPException(status_code=404,
+                             detail=f"no dead-letter records for {run_id}")
+    try:
+        xlsx = write_failures_workbook(failed)
+    except Exception as e:
+        raise HTTPException(status_code=500,
+                             detail=f"failures workbook generation failed: {e}")
+    return Response(content=xlsx,
+                     media_type=("application/vnd.openxmlformats-officedocument"
+                                  ".spreadsheetml.sheet"),
+                     headers={"Content-Disposition":
+                                 f'attachment; filename="ZM4H_failures_{run_id}.xlsx"'})
+
+
+@app.post("/api/runs/{run_id}/reprocess/upload",
+          dependencies=[Depends(require_auth)])
+async def reprocess_upload(run_id: str, file: UploadFile = File(...)):
+    """Accept an uploaded corrected Excel, call each spine's load_one for
+    every row, return a per-object summary."""
+    try:
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from reprocess_manager import parse_correction_workbook, reprocess_rows  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"reprocess_manager import: {e}")
+
+    conns = _load_connections()
+    s4_conf = conns.get("s4hana") or {}
+    if not (s4_conf.get("ashost") and _s4_passwd):
+        raise HTTPException(status_code=400,
+                             detail="No active S/4 connection. Save + test S/4 first.")
+    try:
+        import pyrfc  # type: ignore
+    except ImportError:
+        raise HTTPException(status_code=500, detail="pyrfc unavailable on server.")
+
+    body = await file.read()
+    if not body:
+        raise HTTPException(status_code=400, detail="empty upload")
+    try:
+        corrections = parse_correction_workbook(body)
+    except Exception as e:
+        raise HTTPException(status_code=400,
+                             detail=f"failed to parse Excel: {e}")
+    if not corrections:
+        raise HTTPException(status_code=400,
+                             detail="no data rows in uploaded workbook")
+
+    conn_params = {"ashost": s4_conf["ashost"], "sysnr": s4_conf["sysnr"],
+                    "client": s4_conf["client"], "user": s4_conf["user"],
+                    "passwd": _s4_passwd, "lang": "EN"}
+    if s4_conf.get("saprouter"):
+        conn_params["saprouter"] = s4_conf["saprouter"]
+
+    try:
+        tconn = pyrfc.Connection(**conn_params)
+    except Exception as e:
+        raise HTTPException(status_code=502,
+                             detail=f"S/4 connection failed: {type(e).__name__}: {e}")
+    try:
+        result = reprocess_rows(tconn, corrections,
+                                 preserve_source_numbers=bool(int(os.environ.get(
+                                     "M4H_PRESERVE_SRC_NUMBERS", "0"))))
+    finally:
+        tconn.close()
+
+    # Persist alongside the run so operators can re-download or audit.
+    out_dir = os.path.join(_run_dir(run_id), "reprocess")
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "last_result.json"), "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, default=str)
+    return {"run_id": run_id, **result}
 
 
 # =============================================================================

@@ -71,10 +71,19 @@ class BusinessPartnerSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
+    # External-number preservation: BAPI_BUPA_CREATE_FROM_DATA has a
+    # BUSINESSPARTNER import that S/4 uses as the target BP number when the
+    # PARTNERGROUP maps to an external number range in customizing (TB003).
+    # If the group is internal, S/4 ignores this input; if external, we
+    # inherit the ECC BPARTNER cleanly.
+    external_number_field = "BUSINESSPARTNER"
+
     def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED
         src_bp = payload.pop("_src_bp", "")
         cat = payload.pop("_category", "2")
+
+        self.maybe_preserve_source_number(payload, src_bp)
 
         resp = self.c.call("BAPI_BUPA_CREATE_FROM_DATA", **payload)
         ret = resp.get("RETURN") or []

@@ -181,6 +181,11 @@ class PurchaseOrderSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
+    # BAPI_PO_CREATE1 exposes PURCHASEORDER as the external number input.
+    # Honoured when the purchase-doc type (BSART -> TVKO NUMKE) is set to
+    # an external number range. Otherwise silently ignored.
+    external_number_field = "PURCHASEORDER"
+
     def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_CREATED
         if payload.get("_no_supplier"):
@@ -190,6 +195,8 @@ class PurchaseOrderSpineOrchestrator(BaseSpineOrchestrator):
         src_vendor = payload.pop("_src_vendor", "")
         tgt_vendor = payload.pop("_tgt_vendor", "")
         vdisp      = payload.pop("_vdisp", "registry")
+
+        self.maybe_preserve_source_number(payload, src_po)
 
         resp = self.c.call("BAPI_PO_CREATE1", **payload)
         ret = resp.get("RETURN") or []

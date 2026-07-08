@@ -61,10 +61,14 @@ class VendorSpineOrchestrator(BaseSpineOrchestrator):
             payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
         return payload
 
+    external_number_field = "BUSINESSPARTNER"
+
     def call_bapi(self, payload: dict) -> tuple[Optional[str], list, Optional[str]]:
         from base_spine_orchestrator import DISP_CREATED
         src_lifnr = payload.pop("_src_lifnr", "")
         role      = payload.pop("_role", "FLVN01")
+
+        self.maybe_preserve_source_number(payload, src_lifnr)
 
         # Step 1: BP shell
         resp = self.c.call("BAPI_BUPA_CREATE_FROM_DATA", **payload)

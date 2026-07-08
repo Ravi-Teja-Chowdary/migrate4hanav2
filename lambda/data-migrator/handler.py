@@ -1200,6 +1200,24 @@ def lambda_handler(event, context):
                         loader.cc_org = _cfg.get("co", {})
                         loader.asset_org = _cfg.get("asset", {})
                         discovered_config = _cfg["summary"]
+                        # Thread FI org into env vars so the OpenAR / OpenAP
+                        # spines can auto-populate their cc_org without the
+                        # loader wiring cc_org= at every construction site.
+                        # (Some run paths bypass the loader and instantiate
+                        # via get_spine() alone — env fallback covers them.)
+                        _fi = _cfg.get("fi") or {}
+                        for env_key, fi_key in (
+                            ("M4H_FI_COMP_CODE",   "COMP_CODE"),
+                            ("M4H_FI_CLEARING_GL", "CLEARING_GL"),
+                            ("M4H_FI_PROFIT_CTR",  "PROFIT_CTR"),
+                            ("M4H_FI_CUST_RECON",  "CUST_RECON"),
+                            ("M4H_FI_VEND_RECON",  "VEND_RECON"),
+                        ):
+                            v = _fi.get(fi_key) or ""
+                            if v:
+                                os.environ[env_key] = str(v)
+                        os.environ.setdefault("M4H_FI_USERNAME",
+                                              (loader.bp_org or {}).get("username", "MIGRATE_ADMI"))
                     except Exception as e:
                         log_stage_event(run_id, "data-migrator", "config_discovery_skipped", {"reason": str(e)[:160]})
                 log_stage_event(run_id, "data-migrator", "load_enabled",

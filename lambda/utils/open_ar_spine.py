@@ -55,6 +55,23 @@ class OpenARSpineOrchestrator(BaseSpineOrchestrator):
     def __init__(self, *args, cc_org: Optional[dict] = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.cc_org = dict(cc_org or {})
+        # Auto-populate cc_org from env vars set by the data-migrator handler
+        # when it discovered target-side config. Prevents "cc_org missing"
+        # dead-letters when the wrapper forgets to pass cc_org=... at
+        # construction. Env keys mirror discovered_config fi block:
+        #   M4H_FI_COMP_CODE      -> COMP_CODE
+        #   M4H_FI_CLEARING_GL    -> CLEARING_GL
+        #   M4H_FI_PROFIT_CTR     -> PROFIT_CTR
+        #   M4H_FI_CUST_RECON     -> CUST_RECON (optional)
+        import os as _os
+        for env_key, cc_key in (
+            ("M4H_FI_COMP_CODE",   "COMP_CODE"),
+            ("M4H_FI_CLEARING_GL", "CLEARING_GL"),
+            ("M4H_FI_PROFIT_CTR",  "PROFIT_CTR"),
+            ("M4H_FI_CUST_RECON",  "CUST_RECON"),
+            ("M4H_FI_USERNAME",    "USERNAME"),
+        ):
+            self.cc_org.setdefault(cc_key, _os.environ.get(env_key, ""))
 
     def validate(self, row: dict) -> Optional[str]:
         if not (row.get("BELNR") or "").strip():

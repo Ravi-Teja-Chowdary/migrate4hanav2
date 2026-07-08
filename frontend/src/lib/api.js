@@ -181,6 +181,34 @@ export const api = {
     apiFetch('/api/pipeline/lift-and-shift',
       { method: 'POST', body: JSON.stringify(payload) }),
 
+  // ── Failed-records reprocessing loop ──
+  // Downloads are handled via downloadFile() from this module — those URLs
+  // return .xlsx blobs. Upload uses a plain fetch with multipart form data.
+  reprocessTemplateUrl: (run_id, objects) => {
+    const q = objects && objects.length
+      ? `?objects=${encodeURIComponent(objects.join(','))}` : '';
+    return `/api/runs/${encodeURIComponent(run_id)}/reprocess/template${q}`;
+  },
+  reprocessFailuresUrl: (run_id) =>
+    `/api/runs/${encodeURIComponent(run_id)}/reprocess/failures`,
+  reprocessUpload: async (run_id, file) => {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    const url = `${API_BASE}/api/runs/${encodeURIComponent(run_id)}/reprocess/upload`;
+    const token = getToken();
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      let msg = res.statusText;
+      try { msg = (await res.json()).detail || msg; } catch {}
+      throw new Error(msg);
+    }
+    return res.json();
+  },
+
   // ── Migration coverage report ──
   // Full spine catalog with tier badges (T1/T2/MC/BLOCKED). Wizard uses
   // this to render the honest breadth panel.

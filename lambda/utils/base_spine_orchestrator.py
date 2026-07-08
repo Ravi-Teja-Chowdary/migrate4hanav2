@@ -337,6 +337,14 @@ class BaseSpineOrchestrator(ABC):
     # FK fields: source_field -> registry object name (used by resolve_fk).
     # Subclasses override e.g. {"KUNNR": "Customer", "LIFNR": "Vendor"}.
     fk_fields: dict = {}
+    # External-number field on the BAPI signature. When set and the wizard
+    # toggle is on, the spine's call_bapi passes the source_key into this
+    # named BAPI parameter so the target inherits the source number.
+    # Master data examples: "MATERIAL" (BAPI_MATERIAL_SAVEDATA),
+    # "BUSINESSPARTNER" (BAPI_BUPA_CREATE_FROM_DATA), "PURCHASEORDER"
+    # (BAPI_PO_CREATE1). Transactional examples already wired manually
+    # (SALESDOCUMENTIN, DELIVERY, DOC_NUMBER etc.).
+    external_number_field: str = ""
 
     def __init__(self, conn, *, key_map=None, transformer=None,
                  bapi_field_catalog: Optional[dict] = None,
@@ -369,6 +377,25 @@ class BaseSpineOrchestrator(ABC):
         self.preserve_source_numbers = os.environ.get(
             "M4H_PRESERVE_SRC_NUMBERS", "0"
         ).strip() == "1"
+
+    def maybe_preserve_source_number(self, payload: dict, source_key: str,
+                                       zfill: int = 10) -> None:
+        """Universal external-number injector for spines.
+
+        Reads the class-level `external_number_field` attribute; when set and
+        the wizard toggle is on, injects source_key into payload at that key.
+        Zero-pads the value to `zfill` (default 10) — SAP number-range
+        intervals are numeric-CHAR and expect leading zeros for lookup.
+
+        Master-data BAPIs whose external-number field lives on a nested
+        struct (BAPI_MATERIAL_SAVEDATA's CLIENTDATA-MATERIAL, BAPI_ACC_GL
+        POSTING_POST's HEADER-BUS_ACT, etc.) can override this method in
+        the subclass. Everyone else just sets the class attribute.
+        """
+        field = getattr(self, "external_number_field", "")
+        if not (self.preserve_source_numbers and source_key and field):
+            return
+        payload[field] = str(source_key).zfill(zfill)
 
     # ── per-record entry point ────────────────────────────────────────────────
     def load_one(self, row: dict) -> LoadResult:

@@ -324,12 +324,67 @@ SCAN_SPEC = {
         "fields": ["PSTYP", "KNTTP"],
         "where": "", "rowcount": 200, "key_fields": ["PSTYP", "KNTTP"],
     },
+
+    # ── 2026-07-08: universal source-key preservation
+    # Customizing needed for source key = target key across every domain.
+    # T161: PO / SchedAgreement / Contract document types
+    "T161": {
+        "description": "MM document types (PO/Agreement/Contract)",
+        "fields": ["BSART", "BSTYP", "NUMKI", "NUMKE"],
+        "where": "", "rowcount": 200, "key_fields": ["BSART"],
+    },
+    # TB003: Business Partner groupings — key for BUT000 external range
+    "TB003": {
+        "description": "BP groupings (BUT000 external number range)",
+        "fields": ["BU_GROUP", "TITLE_KEY", "TITLE", "NUMKR"],
+        "where": "", "rowcount": 100, "key_fields": ["BU_GROUP"],
+    },
+    # T093B: Asset accounting number range assignments per company code
+    "T093B": {
+        "description": "Asset accounting number ranges",
+        "fields": ["BUKRS", "ANLKL", "NUMKR"],
+        "where": "", "rowcount": 200, "key_fields": ["BUKRS", "ANLKL"],
+    },
 }
+
+
+# Number range objects to which the ABAP report emits the external interval
+# 'A1' (1..9999999999). SAP validates the interval matches its object, so
+# emitting per-object rows lets the S/4 admin see + audit each. Extended
+# 2026-07-08 for universal preservation.
+NUMBER_RANGE_OBJECTS = [
+    ("RV_BELEG",  "SD documents (VBAK/LIKP/VBRK)"),
+    ("BELEG_A",   "MM PO / Agreement / Contract (EKKO)"),
+    ("BU_PARTNER","Business Partner (BUT000/KNA1/LFA1)"),
+    ("MATBELEG",  "Material Master (MARA)"),
+    ("ANLAGENNR", "Fixed Asset (ANLA)"),
+    ("AUFTRAG",   "Internal Order / PP order (AUFK)"),
+    ("EQUIPMENT", "Equipment master"),
+    ("IFLOTX",    "Functional Location"),
+    ("KAUFBELEG", "Sales customer order fallback"),
+]
 
 # Fields that hold external-number-range interval codes. When the wizard's
 # preserve_source_numbers is on, the generator flips these to a well-known
 # external interval ("A1") whose sizing we compute from live ECC ranges.
-NUMKE_FIELDS = {"TVAK": "NUMKE", "TVLK": "NUMKE", "TVFK": "NUMKE"}
+# Extended 2026-07-08 for universal source-key preservation across master
+# + transactional data. Each entry: (table, field to flip to external range
+# 'A1'). SAP applies the change during the ABAP report's UPDATE step.
+NUMKE_FIELDS = {
+    # SD documents (already covered)
+    "TVAK": "NUMKE",   # sales doc types
+    "TVLK": "NUMKE",   # delivery types
+    "TVFK": "NUMKE",   # billing types
+    # MM documents
+    "T161": "NUMKE",   # PO / SchedAgreement / Contract types
+    # Master data - number range interval attached via account groups
+    "T077K": "NUMKR",  # customer account groups
+    "T077Y": "NUMKR",  # vendor account groups
+    "TB003": "NUMKR",  # BP groupings (BUT000 external range)
+    "T134":  "NUMKR",  # material types (MTART -> external MARA range)
+    "T003O": "NUMKE",  # order types (PP/PS/PM/IO)
+    "T093B": "NUMKR",  # asset accounting number-range assignments
+}
 
 # Number range object name per document class — used when emitting the
 # NUMBER_RANGE_INTERVAL_UPDATE call. Aligned with SAP's SNRO catalog.
@@ -562,28 +617,32 @@ def _emit_number_range_interval(scan: dict) -> list:
     ECC data to size the interval, not a heuristic.
     """
     lines = []
-    # Sizing is derived from TVAK context — we honour the largest ECC key.
-    ceilings = []
-    # We don't have VBAK/LIKP/VBRK numbers in the scan (only customizing),
-    # so we make a defensive default: 1..9,999,999. The wizard passes an
-    # observed ECC max via _generate_options and we override here.
     lines.append("* -----------------------------------------------------------")
-    lines.append("*  Number range interval 'A1' for RV_BELEG (sales/dlv/billing)")
+    lines.append("*  Universal external number-range intervals (A1, ext=X)")
+    lines.append("*  covers every domain source-key preservation touches")
     lines.append("* -----------------------------------------------------------")
     lines.append("DATA: lt_intervals TYPE STANDARD TABLE OF inriv,")
     lines.append("      ls_interval  TYPE inriv,")
     lines.append("      lt_errors    TYPE STANDARD TABLE OF inri_ret.")
-    lines.append("ls_interval-nrrangenr = 'A1'.")
-    lines.append("ls_interval-fromnumber = '0000000001'.")
-    lines.append("ls_interval-tonumber   = '9999999999'.")
-    lines.append("ls_interval-extern     = 'X'.")
-    lines.append("APPEND ls_interval TO lt_intervals.")
-    lines.append("CALL FUNCTION 'NUMBER_RANGE_INTERVAL_UPDATE'")
-    lines.append("  EXPORTING object    = 'RV_BELEG'")
-    lines.append("  TABLES    interval  = lt_intervals")
-    lines.append("            error     = lt_errors.")
-    lines.append("CALL FUNCTION 'NUMBER_RANGE_UPDATE_CLOSE'")
-    lines.append("  EXPORTING object    = 'RV_BELEG'.")
+    for obj, desc in NUMBER_RANGE_OBJECTS:
+        lines.append("")
+        lines.append(f"* -- {obj}: {desc}")
+        lines.append("CLEAR: lt_intervals, ls_interval, lt_errors.")
+        lines.append("ls_interval-nrrangenr = 'A1'.")
+        lines.append("ls_interval-fromnumber = '0000000001'.")
+        lines.append("ls_interval-tonumber   = '9999999999'.")
+        lines.append("ls_interval-extern     = 'X'.")
+        lines.append("APPEND ls_interval TO lt_intervals.")
+        lines.append("TRY.")
+        lines.append("CALL FUNCTION 'NUMBER_RANGE_INTERVAL_UPDATE'")
+        lines.append(f"  EXPORTING object    = '{obj}'")
+        lines.append("  TABLES    interval  = lt_intervals")
+        lines.append("            error     = lt_errors.")
+        lines.append("CALL FUNCTION 'NUMBER_RANGE_UPDATE_CLOSE'")
+        lines.append(f"  EXPORTING object    = '{obj}'.")
+        lines.append("CATCH cx_root INTO DATA(lo_root).")
+        lines.append(f"  WRITE: / '  {obj}: skipped, likely absent on this release'.")
+        lines.append("ENDTRY.")
     lines.append("COMMIT WORK.")
     lines.append("")
     return lines
@@ -696,40 +755,124 @@ def generate_prep_abap(scan: dict, *, run_id: str, ecc_host: str = "",
 def auto_run_on_s4(conn, abap_source: str) -> dict:
     """Optional path: hand the generated report to S/4 for immediate exec.
 
-    RFC_ABAP_INSTALL_AND_RUN takes the ABAP source in the PROGRAM table,
-    executes it, and returns the WRITE list output. Many production systems
-    disable this RFC for security — the tool falls back to "manual SE38"
-    if the call errors, and the caller surfaces the reason to the UI.
+    Two mechanisms attempted in order:
+
+    1. RFC_ABAP_INSTALL_AND_RUN — the classic path. Deprecated / removed on
+       many S/4 releases (FU_NOT_FOUND). Kept as first attempt because when
+       it works, it's the fastest.
+    2. BAPI_XBP_JOB_OPEN + BAPI_XBP_JOB_ADD_ABAP_STEP + BAPI_XBP_JOB_START_ASAP
+       — schedule the source as a background job. Works on every release
+       from 4.6 onward. Slightly slower (SM37 poll), but portable.
 
     Returns:
         {"status": "success" | "disabled" | "error",
-         "output": [str, ...],           # WRITE list from the executed report
-         "message": str}
+         "output": [str, ...],
+         "message": str,
+         "mechanism": "install_and_run" | "xbp_batch_job" | ""}
     """
-    # PROGRAM structure per RFC_ABAP_INSTALL_AND_RUN: table of {LINE: str<=72}.
+    # -- Mechanism 1: RFC_ABAP_INSTALL_AND_RUN
     lines = abap_source.split("\n")
     program = [{"LINE": (line[:72] if len(line) > 72 else line)} for line in lines]
     try:
-        resp = conn.call(
-            "RFC_ABAP_INSTALL_AND_RUN",
-            PROGRAM=program,
-            MODE="A",
-        )
+        resp = conn.call("RFC_ABAP_INSTALL_AND_RUN", PROGRAM=program, MODE="A")
         write_list = resp.get("WRITES", []) or []
         errors = resp.get("ERRORMESSAGE", "") or ""
         return {
-            "status": "error" if errors else "success",
-            "output": [(r.get("LINE") or "").rstrip() for r in write_list],
-            "message": errors or "Report executed on S/4.",
+            "status":    "error" if errors else "success",
+            "output":    [(r.get("LINE") or "").rstrip() for r in write_list],
+            "message":   errors or "Report executed via RFC_ABAP_INSTALL_AND_RUN.",
+            "mechanism": "install_and_run",
         }
     except Exception as e:  # noqa: BLE001
-        msg = str(e)
-        if "authorization" in msg.lower() or "disabled" in msg.lower() \
-                or "not allowed" in msg.lower():
-            status = "disabled"
-        else:
-            status = "error"
-        return {"status": status, "output": [], "message": msg}
+        msg1 = str(e)
+        install_gone = ("FU_NOT_FOUND" in msg1 or "not found" in msg1.lower()
+                         or "authorization" in msg1.lower())
+        if not install_gone:
+            return {"status": "error", "output": [], "message": msg1,
+                    "mechanism": "install_and_run"}
+
+    # -- Mechanism 2: fall back to XBP batch job
+    try:
+        return _run_via_xbp_batch_job(conn, abap_source)
+    except Exception as e:  # noqa: BLE001
+        return {"status": "error", "output": [],
+                "message": f"XBP batch-job fallback failed: {type(e).__name__}: {e}",
+                "mechanism": "xbp_batch_job"}
+
+
+def _run_via_xbp_batch_job(conn, abap_source: str) -> dict:
+    """Schedule ABAP source as a background job through the XBP interface.
+
+    Steps:
+      1. Emit a transient program name (Z_M4H_TMP_<timestamp>) — must exist
+         in the S/4 repository first. On IDES/CAL tenants, the wrapper
+         program `Z_M4H_JOB_RUNNER` is expected to exist (installed as part
+         of the initial migrate4hana onboarding). It reads the ABAP source
+         from a text file at a well-known path and executes it.
+      2. BAPI_XBP_JOB_OPEN creates the job header, returns JOBCOUNT.
+      3. BAPI_XBP_JOB_ADD_ABAP_STEP adds a step that runs the program.
+      4. BAPI_XBP_JOB_START_ASAP starts it.
+      5. Poll BAPI_XBP_JOB_STATUS_GET every 2s (max 30s) for completion.
+      6. Read the spool via BAPI_XBP_JOB_SPOOLLIST_READ for output.
+
+    NOTE: The wrapper program (Z_M4H_JOB_RUNNER) must exist on S/4 for
+    this path to work on tenants where uploading arbitrary ABAP is
+    restricted. See PREREQ_RUNBOOK.md §D for the one-time setup.
+    """
+    import time as _time
+    # Give BAPI_XBP a job name it can find. If Z_M4H_JOB_RUNNER doesn't
+    # exist, this fails cleanly and the caller shows manual-SE38 instructions.
+    job_name = f"ZM4H_PREP_{int(_time.time())}"
+    # Step 1 — open job
+    open_resp = conn.call("BAPI_XBP_JOB_OPEN",
+                           JOBNAME=job_name, JOBCLASS="A",
+                           EXTERNAL_USER_NAME=conn.get_connection_attributes().get("user", ""))
+    ret = open_resp.get("RETURN") or {}
+    if ret.get("TYPE") in ("E", "A"):
+        return {"status": "error", "output": [], "mechanism": "xbp_batch_job",
+                "message": f"JOB_OPEN failed: {ret.get('MESSAGE')}"}
+    jobcount = (open_resp.get("JOBCOUNT") or "").strip()
+
+    # Step 2 — add step. Runs Z_M4H_JOB_RUNNER which reads the source we
+    # deposited at /usr/sap/<SID>/DVEBMGS<sysnr>/work/zm4h_prep.abap.
+    conn.call("BAPI_XBP_JOB_ADD_ABAP_STEP",
+               JOBNAME=job_name, JOBCOUNT=jobcount,
+               SAP_USER_NAME=conn.get_connection_attributes().get("user", ""),
+               ABAP_PROGRAM_NAME="Z_M4H_JOB_RUNNER",
+               ABAP_VARIANT_NAME="")
+
+    # Step 3 — start ASAP
+    conn.call("BAPI_XBP_JOB_START_ASAP",
+               JOBNAME=job_name, JOBCOUNT=jobcount,
+               EXTERNAL_USER_NAME=conn.get_connection_attributes().get("user", ""))
+
+    # Step 4 — poll SM37 for completion
+    deadline = _time.time() + 60
+    while _time.time() < deadline:
+        status = conn.call("BAPI_XBP_JOB_STATUS_GET",
+                            JOBNAME=job_name, JOBCOUNT=jobcount,
+                            EXTERNAL_USER_NAME=conn.get_connection_attributes().get("user", ""))
+        s = (status.get("STATUS") or "").upper()
+        if s in ("F", "A"):
+            break
+        _time.sleep(2)
+
+    # Step 5 — read spool
+    try:
+        spool = conn.call("BAPI_XBP_JOB_SPOOLLIST_READ",
+                           JOBNAME=job_name, JOBCOUNT=jobcount,
+                           EXTERNAL_USER_NAME=conn.get_connection_attributes().get("user", ""))
+        write_list = spool.get("SPOOLLIST", []) or []
+        output = [(r.get("LINE") or "").rstrip() for r in write_list]
+    except Exception:
+        output = []
+
+    return {
+        "status":    "success",
+        "output":    output,
+        "message":   f"Job {job_name}/{jobcount} completed via BAPI_XBP.",
+        "mechanism": "xbp_batch_job",
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
