@@ -345,6 +345,26 @@ NRIV_OBJECT = {
 # ─────────────────────────────────────────────────────────────────────────────
 # Scanner
 # ─────────────────────────────────────────────────────────────────────────────
+def _discover_table_fields(conn, table: str) -> Optional[set]:
+    """Call DDIF_FIELDINFO_GET to get the actual field names for `table` on
+    this SAP release. Returns None when the table doesn't exist at all
+    (TABLE_NOT_AVAILABLE), or the set of uppercase field names when it does.
+
+    We use this to filter my SCAN_SPEC requested fields against what's
+    real, since ECC EhP levels + S/4 releases have different columns for
+    the same table (e.g. TKA01 has extra fields on 816 that 740 lacks —
+    RFC_READ_TABLE errors FIELD_NOT_VALID if any requested field is
+    unknown).
+    """
+    try:
+        resp = conn.call("DDIF_FIELDINFO_GET", TABNAME=table, LANGU="E")
+        # DFIES_TAB is the table of field metadata; each row has FIELDNAME.
+        rows = resp.get("DFIES_TAB", []) or []
+        return {(r.get("FIELDNAME") or "").upper() for r in rows} or None
+    except Exception:
+        return None
+
+
 def scan_ecc(conn, spec: Optional[dict] = None) -> dict:
     """Pull every table in `spec` from ECC via RFC_READ_TABLE.
 
@@ -353,13 +373,36 @@ def scan_ecc(conn, spec: Optional[dict] = None) -> dict:
               "note": "" | error}, ...}`.
     Never raises; per-table failures land as `note`. Callers can iterate
     over the successful tables and skip the failed ones.
+
+    Robust to schema drift: before RFC_READ_TABLE, DDIF_FIELDINFO_GET
+    is called to intersect the requested field list with what actually
+    exists on this release. Prevents FIELD_NOT_VALID errors that would
+    otherwise fail the whole table for one missing column.
     """
     out = {}
     spec = spec or SCAN_SPEC
     for tbl, meta in spec.items():
         note = ""
         rows: list = []
-        cols: list = list(meta["fields"])
+        requested = list(meta["fields"])
+        cols: list = list(requested)
+
+        # Discover which of our requested fields actually exist on this
+        # SAP release. If the table doesn't exist at all, skip it early.
+        available = _discover_table_fields(conn, tbl)
+        if available is None:
+            out[tbl] = {"columns": cols, "rows": [], "note": "TABLE_NOT_AVAILABLE",
+                        "description": meta["description"],
+                        "key_fields": meta["key_fields"]}
+            continue
+        cols = [f for f in requested if f.upper() in available]
+        skipped = [f for f in requested if f.upper() not in available]
+        if not cols:
+            out[tbl] = {"columns": [], "rows": [], "note": "no requested fields exist on this release",
+                        "description": meta["description"],
+                        "key_fields": meta["key_fields"]}
+            continue
+
         try:
             resp = conn.call(
                 "RFC_READ_TABLE",
@@ -376,9 +419,15 @@ def scan_ecc(conn, spec: Optional[dict] = None) -> dict:
                 rows.append({c: (v or "").strip() for c, v in zip(cols, parts)})
         except Exception as e:  # noqa: BLE001
             note = f"{type(e).__name__}: {str(e)[:200]}"
+
+        if skipped and not note:
+            note = f"fields not on this release, skipped: {','.join(skipped)}"
+
+        # Fall back to key-fields intersection so undo/verify still work.
+        effective_keys = [k for k in meta["key_fields"] if k.upper() in available]
         out[tbl] = {"columns": cols, "rows": rows, "note": note,
                     "description": meta["description"],
-                    "key_fields": meta["key_fields"]}
+                    "key_fields": effective_keys or meta["key_fields"]}
     return out
 
 
@@ -453,7 +502,10 @@ def _emit_table_section(table: str, tinfo: dict, warnings: list) -> tuple:
     key_fields = tinfo.get("key_fields", [])
     desc = tinfo.get("description", table)
     note = tinfo.get("note", "")
-    if note:
+    # A partial-schema note (some requested fields not on this release) is
+    # informational — we still emit ABAP for the fields that DID land.
+    # Only skip when the table has no rows at all.
+    if note and not rows:
         warnings.append(f"{table}: skipped — {note}")
         lines.append(f"* -- {table}: skipped due to scan error: {note}")
         lines.append("")
@@ -462,6 +514,10 @@ def _emit_table_section(table: str, tinfo: dict, warnings: list) -> tuple:
         lines.append(f"* -- {table}: no rows extracted from ECC")
         lines.append("")
         return lines, 0
+    if note:
+        # Rows landed but with a partial schema — surface for transparency.
+        warnings.append(f"{table}: partial ({len(rows)} rows) — {note}")
+        lines.append(f"* -- {table}: partial schema — {note}")
 
     lines.append(f"* -----------------------------------------------------------")
     lines.append(f"*  {table} — {desc}  ({len(rows)} rows)")
