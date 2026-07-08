@@ -351,7 +351,68 @@ erroring; the DDB key-map still records the source→target pair.
 S/4 shows the ECC customer with the exact same number. Same for
 Material, Vendor, Sales Order, PO, Delivery, Invoice.
 
-## Section E — Enabling automatic ABAP execution from migrate4hana
+## Section E — Enabling automatic prep-script execution (no SSH required)
+
+**Reality check** (verified live 2026-07-08 on CAL S4H 816):
+
+- `RFC_ABAP_INSTALL_AND_RUN` is removed on S/4 1809+.
+- `VIEW_MAINTENANCE_STORE_DATA` / `VIEWCLUSTER_MAINTAIN_DIRECT` are removed
+  on S/4 too — SAP hardened these for security.
+- `NUMBER_RANGE_INTERVAL_UPDATE` still exists as an RFC-callable FM, but
+  the standard SNRO object names differ between ECC and S/4 (S/4 uses new
+  simplified names for many).
+- SSH to the SAP host is blocked by policy at almost every enterprise.
+
+Given all that, the **enterprise-approved path** is:
+
+### E.1a — One-time SE37 install of `Z_M4H_RUN_ABAP` (RECOMMENDED)
+
+The customer's Basis team installs ONE small RFC-enabled function module.
+After that, migrate4hana can push any future prep script over pure RFC.
+No further SE38 activity ever needed. No SSH. No filesystem access.
+
+**Setup steps** (5 minutes with SAP GUI as SAP_ALL or equivalent):
+
+1. In the wizard's *Prepare S/4 target* panel, click **Download bootstrap
+   ABAP**. Gets you `ZM4H_BOOTSTRAP.abap` with step-by-step instructions.
+2. In S/4:
+   - `SE11` → create data type `ZM4H_ABAP_LINE` (structure, 1 field
+     `LINE TYPE STRING`), activate
+   - `SE11` → create table type `ZM4H_ABAP_LINES` (line type
+     `ZM4H_ABAP_LINE`), activate
+   - `SE80` → create function group `ZM4H`, package `$TMP`, Local Change
+   - `SE37` → create function module `Z_M4H_RUN_ABAP`:
+     - Attributes: **Processing Type = Remote-Enabled Module**
+     - Import: `P_SOURCE` type `ZM4H_ABAP_LINES` (Pass Value, Optional)
+     - Export: `P_STATUS` type `STRING`, `P_SPOOL` type `ZM4H_ABAP_LINES`
+     - Source: paste the function body from the downloaded bootstrap file
+     - Activate
+
+3. Grant `MIGRATE_ADMI` an S_DEVELOP auth scoped to `$TMP` package only,
+   activity `16` (Execute), so the tool can generate the transient
+   subroutine pool that runs each prep script's ABAP.
+
+Once done, migrate4hana's wizard **Auto-run on S/4 now** button works over
+pure RFC. Every subsequent prep script executes in-memory on S/4 with no
+persistent program artifacts.
+
+### E.1b — Apply customizing via `NUMBER_RANGE_INTERVAL_UPDATE` (RFC-only, no Z install)
+
+The wizard's *Apply prep script via RFC* button attempts customizing
+changes directly via documented SAP-shipped RFCs. What actually lands
+depends on release:
+
+| Operation | Modern S/4 (816) | ECC / older | Fallback if blocked |
+|---|:---:|:---:|---|
+| Number-range interval creation (`NUMBER_RANGE_INTERVAL_UPDATE`) | ✅ works when SNRO object exists on target | ✅ works | Manual SNRO in SAP GUI |
+| Customizing row writes (`VIEW_MAINTENANCE_STORE_DATA`) | ❌ FM removed | ✅ works | Z_M4H_RUN_ABAP or manual SE38 |
+| Doc-type external-range flag flips | ❌ FM removed | ✅ works | Z_M4H_RUN_ABAP or manual SE38 |
+
+The tool reports honest per-operation outcome; the wizard surfaces
+"applied N, blocked M, install Z_M4H_RUN_ABAP for the rest" so you know
+exactly what still needs a fallback.
+
+### E.1c — Legacy: RFC_ABAP_INSTALL_AND_RUN
 
 `RFC_ABAP_INSTALL_AND_RUN` was deprecated from SAP NetWeaver 7.5 onward and
 is removed on most S/4 tenants. Trying to re-enable it is not the right

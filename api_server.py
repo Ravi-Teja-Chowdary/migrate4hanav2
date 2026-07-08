@@ -2476,6 +2476,84 @@ class _PrepAutoRunRequest(BaseModel):
     run_id: str
 
 
+@app.get("/api/pipeline/prep-script/bootstrap.abap",
+         dependencies=[Depends(require_auth)])
+async def prep_script_bootstrap():
+    """Return the one-time SE37 install ABAP that creates Z_M4H_RUN_ABAP
+    on the target. After the customer's Basis team runs this once, every
+    future prep-script invocation is 100% RFC — no SSH, no SE38 clicks.
+    """
+    try:
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from abap_generator import bootstrap_install_abap  # type: ignore
+        source = bootstrap_install_abap()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"bootstrap generation: {e}")
+    return Response(content=source, media_type="text/plain",
+                     headers={"Content-Disposition":
+                                 'attachment; filename="ZM4H_BOOTSTRAP.abap"'})
+
+
+@app.post("/api/pipeline/prep-script/apply-via-rfc",
+          dependencies=[Depends(require_auth)])
+async def prep_script_apply_via_rfc(body: _PrepAutoRunRequest):
+    """Apply customizing directly over RFC — number ranges via
+    NUMBER_RANGE_INTERVAL_UPDATE, customizing rows via
+    VIEW_MAINTENANCE_STORE_DATA where available. No SSH, no filesystem.
+
+    Reports honest per-operation outcome so the wizard can guide the user
+    to fallbacks (manual SE38 or Z_M4H_RUN_ABAP install) for anything
+    that doesn't land."""
+    prep_dir = _prep_dir(body.run_id)
+    summary_path = os.path.join(prep_dir, "summary.json")
+    if not os.path.isfile(summary_path):
+        raise HTTPException(status_code=404,
+                             detail="Generate the prep script first (produces the scan).")
+    conns = _load_connections()
+    s4_conf = conns.get("s4hana") or {}
+    if not (s4_conf.get("ashost") and _s4_passwd):
+        raise HTTPException(status_code=400,
+                             detail="No active S/4 connection. Save + test S/4 first.")
+
+    ecc_conf = conns.get("ecc") or {}
+    if not (ecc_conf.get("ashost") and _ecc_passwd):
+        raise HTTPException(status_code=400,
+                             detail="No active ECC connection (needed to re-scan customizing).")
+
+    try:
+        import pyrfc  # type: ignore
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from abap_generator import scan_ecc  # type: ignore
+        from direct_customizer import apply_via_rfc  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"import failed: {e}")
+
+    # Re-scan ECC so we have the customizing rows to write.
+    econn = pyrfc.Connection(
+        ashost=ecc_conf["ashost"], sysnr=ecc_conf["sysnr"],
+        client=ecc_conf["client"], user=ecc_conf["user"],
+        passwd=_ecc_passwd, lang="EN")
+    try:
+        scan = scan_ecc(econn)
+    finally:
+        econn.close()
+
+    sconn = pyrfc.Connection(
+        ashost=s4_conf["ashost"], sysnr=s4_conf["sysnr"],
+        client=s4_conf["client"], user=s4_conf["user"],
+        passwd=_s4_passwd, lang="EN")
+    try:
+        result = apply_via_rfc(sconn, scan, preserve_source_numbers=True)
+    finally:
+        sconn.close()
+
+    # Persist alongside the prep-script artifacts.
+    with open(os.path.join(prep_dir, "rfc_apply_result.json"), "w",
+              encoding="utf-8") as f:
+        json.dump(result, f, indent=2, default=str)
+    return {"run_id": body.run_id, **result}
+
+
 @app.post("/api/pipeline/prep-script/auto-run",
           dependencies=[Depends(require_auth)])
 async def prep_script_auto_run(body: _PrepAutoRunRequest):

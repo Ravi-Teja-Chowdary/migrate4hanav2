@@ -225,6 +225,10 @@ export const api = {
   autoRunPrepScript: (run_id) =>
     apiFetch('/api/pipeline/prep-script/auto-run',
       { method: 'POST', body: JSON.stringify({ run_id }) }),
+  applyPrepViaRfc: (run_id) =>
+    apiFetch('/api/pipeline/prep-script/apply-via-rfc',
+      { method: 'POST', body: JSON.stringify({ run_id }) }),
+  prepScriptBootstrapUrl: () => '/api/pipeline/prep-script/bootstrap.abap',
 
   // ── Gates ──
   gates: () => apiFetch('/api/gates'),

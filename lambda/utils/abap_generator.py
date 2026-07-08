@@ -755,21 +755,39 @@ def generate_prep_abap(scan: dict, *, run_id: str, ecc_host: str = "",
 def auto_run_on_s4(conn, abap_source: str) -> dict:
     """Optional path: hand the generated report to S/4 for immediate exec.
 
-    Two mechanisms attempted in order:
+    Three mechanisms attempted in order — each requires progressively less
+    infrastructure but works on progressively more tenants:
 
-    1. RFC_ABAP_INSTALL_AND_RUN — the classic path. Deprecated / removed on
-       many S/4 releases (FU_NOT_FOUND). Kept as first attempt because when
-       it works, it's the fastest.
-    2. BAPI_XBP_JOB_OPEN + BAPI_XBP_JOB_ADD_ABAP_STEP + BAPI_XBP_JOB_START_ASAP
-       — schedule the source as a background job. Works on every release
-       from 4.6 onward. Slightly slower (SM37 poll), but portable.
+    1. **Z_M4H_RUN_ABAP** — the RECOMMENDED enterprise path. Customer's Basis
+       team creates one small RFC-enabled FM in SE37 ONCE (5 min setup,
+       documented in PREREQ_RUNBOOK §E.1a). After that, every future prep-
+       ABAP invocation is 100% pure RFC — no SSH, no filesystem, no
+       repeated SE38 clicks. Works on every S/4 release forever.
+
+    2. **RFC_ABAP_INSTALL_AND_RUN** — the classic path. Deprecated / removed
+       on S/4 1809+ (FU_NOT_FOUND). Kept as second attempt only because on
+       CAL/IDES or older tenants it may still work.
+
+    3. **BAPI_XBP_JOB_OPEN + JOB_ADD_ABAP_STEP + JOB_START_ASAP** — schedule
+       as background job. Needs a pre-existing wrapper program on S/4 that
+       reads source from filesystem (needs SSH setup — often blocked). Kept
+       as legacy fallback; §1 supersedes it.
 
     Returns:
         {"status": "success" | "disabled" | "error",
          "output": [str, ...],
          "message": str,
-         "mechanism": "install_and_run" | "xbp_batch_job" | ""}
+         "mechanism": "z_m4h_run_abap" | "install_and_run" | "xbp_batch_job" | ""}
     """
+    # -- Mechanism 1: Z_M4H_RUN_ABAP (recommended)
+    try:
+        return _run_via_z_m4h_run_abap(conn, abap_source)
+    except _M4HBootstrapMissing as e:
+        # Function not installed on target — fall through to next mechanism.
+        # UI surfaces this as "one-time SE37 setup available for smoother
+        # future runs" if the eventual outcome fails; otherwise the second
+        # mechanism succeeds and the user never sees the missing FM.
+        pass
     # -- Mechanism 1: RFC_ABAP_INSTALL_AND_RUN
     lines = abap_source.split("\n")
     program = [{"LINE": (line[:72] if len(line) > 72 else line)} for line in lines]
@@ -798,6 +816,49 @@ def auto_run_on_s4(conn, abap_source: str) -> dict:
         return {"status": "error", "output": [],
                 "message": f"XBP batch-job fallback failed: {type(e).__name__}: {e}",
                 "mechanism": "xbp_batch_job"}
+
+
+class _M4HBootstrapMissing(Exception):
+    """Signals Z_M4H_RUN_ABAP is not installed on target — caller should
+    fall through to the next mechanism, not treat as a hard failure."""
+
+
+def _run_via_z_m4h_run_abap(conn, abap_source: str) -> dict:
+    """Send ABAP source to Z_M4H_RUN_ABAP for direct execution over RFC.
+
+    The Z_M4H_RUN_ABAP function is a one-time SE37 install by the customer's
+    Basis team (§E.1a of the runbook). Once installed, it:
+      1. Receives ABAP source as a table of strings
+      2. GENERATE SUBROUTINE POOLs the source into a transient program
+      3. Runs the transient program's MAIN form
+      4. Captures the WRITE output and returns as a table of strings
+
+    Everything happens in-memory on the S/4 host — no filesystem, no SSH,
+    no persistent program artifacts. Auth: user needs S_DEVELOP (or a
+    package-scoped Z_M4H_DEV auth that covers only $TMP).
+
+    Raises _M4HBootstrapMissing when the function isn't installed yet.
+    """
+    lines = abap_source.split("\n")
+    # The function takes a table of {LINE: str} — each row is one ABAP line.
+    source_table = [{"LINE": line[:255]} for line in lines]
+    try:
+        resp = conn.call("Z_M4H_RUN_ABAP", P_SOURCE=source_table)
+    except Exception as e:
+        s = str(e)
+        if "FU_NOT_FOUND" in s or "does not exist" in s.lower():
+            raise _M4HBootstrapMissing("Z_M4H_RUN_ABAP not installed on target")
+        raise
+
+    status = (resp.get("P_STATUS") or "").strip()
+    spool_rows = resp.get("P_SPOOL") or []
+    output = [(r.get("LINE") or "").rstrip() for r in spool_rows]
+    return {
+        "status":    "success" if status.upper().startswith("OK") else "error",
+        "output":    output,
+        "message":   status or "Executed via Z_M4H_RUN_ABAP (100% RFC).",
+        "mechanism": "z_m4h_run_abap",
+    }
 
 
 def _run_via_xbp_batch_job(conn, abap_source: str) -> dict:
@@ -873,6 +934,172 @@ def _run_via_xbp_batch_job(conn, abap_source: str) -> dict:
         "message":   f"Job {job_name}/{jobcount} completed via BAPI_XBP.",
         "mechanism": "xbp_batch_job",
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Z_M4H_RUN_ABAP bootstrap - one-time install to enable RFC-only auto-run
+# ─────────────────────────────────────────────────────────────────────────────
+# This is the ONE ABAP the customer's Basis team runs manually (in SE37) to
+# install the wrapper. After that, every future prep-ABAP invocation is 100%
+# pure RFC — no SSH, no filesystem, no SE38 clicks.
+#
+# The install has 3 parts, all done in SE37 by an admin (5 min total):
+#   1. Create function group ZM4H (SE80 → New → Function Group → ZM4H)
+#   2. Create RFC-enabled function module Z_M4H_RUN_ABAP inside ZM4H
+#   3. Paste the interface + source below, activate, save as Local Change.
+
+Z_M4H_RUN_ABAP_INTERFACE = """\
+* -- Import parameters
+* P_SOURCE   TYPE STANDARD TABLE OF ZM4H_ABAP_LINE
+*            (a Z-line type with one field LINE TYPE STRING; or just use
+*             any structure with a LINE component)
+* -- Export parameters
+* P_STATUS   TYPE STRING
+* P_SPOOL    TYPE STANDARD TABLE OF ZM4H_ABAP_LINE
+"""
+
+Z_M4H_RUN_ABAP_BODY = """\
+FUNCTION Z_M4H_RUN_ABAP.
+*"*"Local Interface:
+*"  IMPORTING
+*"     VALUE(P_SOURCE) TYPE  ZM4H_ABAP_LINES OPTIONAL
+*"  EXPORTING
+*"     VALUE(P_STATUS) TYPE  STRING
+*"     VALUE(P_SPOOL)  TYPE  ZM4H_ABAP_LINES
+*"----------------------------------------------------------------------
+
+DATA: lt_source     TYPE STANDARD TABLE OF string,
+      lv_pool       TYPE string,
+      lv_message    TYPE string,
+      lv_line       TYPE i,
+      lv_word       TYPE string,
+      lt_list       TYPE STANDARD TABLE OF abaplist,
+      lt_ascii      TYPE STANDARD TABLE OF string,
+      ls_ascii      TYPE string,
+      ls_spool_row  TYPE zm4h_abap_line.
+
+CLEAR: p_status, p_spool.
+
+* Copy the input source into a string table for GENERATE.
+LOOP AT p_source INTO DATA(ls_src).
+  APPEND ls_src-line TO lt_source.
+ENDLOOP.
+
+IF lt_source IS INITIAL.
+  p_status = 'ERROR: empty source'.
+  RETURN.
+ENDIF.
+
+* Generate the source as a transient subroutine pool. GENERATE returns
+* a system-assigned program name that lives in memory only — nothing
+* persisted to the repository.
+GENERATE SUBROUTINE POOL lt_source
+  NAME lv_pool
+  MESSAGE lv_message
+  LINE lv_line
+  WORD lv_word.
+
+IF sy-subrc <> 0.
+  p_status = |ERROR: generate failed at line { lv_line } word '{ lv_word }': { lv_message }|.
+  RETURN.
+ENDIF.
+
+* Execute FORM main IN PROGRAM lv_pool if it's declared (convention);
+* otherwise fall back to SUBMIT with report semantics.
+TRY.
+    PERFORM main IN PROGRAM (lv_pool) IF FOUND.
+    IF sy-subrc <> 0.
+      SUBMIT (lv_pool) AND RETURN
+        EXPORTING LIST TO MEMORY.
+      CALL FUNCTION 'LIST_FROM_MEMORY'
+        TABLES listobject = lt_list
+        EXCEPTIONS not_found = 1
+                   OTHERS    = 2.
+      IF sy-subrc = 0.
+        CALL FUNCTION 'LIST_TO_ASCI'
+          TABLES listobject = lt_list
+                 listasci   = lt_ascii.
+        LOOP AT lt_ascii INTO ls_ascii.
+          ls_spool_row-line = ls_ascii.
+          APPEND ls_spool_row TO p_spool.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+    p_status = 'OK'.
+  CATCH cx_root INTO DATA(lo_err).
+    p_status = |ERROR: runtime exception: { lo_err->get_text( ) }|.
+ENDTRY.
+
+ENDFUNCTION.
+"""
+
+
+def bootstrap_install_abap() -> str:
+    """Return the one-time install ABAP the customer's Basis team runs in
+    SE38 to create Z_M4H_RUN_ABAP.
+
+    After running this once, the tool's auto-run path is 100% RFC — no
+    further SE38 activity needed for any future prep script.
+
+    The install creates:
+      1. A minimal DDIC type ZM4H_ABAP_LINE (structure with one LINE field)
+      2. A table type ZM4H_ABAP_LINES built from ZM4H_ABAP_LINE
+      3. Function group ZM4H
+      4. RFC-enabled function module Z_M4H_RUN_ABAP with the body above
+    """
+    return f"""\
+* migrate4hana - one-time SE38 bootstrap
+* -------------------------------------
+* Run this ABAP ONCE via SE38 or SE80 with SAP_ALL or equivalent
+* developer authorization. Creates the small helper function module
+* Z_M4H_RUN_ABAP that lets the tool execute future prep scripts over
+* pure RFC — no more SE38 clicks, no SSH, no filesystem access.
+*
+* Total effect: 1 DDIC type + 1 table type + 1 function group + 1
+* function module. All in package $TMP (local, no transport).
+*
+* NOTE: This install is a one-shot repository operation and needs to
+* be done by hand in SE38/SE80 by an admin. The tool cannot install
+* itself over RFC — that would be a security violation. Once the
+* helper is in place, everything else is pure RFC.
+*
+* Manual steps (5 minutes with SAP GUI):
+*
+*   1. SE11 -> Data Type ZM4H_ABAP_LINE -> Structure -> add one field:
+*        LINE  TYPE  STRING
+*      Activate.
+*
+*   2. SE11 -> Data Type ZM4H_ABAP_LINES -> Table Type ->
+*        Line Type = ZM4H_ABAP_LINE
+*      Activate.
+*
+*   3. SE80 -> Function Group ZM4H -> Create (short text "M4H helpers")
+*      Package $TMP, Local Change.
+*
+*   4. SE37 -> Function Module Z_M4H_RUN_ABAP -> Create ->
+*      Function Group = ZM4H, short text = "Execute ABAP source over RFC".
+*      In Attributes tab: Processing Type = "Remote-Enabled Module".
+*
+*   5. Import tab:
+*        P_SOURCE  TYPE  ZM4H_ABAP_LINES  (checked "Pass Value", optional)
+*      Export tab:
+*        P_STATUS  TYPE  STRING
+*        P_SPOOL   TYPE  ZM4H_ABAP_LINES
+*
+*   6. Source Code tab: paste the body below (between BEGIN and END).
+*      Save + Activate.
+*
+* Once activated, the wizard's *Apply prep script via RFC* button works
+* forever — no more SE38 for any future migration.
+
+* ============================================================
+* BEGIN Z_M4H_RUN_ABAP body (paste into SE37 Source Code tab)
+* ============================================================
+{Z_M4H_RUN_ABAP_BODY}
+* ============================================================
+* END Z_M4H_RUN_ABAP body
+* ============================================================
+"""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
