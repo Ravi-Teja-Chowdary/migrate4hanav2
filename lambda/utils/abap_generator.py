@@ -1066,8 +1066,14 @@ def bootstrap_install_abap() -> str:
 * Manual steps (5 minutes with SAP GUI):
 *
 *   1. SE11 -> Data Type ZM4H_ABAP_LINE -> Structure -> add one field:
-*        LINE  TYPE  STRING
+*        LINE  TYPE  CHAR255
 *      Activate.
+*      NOTE: use CHAR255 (fixed length), NOT the STRING type. On S/4 HANA,
+*      DDIC structures with variable-length components are rejected with
+*      "Field name: component type is not active or is not allowed"
+*      / "could not determine structure width". CHAR255 is a standard
+*      SAP-shipped data element that works on every release. ABAP source
+*      lines are max 72 chars anyway, so 255 is more than enough.
 *
 *   2. SE11 -> Data Type ZM4H_ABAP_LINES -> Table Type ->
 *        Line Type = ZM4H_ABAP_LINE
