@@ -234,17 +234,21 @@ class BapiLoader:
         hdr = {"COMP_CODE": org["COMP_CODE"], "DOC_TYPE": org["DOC_TYPE"], "VENDOR": tgt_vendor,
                "PURCH_ORG": ekorg, "PUR_GROUP": org["PUR_GROUP"], "DOC_DATE": doc_date,
                "CURRENCY": curr}
-        # Source-number preservation: pass PURCHASEORDER when the wizard
-        # toggle is on and T161.NUMKE = 'A1' (external range) on the target
-        # BSART. Basis Kit's Z_M4H_TABLE_UPDATE flips these; silent-fallback
-        # if T161 is still internal range on target.
+        # Source-number preservation: on modern S/4 the external PO number
+        # is exposed via POHEADER-PO_NUMBER (NESTED), not the classic top-
+        # level PURCHASEORDER param (which BAPI_PO_CREATE1's signature no
+        # longer has on 1809+; earlier code hit RFC_INVALID_PARAMETER on
+        # 'PURCHASEORDER' against 816). Setting POHEADER-PO_NUMBER +
+        # POHEADERX-PO_NUMBER = 'X' is honored when T161.NUMKE = 'A1' on
+        # the target BSART. Silent-fallback if internal range.
         import os as _os
         _preserve = _os.environ.get("M4H_PRESERVE_SRC_NUMBERS", "0").strip() == "1"
-        _bapi_kwargs = {"POHEADER": hdr, "POHEADERX": {k: "X" for k in hdr},
+        if _preserve and src_po:
+            hdr["PO_NUMBER"] = src_po.zfill(10)
+        _hdrx = {k: "X" for k in hdr}
+        _bapi_kwargs = {"POHEADER": hdr, "POHEADERX": _hdrx,
                           "POITEM": poitem, "POITEMX": poitemx,
                           "POACCOUNT": acct, "POACCOUNTX": acctx}
-        if _preserve and src_po:
-            _bapi_kwargs["PURCHASEORDER"] = src_po.zfill(10)
         res = self.c.call("BAPI_PO_CREATE1", **_bapi_kwargs)
         ret = self._ret(res)
         po = (res.get("EXPPURCHASEORDER") or "").strip()

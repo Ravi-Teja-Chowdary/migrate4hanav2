@@ -284,6 +284,10 @@ FUNCTION Z_M4H_NR_MAINTAIN.
 *"----------------------------------------------------------------------
 * Wraps NUMBER_RANGE_INTERVAL_UPDATE + close in one atomic call.
 * Handles the INIT step which is not remote-callable on modern S/4.
+*
+* CRITICAL: sets ls_interval-procind = 'I' (Insert). Without PROCIND
+* the update FM treats the row as no-op and returns NR 009 "no changes"
+* even though the interval doesn't actually get created.
 
 DATA: lt_intervals TYPE STANDARD TABLE OF inriv,
       ls_interval  TYPE inriv,
@@ -294,6 +298,7 @@ ls_interval-nrrangenr  = iv_interval_nr.
 ls_interval-fromnumber = iv_from.
 ls_interval-tonumber   = iv_to.
 ls_interval-extern     = iv_extern.
+ls_interval-procind    = 'I'.
 APPEND ls_interval TO lt_intervals.
 
 TRY.
@@ -301,10 +306,22 @@ TRY.
       EXPORTING object   = iv_object
       TABLES    interval = lt_intervals
                 error    = lt_errors.
+    " Inspect errors table — NR 009 (no changes) is soft when interval
+    " already exists; hard errors on other conditions.
+    LOOP AT lt_errors INTO DATA(ls_err).
+      IF ls_err-msgty = 'E' OR ls_err-msgty = 'A'.
+        IF ls_err-msgnr = '009'.  " no changes = already exists
+          CONTINUE.
+        ENDIF.
+        ev_status = |WARN: | && ls_err-msgtx.
+      ENDIF.
+    ENDLOOP.
     CALL FUNCTION 'NUMBER_RANGE_UPDATE_CLOSE'
       EXPORTING object = iv_object.
     COMMIT WORK AND WAIT.
-    ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object.
+    IF ev_status IS INITIAL.
+      ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object.
+    ENDIF.
   CATCH cx_root INTO DATA(lo_err).
     ev_status = |ERROR: | && lo_err->get_text( ).
 ENDTRY.
