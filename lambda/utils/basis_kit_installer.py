@@ -294,10 +294,28 @@ FUNCTION Z_M4H_NR_MAINTAIN.
 *     row as no-op and returns NR 009 "no changes" without actually
 *     writing anything.
 
-DATA: lt_intervals TYPE STANDARD TABLE OF inriv,
-      ls_interval  TYPE inriv.
+* Authoritative NUMBER_RANGE_INTERVAL_UPDATE signature on S/4 816
+* (verified from FUPARAREF 2026-07-12):
+*   IMPORT  OBJECT           TYPE tnro-object
+*   IMPORT  CALLED_FROM_AIM  TYPE c  OPTIONAL
+*   IMPORT  CLIENT_AIM       TYPE sy-mandt OPTIONAL
+*   IMPORT  CHECK_AT_ALL_EVENTS OPTIONAL
+*   IMPORT  INIT_ACT         TYPE c OPTIONAL
+*   IMPORT  SUBOBJECT        OPTIONAL
+*   EXPORT  ERROR            TYPE inrer   (single struct, not TABLES)
+*   EXPORT  ERROR_OCCURED
+*   EXPORT  WARNING_OCCURED
+*   TABLES  INTERVAL         TYPE inriv   (rows to insert/modify)
+*   TABLES  ERROR_IV         TYPE inriv   (MANDATORY — invalid rows returned)
 
-CLEAR: lt_intervals, ls_interval.
+DATA: lt_intervals TYPE STANDARD TABLE OF inriv,
+      lt_error_iv  TYPE STANDARD TABLE OF inriv,
+      ls_interval  TYPE inriv,
+      ls_error     TYPE inrer,
+      lv_err_occ   TYPE c,
+      lv_warn_occ  TYPE c.
+
+CLEAR: lt_intervals, lt_error_iv, ls_interval, ls_error, lv_err_occ, lv_warn_occ.
 ls_interval-nrrangenr  = iv_interval_nr.
 ls_interval-fromnumber = iv_from.
 ls_interval-tonumber   = iv_to.
@@ -306,20 +324,23 @@ ls_interval-procind    = 'I'.
 APPEND ls_interval TO lt_intervals.
 
 TRY.
-    " On S/4 816 the ERROR TABLES parameter was removed from
-    " NUMBER_RANGE_INTERVAL_UPDATE. Passing it compiles (compiler
-    " doesn't validate CALL FUNCTION signatures) but runtime call
-    " fails with "formal parameter ERROR does not exist". Only INTERVAL
-    " goes in. We use sy-subrc + sy-msg* + exception to diagnose.
     CALL FUNCTION 'NUMBER_RANGE_INTERVAL_UPDATE'
-      EXPORTING object   = iv_object
-      TABLES    interval = lt_intervals.
+      EXPORTING
+        object          = iv_object
+      IMPORTING
+        error           = ls_error
+        error_occured   = lv_err_occ
+        warning_occured = lv_warn_occ
+      TABLES
+        interval        = lt_intervals
+        error_iv        = lt_error_iv.
 
-    IF sy-subrc <> 0.
-      IF sy-msgid = 'NR' AND sy-msgno = '009'.
+    " Diagnose from the EXPORT struct + occurance flags.
+    IF lv_err_occ = 'X'.
+      IF ls_error-nrmessage = '009'.
         ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (already existed)|.
       ELSE.
-        ev_status = |WARN: | && sy-msgid && sy-msgno && ' ' && sy-msgv1.
+        ev_status = |WARN: | && ls_error-nrmessage && ' ' && ls_error-msgid.
       ENDIF.
     ELSE.
       ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (created)|.
