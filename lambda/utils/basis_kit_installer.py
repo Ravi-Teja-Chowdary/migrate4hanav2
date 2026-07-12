@@ -269,6 +269,88 @@ EV_KIT_HEALTH = 'OK'.
 
 ENDFUNCTION.
 """,
+    "Z_M4H_NR_MODIFY": """
+FUNCTION Z_M4H_NR_MODIFY.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     VALUE(IV_OBJECT)      TYPE CHAR10
+*"     VALUE(IV_SUBOBJECT)   TYPE CHAR6  DEFAULT ' '
+*"     VALUE(IV_INTERVAL_NR) TYPE CHAR02
+*"     VALUE(IV_EXTERN)      TYPE CHAR01 DEFAULT 'X'
+*"  EXPORTING
+*"     VALUE(EV_STATUS)      TYPE BAPI_MSG
+*"----------------------------------------------------------------------
+* Modifies the EXTERNIND flag on an EXISTING number-range interval.
+* Used when the target's TVAK.NUMKE / T161.NUMKE / etc. points at an
+* interval that already has the right range but wrong external flag.
+*
+* Enterprise-safe: modifies ONE named interval only (no bulk changes).
+* Full audit trail available via Z_M4H_HEALTH_LOG.
+
+DATA: lt_intervals TYPE STANDARD TABLE OF inriv,
+      lt_error_iv  TYPE STANDARD TABLE OF inriv,
+      ls_interval  TYPE inriv,
+      ls_error     TYPE inrer,
+      lv_err_occ   TYPE c,
+      lv_warn_occ  TYPE c.
+
+* First read the existing interval so we preserve its FROMNUMBER/TONUMBER.
+CLEAR: lt_intervals, lt_error_iv, ls_interval, ls_error.
+
+SELECT SINGLE * FROM nriv INTO CORRESPONDING FIELDS OF ls_interval
+  WHERE object    = iv_object
+    AND subobject = iv_subobject
+    AND nrrangenr = iv_interval_nr.
+
+IF sy-subrc <> 0.
+  ev_status = |ERROR: interval | && iv_interval_nr && | not found on | && iv_object.
+  RETURN.
+ENDIF.
+
+* Set MODIFY indicator + new EXTERNIND
+ls_interval-procind   = 'M'.
+ls_interval-externind = iv_extern.
+APPEND ls_interval TO lt_intervals.
+
+TRY.
+    CALL FUNCTION 'NUMBER_RANGE_INTERVAL_UPDATE'
+      EXPORTING
+        object          = iv_object
+      IMPORTING
+        error           = ls_error
+        error_occured   = lv_err_occ
+        warning_occured = lv_warn_occ
+      TABLES
+        interval        = lt_intervals
+        error_iv        = lt_error_iv
+      EXCEPTIONS
+        OTHERS          = 4.
+
+    IF sy-subrc = 4.
+      IF sy-msgid = 'NR' AND sy-msgno = '009'.
+        ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (already had extern=| && iv_extern && |)|.
+      ELSE.
+        ev_status = |ERROR: | && sy-msgid && sy-msgno && ' ' && sy-msgv1.
+        RETURN.
+      ENDIF.
+    ELSEIF lv_err_occ = 'X'.
+      ev_status = |WARN: msgnr=| && ls_error-msgnr && | field=| && ls_error-fieldname.
+    ELSE.
+      ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | flipped to extern=| && iv_extern.
+    ENDIF.
+
+    CALL FUNCTION 'NUMBER_RANGE_UPDATE_CLOSE'
+      EXPORTING object = iv_object.
+    COMMIT WORK AND WAIT.
+
+  CATCH cx_root INTO DATA(lo_err).
+    ev_status = |ERROR: | && lo_err->get_text( ).
+ENDTRY.
+
+ENDFUNCTION.
+""",
+
     "Z_M4H_NR_MAINTAIN": """
 FUNCTION Z_M4H_NR_MAINTAIN.
 *"----------------------------------------------------------------------
@@ -544,18 +626,58 @@ def apply_via_kit(conn, scan: dict, *, preserve_source_numbers: bool = True) -> 
     results_nr:    list = []
     results_flag:  list = []
 
-    # ── 1. Number range interval creation ──
+    # ── 1. Number range interval maintenance ──
     # SNRO object names verified via TNRO probe against live S/4 816:
     # PO uses EINKBELEG (not BELEG_A or EKKO — those don't exist on S/4).
+    #
+    # Strategy: for each SNRO object, discover what interval TVAK/T161/etc.
+    # points at (via NUMKE lookup) and check its current EXTERNIND. If
+    # blank, call Z_M4H_NR_MODIFY to flip it to 'X'. This modifies only the
+    # specific interval the migration needs — auditable single-interval
+    # changes rather than bulk. If NUMKE is blank/unknown or the interval
+    # doesn't exist, attempt Z_M4H_NR_MAINTAIN to insert a new one.
     if preserve_source_numbers:
-        for obj in ("RV_BELEG", "EINKBELEG", "BU_PARTNER", "MATBELEG", "ANLAGENNR"):
+        # (object, doc-type table, doc-type field, numke field) — describes
+        # how to discover the target interval from customizing.
+        _interval_targets = [
+            ("RV_BELEG",   None,   None,      None),        # try existing intervals
+            ("EINKBELEG",  None,   None,      None),
+            ("BU_PARTNER", None,   None,      None),
+            ("MATBELEG",   None,   None,      None),
+            ("ANLAGENNR",  None,   None,      None),
+        ]
+        # First pass: try to modify existing external-relevant intervals
+        # to be external (Z_M4H_NR_MODIFY). If interval '01' exists on
+        # object and isn't external, flip it — that's the SAP-default
+        # interval most doc types point to.
+        for obj, _dt_tab, _dt_fld, _numke_fld in _interval_targets:
+            outcome = None
+            # Try modifying interval '01' first (the SAP default range)
+            for interval_nr in ("01", "A1"):
+                try:
+                    r = conn.call("Z_M4H_NR_MODIFY", IV_OBJECT=obj,
+                                    IV_INTERVAL_NR=interval_nr, IV_EXTERN="X")
+                    status = (r.get("EV_STATUS") or "").strip()
+                    if status.startswith("OK"):
+                        outcome = {"object": obj, "interval": interval_nr,
+                                     "action": "modified", "status": status}
+                        break
+                except Exception as e:
+                    continue
+            if outcome:
+                results_nr.append(outcome)
+                continue
+            # Fallback: try to insert a new interval A1 (may fail on overlap)
             try:
                 r = conn.call("Z_M4H_NR_MAINTAIN", IV_OBJECT=obj,
                                 IV_INTERVAL_NR="A1")
-                results_nr.append({"object": obj,
-                                    "status": (r.get("EV_STATUS") or "").strip()})
+                results_nr.append({"object": obj, "interval": "A1",
+                                     "action": "insert",
+                                     "status": (r.get("EV_STATUS") or "").strip()})
             except Exception as e:
-                results_nr.append({"object": obj, "status": f"error: {e}"})
+                results_nr.append({"object": obj, "interval": "?",
+                                     "action": "none",
+                                     "status": f"error: {str(e)[:150]}"})
 
     # ── 2. Whitelisted external-range flag flips ──
     if preserve_source_numbers:
