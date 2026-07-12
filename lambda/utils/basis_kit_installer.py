@@ -336,11 +336,18 @@ TRY.
         error_iv        = lt_error_iv.
 
     " Diagnose from the EXPORT struct + occurance flags.
+    " INRER fields (verified live 2026-07-12 via DDIF_FIELDINFO_GET):
+    "   MSGNR (CHAR6)  - message number
+    "   TABLENAME      - parameter name that errored
+    "   FIELDNAME      - field name inside that parameter
+    "   TABIX (DEC3)   - row index with the error
+    " No MSGID on modern INRER - it was consolidated.
     IF lv_err_occ = 'X'.
-      IF ls_error-nrmessage = '009'.
+      IF ls_error-msgnr = '009' OR ls_error-msgnr = '  009 '.
         ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (already existed)|.
       ELSE.
-        ev_status = |WARN: | && ls_error-nrmessage && ' ' && ls_error-msgid.
+        ev_status = |WARN: msgnr=| && ls_error-msgnr &&
+                       | field=| && ls_error-fieldname.
       ENDIF.
     ELSE.
       ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (created)|.
