@@ -214,8 +214,13 @@ WRITE: / '      Each FM Attributes tab -> Processing Type = Remote-Enabled.'.
 
 * -----------------------------------------------------------
 * STEP 4: Role ZM4H_MIGRATION_ADMIN
+*
+* SKIP THIS STEP IF the RFC caller user (typically MIGRATE_ADMI) already
+* has SAP_ALL - the scoped role is only useful for narrowing auth in
+* strict enterprise deployments. CAL trials + IDES demo tenants
+* generally grant SAP_ALL and PFCG isn't even available there.
 * -----------------------------------------------------------
-WRITE: / '[4/5] Role ZM4H_MIGRATION_ADMIN'.
+WRITE: / '[4/5] Role ZM4H_MIGRATION_ADMIN  (SKIP if user has SAP_ALL)'.
 WRITE: / '      PFCG -> ZM4H_MIGRATION_ADMIN -> Create'.
 WRITE: / '      Auth objects:'.
 WRITE: / '        S_RFC on FUGR = ZM4H'.
@@ -224,9 +229,10 @@ WRITE: / '        S_TABU_DIS on tables:'.
 WRITE: / '          TVAK TVLK TVFK T161 TB003 T077K T077Y T134 T003O T093B'.
 
 * -----------------------------------------------------------
-* STEP 5: Assign role to MIGRATE_ADMI
+* STEP 5: Assign role to MIGRATE_ADMI  (SKIP if user has SAP_ALL)
 * -----------------------------------------------------------
 WRITE: / '[5/5] SU01 -> MIGRATE_ADMI -> Roles tab -> add ZM4H_MIGRATION_ADMIN'.
+WRITE: / '      (SKIP if the caller already has SAP_ALL)'.
 
 WRITE: / '=================================================='.
 WRITE: / ' Auto steps OK:', lv_ok, ' errors:', lv_err.
