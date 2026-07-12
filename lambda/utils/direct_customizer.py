@@ -49,14 +49,11 @@ log = logging.getLogger("direct_customizer")
 # ─────────────────────────────────────────────────────────────────────────────
 NUMBER_RANGE_OBJECTS = [
     ("RV_BELEG",   "SD documents (VBAK/LIKP/VBRK)"),
-    ("BELEG_A",    "MM PO / Agreement / Contract (EKKO)"),
+    ("EINKBELEG",  "MM PO / Agreement / Contract (EKKO)"),   # was BELEG_A, wrong for S/4 816+
     ("BU_PARTNER", "Business Partner (BUT000/KNA1/LFA1)"),
     ("MATBELEG",   "Material Master (MARA)"),
     ("ANLAGENNR",  "Fixed Asset (ANLA)"),
     ("AUFTRAG",    "Internal Order / PP order (AUFK)"),
-    ("EQUIPMENT",  "Equipment master"),
-    ("IFLOTX",     "Functional Location"),
-    ("KAUFBELEG",  "Sales customer order fallback"),
 ]
 
 

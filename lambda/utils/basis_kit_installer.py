@@ -545,8 +545,10 @@ def apply_via_kit(conn, scan: dict, *, preserve_source_numbers: bool = True) -> 
     results_flag:  list = []
 
     # ── 1. Number range interval creation ──
+    # SNRO object names verified via TNRO probe against live S/4 816:
+    # PO uses EINKBELEG (not BELEG_A or EKKO — those don't exist on S/4).
     if preserve_source_numbers:
-        for obj in ("RV_BELEG", "BU_PARTNER", "MATBELEG", "ANLAGENNR"):
+        for obj in ("RV_BELEG", "EINKBELEG", "BU_PARTNER", "MATBELEG", "ANLAGENNR"):
             try:
                 r = conn.call("Z_M4H_NR_MAINTAIN", IV_OBJECT=obj,
                                 IV_INTERVAL_NR="A1")
