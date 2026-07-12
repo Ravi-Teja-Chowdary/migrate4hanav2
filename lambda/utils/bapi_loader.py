@@ -234,8 +234,18 @@ class BapiLoader:
         hdr = {"COMP_CODE": org["COMP_CODE"], "DOC_TYPE": org["DOC_TYPE"], "VENDOR": tgt_vendor,
                "PURCH_ORG": ekorg, "PUR_GROUP": org["PUR_GROUP"], "DOC_DATE": doc_date,
                "CURRENCY": curr}
-        res = self.c.call("BAPI_PO_CREATE1", POHEADER=hdr, POHEADERX={k: "X" for k in hdr},
-                          POITEM=poitem, POITEMX=poitemx, POACCOUNT=acct, POACCOUNTX=acctx)
+        # Source-number preservation: pass PURCHASEORDER when the wizard
+        # toggle is on and T161.NUMKE = 'A1' (external range) on the target
+        # BSART. Basis Kit's Z_M4H_TABLE_UPDATE flips these; silent-fallback
+        # if T161 is still internal range on target.
+        import os as _os
+        _preserve = _os.environ.get("M4H_PRESERVE_SRC_NUMBERS", "0").strip() == "1"
+        _bapi_kwargs = {"POHEADER": hdr, "POHEADERX": {k: "X" for k in hdr},
+                          "POITEM": poitem, "POITEMX": poitemx,
+                          "POACCOUNT": acct, "POACCOUNTX": acctx}
+        if _preserve and src_po:
+            _bapi_kwargs["PURCHASEORDER"] = src_po.zfill(10)
+        res = self.c.call("BAPI_PO_CREATE1", **_bapi_kwargs)
         ret = self._ret(res)
         po = (res.get("EXPPURCHASEORDER") or "").strip()
         vendor_ref = {"source": src_vendor, "target": tgt_vendor, "disposition": vdisp}
@@ -601,11 +611,27 @@ class BapiLoader:
         items = [{"ITM_NUMBER": "000010", "MATERIAL": cfg["sample_material"],
                   "TARGET_QTY": "1", "TARGET_QU": "EA"}]
         sched = [{"ITM_NUMBER": "000010", "REQ_QTY": "1"}]
-        res = self.c.call("BAPI_SALESORDER_CREATEFROMDAT2", ORDER_HEADER_IN=hdr,
-                          ORDER_PARTNERS=parts, ORDER_ITEMS_IN=items, ORDER_SCHEDULES_IN=sched)
+        # Source-number preservation (M4H_PRESERVE_SRC_NUMBERS=1): pass
+        # SALESDOCUMENTIN so the target SO gets the ECC VBELN when the
+        # TVAK.NUMKE external-range flag is set (Basis Kit does this via
+        # Z_M4H_TABLE_UPDATE). Silent-fallback: if TVAK is still internal
+        # range, S/4 ignores the input and assigns its own number.
+        import os as _os
+        _preserve = _os.environ.get("M4H_PRESERVE_SRC_NUMBERS", "0").strip() == "1"
+        _bapi_kwargs = {"ORDER_HEADER_IN": hdr, "ORDER_PARTNERS": parts,
+                          "ORDER_ITEMS_IN": items, "ORDER_SCHEDULES_IN": sched}
+        if _preserve and src_so:
+            _bapi_kwargs["SALESDOCUMENTIN"] = src_so.zfill(10)
+        res = self.c.call("BAPI_SALESORDER_CREATEFROMDAT2", **_bapi_kwargs)
         ret = self._ret(res)
         doc = (res.get("SALESDOCUMENT") or "").strip()
         cust_ref = {"source": src_cust, "target": tgt_cust, "disposition": cdisp}
+        # After the initial call, if source-number preservation is on AND
+        # the first attempt renumbered the SO, retry with SALESDOCUMENTIN=src_so.
+        # This is intentionally the second attempt so that if the target's
+        # TVAK.NUMKE flag ISN'T flipped we fail cleanly on the first call
+        # rather than silently rejecting the external number.
+        # (Moved to a pre-call injection in the follow-up patch below.)
         if [m for m in ret if m.get("TYPE") in ("E", "A")] or not doc:
             self._rollback()
             return {"status": "failed", "customer": cust_ref,
