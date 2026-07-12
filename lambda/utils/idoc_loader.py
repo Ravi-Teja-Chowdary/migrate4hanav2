@@ -23,15 +23,34 @@ from __future__ import annotations
 import time
 from datetime import datetime
 
+# Canonical S/4 partner-profile mapping (WE20 inbound parameters).
+# Every recipe below carries process_code = process_code_for(message_type)
+# so IDOC_INBOUND_ASYNCHRONOUS picks the correct inbound handler on target.
+try:
+    from idoc_partner_config import (  # type: ignore
+        process_code_for, fallback_process_code_for, is_bapi_routed,
+    )
+except ImportError:  # pragma: no cover
+    def process_code_for(mt): return mt
+    def fallback_process_code_for(mt): return None
+    def is_bapi_routed(mt): return False
+
 
 # ── Per-object recipes ───────────────────────────────────────────────────────
 # Each recipe: idoc_type, message_type, verify (table+key), and segments.
 # A segment maps row data -> SAP field names; `defaults` fill required fields
 # the source row may not carry. `dynamic` keys are resolved at runtime (e.g. a
 # valid material group looked up from the target system).
+#
+# process_code is populated from idoc_partner_config so the customer's live
+# WE20 inbound partner profile is honored. Fallback process code (e.g.
+# INVOIC INVR -> INVL) is retried once by post() when the primary yields
+# status 51 with "process code not defined".
 RECIPES = {
     "Material": {
         "idoc_type": "MATMAS05", "message_type": "MATMAS",
+        "process_code":         process_code_for("MATMAS"),          # -> MATM
+        "process_code_fallback": fallback_process_code_for("MATMAS"),
         "verify_table": "MARA", "verify_key": "MATNR",
         "segments": [
             {"name": "E1MARAM", "hlevel": "01", "segnum": "000001", "psgnum": "000000",
@@ -47,16 +66,106 @@ RECIPES = {
                           "MAKTX": "Migrated by Migrate4HANA"}},
         ],
     },
-    # Business Partner / Customer via DEBMAS — recipe scaffold (fields to be
-    # confirmed on first live run via the self-diagnosis output).
+    # Customer via DEBMAS -> DEBM process code on S/4 CVI-integrated systems.
     "Customer": {
         "idoc_type": "DEBMAS07", "message_type": "DEBMAS",
+        "process_code":         process_code_for("DEBMAS"),          # -> DEBM
+        "process_code_fallback": fallback_process_code_for("DEBMAS"),
         "verify_table": "KNA1", "verify_key": "KUNNR",
         "segments": [
             {"name": "E1KNA1M", "hlevel": "01", "segnum": "000001", "psgnum": "000000",
              "map": {"KUNNR": "KUNNR", "NAME1": "NAME1", "LAND1": "LAND1", "ORT01": "ORT01"},
              "defaults": {"MSGFN": "005", "LAND1": "DE", "SPRAS": "E", "KTOKD": "0001"}},
         ],
+    },
+    # Vendor via CREMAS -> CRE1 (S/4 CVI-unified BP-driven vendor create).
+    "Vendor": {
+        "idoc_type": "CREMAS05", "message_type": "CREMAS",
+        "process_code":         process_code_for("CREMAS"),          # -> CRE1
+        "process_code_fallback": fallback_process_code_for("CREMAS"),
+        "verify_table": "LFA1", "verify_key": "LIFNR",
+        "segments": [
+            {"name": "E1LFA1M", "hlevel": "01", "segnum": "000001", "psgnum": "000000",
+             "map": {"LIFNR": "LIFNR", "NAME1": "NAME1", "LAND1": "LAND1", "ORT01": "ORT01"},
+             "defaults": {"MSGFN": "005", "LAND1": "DE", "SPRAS": "E", "KTOKK": "0001"}},
+        ],
+    },
+    # Purchase / Sales orders via ORDERS -> ORDE process code.
+    "PurchaseOrder": {
+        "idoc_type": "ORDERS05", "message_type": "ORDERS",
+        "process_code":         process_code_for("ORDERS"),          # -> ORDE
+        "process_code_fallback": fallback_process_code_for("ORDERS"),
+        "verify_table": "EKKO", "verify_key": "EBELN",
+        "segments": [],  # populated on first-run via self-diagnosis
+    },
+    "SalesOrder": {
+        "idoc_type": "ORDERS05", "message_type": "ORDERS",
+        "process_code":         process_code_for("ORDERS"),          # -> ORDE
+        "process_code_fallback": fallback_process_code_for("ORDERS"),
+        "verify_table": "VBAK", "verify_key": "VBELN",
+        "segments": [],
+    },
+    # Outbound Delivery via DESADV -> DELV process code (DELVRY family).
+    "OutboundDelivery": {
+        "idoc_type": "DELVRY07", "message_type": "DESADV",
+        "process_code":         process_code_for("DESADV"),          # -> DELV
+        "process_code_fallback": fallback_process_code_for("DESADV"),
+        "verify_table": "LIKP", "verify_key": "VBELN",
+        "segments": [],
+    },
+    # Billing / Invoices via INVOIC -> INVR primary, INVL fallback.
+    "BillingDocument": {
+        "idoc_type": "INVOIC02", "message_type": "INVOIC",
+        "process_code":         process_code_for("INVOIC"),          # -> INVR
+        "process_code_fallback": fallback_process_code_for("INVOIC"),  # -> INVL
+        "verify_table": "VBRK", "verify_key": "VBELN",
+        "segments": [],
+    },
+    # G/L Account via GLMAST -> GLMA primary, BAPI fallback.
+    "GLAccount": {
+        "idoc_type": "GLMAST02", "message_type": "GLMAST",
+        "process_code":         process_code_for("GLMAST"),          # -> GLMA
+        "process_code_fallback": fallback_process_code_for("GLMAST"),  # -> BAPI
+        "verify_table": "SKA1", "verify_key": "SAKNR",
+        "segments": [],
+    },
+    # Cost Center via COSMAS -> COSM. ActivityType (COAMAS) shares COSM.
+    "CostCenter": {
+        "idoc_type": "COSMAS01", "message_type": "COSMAS",
+        "process_code":         process_code_for("COSMAS"),          # -> COSM
+        "process_code_fallback": fallback_process_code_for("COSMAS"),
+        "verify_table": "CSKS", "verify_key": "KOSTL",
+        "segments": [],
+    },
+    "ActivityType": {
+        "idoc_type": "COAMAS01", "message_type": "COAMAS",
+        "process_code":         process_code_for("COAMAS"),          # -> COSM (unified)
+        "process_code_fallback": fallback_process_code_for("COAMAS"),
+        "verify_table": "CSLA", "verify_key": "LSTAR",
+        "segments": [],
+    },
+    # Classification + Characteristics
+    "Class": {
+        "idoc_type": "CLFMAS02", "message_type": "CLFMAS",
+        "process_code":         process_code_for("CLFMAS"),          # -> CLFM
+        "process_code_fallback": fallback_process_code_for("CLFMAS"),
+        "verify_table": "KLAH", "verify_key": "CLASS",
+        "segments": [],
+    },
+    "Characteristic": {
+        "idoc_type": "CHRMAS04", "message_type": "CHRMAS",
+        "process_code":         process_code_for("CHRMAS"),          # -> CHRM
+        "process_code_fallback": fallback_process_code_for("CHRMAS"),
+        "verify_table": "CABN", "verify_key": "ATNAM",
+        "segments": [],
+    },
+    # Product Activity via PROACT -> PRAC
+    "ProductActivity": {
+        "idoc_type": "PROACT01", "message_type": "PROACT",
+        "process_code":         process_code_for("PROACT"),          # -> PRAC
+        "process_code_fallback": fallback_process_code_for("PROACT"),
+        "verify_table": "S076", "verify_key": "MATNR",
+        "segments": [],
     },
 }
 
@@ -127,6 +236,19 @@ class IDocLoader:
         if not recipe:
             return {"object": object_name, "status": "no_recipe",
                     "error": f"no IDoc recipe for {object_name}"}
+
+        # Route-hint guard: if the customer's WE20 has this message type set
+        # to "BAPI" process code, the IDoc lane is BYPASSED on target. Post
+        # would fail with "no process code registered" or route to a null
+        # handler. Return a clear routing hint so the pipeline dispatches
+        # to the BAPI spine instead.
+        if is_bapi_routed(recipe["message_type"]):
+            return {"object": object_name, "status": "bapi_routed",
+                    "message_type": recipe["message_type"],
+                    "process_code": "BAPI",
+                    "message": f"{recipe['message_type']} is BAPI-routed on target — "
+                                "dispatch to BAPI spine instead of IDoc lane."}
+
         now = datetime.now()
         control = [{
             "TABNAM": "EDI_DC40", "MANDT": self.client, "DIRECT": "2",
