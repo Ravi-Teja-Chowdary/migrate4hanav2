@@ -290,10 +290,9 @@ FUNCTION Z_M4H_NR_MAINTAIN.
 * even though the interval doesn't actually get created.
 
 DATA: lt_intervals TYPE STANDARD TABLE OF inriv,
-      ls_interval  TYPE inriv,
-      lt_errors    TYPE STANDARD TABLE OF inri_ret.
+      ls_interval  TYPE inriv.
 
-CLEAR: lt_intervals, ls_interval, lt_errors.
+CLEAR: lt_intervals, ls_interval.
 ls_interval-nrrangenr  = iv_interval_nr.
 ls_interval-fromnumber = iv_from.
 ls_interval-tonumber   = iv_to.
@@ -302,26 +301,25 @@ ls_interval-procind    = 'I'.
 APPEND ls_interval TO lt_intervals.
 
 TRY.
+    " Modern S/4 signature: only INTERVAL is a TABLES parameter.
+    " Older releases also had ERROR — we no longer request it.
+    " sy-subrc + exception is enough to detect real failures.
     CALL FUNCTION 'NUMBER_RANGE_INTERVAL_UPDATE'
       EXPORTING object   = iv_object
-      TABLES    interval = lt_intervals
-                error    = lt_errors.
-    " Inspect errors table — NR 009 (no changes) is soft when interval
-    " already exists; hard errors on other conditions.
-    LOOP AT lt_errors INTO DATA(ls_err).
-      IF ls_err-msgty = 'E' OR ls_err-msgty = 'A'.
-        IF ls_err-msgnr = '009'.  " no changes = already exists
-          CONTINUE.
-        ENDIF.
-        ev_status = |WARN: | && ls_err-msgtx.
+      TABLES    interval = lt_intervals.
+    IF sy-subrc <> 0.
+      " Check sy-msg* — NR 009 = "no changes" = already exists.
+      IF sy-msgno = '009' AND sy-msgid = 'NR'.
+        ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (already existed)|.
+      ELSE.
+        ev_status = |WARN: | && sy-msgid && sy-msgno && ' ' && sy-msgv1.
       ENDIF.
-    ENDLOOP.
+    ELSE.
+      ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (created)|.
+    ENDIF.
     CALL FUNCTION 'NUMBER_RANGE_UPDATE_CLOSE'
       EXPORTING object = iv_object.
     COMMIT WORK AND WAIT.
-    IF ev_status IS INITIAL.
-      ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object.
-    ENDIF.
   CATCH cx_root INTO DATA(lo_err).
     ev_status = |ERROR: | && lo_err->get_text( ).
 ENDTRY.
