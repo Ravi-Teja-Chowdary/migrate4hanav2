@@ -2476,6 +2476,112 @@ class _PrepAutoRunRequest(BaseModel):
     run_id: str
 
 
+@app.get("/api/pipeline/basis-kit/install.abap",
+         dependencies=[Depends(require_auth)])
+async def basis_kit_install():
+    """Return the migrate4hana Basis Kit v1.0 install ABAP — a scoped,
+    whitelisted, auditable Z-namespace package the customer's Basis team
+    installs ONCE per S/4 tenant. After install, every future migration
+    is 100% fire-and-forget via RFC (no SAP GUI touchpoints)."""
+    try:
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from basis_kit_installer import kit_install_abap  # type: ignore
+        src = kit_install_abap()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"kit install gen: {e}")
+    return Response(content=src, media_type="text/plain",
+                     headers={"Content-Disposition":
+                                 'attachment; filename="ZM4H_KIT_INSTALL.abap"'})
+
+
+@app.get("/api/pipeline/basis-kit/fm-sources.abap",
+         dependencies=[Depends(require_auth)])
+async def basis_kit_fm_sources():
+    """Return the 4 function-module source bodies (Z_M4H_STATUS,
+    Z_M4H_NR_MAINTAIN, Z_M4H_TABLE_UPDATE, Z_M4H_HEALTH_LOG) as one
+    .abap file the Basis team pastes into SE37 one at a time."""
+    try:
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from basis_kit_installer import fm_source_bundle  # type: ignore
+        src = fm_source_bundle()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"FM sources gen: {e}")
+    return Response(content=src, media_type="text/plain",
+                     headers={"Content-Disposition":
+                                 'attachment; filename="M4H_KIT_FMS.abap"'})
+
+
+@app.get("/api/pipeline/basis-kit/verify",
+         dependencies=[Depends(require_auth)])
+async def basis_kit_verify():
+    """Probe Z_M4H_STATUS on target — returns kit installed state."""
+    conns = _load_connections()
+    s4_conf = conns.get("s4hana") or {}
+    if not (s4_conf.get("ashost") and _s4_passwd):
+        raise HTTPException(status_code=400,
+                             detail="No active S/4 connection. Save + test S/4 first.")
+    try:
+        import pyrfc  # type: ignore
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from basis_kit_installer import verify_kit_installed  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"import: {e}")
+    try:
+        conn = pyrfc.Connection(
+            ashost=s4_conf["ashost"], sysnr=s4_conf["sysnr"],
+            client=s4_conf["client"], user=s4_conf["user"],
+            passwd=_s4_passwd, lang="EN")
+        try:
+            return verify_kit_installed(conn)
+        finally:
+            conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+class _KitApplyRequest(BaseModel):
+    preserve_source_numbers: Optional[bool] = True
+
+
+@app.post("/api/pipeline/basis-kit/apply",
+          dependencies=[Depends(require_auth)])
+async def basis_kit_apply(body: _KitApplyRequest = None):
+    """Fire-and-forget: apply the target-side prep via the Basis Kit RFC
+    functions. Requires kit installed. Zero SAP GUI activity."""
+    body = body or _KitApplyRequest()
+    conns = _load_connections()
+    s4_conf = conns.get("s4hana") or {}
+    ecc_conf = conns.get("ecc") or {}
+    if not (s4_conf.get("ashost") and _s4_passwd
+             and ecc_conf.get("ashost") and _ecc_passwd):
+        raise HTTPException(status_code=400,
+                             detail="Both ECC and S/4 connections required.")
+    try:
+        import pyrfc  # type: ignore
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from abap_generator import scan_ecc  # type: ignore
+        from basis_kit_installer import apply_via_kit  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"import: {e}")
+
+    econn = pyrfc.Connection(ashost=ecc_conf["ashost"], sysnr=ecc_conf["sysnr"],
+                              client=ecc_conf["client"], user=ecc_conf["user"],
+                              passwd=_ecc_passwd, lang="EN")
+    try:
+        scan = scan_ecc(econn)
+    finally:
+        econn.close()
+
+    sconn = pyrfc.Connection(ashost=s4_conf["ashost"], sysnr=s4_conf["sysnr"],
+                              client=s4_conf["client"], user=s4_conf["user"],
+                              passwd=_s4_passwd, lang="EN")
+    try:
+        return apply_via_kit(sconn, scan,
+                              preserve_source_numbers=bool(body.preserve_source_numbers))
+    finally:
+        sconn.close()
+
+
 @app.get("/api/pipeline/prep-script/bootstrap.abap",
          dependencies=[Depends(require_auth)])
 async def prep_script_bootstrap():
