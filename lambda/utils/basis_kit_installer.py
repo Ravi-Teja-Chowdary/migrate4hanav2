@@ -324,6 +324,11 @@ ls_interval-procind    = 'I'.
 APPEND ls_interval TO lt_intervals.
 
 TRY.
+    " NUMBER_RANGE_INTERVAL_UPDATE raises MESSAGE E009(NR) "No changes
+    " were made" when the interval already exists identically. Without
+    " an EXCEPTIONS clause on the CALL FUNCTION, that MESSAGE becomes
+    " an ABAP runtime error and bypasses cx_root. EXCEPTIONS OTHERS = 4
+    " converts it into sy-subrc = 4 + sy-msgid/sy-msgno we can inspect.
     CALL FUNCTION 'NUMBER_RANGE_INTERVAL_UPDATE'
       EXPORTING
         object          = iv_object
@@ -333,16 +338,19 @@ TRY.
         warning_occured = lv_warn_occ
       TABLES
         interval        = lt_intervals
-        error_iv        = lt_error_iv.
+        error_iv        = lt_error_iv
+      EXCEPTIONS
+        OTHERS          = 4.
 
-    " Diagnose from the EXPORT struct + occurance flags.
-    " INRER fields (verified live 2026-07-12 via DDIF_FIELDINFO_GET):
-    "   MSGNR (CHAR6)  - message number
-    "   TABLENAME      - parameter name that errored
-    "   FIELDNAME      - field name inside that parameter
-    "   TABIX (DEC3)   - row index with the error
-    " No MSGID on modern INRER - it was consolidated.
-    IF lv_err_occ = 'X'.
+    IF sy-subrc = 4.
+      IF sy-msgid = 'NR' AND sy-msgno = '009'.
+        " Idempotent success: interval already exists with same values.
+        ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (already existed)|.
+      ELSE.
+        ev_status = |ERROR: | && sy-msgid && sy-msgno && ' ' && sy-msgv1.
+        RETURN.
+      ENDIF.
+    ELSEIF lv_err_occ = 'X'.
       IF ls_error-msgnr = '009' OR ls_error-msgnr = '  009 '.
         ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (already existed)|.
       ELSE.
