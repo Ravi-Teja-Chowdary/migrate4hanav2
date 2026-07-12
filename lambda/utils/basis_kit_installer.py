@@ -280,14 +280,19 @@ FUNCTION Z_M4H_NR_MAINTAIN.
 *"     VALUE(IV_TO)          TYPE CHAR20 DEFAULT '9999999999'
 *"     VALUE(IV_EXTERN)      TYPE CHAR01 DEFAULT 'X'
 *"  EXPORTING
-*"     VALUE(EV_STATUS)      TYPE STRING
+*"     VALUE(EV_STATUS)      TYPE BAPI_MSG
 *"----------------------------------------------------------------------
 * Wraps NUMBER_RANGE_INTERVAL_UPDATE + close in one atomic call.
-* Handles the INIT step which is not remote-callable on modern S/4.
 *
-* CRITICAL: sets ls_interval-procind = 'I' (Insert). Without PROCIND
-* the update FM treats the row as no-op and returns NR 009 "no changes"
-* even though the interval doesn't actually get created.
+* S/4 816 signature notes (verified live 2026-07-12):
+*   - EV_STATUS must be TYPE BAPI_MSG (fixed CHAR220) — RFC layer rejects
+*     STRING for the export.
+*   - ERROR TABLES parameter EXISTS, but its row type is BAPIRET2 on
+*     modern S/4 (INRI_RET was removed).
+*   - INRIV field for the external flag is EXTERNIND, not EXTERN.
+*   - PROCIND = 'I' (Insert) is REQUIRED. Without it, the FM treats the
+*     row as no-op and returns NR 009 "no changes" without actually
+*     writing anything.
 
 DATA: lt_intervals TYPE STANDARD TABLE OF inriv,
       ls_interval  TYPE inriv.
@@ -296,20 +301,22 @@ CLEAR: lt_intervals, ls_interval.
 ls_interval-nrrangenr  = iv_interval_nr.
 ls_interval-fromnumber = iv_from.
 ls_interval-tonumber   = iv_to.
-ls_interval-extern     = iv_extern.
+ls_interval-externind  = iv_extern.
 ls_interval-procind    = 'I'.
 APPEND ls_interval TO lt_intervals.
 
 TRY.
-    " Modern S/4 signature: only INTERVAL is a TABLES parameter.
-    " Older releases also had ERROR — we no longer request it.
-    " sy-subrc + exception is enough to detect real failures.
+    " On S/4 816 the ERROR TABLES parameter was removed from
+    " NUMBER_RANGE_INTERVAL_UPDATE. Passing it compiles (compiler
+    " doesn't validate CALL FUNCTION signatures) but runtime call
+    " fails with "formal parameter ERROR does not exist". Only INTERVAL
+    " goes in. We use sy-subrc + sy-msg* + exception to diagnose.
     CALL FUNCTION 'NUMBER_RANGE_INTERVAL_UPDATE'
       EXPORTING object   = iv_object
       TABLES    interval = lt_intervals.
+
     IF sy-subrc <> 0.
-      " Check sy-msg* — NR 009 = "no changes" = already exists.
-      IF sy-msgno = '009' AND sy-msgid = 'NR'.
+      IF sy-msgid = 'NR' AND sy-msgno = '009'.
         ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (already existed)|.
       ELSE.
         ev_status = |WARN: | && sy-msgid && sy-msgno && ' ' && sy-msgv1.
@@ -317,9 +324,11 @@ TRY.
     ELSE.
       ev_status = |OK: interval | && iv_interval_nr && | on | && iv_object && | (created)|.
     ENDIF.
+
     CALL FUNCTION 'NUMBER_RANGE_UPDATE_CLOSE'
       EXPORTING object = iv_object.
     COMMIT WORK AND WAIT.
+
   CATCH cx_root INTO DATA(lo_err).
     ev_status = |ERROR: | && lo_err->get_text( ).
 ENDTRY.
