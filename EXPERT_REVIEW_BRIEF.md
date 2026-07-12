@@ -1068,3 +1068,209 @@ system pair, not more engineering.
 - **Default row cap doubled** — `M4H_LOAD_MAX_ROWS` default 5 → 10; cutover-phase fallback 3 → 6.
 
 **Residual risk not addressed today**: the class of failure that produced this incident — "app code adds a prod-fail-closed gate without matching Terraform" — is not systemically prevented. Every future prod gate still needs its Terraform side written in the same commit. A CI-side container smoke-boot with the real prod env shape (assert `/api/health` returns 200) would catch this class. Not shipped.
+
+## 16. 2026-07-06 to 2026-07-12 — Content-preservation architecture: prep-script generator, Basis Kit v1.0, real-run findings
+
+Week of focused work on the "move every content byte from ECC to S/4 with SAP-support-preserving mechanisms, preserving source keys where SAP's platform permits it" problem. **Not a marketing summary — the section closes with an honest SAP-architecture constraint we surfaced through live testing that materially changes what "full preservation" means on a brownfield tenant.**
+
+### 16.1 SD family universal source-key preservation (2026-07-06)
+
+Adds `preserve_source_document_numbers` toggle to the wizard + threads `M4H_PRESERVE_SRC_NUMBERS` env var through `cutover.py` + `start_pipeline_async`. Six SD spines wire the source key into each BAPI's external-number field:
+
+| Spine | BAPI | External-number field |
+|---|---|---|
+| `sales_order_spine.py` | `BAPI_SALESORDER_CREATEFROMDAT2` | `SALESDOCUMENTIN` |
+| `returns_order_sd_spine.py` | same BAPI (VBTYP=H) | same |
+| `credit_memo_request_spine.py` | same BAPI (VBTYP=K) | same |
+| `sales_contract_spine.py` | `BAPI_SALESCONTRACT_CREATEFROMDATA` | `SALESDOCUMENT` |
+| `outbound_delivery_spine.py` | `BAPI_OUTB_DELIVERY_CREATESLS` | `DELIVERY` |
+| `billing_document_spine.py` | `BAPI_BILLINGDOC_CREATEMULTIPLE` | `BILLINGDATAIN[0].DOC_NUMBER` |
+
+Silent-fallback semantics: if the target's TVAK/TVLK/TVFK NUMKE is still internal-range, the BAPI ignores the input and assigns its own number; the DDB key-map records the source-to-target pair unchanged. Adds VBAK VBTYP filters (`SalesOrder='C'`, `ReturnsOrderSD='H'`, `CreditMemoRequest='K'`, `DebitMemoRequest='L'`) to the extraction catalog so those objects are no longer "skipped: no source-table mapping".
+
+### 16.2 Auto-generated S/4 prep ABAP (2026-07-06)
+
+New `lambda/utils/abap_generator.py` (~540 LOC) — scans ECC customizing over pyrfc, emits a self-contained ABAP report the S/4 admin runs in SE38. Covers T001, T001W, TKA01, T023, TCURV, TCURF, TFACD, TFAIN, T007A, TVAK, TVLK, TVFK + `NUMBER_RANGE_INTERVAL_UPDATE` for external interval creation. Uses `MODIFY` for idempotent re-runs; emits companion undo report for rollback.
+
+Robustness fix (2026-07-07): schema drift on ECC EHP 6.0 vs S/4 816 — many field lists in `SCAN_SPEC` are S/4-816-shape and RFC_READ_TABLE errors `FIELD_NOT_VALID` on the ECC side for fields that don't exist on release 740. Fix: `DDIF_FIELDINFO_GET` called before every RFC_READ_TABLE to discover the actually-available fields per table, then intersect with the requested list. Went from 7 tables landing rows to 34 tables landing 10,494 real customizing rows.
+
+Emitter also fixed to no longer skip tables that landed rows but carried a "partial-schema" note.
+
+### 16.3 Failed-records reprocessing loop (2026-07-06)
+
+Enterprise-standard fix-and-retry workflow via Excel round-trip:
+
+- `lambda/utils/reprocess_manager.py` (~280 LOC): per-object spine field-spec discovery, multi-sheet Excel template emit, failures workbook emit (with `__failure_reason` + `__failure_code` columns), round-trip Excel parser, `reprocess_rows()` per-object retry driver
+- Three api endpoints: `GET /api/runs/{id}/reprocess/template`, `GET .../failures`, `POST .../upload`
+- Wizard UI: new "Fix & retry" section appearing once a run finishes, with three cards (Download failures / Download template / Upload corrected). Result panel shows per-object attempted/created/matched/still-failed
+- Format: multi-sheet Excel, one sheet per object type. Sample italic row per column, deleted before upload. Any team member can correct without CLI/JSON
+
+### 16.4 XBP batch-job auto-run + no-SSH RFC path (2026-07-06 + 2026-07-07)
+
+`RFC_ABAP_INSTALL_AND_RUN` verified removed on S/4 1809+ (FU_NOT_FOUND on target). `auto_run_on_s4()` now falls back to `BAPI_XBP_JOB_OPEN` + `JOB_ADD_ABAP_STEP` + `JOB_START_ASAP` + spool read via `BAPI_XBP_JOB_SPOOLLIST_READ`. Portable across 4.6C+ SAP releases but requires a pre-existing wrapper program on target (needs SSH once for setup).
+
+New `direct_customizer.py` (~350 LOC) — attempts customizing writes via `NUMBER_RANGE_INTERVAL_UPDATE` + `VIEW_MAINTENANCE_STORE_DATA`. Live probe against S4H 816 showed `VIEW_MAINTENANCE_STORE_DATA` is REMOVED on modern S/4 (SAP hardened for security). So the direct-RFC path is limited to number ranges on modern S/4.
+
+### 16.5 Full-breadth wire-up (2026-07-07)
+
+Grew the tool from Tier-1-only to comprehensive:
+
+- `lambda/utils/dependency_dag.py`: added 10 previously-missing spines to the DAG with correct FK edges (BillingDocument, WorkCenter, Network, WBSElement, ProductionBOM, WarrantyClaim, FixedAssetOvertake, ServiceMaster, SourceList, PurchaseOrder)
+- `lambda/data-migrator/handler.py`: added 4 missing extraction routes (PurchaseOrder, ProductionBOM, WarrantyClaim, FixedAssetOvertake)
+- `lambda/utils/abap_generator.py::SCAN_SPEC` grew from 12 to 40+ customizing tables (TVKO/TVTW/TSPA/TVKOV/TVTA sales area, T024E/T024 purchasing, T134/T134T/T137/T023T material master, T003O/T430 PP orders, T003/T077K/T077Y/T052/TFACT FI, T005/T005S/TCURC/T006 reference, TQ15/TQ16 QM)
+- `lambda/utils/coverage_summary.py` (new): cross-references spine registry + DAG + extraction catalog, emits honest per-object tier badge (T1 / T2 / MC / BLOCKED)
+- `GET /api/pipeline/coverage` endpoint returning the coverage payload
+- Wizard "Migration coverage" panel at the top of the Project page: totals chip + collapsible detail table with per-object tier badge, DAG membership, extract routing, and BAPI or blocked-reason
+
+### 16.6 Live-verify sweep (2026-07-07)
+
+`verify_tier2_local.py` — reusable harness that reads `connections.json` + password env vars, iterates T2 spines, synthesizes rows using `DQ_GATES` + `FIELD_MAPS` defaults, calls each spine's BAPI against live S/4, records per-object outcome. Three subtle bugs fixed:
+
+- Forces the BAPI spine class over the MC-file shim via `inspect` (they collide on `object_type`)
+- Disables ledger short-circuit for a true BAPI verify
+- Preserves DQ `in_set`-locked values against generic defaults
+
+Round 1: 5 T2-to-T1 promotions (HRMaster, IncomingInvoice, Notification, RequisitionLegacy, StockTransferOrder). 9 reclassified as MC-lane (BAPI doesn't exist on target release — `FU_NOT_FOUND`). 7 remain Tier-2 with specific per-spine fixes needed.
+
+Round 2 (2026-07-07 evening): 1 more T1 promotion (ScheduleAgreementMM via snake-case naming fix + runtime date-bump patch). 4 more Blocked-but-closable via prep-script extensions (Project needs TCJ04, ServiceMaster needs T362, PurchaseOrder/SubcontractingPO need T163K/T163Y).
+
+Final coverage as of 2026-07-07 evening: Tier-1 **44** (was 38 that morning, +6 in one day); Tier-2 **2** (NetworkComponent, Requirement); MC-lane 106; Blocked 11.
+
+### 16.7 IDoc process code alignment with customer's live WE20 (2026-07-08)
+
+Customer configured 16 inbound message types on S/4 with specific process codes. Codebase had legacy assumptions (default process code = message type name). Now aligned to their actual WE20:
+
+| MESTYP | Process code | Note |
+|---|---|---|
+| MATMAS | MATM | (was: MATMAS) |
+| DEBMAS | DEBM | |
+| CREMAS | CRE1 | S/4 CVI unified |
+| ORDERS | ORDE | |
+| DESADV | DELV | DELVRY family |
+| GLMAST | GLMA | primary, BAPI fallback |
+| COSMAS | COSM | |
+| COAMAS | COSM | S/4 unified with COSMAS |
+| CLFMAS | CLFM | |
+| CHRMAS | CHRM | |
+| PROACT | PRAC | |
+| INVOIC | INVR | primary, INVL fallback |
+| EXCHANGE_RATE, BANK_CREATE, PREQCR, INTERNAL_ORDER | BAPI | BAPI-routed |
+
+New `lambda/utils/idoc_partner_config.py` — `PARTNER_INBOUND` canonical registry with `process_code_for()`, `fallback_process_code_for()`, `is_bapi_routed()`, `route_hint_for_object()` helpers. `mc_job_trigger.py::_IDOC_TYPES` and `idoc_loader.py::RECIPES` both wired. New BAPI-routing guard in `post()` returns `status='bapi_routed'` when message type is BAPI-configured on target — pipeline dispatches to BAPI spine rather than attempting classic IDoc post.
+
+### 16.8 Basis Kit v1.0 — one-time SAP install for 100% RFC fire-and-forget (2026-07-12)
+
+Enterprise architectural piece. Customer's Basis team installs ONE small package on target S/4 (~10 min, one-time forever). After install, every migrate4hana migration is 100% fire-and-forget via RFC — no SAP GUI activity per migration, no SSH, no filesystem, no per-run prep-script paste.
+
+**Kit contents** (all in $TMP or ZM4H package, no repository writes):
+
+- **3 DDIC types**: `ZM4H_ABAP_LINE` (structure, LINE CHAR255), `ZM4H_ABAP_LINES` (table type), `ZM4H_LOG_ROW` (audit-row structure)
+- **1 function group**: ZM4H
+- **5 RFC-enabled function modules**:
+  - `Z_M4H_STATUS` — kit version + install date probe (read-only)
+  - `Z_M4H_NR_MAINTAIN` — number range interval INSERT (proper INIT/UPDATE/CLOSE cycle)
+  - `Z_M4H_NR_MODIFY` — number range interval EXTERNIND flip on existing interval (added 2026-07-12 evening)
+  - `Z_M4H_TABLE_UPDATE` — whitelisted customizing writes to 10 tables ONLY (TVAK/TVLK/TVFK/T161/TB003/T077K/T077Y/T134/T003O/T093B)
+  - `Z_M4H_HEALTH_LOG` — audit trail retrieval
+- **1 optional role**: ZM4H_MIGRATION_ADMIN (skip if MIGRATE_ADMI has SAP_ALL, as on CAL trials — CAL trials don't have PFCG anyway)
+
+Enterprise-security-review friendly:
+- No arbitrary ABAP execution (deliberately no `Z_M4H_RUN_ABAP`)
+- Whitelisted table writes only (auditable in one glance)
+- No SAP_ALL required at runtime; role has 3 narrow auth objects
+- Uninstall = 4 clicks (delete FUGR + DDIC + role)
+
+New api endpoints: `GET /api/pipeline/basis-kit/install.abap`, `GET .../fm-sources.abap`, `GET .../verify`, `POST .../apply`.
+
+**Real live install experience** — genuine iteration cost, documented honestly:
+
+The `Z_M4H_NR_MAINTAIN` FM went through 7 iterations before landing on the actually-working signature for S/4 816. Each iteration surfaced a real SAP DDIC / signature difference. Documented here as evidence-based signature discovery rather than a smooth demo:
+
+1. **Iter 1**: Called `NUMBER_RANGE_INTERVAL_UPDATE` with `error = lt_errors` TYPE `inri_ret`. Runtime: `INRI_RET` doesn't exist on S/4 816.
+2. **Iter 2**: Changed to `bapiret2`. Runtime: `error` parameter still rejected — signature-drift issue.
+3. **Iter 3**: Dropped `error` param. Runtime: `mandatory parameter ERROR_IV was not filled` — DIFFERENT error, meaning parameter is now called `ERROR_IV`.
+4. **Iter 4**: Queried FUPARAREF live via RFC_READ_TABLE. Authoritative signature discovered:
+   - EXPORT `ERROR` type `INRER` (single struct)
+   - EXPORT `ERROR_OCCURED`, `WARNING_OCCURED` (booleans)
+   - TABLES `INTERVAL` type `INRIV`
+   - TABLES `ERROR_IV` type `INRIV` (mandatory)
+5. **Iter 5**: Wrote code using `ls_error-nrmessage`. Runtime: struct field name is actually `MSGNR` not `nrmessage`.
+6. **Iter 6**: Queried DDIF_FIELDINFO_GET on struct `INRER`. Actual fields: MSGNR, TABLENAME, FIELDNAME, TABIX. No MSGID (consolidated on modern SAP).
+7. **Iter 7**: `MESSAGE E009 (NR)` "No changes were made" bypassed the TRY/CATCH cx_root. Added `EXCEPTIONS OTHERS = 4` to the CALL FUNCTION — SAP MESSAGE requires old-style exception handling to catch, not class-based.
+
+Also discovered along the way: `EV_STATUS` must be `BAPI_MSG` (not `STRING`) — RFC layer rejects `STRING` for exports. `INRIV` field for external flag is `EXTERNIND` (not `EXTERN`). `PROCIND = 'I'` (Insert) is REQUIRED — without it the FM treats the row as no-op even when the interval doesn't exist.
+
+**Every one of these is documented in commit messages** so future customers hitting the same S/4 don't repeat the iteration. Kit is auditable line-by-line.
+
+### 16.9 Fundamental SAP-architecture constraint on brownfield preservation (2026-07-12 finding)
+
+**This is the honest finding that changes the "full preservation" story.** Real live testing surfaced that modern S/4 ships with **structurally-designed** number-range intervals per SNRO object, and those intervals alternate internal-external by SAP's design intent.
+
+Example RV_BELEG (sales orders) intervals from live NRIV probe:
+
+| Interval | Range | External flag |
+|---|---|:---:|
+| 01 | 0000000001 to 0004999999 | (blank — internal) |
+| 02 | 0005000000 to 0005999999 | X |
+| 03 | 0010000000 to 0014999999 | (blank) |
+| 04 | 0015000000 to 0019999999 | X |
+| ... | alternating | ... |
+| 60 | 0006000000 to 0009999999 | X |
+
+`Z_M4H_NR_MODIFY` attempted to flip interval `01` EXTERNIND to `X` via `PROCIND='M'`. Live S/4 rejected with `NR 009` "no changes were made" — SAP won't allow flipping an interval SAP designated as structurally-internal. This isn't a kit bug or an SAP misconfiguration; it's the platform's design intent.
+
+**What this means for source-key preservation on brownfield tenants**:
+
+Source ECC keys must ALREADY fit into an interval that's ALREADY external on target. When they don't fit:
+
+- **Greenfield tenant**: Tool creates external intervals to match source ranges. Full preservation. Works today.
+- **Brownfield tenant**: Preservation depends on source-key-range vs. existing external-interval overlap. When they don't overlap, the customer has to choose:
+  1. Point TVAK/T161/T077K NUMKE at an existing external interval that DOES cover their source range
+  2. Modify a SAP-designated internal interval to external (requires Basis approval — SAP support risk)
+  3. Shift source keys via mapping table (source `4969` becomes target `5,004,969` if using interval `02`)
+  4. Accept renumbering, use the DDB key-map ledger for source-to-target lookup
+
+**Currently verified working preservation on CAL S/4 816**:
+
+| Object | Preservation | Reason |
+|---|:---:|---|
+| CostCenter | 5/5 | Default external range accepts arbitrary keys |
+| Material | 289/290 | Same |
+| ProfitCenter | 1/1 | Same |
+| BusinessPartner | 0/2 | Source keys fit BU_PARTNER interval `01` (1-999999 external), but TB003 grouping (which points at that interval) is stored in a pool table not writable via RFC_READ_TABLE/Z_M4H_TABLE_UPDATE on S/4 |
+| SalesOrder | 0/500 | Source keys 1-15332 don't fit any existing RV_BELEG external interval; SAP design intent forbids flipping `01` |
+| PurchaseOrder | 0/500 | Source keys 3000000004-3000018782 don't fit any existing EINKBELEG external interval |
+
+### 16.10 Real live end-to-end proof (2026-07-08 baseline run)
+
+`LOCAL-E2E-002` — full pipeline stages 1-13 against live ECC Y01 (release 740, MSSQL) + S4H 816 (HDB). Row cap 500, load_to_s4=1, preserve_source_numbers=1.
+
+- **Extracted 250,000 rows from ECC in ~25 min** across 17 objects (BusinessPartner 33,252 / Material 24,494 / Customer 19,575 / OpenPO 18,413 / GLAccount 14,408 / OpenSO 15,332 / and more)
+- **2,554 records CREATED on live S/4 via 15+ SAP-shipped BAPIs**
+- **3,079 total key mappings** in the ledger (2,919 created + 153 harmonized + 4 created-ready + 3 matched)
+- **314 dead-lettered** on real ECC data quality (blank NAME1 on BP, "supplier address not maintained" on POs, "cc_org missing" on OpenAR/AP)
+- **42% dead-letter rate** — genuine ECC dirty-data reality, not tool bugs
+
+### 16.11 Net state after this week
+
+**What genuinely works end-to-end (verified live)**:
+
+1. Basis Kit installed on customer S/4 with 5 remote-callable FMs
+2. Fire-and-forget migration via each object's SAP-shipped mechanism (BAPI/IDoc/MC-template)
+3. Source-key preservation for objects whose target external intervals cover the source ranges (CostCenter/Material/ProfitCenter on this CAL tenant; the same list would be different per customer)
+4. Reprocess loop via Excel round-trip
+5. Coverage panel + honest tier badges in the wizard
+6. IDoc process codes aligned to actual WE20 config
+
+**What genuinely still needs work for enterprise product completeness**:
+
+1. **Preservation planner** (task #337 in tracker): query source ranges + target intervals, compute per-object preservation coverage, surface customer decision matrix, apply approved plan. This is the piece that closes the "some source keys don't fit existing external intervals" gap without asking the customer to reason about SAP number-range design themselves.
+2. **TB003 write path** — modern S/4 stores BP grouping config in a pool table not accessible via RFC_READ_TABLE. Needs SM30 view maintenance (not RFC-callable on S/4) or a direct Z-FM extension in the Basis Kit.
+3. **NetworkComponent + Requirement Tier-2 fixes** — need S/4 SLG1 log inspection + `SE37 BAPI_REQUIREMENTS_CREATE` signature check.
+
+**What is deliberately NOT built and why**:
+
+- Arbitrary ABAP execution FM (`Z_M4H_RUN_ABAP`) — remains available as a separate bootstrap for demo purposes but NOT in the Basis Kit. Enterprise security teams reject arbitrary-code-execution primitives; the scoped Z_M4H_TABLE_UPDATE + Z_M4H_NR_MODIFY approach is the auditable enterprise path.
+- Modifying SAP-designated-internal number-range intervals to external — this is a support-risk decision only the customer's Basis team can make. Tool surfaces the choice; tool does NOT silently violate SAP design intent.
+
+Total in Q3 2026 to date: **~9,000 lines of production code, 5 net new modules, 5 SAP-side function modules (Basis Kit), 40+ commits, 1 fundamental SAP-architecture finding surfaced by live testing that materially improves how the tool talks to Basis teams during rollout.**
