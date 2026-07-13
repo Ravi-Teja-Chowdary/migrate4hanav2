@@ -87,6 +87,13 @@ export default function Project() {
   const [autoRunning, setAutoRunning] = useState(false);
   const [autoResult, setAutoResult] = useState(null);
   const [allowStrategyB, setAllowStrategyB] = useState(false);
+  // Preflight verification + consent. The Start-migration button (in both
+  // Auto and Step-by-step modes) is gated on: preflight has run, no
+  // blocking checks failed, and user has ticked the consent checkbox.
+  const [preflight, setPreflight] = useState(null);
+  const [preflightRunning, setPreflightRunning] = useState(false);
+  const [consented, setConsented] = useState(false);
+  const [signerName, setSignerName] = useState('');
   const [confirmingLive, setConfirmingLive] = useState(false);
   // Aggregated telemetry + error buckets — populated by /telemetry poll.
   const [telemetry, setTelemetry] = useState(null);
@@ -183,6 +190,20 @@ export default function Project() {
   };
   const setDecision = (obj, choice) => {
     setDecisions((prev) => ({ ...prev, [obj]: choice }));
+  };
+
+  // Preflight verifier — probes everything the migration will do
+  const runPreflight = async () => {
+    setPreflightRunning(true); setErr(''); setConsented(false);
+    try {
+      const r = await api.preflight({
+        run_mode: runMode,
+        load_to_s4: loadToS4,
+        preserve_source_numbers: preserveSourceNumbers,
+      });
+      setPreflight(r);
+    } catch (e) { setErr(e.message); }
+    finally { setPreflightRunning(false); }
   };
 
   // Auto-mode fire-and-forget
@@ -696,6 +717,19 @@ export default function Project() {
         </Section>
       )}
 
+      <Section title="Preflight verification & consent">
+        <PreflightPanel
+          preflight={preflight}
+          running={preflightRunning}
+          onRun={runPreflight}
+          consented={consented}
+          onConsent={setConsented}
+          signerName={signerName}
+          onSignerName={setSignerName}
+          runMode={runMode}
+        />
+      </Section>
+
       <Section title={runMode === 'auto' ? "Fire and forget" : (loadToS4 ? "Step 2 — Actions" : "Actions")}>
         {runMode === 'step' && loadToS4 && !prepConfirmedRun && (
           <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
@@ -714,37 +748,63 @@ export default function Project() {
           </div>
         )}
         <div className="flex flex-wrap gap-3 items-center">
-          {runMode === 'auto' ? (
-            <button
-              onClick={startAutoRun}
-              disabled={autoRunning || activeRun}
-              className="px-5 py-2.5 rounded bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-medium"
-            >
-              {autoRunning
-                ? 'Auto-migrating (plan → apply → run) ...'
-                : activeRun
-                  ? 'Running'
-                  : '🚀 Fire and forget — Auto-migrate ECC → S/4HANA'}
-            </button>
-          ) : (
-            <button
-              onClick={startMigration}
-              disabled={starting || activeRun || (loadToS4 && !prepConfirmedRun)}
-              className={`px-5 py-2.5 rounded text-white font-medium ${
-                loadToS4
-                  ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'
-                  : 'bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300'
-              }`}
-            >
-              {starting
-                ? 'Starting…'
-                : activeRun
-                  ? 'Running'
-                  : loadToS4
-                    ? 'Start migration + load to S/4HANA'
-                    : 'Start migration (extract-only)'}
-            </button>
-          )}
+          {/* Start-migration gate: preflight must have run, no blocking
+              failures, user consent ticked with signature. */}
+          {(() => {
+            const preflightReady = preflight?.summary?.ready_to_migrate;
+            const consentReady = consented && signerName.trim().length > 0;
+            const gateBlocked = !preflightReady || !consentReady;
+            const gateReason = !preflight
+              ? 'Run preflight verification first ↑'
+              : !preflightReady
+                ? `Preflight has ${preflight.summary.blocking_fail} blocking failure(s) — resolve before proceeding`
+                : !signerName.trim()
+                  ? 'Type your name in the signer field above ↑'
+                  : !consented
+                    ? 'Tick the consent checkbox above ↑'
+                    : '';
+            return runMode === 'auto' ? (
+              <>
+                <button
+                  onClick={startAutoRun}
+                  disabled={autoRunning || activeRun || gateBlocked}
+                  className="px-5 py-2.5 rounded bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white font-medium"
+                >
+                  {autoRunning
+                    ? 'Auto-migrating (plan → apply → run) ...'
+                    : activeRun
+                      ? 'Running'
+                      : '🚀 Fire and forget — Auto-migrate ECC → S/4HANA'}
+                </button>
+                {gateBlocked && gateReason && (
+                  <span className="text-xs text-amber-700">{gateReason}</span>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={startMigration}
+                  disabled={starting || activeRun || (loadToS4 && !prepConfirmedRun) || gateBlocked}
+                  className={`px-5 py-2.5 rounded text-white font-medium disabled:cursor-not-allowed ${
+                    loadToS4
+                      ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'
+                      : 'bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300'
+                  }`}
+                >
+                  {starting
+                    ? 'Starting…'
+                    : activeRun
+                      ? 'Running'
+                      : loadToS4
+                        ? 'Start migration + load to S/4HANA'
+                        : 'Start migration (extract-only)'}
+                </button>
+                {gateBlocked && gateReason && (
+                  <span className="text-xs text-amber-700">{gateReason}</span>
+                )}
+              </>
+            );
+          })()}
           {autoResult && (
             <span className="text-xs text-slate-600">
               Auto plan applied · {(autoResult.plan_applied?.outcomes || []).length} objects processed
@@ -863,6 +923,159 @@ function MetricCard({ label, value, tone = 'neutral' }) {
     </div>
   );
 }
+
+// Preflight verification panel. Runs a live probe of every operation the
+// migration will perform, shows expected-vs-actual per check, and gates
+// the Start-migration button on a signed consent.
+function PreflightPanel({ preflight, running, onRun, consented, onConsent,
+                            signerName, onSignerName, runMode }) {
+  const verdictBadge = (v) => {
+    const map = {
+      pass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      warn: 'bg-amber-100 text-amber-800 border-amber-300',
+      fail: 'bg-red-100 text-red-800 border-red-300',
+      info: 'bg-blue-100 text-blue-800 border-blue-300',
+      pending: 'bg-slate-100 text-slate-600 border-slate-300',
+    };
+    const label = { pass: 'PASS', warn: 'WARN', fail: 'FAIL', info: 'INFO', pending: '·' }[v] || v;
+    return (
+      <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-mono ${map[v] || map.pending}`}>
+        {label}
+      </span>
+    );
+  };
+
+  if (!preflight) {
+    return (
+      <div className="space-y-3">
+        <div className="text-sm text-slate-600">
+          <strong>Before migration starts</strong>, migrate4hana probes every
+          operation the run will perform against your live ECC + S/4:
+        </div>
+        <ul className="text-xs text-slate-600 list-disc ml-5 space-y-0.5">
+          <li>ECC + S/4 RFC connectivity + system info</li>
+          <li>Basis Kit installed on S/4 + all 5 FMs callable</li>
+          <li>Key SAP-shipped BAPIs present (BUPA, MATERIAL, PO, SALESORDER, ACC_DOCUMENT)</li>
+          <li>Source ECC data volumes discoverable</li>
+          <li>Target NRIV intervals readable</li>
+          <li>Local staging path writable</li>
+          <li>Preservation plan compute dry-preview</li>
+        </ul>
+        <div className="text-sm text-slate-600">
+          Each check shows what the operation does, an example of what a
+          working output looks like, and the actual response from your
+          systems. Only after every blocking check passes and you sign
+          consent does the Start migration button unlock.
+        </div>
+        <button
+          onClick={onRun}
+          disabled={running}
+          className="px-4 py-2 rounded bg-slate-800 hover:bg-slate-900 disabled:bg-slate-400 text-white text-sm font-medium"
+        >
+          {running ? 'Probing live systems...' : 'Run preflight verification'}
+        </button>
+      </div>
+    );
+  }
+
+  const s = preflight.summary || {};
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-3 items-center text-xs text-slate-700">
+        <span>Ran at <strong>{new Date(preflight.generated_at).toLocaleTimeString()}</strong></span>
+        <span>Run mode: <strong>{preflight.run_mode}</strong></span>
+        <span className="text-emerald-700">Pass: <strong>{s.pass}</strong></span>
+        <span className="text-amber-700">Warn: <strong>{s.warn}</strong></span>
+        <span className="text-red-700">Fail: <strong>{s.fail}</strong></span>
+        <span>Blocking fail: <strong className={s.blocking_fail > 0 ? 'text-red-700' : 'text-slate-500'}>{s.blocking_fail}</strong></span>
+        <span className={s.ready_to_migrate ? 'text-emerald-700 font-semibold' : 'text-amber-700 font-semibold'}>
+          {s.ready_to_migrate ? '✓ Ready to migrate' : '✗ Not ready'}
+        </span>
+        <button
+          onClick={onRun}
+          disabled={running}
+          className="ml-auto text-xs px-2 py-0.5 rounded border border-slate-300 hover:bg-slate-50"
+        >
+          {running ? 'Re-probing...' : 'Re-run preflight'}
+        </button>
+      </div>
+
+      <div className="border border-slate-200 rounded overflow-hidden">
+        <div className="overflow-auto max-h-96">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-100 sticky top-0">
+              <tr className="text-left">
+                <th className="px-2 py-1.5">Status</th>
+                <th className="px-2 py-1.5">Check</th>
+                <th className="px-2 py-1.5">What it does</th>
+                <th className="px-2 py-1.5">Expected output</th>
+                <th className="px-2 py-1.5">Actual output</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(preflight.checks || []).map((c, idx) => (
+                <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50">
+                  <td className="px-2 py-1">
+                    {verdictBadge(c.verdict)}
+                    {c.blocking && (
+                      <div className="text-[9px] text-red-700 mt-0.5 font-mono">BLOCK</div>
+                    )}
+                  </td>
+                  <td className="px-2 py-1 font-medium">{c.name}</td>
+                  <td className="px-2 py-1 text-slate-600 max-w-md">{c.description}</td>
+                  <td className="px-2 py-1 text-slate-500 font-mono text-[11px] max-w-xs whitespace-pre-wrap">{c.expected}</td>
+                  <td className={`px-2 py-1 font-mono text-[11px] max-w-xs whitespace-pre-wrap ${
+                    c.verdict === 'pass' ? 'text-emerald-700' :
+                    c.verdict === 'warn' ? 'text-amber-700' :
+                    c.verdict === 'fail' ? 'text-red-700' : 'text-slate-500'
+                  }`}>{c.actual}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="p-3 border border-emerald-200 bg-emerald-50 rounded">
+        <div className="text-sm text-slate-700 mb-2">
+          <strong>Consent to proceed</strong>
+        </div>
+        <div className="text-xs text-slate-600 mb-3 whitespace-pre-wrap">
+          {(preflight.consent_text || '').replace('{signer}', signerName || '_______')}
+        </div>
+        <div className="flex flex-wrap gap-3 items-center">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-slate-600">Signer name:</span>
+            <input
+              type="text"
+              value={signerName}
+              onChange={(e) => onSignerName(e.target.value)}
+              placeholder="Your full name"
+              className="input px-2 py-1 border border-slate-300 rounded text-sm w-56"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={consented}
+              onChange={(e) => onConsent(e.target.checked)}
+              disabled={!signerName.trim() || (s.blocking_fail || 0) > 0}
+            />
+            <span>
+              I authorize migrate4hana to execute the migration as configured
+              {(s.blocking_fail || 0) > 0 && (
+                <span className="text-red-700 font-medium">
+                  {' '}— unavailable ({s.blocking_fail} blocking failure)
+                </span>
+              )}
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // Run-mode card - one of two choices (auto vs step-by-step). Emerald when
 // selected auto, blue when selected step. Muted when unselected.

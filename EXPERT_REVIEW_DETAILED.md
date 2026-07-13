@@ -3673,3 +3673,100 @@ The tool is fire-and-forget for the running migration in Auto mode. This is the 
 - `api_server.py`: added `_AutoRunRequest`, `_PlanRequest`, `_ApplyPlanRequest` DTOs + 3 new endpoints (compute, apply, auto-run)
 - `frontend/src/lib/api.js`: added `autoRun()`, `preservationCompute()`, `preservationApply()` client methods
 - `frontend/src/pages/v2/Project.jsx`: added `PreservationPanel`, `RunModeCard`, `RunModeChooser`; state fields for runMode, preservationPlan, autoRunning, decisions, allowStrategyB; conditional Actions rendering by runMode
+
+## 2026-07-13 (evening) — Preflight verifier + signed-consent gating
+
+Governance layer added on top of the fire-and-forget architecture. Before any migration button unlocks, tool actively probes every operation and requires signer + consent.
+
+### New module lambda/utils/preflight_verifier.py
+
+Structure:
+- 10 individual `check_*` functions, each returns a standardized row dict {name, category, description, expected, actual, verdict, blocking}
+- Constants: PASS, WARN, FAIL, INFO, PENDING
+- `run_preflight(ecc_conn, s4_conn, *, run_mode, load_to_s4, preserve_source_numbers)` orchestrator
+
+Check functions:
+- `check_local_staging_writable()` — probes local-staging/m4h-local/runs/ by writing + removing a probe file
+- `check_ecc_connection(ecc_conn)` — RFC_SYSTEM_INFO
+- `check_s4_connection(s4_conn)` — RFC_SYSTEM_INFO
+- `check_basis_kit_installed(s4_conn)` — Z_M4H_STATUS probe; classifies FU_NOT_FOUND as WARN (not FAIL) since migration works without kit (just no preservation)
+- `check_kit_nr_modify_callable(s4_conn)` — dry-probes Z_M4H_NR_MODIFY with a non-existent interval (expects "not found" as OK signal — proves FM logic runs)
+- `check_kit_table_update_callable(s4_conn)` — dry-probes Z_M4H_TABLE_UPDATE with a non-existent key value (expects 0 rows updated as OK)
+- `check_source_key_ranges(ecc_conn, ...)` — samples row counts on VBAK/EKKO/KNA1/LFA1/MARA
+- `check_target_intervals_readable(s4_conn)` — probes NRIV for RV_BELEG intervals with EXTERNIND flag
+- `check_migration_bapis_present(s4_conn)` — empty-arg call to BAPI_BUPA_CREATE_FROM_DATA, BAPI_MATERIAL_SAVEDATA, BAPI_PO_CREATE1, BAPI_SALESORDER_CREATEFROMDAT2, BAPI_ACC_DOCUMENT_POST; missing-param err means BAPI exists (PASS), FU_NOT_FOUND means it's missing
+- `check_preservation_plan_dry(ecc_conn, s4_conn)` — dry compute via preservation_planner.build_plan() with limited object list
+
+Orchestrator returns per-check rows + summary counts + consent_text template with {signer} placeholder the wizard substitutes.
+
+Blocking flags:
+- local staging writable — TRUE (can't run without writable local artifacts)
+- ECC connection — TRUE
+- S/4 connection — TRUE
+- Everything else — FALSE (non-blocking; migration adapts or degrades gracefully)
+
+Verdict severity: PASS > WARN > FAIL > INFO > PENDING
+
+### New API endpoint POST /api/pipeline/preflight
+
+Request body `_PreflightRequest`: run_mode, load_to_s4, preserve_source_numbers.
+
+Handler:
+1. Loads connections.json for ECC + S/4 conf
+2. Rejects if either ashost is missing (400)
+3. Opens pyrfc connections IF password is in memory; else passes a _NullConn stub that errors on call
+4. Calls `run_preflight()` with the connections
+5. Closes connections in finally block
+6. Returns the full result dict
+
+### Wizard PreflightPanel component
+
+Two states:
+
+**Pre-run state**:
+- Introduction paragraph explaining preflight's role
+- Bulleted list of 10 checks
+- Big "Run preflight verification" button (slate-800)
+
+**Post-run state**:
+- Summary line: timestamp, mode, per-verdict counts (colour-coded), blocking-fail count, ready-to-migrate boolean
+- Re-run button
+- Table with 5 columns per check row:
+  - Status: badge (PASS emerald, WARN amber, FAIL red, INFO blue, PENDING slate) + BLOCK sub-label when applicable
+  - Check name (semibold)
+  - Description (slate-600, max-w-md)
+  - Expected output (slate-500, mono, whitespace-pre-wrap)
+  - Actual output (colour-coded by verdict, mono, whitespace-pre-wrap)
+- Consent block at bottom (emerald-50 bg, emerald-200 border):
+  - Section title "Consent to proceed"
+  - Full consent text with {signer} substituted from state (or _______ placeholder)
+  - Signer-name text input (56-width)
+  - Consent checkbox (disabled until signer name typed AND blocking_fail == 0)
+
+### Start-migration button gating
+
+Both Auto and Step-by-step Start buttons now check three gates:
+1. `preflight?.summary?.ready_to_migrate` — preflight run + no blocking failures
+2. `signerName.trim().length > 0` — user typed their name
+3. `consented === true` — checkbox ticked
+
+Inline amber hint text appears next to disabled button explaining which gate to satisfy:
+- "Run preflight verification first ↑"
+- "Preflight has N blocking failure(s) — resolve before proceeding"
+- "Type your name in the signer field above ↑"
+- "Tick the consent checkbox above ↑"
+
+Once all gates open + no active run, button unlocks + becomes clickable.
+
+### Files touched
+
+- `lambda/utils/preflight_verifier.py` (new, 460 LOC)
+- `api_server.py`: added `_PreflightRequest` DTO + `POST /api/pipeline/preflight` endpoint
+- `frontend/src/lib/api.js`: added `preflight()` client method
+- `frontend/src/pages/v2/Project.jsx`: added `PreflightPanel` component, state fields for preflight/preflightRunning/consented/signerName, `runPreflight()` handler, and gating logic on both Start buttons + inline gate-hint text
+
+### Wizard flow after this addition (final for 2026-07-13)
+
+The Project page now has 15 stacked sections. Preflight is section #8, right before Actions (#9). Every migration run — regardless of mode — passes through preflight + signed consent before target changes. This is the enterprise-grade governance layer that separates "signed-off migration" from "casual click-run".
+
+The signed consent is currently in-memory. Future work (item on backlog): persist to compliance-ledger with timestamp + IP + kit-audit-log correlation, so audit trail spans user consent through every SAP-side RFC call to final migration outcome.

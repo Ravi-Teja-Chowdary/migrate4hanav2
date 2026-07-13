@@ -1370,3 +1370,114 @@ The Project page (the entry point for every migration run) now has this stack, t
 **The answer to "is the tool fire and forget?"** — YES for the per-migration path after Basis Kit install. **NO** as a "zero setup ever" model because SAP's platform architecture requires ONE touchpoint (the kit install) for any tool that wants to make RFC-callable customizing writes. Every enterprise SAP migration tool works this way; migrate4hana's kit is minimal, scoped, auditable, and one-time.
 
 Total lines added this week (2026-07-06 → 2026-07-13): **~2,600 lines of production code**, **6 net new modules**, **5 SAP-side function modules (Basis Kit)**, **50+ commits**, **1 fundamental SAP-architecture finding surfaced by live testing that materially improves how the tool talks to Basis teams during rollout**, plus the **preservation planner + Auto-mode** that make the last mile fire-and-forget.
+
+## 18. 2026-07-13 (evening) — Preflight verifier + consent screen (unified for auto + step)
+
+Enterprise-grade governance addition: before ANY migration button unlocks (in either Auto or Step-by-step mode), the tool actively probes every operation it will perform, shows expected-vs-actual output per check, and requires a signed consent.
+
+### 18.1 What the preflight verifier does
+
+`lambda/utils/preflight_verifier.py` (~460 LOC). Runs 10 checks against the live systems:
+
+| # | Check | Category | Blocking? |
+|---|---|---|:---:|
+| 1 | Local staging path writable | migration | ✓ |
+| 2 | ECC RFC connection | connection | ✓ |
+| 3 | S/4 RFC connection | connection | ✓ |
+| 4 | Basis Kit installed on S/4 | kit | — |
+| 5 | Key BAPIs available on S/4 | migration | — |
+| 6 | Target NRIV intervals readable | discovery | — |
+| 7 | Z_M4H_NR_MODIFY callable | kit | — |
+| 8 | Z_M4H_TABLE_UPDATE callable | kit | — |
+| 9 | Source data volumes discoverable | discovery | — |
+| 10 | Preservation plan compute (dry preview) | plan | — |
+
+Each check row carries:
+- **name**: short human label
+- **category**: connection / kit / discovery / plan / migration
+- **description**: full paragraph of what will happen
+- **expected**: sample of what a working output looks like (concrete example)
+- **actual**: live probe result from the system
+- **verdict**: pass / warn / fail / info / pending
+- **blocking**: bool — if True, migration cannot start without this passing
+
+### 18.2 New API endpoint
+
+`POST /api/pipeline/preflight` runs the verifier against live ECC + S/4 and returns:
+
+```json
+{
+  "generated_at": "2026-07-13T...",
+  "run_mode":     "auto" | "step",
+  "checks":       [...10 check rows...],
+  "summary": {
+    "total": 10, "pass": 9, "warn": 1, "fail": 0,
+    "blocking_fail": 0, "ready_to_migrate": true
+  },
+  "consent_text": "I (signer) have reviewed the 10 preflight checks..."
+}
+```
+
+### 18.3 Wizard preflight panel (unified for auto + step)
+
+New section "Preflight verification & consent" placed BEFORE the Actions section. Same panel for both Auto and Step-by-step modes.
+
+Before running:
+- Introduction paragraph explaining what will be probed
+- Bulleted list of the 10 checks
+- Big "Run preflight verification" button
+
+After running:
+- Summary line: run timestamp, mode, per-verdict counts, blocking-fail count, ready-to-migrate indicator
+- Re-run button
+- Table with 5 columns per check: Status badge (colour-coded PASS/WARN/FAIL/INFO), Check name, What it does (description), Expected output (example), Actual output (live probe result, colour-coded by verdict)
+- BLOCK badge on rows where verdict is fail AND blocking is true
+- Consent block at bottom (emerald bg): consent text with signer name substituted, signer-name text input, consent checkbox (disabled until signer name typed AND no blocking failures)
+
+### 18.4 Start-migration button gating
+
+Both Auto-mode ("Fire and forget") and Step-by-step ("Start migration + load to S/4HANA") buttons are now gated on:
+
+1. `preflight?.summary?.ready_to_migrate` — no blocking failures
+2. `signerName.trim()` — user has typed their name
+3. `consented === true` — checkbox ticked
+
+If any gate is closed, button is disabled + an inline amber hint tells the user which one to satisfy next:
+
+- "Run preflight verification first ↑"
+- "Preflight has N blocking failure(s) — resolve before proceeding"
+- "Type your name in the signer field above ↑"
+- "Tick the consent checkbox above ↑"
+
+Once all gates open, the Start button is enabled + emerald/red as before. Clicking triggers the actual migration.
+
+### 18.5 Wizard flow (updated end-to-end)
+
+The complete Project page flow, top to bottom, as of 2026-07-13 evening:
+
+1. **Header** — run id + ECC/S4 versions + migration type
+2. **Errors bar** — inline error surface
+3. **How should this migration run?** — Auto vs Step-by-step chooser + Allow Strategy B checkbox (when Auto)
+4. **Migration coverage** — collapsible 135-object breadth report
+5. **Source-key preservation strategy** — planner with per-object A/B/C/D dropdowns
+6. **What this run will do** — load-mode, simulation, row cap, preserve toggle
+7. **Prepare S/4 target (Step 1)** — auto-gen prep ABAP (only when Load-to-S4 + Step mode)
+8. **Preflight verification & consent** — NEW: 10-check table + consent block
+9. **Fire and forget / Step 2 — Actions** — Start button (gated on preflight + consent)
+10. **Live telemetry** — appears once run active
+11. **Project tracker** — 9-phase progress
+12. **Stats** — aggregate progress stats
+13. **Errors — triage** — dead-letter buckets
+14. **Fix & retry** — reprocess Excel loop
+15. **Post-run actions** — Live Ops / Conversion Dashboard / PDF
+
+### 18.6 Truth-table now (per-migration path after Basis Kit install)
+
+| Mode | Clicks before Start | Additional gates | SAP GUI | SSH |
+|---|:---:|---|:---:|:---:|
+| Auto | 2 (preflight + consent) | Preflight all-pass + signed consent | 0 | 0 |
+| Step-by-step | 4 (Compute plan + Apply + preflight + consent) | Same + per-step review | 0 | 0 |
+
+Enterprise pattern satisfied: user sees exactly what will happen, verifies each precondition against live systems, and signs off before anything changes on target. The consent signature is captured with a timestamp for audit — future work can persist this into the compliance-ledger.
+
+**The tool is fire-and-forget once consent is signed** — clicking Start in Auto mode runs plan-compute + plan-apply + migration in one server-side chain. Consent is the deliberate ceremony that separates "have I thought about this" from "just click and hope".

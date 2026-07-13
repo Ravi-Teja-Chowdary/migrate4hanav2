@@ -209,6 +209,14 @@ export const api = {
     return res.json();
   },
 
+  // ── Preflight verifier (consent screen) ──
+  // Probes every operation the migration will perform + returns the
+  // consent text + per-check pass/warn/fail. Wizard gates the Start
+  // button on all-blocking-pass + user consent.
+  preflight: (payload = {}) =>
+    apiFetch('/api/pipeline/preflight',
+      { method: 'POST', body: JSON.stringify(payload) }),
+
   // ── Full-auto orchestrator (fire-and-forget) ──
   // Server-side chains: preservation plan compute → apply non-B → start
   // migration. One call, one response with run_id + plan summary.

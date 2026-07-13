@@ -2544,6 +2544,79 @@ class _ApplyPlanRequest(BaseModel):
     decisions: dict   # object_type -> "A" | "B" | "C" | "D"
 
 
+class _PreflightRequest(BaseModel):
+    run_mode:                Optional[str] = "auto"   # "auto" or "step"
+    load_to_s4:              Optional[bool] = True
+    preserve_source_numbers: Optional[bool] = True
+
+
+@app.post("/api/pipeline/preflight",
+          dependencies=[Depends(require_auth)])
+async def pipeline_preflight(body: Optional[_PreflightRequest] = None):
+    """Run the preflight verifier - probes every operation the migration
+    will perform (ECC/S/4 connectivity, kit installed + FMs callable,
+    NRIV readable, BAPIs present, source data discoverable, preservation
+    plan compute preview). Returns the full checklist + a
+    consent_text the wizard renders next to the consent checkbox.
+
+    Wizard gates the Start Migration button on:
+      - No blocking checks failing
+      - User has ticked the consent checkbox
+    """
+    body = body or _PreflightRequest()
+    conns = _load_connections()
+    ecc_conf = conns.get("ecc") or {}
+    s4_conf = conns.get("s4hana") or {}
+    if not (ecc_conf.get("ashost") and s4_conf.get("ashost")):
+        raise HTTPException(status_code=400,
+                             detail="Both ECC + S/4 connections must be saved.")
+    try:
+        import pyrfc  # type: ignore
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from preflight_verifier import run_preflight  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"import: {e}")
+
+    ecc = None; s4 = None
+    try:
+        if _ecc_passwd:
+            try:
+                ecc = pyrfc.Connection(ashost=ecc_conf["ashost"],
+                                          sysnr=ecc_conf["sysnr"],
+                                          client=ecc_conf["client"],
+                                          user=ecc_conf["user"],
+                                          passwd=_ecc_passwd, lang="EN")
+            except Exception as e:
+                log.warning("ECC connection at preflight failed: %s", e)
+        if _s4_passwd:
+            try:
+                s4 = pyrfc.Connection(ashost=s4_conf["ashost"],
+                                         sysnr=s4_conf["sysnr"],
+                                         client=s4_conf["client"],
+                                         user=s4_conf["user"],
+                                         passwd=_s4_passwd, lang="EN")
+            except Exception as e:
+                log.warning("S/4 connection at preflight failed: %s", e)
+
+        class _NullConn:
+            def call(self, *a, **kw):
+                raise RuntimeError("connection not established at preflight")
+
+        return run_preflight(
+            ecc or _NullConn(), s4 or _NullConn(),
+            run_mode=body.run_mode or "auto",
+            load_to_s4=bool(body.load_to_s4),
+            preserve_source_numbers=bool(body.preserve_source_numbers),
+        )
+    finally:
+        if ecc:
+            try: ecc.close()
+            except Exception: pass
+        if s4:
+            try: s4.close()
+            except Exception: pass
+
+
 @app.post("/api/pipeline/auto-run",
           dependencies=[Depends(require_auth)])
 async def pipeline_auto_run(body: _AutoRunRequest):
