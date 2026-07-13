@@ -2476,6 +2476,87 @@ class _PrepAutoRunRequest(BaseModel):
     run_id: str
 
 
+class _PlanRequest(BaseModel):
+    object_types: Optional[List[str]] = None
+
+
+@app.post("/api/pipeline/preservation-plan/compute",
+          dependencies=[Depends(require_auth)])
+async def preservation_plan_compute(body: Optional[_PlanRequest] = None):
+    """Discover source ECC key ranges + target NRIV intervals, compute
+    per-object coverage under each of the 4 preservation strategies
+    (A: point NUMKE at existing external; B: modify SAP-shipped interval;
+    C: shift source keys via mapping table; D: renumber + ledger).
+
+    Returns the full plan for the wizard to render + customer to approve."""
+    body = body or _PlanRequest()
+    conns = _load_connections()
+    ecc_conf = conns.get("ecc") or {}
+    s4_conf = conns.get("s4hana") or {}
+    if not (ecc_conf.get("ashost") and _ecc_passwd
+             and s4_conf.get("ashost") and _s4_passwd):
+        raise HTTPException(status_code=400,
+                             detail="Both ECC + S/4 connections required.")
+    try:
+        import pyrfc  # type: ignore
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from preservation_planner import build_plan  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"import: {e}")
+
+    ecc = pyrfc.Connection(ashost=ecc_conf["ashost"], sysnr=ecc_conf["sysnr"],
+                             client=ecc_conf["client"], user=ecc_conf["user"],
+                             passwd=_ecc_passwd, lang="EN")
+    s4  = pyrfc.Connection(ashost=s4_conf["ashost"], sysnr=s4_conf["sysnr"],
+                             client=s4_conf["client"], user=s4_conf["user"],
+                             passwd=_s4_passwd, lang="EN")
+    try:
+        return build_plan(ecc, s4, object_types=body.object_types)
+    finally:
+        ecc.close(); s4.close()
+
+
+class _ApplyPlanRequest(BaseModel):
+    plan:      dict
+    decisions: dict   # object_type -> "A" | "B" | "C" | "D"
+
+
+@app.post("/api/pipeline/preservation-plan/apply",
+          dependencies=[Depends(require_auth)])
+async def preservation_plan_apply(body: _ApplyPlanRequest):
+    """Apply the customer-approved per-object strategy via Basis Kit RFCs.
+
+    - A: calls Z_M4H_TABLE_UPDATE to point NUMKE at existing external
+    - B: calls Z_M4H_NR_MODIFY to flip EXTERNIND on existing interval
+    - C: returns shift_map that the loader uses to compute target keys
+    - D: no-op (per-object)"""
+    conns = _load_connections()
+    s4_conf = conns.get("s4hana") or {}
+    if not (s4_conf.get("ashost") and _s4_passwd):
+        raise HTTPException(status_code=400, detail="S/4 connection required.")
+    try:
+        import pyrfc  # type: ignore
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from preservation_planner import apply_approved_plan  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"import: {e}")
+
+    s4 = pyrfc.Connection(ashost=s4_conf["ashost"], sysnr=s4_conf["sysnr"],
+                            client=s4_conf["client"], user=s4_conf["user"],
+                            passwd=_s4_passwd, lang="EN")
+    try:
+        result = apply_approved_plan(s4, body.plan, body.decisions)
+    finally:
+        s4.close()
+
+    # If any strategy-C choices produced shift_map, set env vars for the
+    # next migration run so the loader can honor them.
+    shift_map = result.get("shift_map") or {}
+    for obj, offset in shift_map.items():
+        os.environ[f"M4H_KEY_SHIFT_{obj.upper()}"] = str(offset)
+    return result
+
+
 @app.get("/api/pipeline/basis-kit/install.abap",
          dependencies=[Depends(require_auth)])
 async def basis_kit_install():

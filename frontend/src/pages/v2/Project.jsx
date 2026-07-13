@@ -72,6 +72,13 @@ export default function Project() {
   const [coverage, setCoverage] = useState(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [coverageOpen, setCoverageOpen] = useState(false);
+  // Preservation planner state — 4-strategy decision matrix per object.
+  // computed lazily; decisions map = {object_type: 'A'|'B'|'C'|'D'}.
+  const [preservationPlan, setPreservationPlan] = useState(null);
+  const [preservationLoading, setPreservationLoading] = useState(false);
+  const [preservationApplying, setPreservationApplying] = useState(false);
+  const [preservationApplyResult, setPreservationApplyResult] = useState(null);
+  const [decisions, setDecisions] = useState({}); // per-object choice
   const [confirmingLive, setConfirmingLive] = useState(false);
   // Aggregated telemetry + error buckets — populated by /telemetry poll.
   const [telemetry, setTelemetry] = useState(null);
@@ -141,6 +148,33 @@ export default function Project() {
     } catch (e) {
       setErr(e.message);
     } finally { setStarting(false); }
+  };
+
+  // Preservation planner — compute + apply
+  const computePreservationPlan = async () => {
+    setPreservationLoading(true); setErr('');
+    try {
+      const r = await api.preservationCompute();
+      setPreservationPlan(r);
+      // Auto-populate decisions with the planner's recommendation per object
+      const dec = {};
+      for (const [obj, entry] of Object.entries(r.plan || {})) {
+        dec[obj] = entry.recommended || 'D';
+      }
+      setDecisions(dec);
+    } catch (e) { setErr(e.message); }
+    finally { setPreservationLoading(false); }
+  };
+  const applyPreservationPlan = async () => {
+    setPreservationApplying(true); setErr(''); setPreservationApplyResult(null);
+    try {
+      const r = await api.preservationApply(preservationPlan.plan, decisions);
+      setPreservationApplyResult(r);
+    } catch (e) { setErr(e.message); }
+    finally { setPreservationApplying(false); }
+  };
+  const setDecision = (obj, choice) => {
+    setDecisions((prev) => ({ ...prev, [obj]: choice }));
   };
 
   const loadCoverage = async () => {
@@ -325,6 +359,19 @@ export default function Project() {
             </div>
           </div>
         )}
+      </Section>
+
+      <Section title="Source-key preservation strategy (ECC ID → S/4 ID fidelity)">
+        <PreservationPanel
+          plan={preservationPlan}
+          loading={preservationLoading}
+          applying={preservationApplying}
+          applyResult={preservationApplyResult}
+          decisions={decisions}
+          onCompute={computePreservationPlan}
+          onApply={applyPreservationPlan}
+          onDecision={setDecision}
+        />
       </Section>
 
       {activeRun && telemetry && (
@@ -710,6 +757,206 @@ function MetricCard({ label, value, tone = 'neutral' }) {
     </div>
   );
 }
+
+// Source-key preservation strategy panel.
+// Presents the 4-strategy decision matrix per object type, with the
+// planner's auto-recommendation pre-selected. Customer can override
+// per object. Includes clear risk banners (esp. for option B which
+// changes SAP-shipped defaults).
+function PreservationPanel({ plan, loading, applying, applyResult,
+                              decisions, onCompute, onApply, onDecision }) {
+  const strategyMeta = {
+    A: { label: 'A. Point NUMKE at existing external interval',
+         short: 'Partial preservation. Zero SAP risk.',
+         color: 'bg-blue-100 text-blue-800 border-blue-300' },
+    B: { label: 'B. Modify SAP-shipped interval to external',
+         short: 'Full preservation (source ID = target ID). Requires Basis approval.',
+         color: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+    C: { label: 'C. Shift source keys via mapping table',
+         short: 'Source X → target X+offset. Deterministic. Zero SAP risk.',
+         color: 'bg-amber-100 text-amber-800 border-amber-300' },
+    D: { label: 'D. Accept target-assigned numbers (renumber + ledger)',
+         short: 'No preservation. Zero target-side changes.',
+         color: 'bg-slate-100 text-slate-700 border-slate-300' },
+  };
+
+  if (!plan) {
+    return (
+      <div className="space-y-3">
+        <div className="text-sm text-slate-600">
+          For a true ECC → S/4 replication (same IDs everywhere), the tool
+          needs to know your preservation strategy per object type. Run
+          the planner — it queries live ECC + S/4, computes coverage for
+          each of 4 strategies, and pre-recommends the highest-fidelity
+          option (typically <strong>B</strong>) that's applicable.
+        </div>
+        <button
+          onClick={onCompute}
+          disabled={loading}
+          className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-medium"
+        >
+          {loading ? 'Analysing ECC + S/4...' : 'Compute preservation plan'}
+        </button>
+      </div>
+    );
+  }
+
+  const objects = Object.entries(plan.plan || {});
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-slate-600 flex flex-wrap gap-4">
+        <span>Analysed at: <strong>{new Date(plan.generated_at).toLocaleTimeString()}</strong></span>
+        <span>Objects: <strong>{plan.objects_analyzed}</strong></span>
+        <button
+          onClick={onCompute}
+          disabled={loading}
+          className="text-xs px-2 py-0.5 rounded border border-slate-300 hover:bg-slate-50"
+        >
+          {loading ? 'Re-analysing...' : 'Re-analyse'}
+        </button>
+      </div>
+
+      <div className="bg-slate-50 border border-slate-200 rounded p-3 text-xs text-slate-700 space-y-1">
+        <div className="font-medium mb-1">4 strategies (per-object choice):</div>
+        {Object.entries(strategyMeta).map(([k, m]) => (
+          <div key={k}>
+            <span className={`inline-block px-1.5 py-0.5 rounded font-mono ${m.color} border`}>
+              {k}
+            </span>
+            {' '}<strong>{m.label.replace(/^. /, '')}</strong>: {m.short}
+          </div>
+        ))}
+        <div className="mt-2 text-amber-800">
+          ⚠️ Choosing <strong>B</strong> for any object means the tool will
+          modify a SAP-shipped number-range interval. This is the highest
+          fidelity option — source keys will match target keys exactly —
+          but SAP support does not cover incidents on modified designated-
+          internal intervals. Confirm with your Basis team before applying.
+        </div>
+      </div>
+
+      <div className="border border-slate-200 rounded overflow-hidden">
+        <div className="overflow-auto max-h-96">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-100 sticky top-0">
+              <tr className="text-left">
+                <th className="px-2 py-1.5">Object</th>
+                <th className="px-2 py-1.5">Source range</th>
+                <th className="px-2 py-1.5">SNRO</th>
+                <th className="px-2 py-1.5">Strategy A coverage</th>
+                <th className="px-2 py-1.5">Strategy B coverage</th>
+                <th className="px-2 py-1.5">Strategy C coverage</th>
+                <th className="px-2 py-1.5">Your choice</th>
+              </tr>
+            </thead>
+            <tbody>
+              {objects.map(([obj, entry]) => {
+                const src = entry.source || {};
+                const strats = entry.strategies || {};
+                const choice = decisions[obj] || entry.recommended || 'D';
+                return (
+                  <tr key={obj} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-2 py-1 font-mono font-semibold">{obj}</td>
+                    <td className="px-2 py-1">
+                      {src.count > 0
+                        ? <span>{src.count.toLocaleString()} rows<br/>
+                            <span className="text-slate-500 text-[10px]">
+                              min <code>{src.min_key}</code> · max <code>{src.max_key}</code>
+                            </span>
+                          </span>
+                        : <span className="text-slate-400">no rows</span>}
+                    </td>
+                    <td className="px-2 py-1 font-mono text-slate-500">{entry.snro}</td>
+                    <td className="px-2 py-1">
+                      <span className={strats.A?.coverage_est_pct >= 90 ? 'text-emerald-700 font-medium' : 'text-slate-600'}>
+                        {strats.A?.coverage_est_pct?.toFixed(1) || 0}%
+                      </span>
+                    </td>
+                    <td className="px-2 py-1">
+                      <span className={strats.B?.coverage_est_pct >= 90 ? 'text-emerald-700 font-medium' : 'text-slate-600'}>
+                        {strats.B?.coverage_est_pct?.toFixed(1) || 0}%
+                        {strats.B?.requires_basis_approval && (
+                          <span title="Requires Basis approval" className="ml-1 text-amber-600">⚠</span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1">
+                      <span className={strats.C?.coverage_est_pct >= 90 ? 'text-emerald-700 font-medium' : 'text-slate-600'}>
+                        {strats.C?.coverage_est_pct?.toFixed(1) || 0}%
+                      </span>
+                    </td>
+                    <td className="px-2 py-1">
+                      <select
+                        value={choice}
+                        onChange={(e) => onDecision(obj, e.target.value)}
+                        className={`text-xs px-2 py-1 rounded border ${strategyMeta[choice]?.color}`}
+                      >
+                        <option value="A">A (partial)</option>
+                        <option value="B">B (best — needs Basis)</option>
+                        <option value="C">C (shifted)</option>
+                        <option value="D">D (renumber)</option>
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3 items-center">
+        <button
+          onClick={onApply}
+          disabled={applying}
+          className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium"
+        >
+          {applying ? 'Applying to S/4...' : 'Apply approved plan to S/4'}
+        </button>
+        <span className="text-xs text-slate-500">
+          Applies via Basis Kit RFCs. Idempotent — safe to re-run.
+        </span>
+      </div>
+
+      {applyResult && (
+        <div className="border border-slate-200 rounded overflow-hidden">
+          <div className="bg-slate-100 px-3 py-2 text-sm font-medium border-b border-slate-200">
+            Apply result — {applyResult.outcomes?.length || 0} objects processed
+          </div>
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-left">
+              <tr>
+                <th className="px-2 py-1">Object</th>
+                <th className="px-2 py-1">Choice</th>
+                <th className="px-2 py-1">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(applyResult.outcomes || []).map((r) => (
+                <tr key={r.object} className="border-t border-slate-100">
+                  <td className="px-2 py-1 font-mono">{r.object}</td>
+                  <td className="px-2 py-1">
+                    <span className={`px-1.5 py-0.5 rounded ${strategyMeta[r.choice]?.color}`}>
+                      {r.choice}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1">
+                    <span className={
+                      (r.status || '').startsWith('OK') ? 'text-emerald-700' :
+                      (r.status || '').startsWith('ERROR') ? 'text-red-700' :
+                      'text-amber-700'
+                    }>{r.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // Fix-and-retry loop. Three-step operator flow the panel presents:
 //   1. Download either the pre-populated failures Excel or the blank template

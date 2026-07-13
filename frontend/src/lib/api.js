@@ -209,6 +209,18 @@ export const api = {
     return res.json();
   },
 
+  // ── Preservation planner ──
+  // Compute per-object source-key preservation coverage under each of
+  // 4 strategies (A: point NUMKE at existing external; B: modify SAP
+  // interval - highest fidelity, needs Basis approval; C: shift source
+  // keys via offset; D: renumber + ledger).
+  preservationCompute: (object_types) =>
+    apiFetch('/api/pipeline/preservation-plan/compute',
+      { method: 'POST', body: JSON.stringify({ object_types: object_types || null }) }),
+  preservationApply: (plan, decisions) =>
+    apiFetch('/api/pipeline/preservation-plan/apply',
+      { method: 'POST', body: JSON.stringify({ plan, decisions }) }),
+
   // ── Migration coverage report ──
   // Full spine catalog with tier badges (T1/T2/MC/BLOCKED). Wizard uses
   // this to render the honest breadth panel.
