@@ -39,7 +39,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$EccHost = "192.168.100.169",
+    [string]$EccHost = "192.168.100.180",
     [int]$EccSysnr = 41,
     [Parameter(Mandatory=$true)]
     [string]$SshKeyPath,
