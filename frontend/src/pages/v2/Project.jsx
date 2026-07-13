@@ -79,6 +79,14 @@ export default function Project() {
   const [preservationApplying, setPreservationApplying] = useState(false);
   const [preservationApplyResult, setPreservationApplyResult] = useState(null);
   const [decisions, setDecisions] = useState({}); // per-object choice
+  // Run mode: 'auto' = one-click fire-and-forget (server chains plan +
+  // apply non-B + migration). 'step' = existing per-step confirmations
+  // (Compute → Apply → Start). Defaults to auto for demo; enterprise
+  // Basis teams often switch to step for approval visibility.
+  const [runMode, setRunMode] = useState('auto');
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoResult, setAutoResult] = useState(null);
+  const [allowStrategyB, setAllowStrategyB] = useState(false);
   const [confirmingLive, setConfirmingLive] = useState(false);
   // Aggregated telemetry + error buckets — populated by /telemetry poll.
   const [telemetry, setTelemetry] = useState(null);
@@ -175,6 +183,31 @@ export default function Project() {
   };
   const setDecision = (obj, choice) => {
     setDecisions((prev) => ({ ...prev, [obj]: choice }));
+  };
+
+  // Auto-mode fire-and-forget
+  const startAutoRun = async () => {
+    setErr(''); setAutoRunning(true); setAutoResult(null);
+    try {
+      const r = await api.autoRun({
+        run_id: runId,
+        migration_type: wizard.migration_type,
+        selective_objects: wizard.selective_objects || [],
+        load_to_s4: loadToS4,
+        simulation_mode: loadToS4 && simulationMode,
+        max_rows: maxRows === '' ? null : Number(maxRows),
+        preserve_source_numbers: preserveSourceNumbers,
+        allow_strategy_b: allowStrategyB,
+      });
+      setAutoResult(r);
+      const pipeline_run_id = r.run_id || runId;
+      setActiveRun(pipeline_run_id);
+      await api.wizardPatch(runId, {
+        page: 'project', pipeline_run_id, load_to_s4: loadToS4,
+        started_at: new Date().toISOString(), auto_mode: true,
+      });
+    } catch (e) { setErr(e.message); }
+    finally { setAutoRunning(false); }
   };
 
   const loadCoverage = async () => {
@@ -286,6 +319,47 @@ export default function Project() {
           {err}
         </div>
       )}
+
+      <Section title="How should this migration run?">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <RunModeCard
+            selected={runMode === 'auto'}
+            title="Full auto (fire-and-forget)"
+            subtitle="One click. Server orchestrates everything."
+            body="Preservation plan computed → non-B strategies auto-applied → migration starts. Zero SAP GUI activity. Strategy B (which modifies SAP-shipped intervals) is deferred to the step-by-step mode because it needs your Basis team's explicit approval."
+            accent="emerald"
+            onClick={() => setRunMode('auto')}
+            disabled={!!activeRun || starting}
+          />
+          <RunModeCard
+            selected={runMode === 'step'}
+            title="Step-by-step (per-change confirmations)"
+            subtitle="Review each SAP-side change before it lands."
+            body="Enterprise Basis-team pattern. You click through: Compute preservation plan → review per-object coverage → override recommendations if needed → apply → then start migration. Full visibility into every RFC change made on target."
+            accent="blue"
+            onClick={() => setRunMode('step')}
+            disabled={!!activeRun || starting}
+          />
+        </div>
+        {runMode === 'auto' && (
+          <div className="mt-3">
+            <label className="flex items-start gap-2 text-sm p-2 border border-amber-200 bg-amber-50 rounded">
+              <input
+                type="checkbox"
+                checked={allowStrategyB}
+                onChange={(e) => setAllowStrategyB(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Allow Strategy B in Auto mode</strong> (modifies SAP-shipped
+                internal intervals to external). Only tick this if your Basis team
+                has pre-approved changes to SAP-designated internal number ranges.
+                Default off = auto-downgrades B to next-best option.
+              </span>
+            </label>
+          </div>
+        )}
+      </Section>
 
       <Section title="Migration coverage (what this tool knows about)">
         <div className="flex items-start gap-3 flex-wrap">
@@ -622,33 +696,65 @@ export default function Project() {
         </Section>
       )}
 
-      <Section title={loadToS4 ? "Step 2 — Actions" : "Actions"}>
-        {loadToS4 && !prepConfirmedRun && (
+      <Section title={runMode === 'auto' ? "Fire and forget" : (loadToS4 ? "Step 2 — Actions" : "Actions")}>
+        {runMode === 'step' && loadToS4 && !prepConfirmedRun && (
           <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
-            Generate + run the S/4 prep script above, then tick the
-            confirmation box — the <em>Start migration</em> button unlocks
-            once that's done. Extract-only mode (unset <em>Load to S/4</em>)
+            (Step-by-step mode) Generate + run the S/4 prep script above, then
+            tick the confirmation box — the <em>Start migration</em> button
+            unlocks once that's done. Extract-only mode (unset <em>Load to S/4</em>)
             skips this gate entirely.
           </div>
         )}
+        {runMode === 'auto' && (
+          <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded p-2 mb-3">
+            <strong>Auto mode</strong>: one click orchestrates preservation
+            plan compute → non-B strategy apply → migration start. Zero SAP
+            GUI activity. Basis Kit must be installed on target
+            {allowStrategyB ? ' — Strategy B enabled (assumes Basis pre-approval).' : ' — Strategy B DEFERRED to step-by-step mode (needs Basis approval).'}
+          </div>
+        )}
         <div className="flex flex-wrap gap-3 items-center">
-          <button
-            onClick={startMigration}
-            disabled={starting || activeRun || (loadToS4 && !prepConfirmedRun)}
-            className={`px-5 py-2.5 rounded text-white font-medium ${
-              loadToS4
-                ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'
-                : 'bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300'
-            }`}
-          >
-            {starting
-              ? 'Starting…'
-              : activeRun
-                ? 'Running'
-                : loadToS4
-                  ? 'Start migration + load to S/4HANA'
-                  : 'Start migration (extract-only)'}
-          </button>
+          {runMode === 'auto' ? (
+            <button
+              onClick={startAutoRun}
+              disabled={autoRunning || activeRun}
+              className="px-5 py-2.5 rounded bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-medium"
+            >
+              {autoRunning
+                ? 'Auto-migrating (plan → apply → run) ...'
+                : activeRun
+                  ? 'Running'
+                  : '🚀 Fire and forget — Auto-migrate ECC → S/4HANA'}
+            </button>
+          ) : (
+            <button
+              onClick={startMigration}
+              disabled={starting || activeRun || (loadToS4 && !prepConfirmedRun)}
+              className={`px-5 py-2.5 rounded text-white font-medium ${
+                loadToS4
+                  ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'
+                  : 'bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300'
+              }`}
+            >
+              {starting
+                ? 'Starting…'
+                : activeRun
+                  ? 'Running'
+                  : loadToS4
+                    ? 'Start migration + load to S/4HANA'
+                    : 'Start migration (extract-only)'}
+            </button>
+          )}
+          {autoResult && (
+            <span className="text-xs text-slate-600">
+              Auto plan applied · {(autoResult.plan_applied?.outcomes || []).length} objects processed
+              {autoResult.downgraded_from_B?.length > 0 && (
+                <span className="text-amber-700">
+                  {' '}· {autoResult.downgraded_from_B.length} downgraded from B
+                </span>
+              )}
+            </span>
+          )}
 
           {activeRun && (
             <>
@@ -757,6 +863,28 @@ function MetricCard({ label, value, tone = 'neutral' }) {
     </div>
   );
 }
+
+// Run-mode card - one of two choices (auto vs step-by-step). Emerald when
+// selected auto, blue when selected step. Muted when unselected.
+function RunModeCard({ selected, title, subtitle, body, accent, onClick, disabled }) {
+  const accentBg = accent === 'emerald' ? 'bg-emerald-50 border-emerald-300' : 'bg-blue-50 border-blue-300';
+  const mutedBg  = 'bg-slate-50 border-slate-200';
+  const cls = selected
+    ? `${accentBg} ring-2 ring-offset-1 ${accent === 'emerald' ? 'ring-emerald-500' : 'ring-blue-500'}`
+    : `${mutedBg} hover:bg-slate-100`;
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`text-left p-4 border rounded ${cls} disabled:opacity-60 disabled:cursor-not-allowed`}
+    >
+      <div className={`text-sm font-semibold ${selected ? '' : 'text-slate-700'}`}>{title}</div>
+      <div className="text-xs text-slate-600 mb-2">{subtitle}</div>
+      <div className="text-xs text-slate-600">{body}</div>
+    </button>
+  );
+}
+
 
 // Source-key preservation strategy panel.
 // Presents the 4-strategy decision matrix per object type, with the

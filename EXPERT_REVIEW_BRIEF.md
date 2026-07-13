@@ -1274,3 +1274,99 @@ Source ECC keys must ALREADY fit into an interval that's ALREADY external on tar
 - Modifying SAP-designated-internal number-range intervals to external — this is a support-risk decision only the customer's Basis team can make. Tool surfaces the choice; tool does NOT silently violate SAP design intent.
 
 Total in Q3 2026 to date: **~9,000 lines of production code, 5 net new modules, 5 SAP-side function modules (Basis Kit), 40+ commits, 1 fundamental SAP-architecture finding surfaced by live testing that materially improves how the tool talks to Basis teams during rollout.**
+
+## 17. 2026-07-13 — Preservation planner + Auto-mode: single-click ECC to S/4 replication
+
+The last mile of fire-and-forget. Two adjacent additions turned the tool into a genuinely one-click experience for demo tenants (after Basis Kit install) and a clean 3-click flow for enterprise Basis-team-governed rollouts.
+
+### 17.1 Preservation planner + customer decision matrix
+
+`lambda/utils/preservation_planner.py` (450 LOC) — enterprise-correct answer for "how close can we get to source key = target key on target". Four strategies, per-object choice:
+
+| Strategy | Fidelity | SAP-side risk | Description |
+|---|---|---|---|
+| **A** | Partial | None | Point NUMKE at an existing external interval. Only source keys inside that range preserve. |
+| **B** | Full (source ID = target ID) | Basis approval | Modify SAP-shipped internal interval to external. **Highest fidelity option**. SAP support won't cover incidents on modified designated-internal intervals. |
+| **C** | Deterministic offset | None | Shift source keys via mapping table. Source X → target X+offset. Numbers differ but audit-traceable through DDB ledger. |
+| **D** | None | None | Accept target-assigned numbers. Every mapping tracked in DDB key_map. |
+
+Planner:
+- `discover_source_ranges(ecc_conn)` — probes source tables for min/max key + row counts
+- `discover_target_intervals(s4_conn)` — probes NRIV per SNRO object with EXTERNIND flags
+- `compute_strategy_coverage()` — per-object coverage % under each strategy + auto-recommendation
+- `apply_approved_plan()` — applies via Basis Kit RFCs (Z_M4H_TABLE_UPDATE for A, Z_M4H_NR_MODIFY for B, shift_map for C, no-op for D)
+
+API endpoints: `POST /api/pipeline/preservation-plan/compute`, `POST /api/pipeline/preservation-plan/apply`.
+
+**Recommendation logic**: planner picks B when its coverage matches or beats A. Otherwise A if it has >=80% coverage. Otherwise C if applicable. Otherwise D. Rationale: B is the highest-fidelity option; when it's applicable and effective, it should be the default. When it isn't (source range doesn't overlap any existing interval, or the change would be too invasive), fall back through A > C > D.
+
+### 17.2 Auto-mode: single-click fire-and-forget
+
+New wizard "How should this migration run?" section (added ABOVE the coverage panel on the Project page) with two large cards:
+
+- **Full auto (fire-and-forget)** — one click. Server orchestrates preservation plan compute → non-B strategy apply → migration start. Strategy B is auto-DOWNGRADED to next-best (A/C/D) unless the "Allow Strategy B" checkbox is ticked (implies Basis pre-approval).
+- **Step-by-step (per-change confirmations)** — enterprise Basis-team pattern. Compute plan → review per-object coverage → apply → then start migration. Full visibility into every RFC change made on target.
+
+New `POST /api/pipeline/auto-run` endpoint chains:
+1. `build_plan(ecc, s4)` — live discovery
+2. Auto-decisions dict from planner recommendations (with B → A/C/D downgrade unless `allow_strategy_b=True`)
+3. `apply_approved_plan()` via Basis Kit RFCs
+4. `start_pipeline_async()` with `M4H_LOAD_TO_S4=1` + `M4H_PRESERVE_SRC_NUMBERS=1`
+
+Returns immediately with run_id + apply summary + list of objects downgraded from B; migration continues in background.
+
+### 17.3 Full wizard UI walkthrough (as of 2026-07-13)
+
+The Project page (the entry point for every migration run) now has this stack, top to bottom:
+
+1. **Header** — run id, ECC version → S/4 version, migration type (full/selective), object count
+2. **Errors bar** — inline error display when any step fails
+3. **How should this migration run?** — new run-mode chooser (Auto / Step-by-step). Auto shows an "Allow Strategy B" checkbox with amber banner explaining the SAP-support implication.
+4. **Migration coverage** — collapsible panel showing all 135 objects with tier badges (T1 verified / T2 attempted / MC-lane / Blocked). Loads on demand via `/api/pipeline/coverage`.
+5. **Source-key preservation strategy** — planner UI:
+   - Big Compute button when no plan yet
+   - After compute: 4-strategy legend with colour-coded badges + amber banner about B's SAP-support risk
+   - Per-object table: source range (min/max/count), SNRO object, coverage % under each of A/B/C/D (green when >=90%), per-object dropdown for choice
+   - Apply button (drives Basis Kit RFCs) + per-object result table
+6. **What this run will do** — load-mode chooser (Extract-only vs Load-to-S4), simulation-mode checkbox, row cap, preserve-source-numbers toggle
+7. **Prepare S/4 target (Step 1)** — auto-generated prep ABAP with Copy/Download/Auto-run buttons; visible when Load-to-S4 is on
+8. **Actions (Step 2 / Fire and forget)** — title changes based on run mode:
+   - Auto mode: single button "🚀 Fire and forget — Auto-migrate ECC → S/4HANA"
+   - Step mode: existing "Start migration + load to S/4HANA" button gated on prep-confirmed checkbox
+9. **Live telemetry** — appears once a run is active. TelemetryCards showing rows/sec, records loaded, dead-letter rate
+10. **Project tracker** — 9-phase progress list (ASSESS → PROVISION → CODE → CONFIG → DATA_PREP → DATA_LOAD → VALIDATE → CUTOVER → RUN)
+11. **Stats** — aggregate stats from progress events
+12. **Errors — triage** — error-bucket cards when there are dead-letters
+13. **Fix & retry** — reprocess-loop panel with three cards (Download failures / Download template / Upload corrected)
+14. **Post-run actions** — Open Live Ops / Open Conversion Dashboard / Download PDF buttons
+
+### 17.4 Net state after this addition — the fire-and-forget scorecard
+
+**Per-migration path (after Basis Kit install)**:
+
+| Step | Auto mode | Step-by-step mode |
+|---|---|---|
+| Preservation plan compute | Auto | 1 click |
+| Plan apply on target | Auto (non-B only) | 1 click |
+| Migration start | Auto | 1 click |
+| **Total clicks** | **1** | **3** |
+| SAP GUI activity | 0 | 0 |
+| SSH | 0 | 0 |
+
+**One-time per customer** (unavoidable — SAP platform doesn't allow bypass):
+
+| Step | Duration |
+|---|---|
+| Basis Kit SE37 install (5 FMs) | ~10 min by Basis team |
+| Connection setup (ECC + S/4 creds) | ~1 min in wizard |
+
+**Genuinely remaining friction** (documented honestly):
+
+1. Strategy B always requires Basis approval per object it's applied to — SAP won't cover incidents on modified designated-internal intervals. Auto-mode DOWNGRADES B; user can flip the "Allow Strategy B" checkbox after Basis approves.
+2. TB003 (BP grouping) is a pool table on modern S/4 — not RFC-writable via Z_M4H_TABLE_UPDATE. Needs kit extension for full BP preservation (~2 hours engineering).
+3. 2 Tier-2 spines still need per-object fixes (NetworkComponent, Requirement).
+4. ECC data quality issues — genuine source-side problems the tool honestly refuses to send to BAPIs. Reprocess-loop Excel round-trip handles it.
+
+**The answer to "is the tool fire and forget?"** — YES for the per-migration path after Basis Kit install. **NO** as a "zero setup ever" model because SAP's platform architecture requires ONE touchpoint (the kit install) for any tool that wants to make RFC-callable customizing writes. Every enterprise SAP migration tool works this way; migrate4hana's kit is minimal, scoped, auditable, and one-time.
+
+Total lines added this week (2026-07-06 → 2026-07-13): **~2,600 lines of production code**, **6 net new modules**, **5 SAP-side function modules (Basis Kit)**, **50+ commits**, **1 fundamental SAP-architecture finding surfaced by live testing that materially improves how the tool talks to Basis teams during rollout**, plus the **preservation planner + Auto-mode** that make the last mile fire-and-forget.

@@ -3582,3 +3582,94 @@ Session-relevant tasks:
 - 335: IDoc process codes aligned with WE20 — completed
 - 336: Flip EXTERNIND via Z_M4H_NR_MODIFY + verify — completed (surfaced the fundamental architectural finding)
 - 337: Preservation planner + customer decision matrix — pending (roadmap item)
+
+## 2026-07-13 — Preservation planner + Auto-mode: closing the fire-and-forget loop
+
+### Commit c650f67 — Preservation planner + wizard 4-strategy decision matrix
+
+Enterprise-correct answer for "how close can we get to true ECC to S/4 replication (same IDs everywhere)". The tool computes per-object coverage under 4 strategies and lets the customer pick per object.
+
+New `lambda/utils/preservation_planner.py` (~450 LOC):
+- `OBJECT_META`: per-object SNRO + source table + customizing table metadata for the 12 objects the tool preserves keys for
+- `discover_source_ranges(ecc_conn)`: probes each source table for min/max source key + numeric interpretation + row count. Uses RFC_READ_TABLE with ROWCOUNT=100000 to get a representative sample. Handles non-numeric keys gracefully.
+- `discover_target_intervals(s4_conn)`: probes NRIV per SNRO object with EXTERNIND flag. Returns list of intervals with (nr, from, to, extern) tuples.
+- `_range_overlaps()`: computes which target interval covers the source range (external-only or any). Returns (fits_count, best_interval).
+- `compute_strategy_coverage()`: builds per-object plan with coverage %, risk level, action description, and recommended strategy for each of the 4 options. Recommendation logic: B wins when applicable and coverage >= A; else A if >= 80%; else C if >= 80%; else A if >0; else D.
+- `apply_approved_plan()`: applies customer's decisions via Basis Kit RFCs. A: Z_M4H_TABLE_UPDATE. B: Z_M4H_NR_MODIFY. C: returns shift_map for loader. D: no-op.
+- `build_plan()`: top-level entry point that combines all of the above into a single wizard-renderable plan dict.
+
+Two new api endpoints:
+- `POST /api/pipeline/preservation-plan/compute`
+- `POST /api/pipeline/preservation-plan/apply`
+
+Wizard `PreservationPanel` component:
+- Big Compute button when no plan yet
+- After compute: 4-strategy legend with colour-coded badges (A blue, B emerald, C amber, D slate) + amber warning banner about B's SAP-support implication
+- Per-object table:
+  - Object name (font-mono)
+  - Source range: row count + min/max source key
+  - SNRO object
+  - Coverage % under A/B/C/D (green when >= 90%)
+  - Per-object dropdown for strategy choice
+- Auto-populates decisions with planner's recommendation
+- Apply button drives Basis Kit RFCs
+- Result table shows per-object apply outcome
+
+### Commit (this session) — Auto-mode: single-click orchestration
+
+New `_AutoRunRequest` DTO + `POST /api/pipeline/auto-run` endpoint that server-side orchestrates the whole flow in one call:
+
+1. Opens ECC + S/4 pyrfc connections
+2. Calls `build_plan(ecc, s4)` — full discovery of source ranges + target intervals
+3. Iterates planner recommendations:
+   - For each object, if recommended = B and `allow_strategy_b=False`: downgrade to next-best A/C/D (whichever has highest coverage among the non-B options)
+   - Otherwise apply the recommendation directly
+4. Calls `apply_approved_plan(s4_apply, plan_result["plan"], decisions)`
+5. Sets `M4H_KEY_SHIFT_<OBJ>` env vars for any strategy-C choices
+6. Awaits `start_pipeline_async(mode="full", pipeline_kind="lift_and_shift", ...)`
+7. Returns run_id + plan_applied summary + downgraded_from_B list + migration_result
+
+Downgrade logic explicit: B needs Basis approval; auto-applying silently would violate SAP-support governance. The downgraded list is returned so the wizard can surface "N objects would have preserved fully via B but were downgraded — enable Step-by-step mode + Allow Strategy B checkbox to apply after Basis approval".
+
+Wizard additions:
+
+- `RunModeCard` component — one of two large clickable cards (auto vs step). Selected card gets emerald or blue ring, unselected is muted slate. Both disabled when a run is active.
+- `RunModeChooser` section (new, placed ABOVE the coverage panel):
+  - Full auto card: "Preservation plan computed → non-B strategies auto-applied → migration starts. Zero SAP GUI activity."
+  - Step-by-step card: "Enterprise Basis-team pattern. Compute → review → override if needed → apply → start."
+  - When auto mode selected: additional amber checkbox "Allow Strategy B in Auto mode" — off by default, warns about SAP-support risk when ticked
+- Actions section title changes based on runMode:
+  - Auto: "Fire and forget"
+  - Step: "Step 2 — Actions" (existing) or "Actions" if not load_to_s4
+- Actions button changes based on runMode:
+  - Auto: single big emerald "🚀 Fire and forget — Auto-migrate ECC → S/4HANA" button that calls `startAutoRun()`
+  - Step: existing red/orange "Start migration + load to S/4HANA" button gated on prep-confirmed checkbox
+- After auto-run response received: shows "Auto plan applied · N objects processed · M downgraded from B" summary line
+
+### Truth-table of what's fire-and-forget vs manual after this session
+
+Per-migration path (once Basis Kit is installed):
+
+| Mode | Clicks | SAP GUI activity | SSH |
+|---|:---:|:---:|:---:|
+| Auto | 1 | 0 | 0 |
+| Step | 3 | 0 | 0 |
+
+One-time per customer:
+- Basis Kit SE37 install of 5 FMs (~10 min by Basis team) — unavoidable per SAP platform architecture
+- Connection setup in wizard (~1 min) — one-time per tenant pair
+
+Genuine remaining friction items (all documented and none of them tool bugs):
+- Strategy B always requires Basis approval per object. Cannot be auto-applied silently. Enterprise-correct.
+- TB003 (BP grouping) storage on modern S/4 is a pool table not writable via RFC_READ_TABLE. Needs kit extension.
+- 2 Tier-2 spines (NetworkComponent, Requirement) still need per-object BAPI-signature fixes.
+- ECC data quality issues need Excel-based reprocess loop (already built).
+
+The tool is fire-and-forget for the running migration in Auto mode. This is the enterprise-correct definition.
+
+### Files touched this commit
+
+- `lambda/utils/preservation_planner.py` (new, ~450 LOC)
+- `api_server.py`: added `_AutoRunRequest`, `_PlanRequest`, `_ApplyPlanRequest` DTOs + 3 new endpoints (compute, apply, auto-run)
+- `frontend/src/lib/api.js`: added `autoRun()`, `preservationCompute()`, `preservationApply()` client methods
+- `frontend/src/pages/v2/Project.jsx`: added `PreservationPanel`, `RunModeCard`, `RunModeChooser`; state fields for runMode, preservationPlan, autoRunning, decisions, allowStrategyB; conditional Actions rendering by runMode

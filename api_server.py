@@ -2476,6 +2476,29 @@ class _PrepAutoRunRequest(BaseModel):
     run_id: str
 
 
+class _AutoRunRequest(BaseModel):
+    """Fire-and-forget: server-side orchestrates plan-compute + plan-apply +
+    start_pipeline_async in one call.
+
+    Behaviour: preservation planner auto-runs, decisions default to the
+    planner's recommendations, but strategy B is DOWNGRADED to A/C/D per
+    the object's next-best option (B needs explicit Basis approval; we
+    won't silently apply it in auto mode). Post-apply, migration starts.
+
+    Returns::
+
+        {"run_id": str, "plan_applied": {...}, "migration_started": True}
+    """
+    run_id:                  Optional[str] = None
+    migration_type:          Optional[str] = None
+    selective_objects:       Optional[List[str]] = None
+    load_to_s4:              Optional[bool] = True
+    simulation_mode:         Optional[bool] = False
+    max_rows:                Optional[int] = None
+    preserve_source_numbers: Optional[bool] = True
+    allow_strategy_b:        Optional[bool] = False   # if True, applies B too
+
+
 class _PlanRequest(BaseModel):
     object_types: Optional[List[str]] = None
 
@@ -2519,6 +2542,108 @@ async def preservation_plan_compute(body: Optional[_PlanRequest] = None):
 class _ApplyPlanRequest(BaseModel):
     plan:      dict
     decisions: dict   # object_type -> "A" | "B" | "C" | "D"
+
+
+@app.post("/api/pipeline/auto-run",
+          dependencies=[Depends(require_auth)])
+async def pipeline_auto_run(body: _AutoRunRequest):
+    """Full auto mode - one server-side call orchestrates:
+
+      1. Preservation plan compute (queries live ECC + S/4)
+      2. Plan apply for A/C/D strategies; B strategies DOWNGRADED to
+         next-best unless allow_strategy_b=True (B needs Basis approval;
+         auto-applying silently would violate SAP-support governance).
+      3. start_pipeline_async with load_to_s4=1 and preservation env vars
+
+    Returns immediately with run_id + plan summary; migration continues
+    in background (existing pipeline behaviour)."""
+    conns = _load_connections()
+    ecc_conf = conns.get("ecc") or {}
+    s4_conf = conns.get("s4hana") or {}
+    if not (ecc_conf.get("ashost") and _ecc_passwd
+             and s4_conf.get("ashost") and _s4_passwd):
+        raise HTTPException(status_code=400,
+                             detail="Both ECC + S/4 connections required for auto-run.")
+
+    try:
+        import pyrfc  # type: ignore
+        sys.path.insert(0, os.path.join(PROJECT_DIR, "lambda", "utils"))
+        from preservation_planner import build_plan, apply_approved_plan  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"import: {e}")
+
+    # Step 1 — compute plan
+    ecc = pyrfc.Connection(ashost=ecc_conf["ashost"], sysnr=ecc_conf["sysnr"],
+                             client=ecc_conf["client"], user=ecc_conf["user"],
+                             passwd=_ecc_passwd, lang="EN")
+    s4  = pyrfc.Connection(ashost=s4_conf["ashost"], sysnr=s4_conf["sysnr"],
+                             client=s4_conf["client"], user=s4_conf["user"],
+                             passwd=_s4_passwd, lang="EN")
+    try:
+        plan_result = build_plan(ecc, s4)
+    finally:
+        ecc.close()
+
+    # Step 2 — auto-decide + downgrade B when allow_strategy_b=False
+    decisions = {}
+    downgraded = []
+    for obj, entry in (plan_result.get("plan") or {}).items():
+        rec = entry.get("recommended") or "D"
+        if rec == "B" and not body.allow_strategy_b:
+            # Find next-best non-B strategy
+            strats = entry.get("strategies") or {}
+            best = "D"
+            best_cov = -1.0
+            for k in ("A", "C", "D"):
+                cov = (strats.get(k) or {}).get("coverage_est_pct", 0)
+                if cov > best_cov:
+                    best_cov = cov; best = k
+            decisions[obj] = best
+            downgraded.append({"object": obj, "recommended": "B",
+                                 "auto_downgraded_to": best,
+                                 "reason": "Strategy B requires explicit Basis approval; "
+                                           "not auto-applied in Auto mode. Enable "
+                                           "'Allow Strategy B' in Step-by-step mode "
+                                           "if your Basis team has approved."})
+        else:
+            decisions[obj] = rec
+
+    # Step 3 — apply
+    s4_apply = pyrfc.Connection(ashost=s4_conf["ashost"], sysnr=s4_conf["sysnr"],
+                                  client=s4_conf["client"], user=s4_conf["user"],
+                                  passwd=_s4_passwd, lang="EN")
+    try:
+        apply_result = apply_approved_plan(s4_apply, plan_result["plan"], decisions)
+    finally:
+        s4_apply.close()
+
+    # Set env vars for shift_map so loader honors offsets
+    for obj, offset in (apply_result.get("shift_map") or {}).items():
+        os.environ[f"M4H_KEY_SHIFT_{obj.upper()}"] = str(offset)
+
+    # Step 4 — start migration
+    run_id = body.run_id or f"auto-{int(time.time())}"
+    migration_result = await start_pipeline_async(
+        mode="full",
+        pipeline_kind="lift_and_shift",
+        run_id=run_id,
+        load_to_s4=bool(body.load_to_s4),
+        simulation_mode=bool(body.simulation_mode),
+        max_rows=body.max_rows,
+        preserve_source_numbers=bool(body.preserve_source_numbers),
+    )
+
+    return {
+        "run_id":              run_id,
+        "plan_applied":        apply_result,
+        "downgraded_from_B":   downgraded,
+        "auto_decisions":      decisions,
+        "migration_started":   True,
+        "migration_result":    migration_result,
+        "note": ("Auto mode: preservation plan computed + applied, migration started. "
+                  "Strategy B downgraded on objects that would need it; run in "
+                  "Step-by-step mode after Basis approval to apply B."),
+    }
 
 
 @app.post("/api/pipeline/preservation-plan/apply",

@@ -209,6 +209,13 @@ export const api = {
     return res.json();
   },
 
+  // ── Full-auto orchestrator (fire-and-forget) ──
+  // Server-side chains: preservation plan compute → apply non-B → start
+  // migration. One call, one response with run_id + plan summary.
+  autoRun: (payload = {}) =>
+    apiFetch('/api/pipeline/auto-run',
+      { method: 'POST', body: JSON.stringify(payload) }),
+
   // ── Preservation planner ──
   // Compute per-object source-key preservation coverage under each of
   // 4 strategies (A: point NUMKE at existing external; B: modify SAP
