@@ -64,33 +64,26 @@ class ProfitCenterSpineOrchestrator(BaseSpineOrchestrator):
         long_ = ((row.get("LTEXT") or short).strip() or short)[:40]
         verak = (row.get("VERAK") or "M4H").strip()[:20]
 
-        master_data: dict = {
-            "PROFIT_CTR":     prctr,
-            "CONTROLLINGAREA": kokrs,
-            "VALID_FROM":     valid_from,
-            "VALID_TO":       valid_to,
-            "NAME":           short,
-            "LONG_TEXT":      long_,
-            "PERSON_RESP":    verak,
-            "PRCTR_HIER_GRP": pc_hier,
-        }
-        payload = {"PROFITCENTER_KEY": {"CONTROLLINGAREA": kokrs,
-                                         "PROFIT_CTR": prctr,
-                                         "VALID_FROM": valid_from,
-                                         "VALID_TO":   valid_to},
-                   "MASTER_DATA": master_data}
+        # Live-probed signature (S/4 2020, FUPARAREF 2026-07-14): mandatory
+        # PROFITCENTERID (BAPI0015ID2: CO_AREA + PROFIT_CTR), VALIDFROM/VALIDTO
+        # dates, and BASICDATA (BAPI0015_4). Extensions go through the
+        # PROFITCENTER_EXTENSIONIN table (BAPIPAREXTAB; no X-table).
+        payload = {"PROFITCENTERID": {"CO_AREA": kokrs, "PROFIT_CTR": prctr},
+                   "VALIDFROM": valid_from,
+                   "VALIDTO":   valid_to,
+                   "BASICDATA": {"PRCTR_NAME":     short,
+                                  "LONG_TEXT":      long_,
+                                  "IN_CHARGE":      verak,
+                                  "PRCTR_HIER_GRP": pc_hier}}
         if ext_rows:
-            payload["EXTENSIONIN"] = ext_rows
-            from base_spine_orchestrator import build_extensioninx
-            field_names = [(r.get("VALUEPART1") or "")[:30].strip() for r in ext_rows]
-            payload["EXTENSIONINX"] = build_extensioninx(self.extension_structure, field_names)
+            payload["PROFITCENTER_EXTENSIONIN"] = ext_rows
         return payload
 
     # ── BAPI invocation (pre-flight idempotency probe) ───────────────────────
     def call_bapi(self, payload: dict) -> tuple:
         from base_spine_orchestrator import DISP_MATCHED_EXISTING, DISP_CREATED
-        kokrs = payload["PROFITCENTER_KEY"]["CONTROLLINGAREA"]
-        prctr = payload["PROFITCENTER_KEY"]["PROFIT_CTR"]
+        kokrs = payload["PROFITCENTERID"]["CO_AREA"]
+        prctr = payload["PROFITCENTERID"]["PROFIT_CTR"]
         vk = {"table": "CEPC", "key": {"KOKRS": kokrs, "PRCTR": prctr}}
         if self._profit_center_exists(kokrs, prctr):
             return prctr, [f"profit center {prctr} already exists in {kokrs}"], DISP_MATCHED_EXISTING, vk

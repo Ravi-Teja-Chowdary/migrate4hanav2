@@ -353,6 +353,18 @@ class UnifiedLoader:
             bapi_field_catalog=self.bapi_field_catalog,
             dry_run=False,
         )
+        # Thread the discovered target org config into the spine. Spines read
+        # self.cc_org for target org units (CO area, hierarchy nodes, comp
+        # code); without this the batch path fell back to SOURCE values
+        # (e.g. ECC KOKRS 1000) that don't exist on the target.
+        if not getattr(orch, "cc_org", None):
+            _org: dict = {}
+            for _attr in ("cc_org", "asset_org"):
+                _d = getattr(self, _attr, None)
+                if isinstance(_d, dict):
+                    _org.update(_d)
+            if _org:
+                orch.cc_org = _org
         results = orch.load_many(rows, max_rows=max_rows)
         ok = [r for r in results if r.status in ("created", "matched_existing", "remapped")]
         dl = [r for r in results if r.status == "dead_letter"]

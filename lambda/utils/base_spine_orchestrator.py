@@ -403,6 +403,7 @@ class BaseSpineOrchestrator(ABC):
         failure becomes a dead-letter result the caller can surface."""
         with self._lock:
             self.stats.attempted += 1
+        row = self.normalize_row(row)
         src_key = str(row.get(self.source_key_field) or "").strip()
         result = LoadResult(status="failed", object_type=self.object_type,
                             source_key=src_key)
@@ -572,6 +573,12 @@ class BaseSpineOrchestrator(ABC):
         if dq and not dq.passed:
             return None     # DQ rejection
         return out
+
+    def normalize_row(self, row: dict) -> dict:
+        """Subclass hook: adapt raw extraction column names to the spine's
+        canonical row shape (runs before the source key is read, so it also
+        fixes source-key resolution). Default: identity."""
+        return row
 
     def validate(self, row: dict) -> Optional[str]:
         """Default: no extra validation. Override to return a string error

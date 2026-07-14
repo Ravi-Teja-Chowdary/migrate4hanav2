@@ -38,6 +38,26 @@ class BusinessPartnerSpineOrchestrator(BaseSpineOrchestrator):
     extension_structure   = "BAPI_TE_BUT000"
     fk_fields: dict       = {}
 
+    def normalize_row(self, row: dict) -> dict:
+        # Batch extraction feeds raw BUT000 columns (PARTNER / TYPE /
+        # NAME_ORG1 / NAME_LAST / BU_GROUP); the canonical spine shape is
+        # BPARTNER / CATEGORY / NAME / GROUPING. Map whichever is missing so
+        # both feeds (raw extract and pre-shaped rows) load identically.
+        out = dict(row)
+        if not (out.get("BPARTNER") or "").strip():
+            out["BPARTNER"] = (row.get("PARTNER") or "").strip()
+        cat = ((out.get("CATEGORY") or row.get("TYPE") or "2").strip() or "2")
+        out["CATEGORY"] = cat
+        if not (out.get("NAME") or "").strip():
+            if cat == "1":
+                name = (row.get("NAME_LAST") or row.get("NAME_ORG1") or "")
+            else:
+                name = (row.get("NAME_ORG1") or row.get("NAME_LAST") or "")
+            out["NAME"] = (name or row.get("MC_NAME1") or "").strip()
+        if not (out.get("GROUPING") or "").strip():
+            out["GROUPING"] = (row.get("BU_GROUP") or "").strip()
+        return out
+
     def validate(self, row: dict) -> Optional[str]:
         # NAME required (BP can't be created without identification data)
         if not (row.get("NAME") or "").strip():

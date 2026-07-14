@@ -246,7 +246,7 @@ DEFAULT_OBJECT_TABLES = {
     "Customer":          {"table": "KNA1", "fields": ["KUNNR", "NAME1", "LAND1", "ORT01"], "lane": "MC"},
     "Vendor":            {"table": "LFA1", "fields": ["LIFNR", "NAME1", "LAND1", "ORT01"], "lane": "MC"},
     "Material":          {"table": "MARA", "fields": ["MATNR", "MTART", "MATKL", "MEINS"], "lane": "MC"},
-    "BusinessPartner":   {"table": "BUT000", "fields": ["PARTNER", "TYPE", "BPKIND", "BU_GROUP"], "lane": "MC"},
+    "BusinessPartner":   {"table": "BUT000", "fields": ["PARTNER", "TYPE", "BPKIND", "BU_GROUP", "NAME_ORG1", "NAME_LAST", "NAME_FIRST"], "lane": "MC"},
     "CompanyCode":       {"table": "T001", "fields": ["BUKRS", "BUTXT", "ORT01", "LAND1"], "lane": "MC"},
     "GLAccount":         {"table": "SKA1", "fields": ["KTOPL", "SAKNR", "XBILK"], "lane": "MC"},
     "CostCenter":        {"table": "CSKS", "fields": ["KOKRS", "KOSTL", "DATBI"], "lane": "MC"},
