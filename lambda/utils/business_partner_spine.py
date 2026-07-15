@@ -114,6 +114,30 @@ class BusinessPartnerSpineOrchestrator(BaseSpineOrchestrator):
         hard = [m for m in ret_list if m.get("TYPE") in ("E", "A")]
         msgs = [(m.get("MESSAGE") or "").strip() for m in ret_list if m.get("MESSAGE")]
         bp = (resp.get("BUSINESSPARTNER") or "").strip()
+
+        # Grouping harmonization fallback (AUTO2: 498 dead on "Grouping 0001 has
+        # external number assignment. Please enter a valid number."). The source
+        # BU_GROUP maps to an external-numbered grouping on target whose range
+        # the source BP number doesn't fit. BP-led numbering is the S/4 design
+        # anyway (see CVI), so retry ONCE letting the target's default internal
+        # grouping assign the number; the ledger records source->target as usual.
+        if (hard or not bp) and any("external number" in m.lower() for m in msgs):
+            try:
+                self.c.call("BAPI_TRANSACTION_ROLLBACK")
+            except Exception:
+                pass
+            retry = {k: v for k, v in payload.items()
+                     if k not in ("PARTNERGROUP", "BUSINESSPARTNER")}
+            resp = self.c.call("BAPI_BUPA_CREATE_FROM_DATA", **retry)
+            ret = resp.get("RETURN") or []
+            ret_list = ([ret] if ret.get("TYPE") else []) if isinstance(ret, dict) \
+                else list(ret)
+            hard = [m for m in ret_list if m.get("TYPE") in ("E", "A")]
+            msgs += ["grouping fallback: retried with target default grouping"]
+            msgs += [(m.get("MESSAGE") or "").strip() for m in ret_list
+                     if m.get("MESSAGE")]
+            bp = (resp.get("BUSINESSPARTNER") or "").strip()
+
         if hard or not bp:
             try:
                 self.c.call("BAPI_TRANSACTION_ROLLBACK")

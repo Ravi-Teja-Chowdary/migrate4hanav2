@@ -586,8 +586,17 @@ class BapiLoader:
                            "customers": set(cl), "sample_customer": cl[0],
                            "sample_material": mats[(vk, vt)][0]}
                     break
-        except Exception:
-            pass
+        except Exception as e:
+            # A discovery EXCEPTION (typically a dead RFC connection late in a
+            # long run) must NOT be cached as "no sales area" — that verdict
+            # poisoned all 10,000 OpenSO rows in AUTO/AUTO2 within 0.1s. Leave
+            # the cache unset so the next record retries, and surface why.
+            self._so_cfg_reason = f"discovery failed: {type(e).__name__}: {str(e)[:120]}"
+            return None
+        if cfg is None:
+            self._so_cfg_reason = ("no (VKORG,VTWEG) present in BOTH KNVV and "
+                                   "MVKE on target — extend a customer + "
+                                   "material into the sales area (prep step)")
         self._so_cfg_cache = cfg
         return cfg
 
@@ -599,7 +608,10 @@ class BapiLoader:
         Internal numbering -> the BAPI assigns the document; source VBELN -> target recorded."""
         cfg = self._so_config()
         if not cfg:
-            return {"status": "skipped", "messages": ["no coherent target sales area (customer+material) discovered"]}
+            reason = getattr(self, "_so_cfg_reason", "") or "unknown"
+            return {"status": "skipped",
+                    "messages": ["no coherent target sales area (customer+material) "
+                                 f"discovered [{reason}]"]}
         src_so = (header.get("VBELN") or "").strip()
         src_cust = (header.get("KUNNR") or "").strip()
         tgt_cust = key_map.resolve("Customer", src_cust) if key_map else None
