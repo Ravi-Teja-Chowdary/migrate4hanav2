@@ -1481,3 +1481,80 @@ The complete Project page flow, top to bottom, as of 2026-07-13 evening:
 Enterprise pattern satisfied: user sees exactly what will happen, verifies each precondition against live systems, and signs off before anything changes on target. The consent signature is captured with a timestamp for audit — future work can persist this into the compliance-ledger.
 
 **The tool is fire-and-forget once consent is signed** — clicking Start in Auto mode runs plan-compute + plan-apply + migration in one server-side chain. Consent is the deliberate ceremony that separates "have I thought about this" from "just click and hope".
+
+## 19. 2026-07-14 to 2026-07-16 — Live E2E proof, Basis Kit v1.1, and the self-healing customizing loop
+
+Three days of live full-pipeline runs against the CAL landscape (including surviving an
+AWS-side appliance termination mid-run) converted the fire-and-forget architecture from
+"designed" to "proven", and closed the tool's last per-migration SAP-GUI touchpoint.
+
+### 19.1 Full 27-stage E2E runs (LOCAL-E2E-KIT-AUTO2, LOCAL-E2E-FULL-001/002)
+
+- Complete pipeline — discovery → code remediation (6,044 auto-fixes) → config →
+  extract → load → validate → cutover checks → **PDF report (stage 27)** — runs
+  unattended, exit 0, across 24,101 RFC calls.
+- **Resume-safe across real interruptions**: the S/4 appliance was terminated by AWS
+  mid-run on 07-14 and the laptop/VM IPs changed twice; relaunching with the same
+  run-id recognized all prior work from the cross-run ledger (92.6% idempotency hit
+  rate) and created **zero duplicates**.
+- Cumulative outcome: **5,090 records live on the target** across 10 object types.
+  Day-over-day dead-letter rate: **71.8% → 15.8% → 8.4% → 7.4%**, with every
+  remaining failure bucket named (appliance demo-vendor address defects, UoM quirks,
+  exchange-rate ratio config) — zero unexplained failures.
+
+### 19.2 Platform truths established (live-verified, documented in BASIS_KIT_OPERATIONS.md)
+
+- **Per-doc-type number ranges**: T161/TVAK `NUMKE` names ONE external interval per
+  document type — preservation coverage is per-(doc type × number band), not
+  per-object. A data-driven scanner (`interval_coverage.py` + per-type alignment)
+  computes each type's dominant source band and the exact kit calls to cover it.
+- **In-use internal intervals cannot be flipped external** (NR 009), and this
+  appliance already owned documents inside the dominant PO band (45xxxxxxxx), making
+  that band structurally unpreservable HERE — an appliance artifact; empty
+  brownfield targets don't have squatters in the number space.
+- **Renumber-fallback** (bapi_loader): when a specific document's number is
+  platform-blocked ("not within defined interval" / "already exists" / the SD
+  variant "Enter a document number between"), the loader retries once with internal
+  numbering and ledger-maps the pair (`renumbered_fallback`) instead of
+  dead-lettering. This single fix converted 10,000 dead SOs into 500 migrated ones
+  (cap) and dropped the run's dead-letter rate by ~56 points.
+
+### 19.3 Basis Kit v1.1 — the last SE38 touchpoint closed
+
+- New RFC FM **`Z_M4HTABLE_UPSERT`**: full-row customizing upserts. Guardrail is
+  stronger than a whitelist — it reads the table's DD02L delivery class and refuses
+  anything that isn't customizing (C/G/E/S), so it structurally cannot write master
+  or transaction data. MODIFY semantics (idempotent); MANDT stamped server-side.
+- Live proof: **2,806 customizing rows** (material groups T023/T023T, exchange-rate
+  config TCURV/TCURF, currencies TCURC, material types T134/T134T) pushed over pure
+  RFC in two rounds, zero failures, pre-existing rows untouched.
+- Three more live-debugged SE37/ABAP lessons captured (#13 TABLES params obsolete →
+  IMPORTING table types; #14 RFC refuses generic types → SOLI_TAB; #15 `&&` is
+  character-only → `{ }` templates for integers).
+- The SE38 prep-script path remains as fallback, now 11× smaller via compact
+  VALUE-constructor emission in abap_generator (36,675 → 2,846 lines).
+
+### 19.4 Self-healing customizing loop — wired into Auto mode (stage 15b)
+
+The manual push-and-retry pattern that produced the 15.8% → 7.4% improvement is now a
+pipeline stage (`_inline_prep_push_retry`, `lambda/utils/prep_push_loop.py`):
+
+1. Read the run's dead-letter artifact; **error signatures name the missing
+   customizing** ("value 002 not allowed for MARA-MATKL" → T023; "rate type not in
+   TCURV" → TCURV; "From currency UNI" → TCURC; "material type XLMT" → T134 …).
+2. Scan ECC for those tables, diff against live target keys, push ONLY the missing
+   rows via kit v1.1.
+3. Re-run the load stage — dead letters retry idempotently against the completed
+   customizing. Repeat up to `M4H_PREP_PUSH_ROUNDS` (default 2); terminates
+   naturally when a push lands zero rows.
+
+Auto mode inherits it via the pipeline (`auto_prep_push` flag on
+`POST /api/pipeline/auto-run`, default ON); degrade paths are all clean skips
+(kit absent, extract-only run, no signatures, no credentials). Live-smoked against
+the real FULL-002 dead-letter artifact: detected 7 tables, found zero delta
+(already healed), terminated without a wasteful retry.
+
+**Net effect on the operating model**: one SE37 kit install per target, then
+migrate → detect → heal → retry is a closed loop with no human in it. The human
+steps that remain are the governance ones by design: preflight consent, and
+Strategy-B approval.

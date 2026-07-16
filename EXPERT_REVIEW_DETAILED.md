@@ -3770,3 +3770,110 @@ Once all gates open + no active run, button unlocks + becomes clickable.
 The Project page now has 15 stacked sections. Preflight is section #8, right before Actions (#9). Every migration run — regardless of mode — passes through preflight + signed consent before target changes. This is the enterprise-grade governance layer that separates "signed-off migration" from "casual click-run".
 
 The signed consent is currently in-memory. Future work (item on backlog): persist to compliance-ledger with timestamp + IP + kit-audit-log correlation, so audit trail spans user consent through every SAP-side RFC call to final migration outcome.
+
+## 2026-07-14 to 2026-07-16 — Live E2E proof week: kit v1.1, renumber-fallback, self-healing loop
+
+Engineering log for the three-day live-verification arc summarized in BRIEF §19.
+
+### Timeline of runs
+
+| Run | Scope | Outcome |
+|---|---|---|
+| LOCAL-E2E-KIT-AUTO2 | preflight + plan-apply + stage13 | PC/BP/cc_org fixes proven; CAL terminated by AWS mid-run — late-run failures (ExchangeRates "connection is closed", reconciliation 0-verified) later traced to the dying appliance |
+| LOCAL-E2E-FULL-001 | full 27 stages | killed intentionally mid-15: all 10,000 OpenSOs dead on an SD message-variant miss (below); relaunch was cheaper than 3 more hours of known-bad retries |
+| LOCAL-E2E-FULL-002 | full 27 stages + 2 retry rounds | rc=0, PDF produced; dead-letter 15.8% → 8.4% → 7.4%; ledger 5,090 |
+
+### Root-caused fixes (each live-verified before commit)
+
+1. **ProfitCenter BAPI signature** (`b633a5e`) — code assumed `PROFITCENTER_KEY`;
+   FUPARAREF probe showed `PROFITCENTERID`(BAPI0015ID2) + `VALIDFROM/VALIDTO` +
+   `BASICDATA`(BAPI0015_4), extensions via `PROFITCENTER_EXTENSIONIN`. 490 dead → 0;
+   closed-loop smoke created + read back M4HPC001 in A000/YBH119.
+2. **BusinessPartner empty rows** (`b633a5e`) — extraction pulled no BUT000 name
+   columns AND field names didn't match the spine shape. New `normalize_row()` hook
+   on the base spine (runs before source-key read — fixed empty ledger keys too);
+   extraction now pulls NAME_ORG1/NAME_LAST/NAME_FIRST. 500 dead → 497 created.
+3. **cc_org threading** (`b633a5e`) — `_load_via_spine` never handed the discovered
+   target org config to spines; batch runs fell back to SOURCE org values (ECC
+   KOKRS 1000, nonexistent on target). One threading block fixed CostCenter (495
+   dead → ≤10) and pre-fixed ProfitCenter.
+4. **BP grouping fallback** (`ac51676`) — target groupings 0001/GPIN are
+   external-numbered; source BP numbers don't fit their ranges. On "external number
+   assignment", roll back + retry once without PARTNERGROUP/BUSINESSPARTNER (BP-led
+   numbering per CVI), message recorded.
+5. **SO discovery poisoning** (`ac51676`) — `_so_config()` cached a dead-connection
+   exception as "no coherent sales area", skipping 10,000 rows in 0.1s on two runs.
+   Exceptions no longer cached; skip reason surfaced.
+6. **Renumber-fallback** (`b0d0338`) — PO+SO loaders retry once with internal
+   numbering when the number is platform-blocked; ledger disposition
+   `renumbered_fallback`. Message-variant lesson: this S/4 phrases the SD range
+   check as "Enter a document number between X and Y" — FULL-001's 10,000 dead SOs
+   were a substring mismatch, nothing more. Renumbered docs land in interval 48
+   (repointed T161 NUMKI for NB/UB/EUB/FO), chosen because NO source band uses
+   48xxxxxxxx — renumbers can never collide with preserved numbers.
+
+### Number-range platform truths (EINKBELEG case study)
+
+Live NRIV read: 18 intervals, externals 41/44/56/61; T161 showed ALL PO doc types
+with NUMKI=45, NUMKE=41. Source scan: 91% of 18,413 POs in band 4500000000-4509999999.
+The approved plan (flip 45 external + NUMKE=45 for NB/UB/EUB) was REFUSED by SAP with
+NR 009 — interval 45 had 2,615 documents drawn (NRLEVEL>0) and in-use internal
+intervals cannot flip. Additionally the appliance's own documents occupy the low 45xx
+numbers, so exact preservation there is impossible regardless of intervals. Verdict:
+appliance artifact, not tool limitation; on an empty brownfield target the same
+planner + kit calls cover the band. OpenPO preservation on THIS box: 379/721 (52.6%),
+100% within the coverable 41-band.
+
+### Basis Kit v1.1 (`e4344de`) — Z_M4HTABLE_UPSERT
+
+Design: IV_TABLE + IV_FIELDS (CSV) + IT_ROWS (SOLI_TAB, pipe-delimited values);
+dynamic CREATE DATA + ASSIGN COMPONENT per field; MANDT stamped server-side; MODIFY
+upsert; per-row TRY/CATCH. Guardrail: DD02L delivery class must be C/G/E/S — refuses
+master/transaction tables structurally, no name list to maintain.
+
+Install debugging (all captured as ops-doc lessons #13-15):
+- SE37 flags classic TABLES params obsolete → IMPORTING param typed with a DDIC
+  table type, pass-by-value.
+- "In RFC, no generic types are allowed" → the kit's own ZM4H_ABAP_LINES table type
+  was created with a GENERIC key (DD40L KEYKIND=G); switched to standard SOLI_TAB —
+  which the live Z_M4H_TABLE_UPDATE was already using (FUPARAREF showed SOLI_TAB,
+  not ZM4H_ABAP_LINES).
+- `&&` concatenation is character-only → integers embedded as `{ ev_count }` in
+  string templates; the bad statement broke generation of the whole function group
+  (every kit FM 500'd until fixed).
+- Live FM name is `Z_M4HTABLE_UPSERT` (creation-time typo, kept); the Python pusher
+  resolves canonical + variant via TFDIR.
+
+Proof pushes: round 1 T023(447)/T023T(538)/TCURV(25)/TCURF(1730), round 2
+TCURC(29)/T134(16)/T134T(21) — 2,806 rows, 0 failures, spot-checked presence of
+previously-missing keys (MATKL 002/004/008/017, KURST 001, WAERS UNI, MTART XLMT)
+and integrity of pre-existing rows.
+
+### Self-healing loop wiring (this change set)
+
+- `lambda/utils/prep_push_loop.py`: DETECTION_RULES (error-signature substrings →
+  scan tables), `detect_tables()`, `push_missing()` (scan → key-diff → kit push;
+  GET_SORTED paging for S/4's hardened RFC_READ_TABLE), `kit_upsert_available()`.
+- `run_local_lift_and_shift.py`: stage **15b** `_inline_prep_push_retry` after the
+  second data-migrator pass — per round: read dead letters → detect → push → if
+  rows landed, re-run data-migrator (idempotent). Max `M4H_PREP_PUSH_ROUNDS`
+  (default 2); natural termination when a push lands 0 rows. Every degrade path is
+  a clean skip with a reason (gated off, extract-only, no dead letters, no
+  signatures, kit absent, creds missing) — the stage can never fail a pipeline.
+- `api_server.py` auto-run: `auto_prep_push` flag (default True) →
+  `M4H_AUTO_PREP_PUSH` env for the runner subprocess; response notes the stage.
+- Unit-tested detection against the six real failure classes (incl. negative case:
+  vendor-address errors correctly NOT matched); live-smoked stage15b standalone
+  against FULL-002's real dead-letter artifact (7 tables detected, zero delta,
+  no wasteful retry).
+
+### Honest residuals (state at end of 2026-07-16)
+
+- Dead-letter 7.4% vs 5% SLO on this appliance; remaining buckets are named data
+  defects: OpenPO 169 (demo vendors lack addresses), ExchangeRates ~193 (quotation/
+  ratio config), Material 36 (UoM), CC 10 / AP 12 / BP 1 (source data quirks) —
+  reprocessable via the Excel fix-and-retry loop.
+- PDF aggregator still grades per-run increments; a resumed run reads as "0
+  created". Backlog: read the cumulative ledger.
+- Reconciliation `records_missing: -288` on the retry run — accounting artifact of
+  re-verifying matched_existing rows; same aggregator backlog item.

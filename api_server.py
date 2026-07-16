@@ -2497,6 +2497,11 @@ class _AutoRunRequest(BaseModel):
     max_rows:                Optional[int] = None
     preserve_source_numbers: Optional[bool] = True
     allow_strategy_b:        Optional[bool] = False   # if True, applies B too
+    # Self-healing customizing loop (pipeline stage 15b): dead-letters that
+    # name missing customizing rows trigger a kit-v1.1 RFC push + load retry,
+    # up to M4H_PREP_PUSH_ROUNDS rounds. Safe default ON: delta-only pushes,
+    # idempotent, no-ops cleanly when the kit upsert FM isn't installed.
+    auto_prep_push:          Optional[bool] = True
 
 
 class _PlanRequest(BaseModel):
@@ -2694,7 +2699,9 @@ async def pipeline_auto_run(body: _AutoRunRequest):
     for obj, offset in (apply_result.get("shift_map") or {}).items():
         os.environ[f"M4H_KEY_SHIFT_{obj.upper()}"] = str(offset)
 
-    # Step 4 — start migration
+    # Step 4 — start migration (stage 15b in the runner picks this up:
+    # push missing customizing via kit + retry dead letters, unattended)
+    os.environ["M4H_AUTO_PREP_PUSH"] = "1" if body.auto_prep_push else "0"
     run_id = body.run_id or f"auto-{int(time.time())}"
     migration_result = await start_pipeline_async(
         mode="full",
@@ -2713,9 +2720,12 @@ async def pipeline_auto_run(body: _AutoRunRequest):
         "auto_decisions":      decisions,
         "migration_started":   True,
         "migration_result":    migration_result,
+        "auto_prep_push":      bool(body.auto_prep_push),
         "note": ("Auto mode: preservation plan computed + applied, migration started. "
                   "Strategy B downgraded on objects that would need it; run in "
-                  "Step-by-step mode after Basis approval to apply B."),
+                  "Step-by-step mode after Basis approval to apply B. "
+                  "Stage 15b self-heals missing customizing (kit v1.1 push + "
+                  "dead-letter retry) unless auto_prep_push=false."),
     }
 
 

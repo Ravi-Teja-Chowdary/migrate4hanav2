@@ -86,6 +86,12 @@ STAGES = [
     ("stage13",  "DATA_PREP",  "data-migrator.handler",                        {"mode": "extract"}),
     ("stage14",  "DATA_PREP",  "data-hygiene.handler",                         {}),
     ("stage15",  "DATA_PREP",  "data-migrator.handler",                        {"mode": "generate_templates"}),
+    # Self-healing customizing loop (kit v1.1): dead-letter records name the
+    # customizing rows the target is missing -> push them over RFC via
+    # Z_M4HTABLE_UPSERT -> re-run the load so those records retry. Two manual
+    # rounds of this took FULL-002 from 15.8% to 7.4% dead-letter; this stage
+    # runs the same loop unattended. Gate: M4H_AUTO_PREP_PUSH (default on).
+    ("stage15b", "DATA_PREP",  "_inline_prep_push_retry",                      {}),
     # PHASE 5 — DATA-LOAD (driven by object-router DAG)
     ("stage16",  "DATA_LOAD",  "migration-cockpit-orchestrator.handler",       {}),
     ("stage17",  "DATA_LOAD",  "ltmom-orchestrator.handler",                   {}),
@@ -107,6 +113,98 @@ STAGES = [
     # The runner has a small adapter to call it; output lands in local-staging.
     ("stage27",  "RUN",        "_inline_pdf_report",                           {}),
 ]
+
+
+def _inline_prep_push_retry(event, _context):
+    """Stage 15b — self-healing customizing loop (see STAGES comment).
+
+    Per round (max M4H_PREP_PUSH_ROUNDS, default 2):
+      1. read this run's dead-letter artifact
+      2. detect which customizing tables the failures name (prep_push_loop)
+      3. scan ECC, push ONLY the missing rows via kit v1.1 upsert
+      4. if rows were pushed, re-run data-migrator so dead letters retry
+
+    Degrades to a clean skip (never fails the pipeline) when: gated off,
+    no dead letters, no recognizable signatures, kit not installed, or
+    connections unavailable.
+    """
+    if os.environ.get("M4H_AUTO_PREP_PUSH", "1") != "1":
+        return {"status": "skipped", "reason": "M4H_AUTO_PREP_PUSH=0"}
+    if os.environ.get("M4H_LOAD_TO_S4", "0") != "1":
+        return {"status": "skipped", "reason": "extract-only run (no S/4 load)"}
+
+    run_id = event.get("run_id", "local")
+    dl_path = (REPO_ROOT / "local-staging" / "m4h-local" / "runs" / run_id /
+               "data-migrator" / "dead-letter" / "failed_records.json")
+
+    try:
+        import prep_push_loop
+        from pyrfc import Connection
+    except Exception as e:
+        return {"status": "skipped", "reason": f"imports unavailable: {e}"}
+
+    conns_path = REPO_ROOT / "connections.json"
+    if not conns_path.exists():
+        return {"status": "skipped", "reason": "connections.json not found"}
+    conns = json.loads(conns_path.read_text())
+    ecc_conf, s4_conf = conns.get("ecc") or {}, conns.get("s4hana") or {}
+    ecc_pw = os.environ.get("M4H_ECC_PASSWD", "")
+    s4_pw = os.environ.get("M4H_TARGET_PASSWD", "")
+    if not (ecc_conf.get("ashost") and ecc_pw and s4_conf.get("ashost") and s4_pw):
+        return {"status": "skipped", "reason": "live ECC+S/4 credentials required"}
+
+    max_rounds = int(os.environ.get("M4H_PREP_PUSH_ROUNDS", "2") or 2)
+    rounds, migrator = [], None
+    for rnd in range(1, max_rounds + 1):
+        if not dl_path.exists():
+            rounds.append({"round": rnd, "note": "no dead-letter artifact"})
+            break
+        dead = json.loads(dl_path.read_text() or "[]")
+        tables = prep_push_loop.detect_tables(dead)
+        if not tables:
+            rounds.append({"round": rnd, "dead_letters": len(dead),
+                            "note": "no customizing-prerequisite signatures"})
+            break
+        ecc = s4 = None
+        try:
+            ecc = Connection(ashost=ecc_conf["ashost"], sysnr=ecc_conf["sysnr"],
+                             client=ecc_conf["client"], user=ecc_conf["user"],
+                             passwd=ecc_pw, lang="EN")
+            s4 = Connection(ashost=s4_conf["ashost"], sysnr=s4_conf["sysnr"],
+                            client=s4_conf["client"], user=s4_conf["user"],
+                            passwd=s4_pw, lang="EN")
+            if not prep_push_loop.kit_upsert_available(s4):
+                rounds.append({"round": rnd, "tables_detected": tables,
+                                "note": "kit v1.1 upsert FM not installed - "
+                                        "run the SE38 prep script instead"})
+                break
+            push = prep_push_loop.push_missing(ecc, s4, tables)
+        except Exception as e:
+            rounds.append({"round": rnd, "error": f"{type(e).__name__}: {str(e)[:140]}"})
+            break
+        finally:
+            for k in (ecc, s4):
+                try:
+                    if k is not None:
+                        k.close()
+                except Exception:
+                    pass
+        rounds.append({"round": rnd, "tables_detected": tables, "push": push})
+        if push.get("total_pushed", 0) == 0:
+            break   # nothing new to heal with — retrying would change nothing
+        # Re-run the load so the dead-lettered records retry (idempotent:
+        # ledger skips everything already migrated).
+        print(f"  [stage15b] round {rnd}: pushed {push['total_pushed']} customizing "
+              f"rows -> re-running data-migrator")
+        if migrator is None:
+            migrator = _load("data-migrator.handler")
+        handler = getattr(migrator, "lambda_handler", None) or getattr(migrator, "handler")
+        retry_event = {**event, "mode": "extract"}
+        result = handler(retry_event, None)
+        rounds[-1]["retry_status"] = result.get("status", "unknown")
+
+    return {"status": "success", "rounds": rounds,
+            "rounds_executed": len(rounds)}
 
 
 def _inline_pdf_report(event, _context):
@@ -706,6 +804,8 @@ def main() -> int:
                 result = _run_gate(sid, extra.get("gate", sid), event_for_stage)
             elif mod == "_inline_pdf_report":
                 result = _inline_pdf_report(event_for_stage, None)
+            elif mod == "_inline_prep_push_retry":
+                result = _inline_prep_push_retry(event_for_stage, None)
             else:
                 module = _load(mod)
                 handler = getattr(module, "lambda_handler", None) or getattr(module, "handler", None)
