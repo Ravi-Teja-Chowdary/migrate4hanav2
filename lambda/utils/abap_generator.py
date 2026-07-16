@@ -577,10 +577,37 @@ def _emit_table_section(table: str, tinfo: dict, warnings: list) -> tuple:
     lines.append(f"* -----------------------------------------------------------")
     lines.append(f"*  {table} — {desc}  ({len(rows)} rows)")
     lines.append(f"* -----------------------------------------------------------")
-    lines.append(f"DATA: ls_{table.lower()} TYPE {table}.")
+    tl = table.lower()
+    lines.append(f"DATA: lt_{tl} TYPE STANDARD TABLE OF {table}.")
     lines.append(f"WRITE: / '  {table} ({desc}):'.")
-    for r in rows:
-        lines.extend(_emit_row_upsert(table, r, columns, key_fields, line_prefix=""))
+    # Compact emission: one VALUE-constructor line per row instead of the old
+    # 11-line CLEAR/assign/MODIFY/IF block (a 447-row table went from ~5,000
+    # ABAP lines to ~460 — SE38 paste stays practical). Chunked so no single
+    # statement grows unbounded; MODIFY ... FROM TABLE keeps upsert semantics.
+    _CHUNK = 400
+    for i in range(0, len(rows), _CHUNK):
+        lines.append(f"lt_{tl} = VALUE #(")
+        for r in rows[i:i + _CHUNK]:
+            fields = " ".join(f"{_abap_ident(c)} = {_abap_str(r.get(c, ''))}"
+                              for c in columns)
+            if len(fields) <= 160:
+                lines.append(f"  ( {fields} )")
+            else:                       # wrap long rows at field boundaries
+                parts, cur = [], ""
+                for tok in (f"{_abap_ident(c)} = {_abap_str(r.get(c, ''))}"
+                            for c in columns):
+                    if cur and len(cur) + len(tok) > 150:
+                        parts.append(cur); cur = tok
+                    else:
+                        cur = f"{cur} {tok}".strip()
+                parts.append(cur)
+                lines.append(f"  ( {parts[0]}")
+                lines.extend(f"    {p}" for p in parts[1:-1])
+                lines.append(f"    {parts[-1]} )")
+        lines.append(").")
+        lines.append(f"MODIFY {table} FROM TABLE lt_{tl}.")
+        lines.append(f"IF sy-subrc = 0. lv_ok = lv_ok + lines( lt_{tl} ). "
+                     f"ELSE. lv_err = lv_err + lines( lt_{tl} ). ENDIF.")
     lines.append(f"WRITE: / '    ', lv_ok, 'rows OK,', lv_err, 'errors.'.")
     lines.append(f"lv_total_ok = lv_total_ok + lv_ok. lv_ok = 0.")
     lines.append(f"lv_total_err = lv_total_err + lv_err. lv_err = 0.")

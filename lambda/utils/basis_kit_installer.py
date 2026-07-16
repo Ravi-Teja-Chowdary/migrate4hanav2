@@ -537,6 +537,103 @@ ev_status = |OK: | && lv_ok && | rows updated, | && lv_err && | errors|.
 
 ENDFUNCTION.
 """,
+    "Z_M4HTABLE_UPSERT": """
+FUNCTION Z_M4HTABLE_UPSERT.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     VALUE(IV_TABLE)  TYPE  CHAR30
+*"     VALUE(IV_FIELDS) TYPE  CHAR255
+*"     VALUE(IT_ROWS)   TYPE  SOLI_TAB
+*"  EXPORTING
+*"     VALUE(EV_STATUS) TYPE  BAPI_MSG
+*"     VALUE(EV_ROWS_UPSERTED) TYPE  I
+*"     VALUE(EV_ROWS_FAILED) TYPE  I
+*"----------------------------------------------------------------------
+* NOTE: IT_ROWS is an IMPORTING table-type param typed SOLI_TAB (std SAP
+* 255-char lines) passed by value — NOT a classic TABLES param (SE37 flags
+* those obsolete) and NOT ZM4H_ABAP_LINES (that table type was created with
+* a GENERIC key, which RFC interfaces refuse: "no generic types allowed").
+* Same live pattern as Z_M4H_TABLE_UPDATE's IT_KEY_VALUES (SOLI_TAB).
+* Kit v1.1 - full-row customizing upsert over RFC. Closes the last SE38
+* touchpoint: prep rows (material groups, exchange-rate customizing, ...)
+* are pushed by migrate4hana instead of pasted as a generated report.
+*
+* GUARDRAIL (stronger than a name whitelist): the table's DD02L delivery
+* class must be C/G/E/S (customizing). Master/transaction tables (A/L)
+* are refused - this FM can never write application data.
+*
+* IV_FIELDS = comma-separated field names, IT_ROWS = one row per line,
+* pipe-delimited values in the same order. MODIFY = idempotent upsert.
+
+DATA: lv_contflag TYPE dd02l-contflag.
+
+CLEAR: ev_status, ev_rows_upserted, ev_rows_failed.
+
+SELECT SINGLE contflag FROM dd02l INTO lv_contflag
+  WHERE tabname = iv_table AND as4local = 'A'.
+IF sy-subrc <> 0.
+  ev_status = |ERROR: table | && iv_table && | not found|.
+  RETURN.
+ENDIF.
+IF lv_contflag NA 'CGES'.
+  ev_status = |ERROR: | && iv_table && | delivery class | && lv_contflag
+           && | is not customizing - refused|.
+  RETURN.
+ENDIF.
+
+DATA: lt_fields TYPE TABLE OF string,
+      lv_fname  TYPE string,
+      lt_vals   TYPE TABLE OF string,
+      lv_val    TYPE string,
+      lv_idx    TYPE i,
+      ls_line   TYPE soli,
+      lr_row    TYPE REF TO data.
+FIELD-SYMBOLS: <row> TYPE any,
+               <fv>  TYPE any.
+
+SPLIT iv_fields AT ',' INTO TABLE lt_fields.
+CREATE DATA lr_row TYPE (iv_table).
+ASSIGN lr_row->* TO <row>.
+
+LOOP AT it_rows INTO ls_line.
+  TRY.
+      CLEAR <row>.
+      SPLIT ls_line-line AT '|' INTO TABLE lt_vals.
+      lv_idx = 0.
+      LOOP AT lt_fields INTO lv_fname.
+        lv_idx = lv_idx + 1.
+        CONDENSE lv_fname NO-GAPS.
+        TRANSLATE lv_fname TO UPPER CASE.
+        ASSIGN COMPONENT lv_fname OF STRUCTURE <row> TO <fv>.
+        IF sy-subrc = 0.
+          CLEAR lv_val.
+          READ TABLE lt_vals INDEX lv_idx INTO lv_val.
+          <fv> = lv_val.
+        ENDIF.
+      ENDLOOP.
+      ASSIGN COMPONENT 'MANDT' OF STRUCTURE <row> TO <fv>.
+      IF sy-subrc = 0.
+        <fv> = sy-mandt.
+      ENDIF.
+      MODIFY (iv_table) FROM <row>.
+      IF sy-subrc = 0.
+        ev_rows_upserted = ev_rows_upserted + 1.
+      ELSE.
+        ev_rows_failed = ev_rows_failed + 1.
+      ENDIF.
+    CATCH cx_root.
+      ev_rows_failed = ev_rows_failed + 1.
+  ENDTRY.
+ENDLOOP.
+
+COMMIT WORK AND WAIT.
+* NOTE: && concatenates CHARACTER operands only — ev_rows_* are integers,
+* so they must be embedded via { } in the string template, not with &&.
+ev_status = |OK: { ev_rows_upserted } upserted, { ev_rows_failed } failed on { iv_table }|.
+
+ENDFUNCTION.
+""",
     "Z_M4H_HEALTH_LOG": """
 FUNCTION Z_M4H_HEALTH_LOG.
 *"----------------------------------------------------------------------
@@ -565,11 +662,11 @@ ENDFUNCTION.
 
 
 def fm_source_bundle() -> str:
-    """Return all four FM sources as one .abap-ready text file the Basis
+    """Return all FM sources as one .abap-ready text file the Basis
     team pastes into SE37 (one function at a time)."""
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     parts = [
-        "* migrate4hana Basis Kit v1.0 - Function Module sources",
+        "* migrate4hana Basis Kit v1.1 - Function Module sources",
         "* Paste each block into SE37 one at a time. FUGR = ZM4H.",
         "* Attributes tab: Processing Type = Remote-Enabled Module.",
         f"* Kit generated: {ts}", "",
@@ -606,6 +703,78 @@ def verify_kit_installed(conn) -> dict:
                     "from the wizard and run it in SE38 once."}
         return {"installed": False, "message":
                 f"Kit status probe failed: {type(e).__name__}: {s[:200]}"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Kit v1.1: push customizing rows over RFC (replaces the SE38 prep paste)
+# ─────────────────────────────────────────────────────────────────────────────
+def push_rows_via_kit(conn, table: str, fields: list, rows: list,
+                      chunk: int = 500) -> dict:
+    """Upsert full customizing rows on the target via Z_M4HTABLE_UPSERT.
+
+    ``fields``: ordered field names; ``rows``: list of dicts (values looked up
+    per field). Values are pipe-joined per row (ZM4H_ABAP_LINE is CHAR255 —
+    fine for customizing rows; values must not contain '|').
+
+    Idempotent (MODIFY semantics on the ABAP side). Returns totals + per-chunk
+    statuses. Raises nothing: RFC errors are captured in the result.
+    """
+    upserted = failed = 0
+    statuses: list = []
+    field_csv = ",".join(f.strip().upper() for f in fields)
+    # Resolve the FM name once: canonical first, then the known appliance
+    # variant (created with a typo'd name on 2026-07-16 and kept, since
+    # renaming in SE37 is more churn than resolving here).
+    fm = getattr(conn, "_m4h_upsert_fm", None)
+    if fm is None:
+        fm = "Z_M4HTABLE_UPSERT"
+        for cand in ("Z_M4HTABLE_UPSERT", "Z_M4H_TABLE_UPSERT"):
+            try:
+                r = conn.call("RFC_READ_TABLE", QUERY_TABLE="TFDIR", DELIMITER="|",
+                              OPTIONS=[{"TEXT": f"FUNCNAME = '{cand}'"}],
+                              FIELDS=[{"FIELDNAME": "FUNCNAME"}], ROWCOUNT=1)
+                if r.get("DATA"):
+                    fm = cand
+                    break
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            conn._m4h_upsert_fm = fm
+        except Exception:  # noqa: BLE001
+            pass
+    for i in range(0, len(rows), chunk):
+        lines = []
+        for r in rows[i:i + chunk]:
+            vals = [str(r.get(f, "") if r.get(f) is not None else "") for f in fields]
+            lines.append({"LINE": "|".join(v.replace("|", " ") for v in vals)[:255]})
+        try:
+            resp = conn.call(fm, IV_TABLE=table.upper(),
+                             IV_FIELDS=field_csv, IT_ROWS=lines)
+            upserted += int(resp.get("EV_ROWS_UPSERTED") or 0)
+            failed += int(resp.get("EV_ROWS_FAILED") or 0)
+            statuses.append((resp.get("EV_STATUS") or "").strip())
+        except Exception as e:  # noqa: BLE001
+            failed += len(lines)
+            statuses.append(f"ERROR: {type(e).__name__}: {str(e)[:140]}")
+    return {"table": table.upper(), "rows_sent": len(rows),
+            "upserted": upserted, "failed": failed, "chunk_statuses": statuses}
+
+
+def apply_prep_scan_via_kit(conn, scan: dict) -> dict:
+    """Push an abap_generator scan result's rows through the kit upsert FM —
+    the pure-RFC replacement for pasting the generated prep report in SE38.
+    Only rows present in the scan are pushed; per-table results returned."""
+    out = {"tables": [], "total_upserted": 0, "total_failed": 0}
+    for table, tinfo in scan.items():
+        rows = tinfo.get("rows") or []
+        cols = tinfo.get("columns") or []
+        if not rows or not cols:
+            continue
+        r = push_rows_via_kit(conn, table, cols, rows)
+        out["tables"].append(r)
+        out["total_upserted"] += r["upserted"]
+        out["total_failed"] += r["failed"]
+    return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────

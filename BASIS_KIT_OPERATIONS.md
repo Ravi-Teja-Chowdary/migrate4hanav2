@@ -1,6 +1,6 @@
 # migrate4hana Basis Kit — Operations Reference
 
-**Kit version:** 1.0 · **Doc updated:** 2026-07-14 · **Code home:** `lambda/utils/basis_kit_installer.py`
+**Kit version:** 1.1 · **Doc updated:** 2026-07-16 · **Code home:** `lambda/utils/basis_kit_installer.py`
 
 The Basis Kit is a small, scoped, auditable set of Z-namespace function modules installed
 **once** on the target S/4HANA system. After that one install, every migrate4hana migration
@@ -40,6 +40,7 @@ Security properties (what a customer's Basis/security team will ask):
 | `Z_M4H_NR_MODIFY` | RFC FM | Flip EXTERNIND on an **existing** number-range interval |
 | `Z_M4H_NR_MAINTAIN` | RFC FM | **Create** a number-range interval (from/to/extern) |
 | `Z_M4H_TABLE_UPDATE` | RFC FM | Whitelisted customizing writes (e.g. point TVAK.NUMKE at an interval) |
+| `Z_M4HTABLE_UPSERT` | RFC FM | **v1.1** — full-row customizing upserts (material groups, exchange-rate config, …); replaces the SE38 prep-script paste |
 | `Z_M4H_HEALTH_LOG` | RFC FM | Audit-trail probe (works with or without the ZM4H_LOG table) |
 | `ZM4H_MIGRATION_ADMIN` | PFCG role | S_RFC on FUGR ZM4H + S_NUMBER 02/03 + S_TABU_DIS on the 10 tables (optional on CAL trials where the RFC user has SAP_ALL) |
 
@@ -168,7 +169,35 @@ r = conn.call("Z_M4H_TABLE_UPDATE", IV_TABLE="TVAK",
 Rows that don't exist count as errors in EV_STATUS but never abort the call.
 Non-whitelisted tables return `ERROR: table X not in kit whitelist` and write nothing.
 
-### 4.5 Z_M4H_HEALTH_LOG
+### 4.5 Z_M4HTABLE_UPSERT (v1.1) — full-row customizing upsert over RFC
+
+```
+IMPORTING  IV_TABLE CHAR30, IV_FIELDS CHAR255 (comma-separated field names),
+           IT_ROWS TYPE SOLI_TAB (pass value; pipe-delimited values per row)
+EXPORTING  EV_STATUS BAPI_MSG, EV_ROWS_UPSERTED I, EV_ROWS_FAILED I
+```
+(IT_ROWS is an IMPORTING table-type param — classic TABLES params are flagged
+"obsolete" by SE37. It is typed **SOLI_TAB**, not ZM4H_ABAP_LINES: the kit's own
+table type was created with a GENERIC key, which RFC interfaces refuse
+("no generic types allowed"). Same live pattern as Z_M4H_TABLE_UPDATE.)
+```python
+from basis_kit_installer import push_rows_via_kit
+r = push_rows_via_kit(conn, "T023", ["MATKL", "BKLAS"],
+                      [{"MATKL": "002"}, {"MATKL": "004"}])
+# r -> {"upserted": 2, "failed": 0, ...}
+```
+**Guardrail — stronger than a name whitelist:** the FM reads the table's
+delivery class from DD02L and refuses anything that isn't C/G/E/S
+(customizing). It can never write master or transaction data, no matter what
+table name is passed. MODIFY semantics → idempotent re-runs; MANDT is stamped
+server-side. Values must not contain `|` (pipe is the row delimiter).
+
+**Why it exists:** kit v1.0 still needed one SE38 paste per migration for prep
+rows (material groups, TCURV/TCURF, …). v1.1 closes that: the ONLY SE38/SE37
+touch on a target is the one-time kit install itself.
+`apply_prep_scan_via_kit(conn, scan)` pushes a whole abap_generator scan.
+
+### 4.6 Z_M4H_HEALTH_LOG
 
 ```
 IMPORTING IV_LAST_N I DEFAULT 100   EXPORTING EV_TOTAL I, EV_STATUS STRING
@@ -223,6 +252,19 @@ Every item below cost a live debugging round; the kit sources already encode the
 12. **A long-lived RFC connection can die mid-run** (and does, if the CAL suspends or
     terminates); calls then fail with "connection is closed". Late-run loaders and the
     reconciler must expect this (auto-reconnect is on the roadmap, task #343).
+13. **SE37 flags classic TABLES parameters as "obsolete"** on modern releases — declare
+    RFC table inputs as IMPORTING parameters typed with a DDIC table type and
+    pass-by-value instead. The FM body (`LOOP AT it_rows`) is identical either way;
+    pyrfc calls it identically too.
+14. **RFC interfaces refuse generic types** ("no generic types are allowed") — the kit's
+    `ZM4H_ABAP_LINES` table type was created with a generic key (DD40L KEYKIND=G), so
+    it can't type an RFC parameter. Use standard **SOLI_TAB** (row = SOLI, one LINE
+    CHAR255 field) for 255-char line tables — it's on every system and RFC-clean; the
+    live `Z_M4H_TABLE_UPDATE` was already using it.
+15. **`&&` concatenation takes character-like operands only** — integers (`TYPE i`) in a
+    status message must be embedded in the string template as `{ ev_count }`, not
+    chained with `&&` (activation fails with a hard syntax error in the function group,
+    which then breaks ALL kit FMs until fixed).
 
 ## 7. Uninstall
 
