@@ -253,16 +253,38 @@ class BapiLoader:
         ret = self._ret(res)
         po = (res.get("EXPPURCHASEORDER") or "").strip()
         vendor_ref = {"source": src_vendor, "target": tgt_vendor, "disposition": vdisp}
+        _disp = "created"
+        _nr_reject = lambda m: any(t in (m.get("MESSAGE") or "") for t in (
+            "not within defined interval", "already exists",
+            "Enter a document number between"))   # range-check message variants
+        if ([m for m in ret if m.get("TYPE") in ("E", "A")] or not po) \
+                and _preserve and hdr.get("PO_NUMBER") \
+                and any(_nr_reject(m) for m in ret):
+            # Preservation impossible for THIS number (no external interval
+            # covers it — platform constraint, see AUTO2: 9,619 dead). Fall
+            # back to internal numbering so the document still migrates;
+            # ledger records source->target (Strategy D per record).
+            self._rollback()
+            hdr.pop("PO_NUMBER", None)
+            _hdrx.pop("PO_NUMBER", None)
+            res = self.c.call("BAPI_PO_CREATE1", **_bapi_kwargs)
+            ret = self._ret(res)
+            po = (res.get("EXPPURCHASEORDER") or "").strip()
+            _disp = "renumbered_fallback"
         if [m for m in ret if m.get("TYPE") in ("E", "A")] or not po:
             self._rollback()
             return {"status": "failed", "vendor": vendor_ref,
                     "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:4]}
         if commit:
             self._commit()
+        msgs = [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]
+        if _disp == "renumbered_fallback":
+            msgs.insert(0, f"source {src_po} not preservable (no external "
+                           f"interval) -> renumbered to {po}, ledger-mapped")
         return {"status": "created", "po": po, "vendor": vendor_ref,
                 "verify_key": {"table": "EKKO", "key": {"EBELN": po}},
-                "key_mapping": {"source": src_po, "target": po, "disposition": "created"},
-                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:2]}
+                "key_mapping": {"source": src_po, "target": po, "disposition": _disp},
+                "messages": msgs}
 
     # ── Purchase requisition (BAPI_REQUISITION_CREATE) — open MM doc ───────────
     def create_purchase_requisition(self, row: dict, org: dict, commit: bool = True) -> dict:
@@ -642,22 +664,37 @@ class BapiLoader:
         ret = self._ret(res)
         doc = (res.get("SALESDOCUMENT") or "").strip()
         cust_ref = {"source": src_cust, "target": tgt_cust, "disposition": cdisp}
-        # After the initial call, if source-number preservation is on AND
-        # the first attempt renumbered the SO, retry with SALESDOCUMENTIN=src_so.
-        # This is intentionally the second attempt so that if the target's
-        # TVAK.NUMKE flag ISN'T flipped we fail cleanly on the first call
-        # rather than silently rejecting the external number.
-        # (Moved to a pre-call injection in the follow-up patch below.)
+        _disp = "created"
+        _nr_reject = lambda m: any(t in (m.get("MESSAGE") or "") for t in (
+            "not within defined interval", "already exists",
+            "Enter a document number between"))   # SD variant of the range check
+        if ([m for m in ret if m.get("TYPE") in ("E", "A")] or not doc) \
+                and _preserve and "SALESDOCUMENTIN" in _bapi_kwargs \
+                and any(_nr_reject(m) for m in ret):
+            # Preservation impossible for THIS VBELN (target RV_BELEG lattice
+            # has no external interval covering it — platform constraint).
+            # Fall back to internal numbering so the SO still migrates;
+            # ledger records source->target (Strategy D per record).
+            self._rollback()
+            _bapi_kwargs.pop("SALESDOCUMENTIN", None)
+            res = self.c.call("BAPI_SALESORDER_CREATEFROMDAT2", **_bapi_kwargs)
+            ret = self._ret(res)
+            doc = (res.get("SALESDOCUMENT") or "").strip()
+            _disp = "renumbered_fallback"
         if [m for m in ret if m.get("TYPE") in ("E", "A")] or not doc:
             self._rollback()
             return {"status": "failed", "customer": cust_ref,
                     "messages": [f"{m.get('TYPE')} {m.get('MESSAGE')}" for m in ret][:4]}
         if commit:
             self._commit()
+        msgs = [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:1]
+        if _disp == "renumbered_fallback":
+            msgs.insert(0, f"source {src_so} not preservable (no external "
+                           f"interval) -> renumbered to {doc}, ledger-mapped")
         return {"status": "created", "so": doc, "customer": cust_ref,
                 "verify_key": {"table": "VBAK", "key": {"VBELN": doc}},
-                "key_mapping": {"source": src_so or doc, "target": doc, "disposition": "created"},
-                "messages": [m.get("MESSAGE") for m in ret if m.get("TYPE") in ("S", "W")][:1]}
+                "key_mapping": {"source": src_so or doc, "target": doc, "disposition": _disp},
+                "messages": msgs}
 
     # ── Open AR / AP financial items (BAPI_ACC_DOCUMENT_POST) ───────────────
     def _recon_partners(self, table: str, key_field: str, bukrs: str) -> list:
