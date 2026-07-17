@@ -73,6 +73,27 @@ def _aggregate_run_artifacts(staging_root: Path, run_id: str) -> dict:
     provis    = g("target-provisioner/manifest.json")
     router    = g("object-router/dag.json")
 
+    # H0.4: cumulative-on-target from the cross-run ledger (resume runs do almost
+    # no NEW creates, so per-run counters read as "0 created"). Keep in sync with
+    # run_local_lift_and_shift.py:_aggregate_run_artifacts.
+    def _cumulative_on_target(_root):
+        led = _root / "migration-ledger" / "key_mapping.json"
+        try:
+            blob = json.loads(led.read_text())
+        except Exception:
+            return {"available": False, "records_on_target": 0, "by_object": {}}
+        m = blob.get("mappings", blob)
+        by_obj, total = {}, 0
+        if isinstance(m, dict):
+            for obj, entries in m.items():
+                n = len(entries) if isinstance(entries, (dict, list)) else 0
+                if n:
+                    by_obj[obj] = n
+                    total += n
+        return {"available": True, "records_on_target": total,
+                "object_count": len(by_obj), "by_object": by_obj}
+    cumulative = _cumulative_on_target(staging_root)
+
     # ── 1. executive_summary + report_metadata ─────────────────────────────
     grade = scorecard.get("grade", "--")
     score = scorecard.get("score", "--")
@@ -192,12 +213,22 @@ def _aggregate_run_artifacts(staging_root: Path, run_id: str) -> dict:
                           for o in ("Customer","Vendor","Material","BusinessPartner",
                                     "GLAccount","CostCenter","ProfitCenter"))
 
+    # H0.4: clamp negative records_missing (verified counts matched_existing on resume).
+    _recon_missing_raw = recon.get("records_missing", 0)
+    _recon_note = None
+    if isinstance(_recon_missing_raw, (int, float)) and _recon_missing_raw < 0:
+        _recon_note = ("verified-in-target exceeds this-run creates (idempotent "
+                       "re-verification of already-migrated rows); not a shortfall")
+
     data_migration = {
+        "cumulative_on_target": cumulative,   # H0.4: durable ledger view
         "finance": {
             "source_documents_bkpf":  cfg_dump.get("finance", {}).get("documents_bkpf", 0),
             "source_line_items_bseg": cfg_dump.get("finance", {}).get("line_items_bseg", 0),
             "target_acdoca_records":  recon.get("records_verified_in_target", 0),
+            "records_missing":        max(0, _recon_missing_raw) if isinstance(_recon_missing_raw, (int, float)) else 0,
             "reconciliation":         recon.get("verdict", "NOTHING_TO_RECONCILE"),
+            **({"reconciliation_note": _recon_note} if _recon_note else {}),
         },
         "business_partner_conversion": {
             "customers_migrated":         cust_stats["created_in_s4"],
@@ -215,8 +246,13 @@ def _aggregate_run_artifacts(staging_root: Path, run_id: str) -> dict:
         },
         "dirty_data_handling": {
             "load_to_s4_enabled":     dm.get("load_to_s4_enabled", False),
+            "scope_note":             ("Counts below are THIS RUN's increment; "
+                                       "cumulative records live on target = "
+                                       f"{cumulative.get('records_on_target', 0)} "
+                                       "(see data_migration.cumulative_on_target)."),
             "total_attempted":        total_attempted,
-            "total_created_in_s4":    total_created,
+            "total_created_in_s4":    total_created,   # THIS RUN's new creates
+            "cumulative_records_on_target": cumulative.get("records_on_target", 0),
             "total_matched_existing": total_matched,
             "total_dead_lettered":    total_dead,
             "create_rate":            (f"{100.0*total_created/total_attempted:.1f}%" if total_attempted else "n/a"),

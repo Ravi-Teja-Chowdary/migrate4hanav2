@@ -112,6 +112,38 @@ For each FM in the bundle (`Z_M4H_STATUS`, `Z_M4H_NR_MODIFY`, `Z_M4H_NR_MAINTAIN
 - The **preflight panel** (wizard section 8) runs the same checks as rows 4/7/8 of its
   10-check table before any migration is allowed to start.
 
+### 3.5 Production hardening — the scoped `ZM4H_MIGRATION_ADMIN` role (H0.2)
+
+On a **CAL trial** the RFC user `MIGRATE_ADMI` carries `SAP_ALL` (there's no PFCG on the trial),
+and that's fine there. **On a real production landscape the RFC user must NOT run on SAP_ALL** —
+build and assign the narrow role below, then remove SAP_ALL.
+
+Preflight surfaces this automatically: the **"RFC user privilege scope"** check calls
+`BAPI_USER_GET_DETAIL` and returns `WARN` when SAP_ALL is present ("over-privileged for
+production; apply ZM4H_MIGRATION_ADMIN + remove SAP_ALL"), `PASS` when the scoped role is present
+without SAP_ALL. It is non-blocking (a trial legitimately can't apply PFCG).
+
+Build the role once (PFCG):
+1. PFCG → create role `ZM4H_MIGRATION_ADMIN`.
+2. Authorizations → manually add:
+   - **`S_RFC`** — RFC_TYPE=FUGR, RFC_NAME=`ZM4H` (+ `SYST`, `RFC1` for the login handshake),
+     ACTVT=16. Lets the user call only the kit's function group over RFC.
+   - **`S_NUMBER`** — number-range maintenance for the SNRO objects the kit touches
+     (RV_BELEG, EINKBELEG, BU_PARTNER, MATBELEG, ANLAGENNR…), ACTVT=02,03.
+   - **`S_TABU_DIS`** / **`S_TABU_NAM`** — table maintenance scoped to the customizing tables the
+     kit writes. `Z_M4H_TABLE_UPDATE` covers the 10-table whitelist; **`Z_M4HTABLE_UPSERT` (v1.1)
+     writes any *customizing-class* table** (it checks DD02L delivery class at runtime), so grant
+     `S_TABU_NAM` for the specific tables a migration needs (e.g. T023, T023T, TCURV, TCURF, TCURC,
+     T134, T134T) or the customizing auth groups that contain them. ACTVT=02.
+   - **`S_TCODE`** not required (pure RFC; no dialog transactions).
+3. Generate the profile, assign the role to the RFC user, then **remove `SAP_ALL`/`SAP_NEW`**.
+4. Re-run preflight — the privilege check should flip to `PASS`.
+
+Note: if `S_TABU_NAM` is too narrow, `Z_M4HTABLE_UPSERT` fails with an authorization error on the
+uncovered table (not a silent skip) — widen the role to that table and re-run. This is the
+intended least-privilege posture: the role grows to exactly the customizing surface a given
+customer's migration needs, nothing more.
+
 ## 4. FM reference — signatures and pyrfc calls
 
 ### 4.1 Z_M4H_STATUS (read-only)

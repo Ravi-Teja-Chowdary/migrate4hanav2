@@ -153,6 +153,64 @@ def check_kit_nr_modify_callable(s4_conn) -> dict:
     return r
 
 
+def check_rfc_user_privilege(s4_conn) -> dict:
+    """H0.2 — report whether the RFC user runs on the broad SAP_ALL profile vs
+    the scoped ZM4H_MIGRATION_ADMIN role. Live-verified probe: BAPI_USER_GET_DETAIL
+    returns PROFILES + ACTIVITYGROUPS (roles). Non-blocking (CAL trials legitimately
+    can't apply PFCG roles); a production landscape should carry the scoped role."""
+    SCOPED_ROLE = "ZM4H_MIGRATION_ADMIN"
+    r = _row(
+        name="RFC user privilege scope",
+        category="security",
+        description="Checks the target RFC user's authorizations via "
+                    "BAPI_USER_GET_DETAIL. Production should run on the scoped "
+                    f"{SCOPED_ROLE} role, NOT SAP_ALL. Non-blocking: CAL trials "
+                    "have no PFCG so SAP_ALL there is expected.",
+        expected=f"scoped role {SCOPED_ROLE} assigned; SAP_ALL absent",
+        blocking=False,
+    )
+    try:
+        # discover the current user from the live connection (don't assume)
+        who = ""
+        try:
+            attrs = s4_conn.get_connection_attributes() or {}
+            who = (attrs.get("user") or "").strip().upper()
+        except Exception:
+            pass
+        d = s4_conn.call("BAPI_USER_GET_DETAIL", USERNAME=who) if who \
+            else s4_conn.call("BAPI_USER_GET_DETAIL")
+        profs = {(p.get("BAPIPROF") or p.get("PROFILE") or "").strip().upper()
+                 for p in (d.get("PROFILES") or [])}
+        roles = {(g.get("AGR_NAME") or "").strip().upper()
+                 for g in (d.get("ACTIVITYGROUPS") or [])}
+        has_sap_all = "SAP_ALL" in profs
+        has_scoped = SCOPED_ROLE in roles
+        if has_scoped and not has_sap_all:
+            r["actual"] = f"OK: scoped role {SCOPED_ROLE} present, SAP_ALL absent"
+            r["verdict"] = PASS
+        elif has_sap_all:
+            r["actual"] = (f"SAP_ALL present (over-privileged for production). "
+                           f"Scoped role {'present' if has_scoped else 'NOT assigned'}. "
+                           f"OK on a CAL trial; apply {SCOPED_ROLE} + remove SAP_ALL "
+                           f"before a production run.")
+            r["verdict"] = WARN
+        else:
+            r["actual"] = (f"Neither SAP_ALL nor {SCOPED_ROLE} detected "
+                           f"(profiles={sorted(profs)[:6]}, roles={sorted(roles)[:6]}) "
+                           f"— verify the RFC user can perform kit + BAPI operations.")
+            r["verdict"] = WARN
+    except Exception as e:
+        s = str(e)
+        if "FU_NOT_FOUND" in s or "not authorized" in s.lower() or "AUTH" in s:
+            r["actual"] = ("could not read user detail (BAPI_USER_GET_DETAIL blocked "
+                           "or absent) — privilege scope unverified")
+            r["verdict"] = INFO
+        else:
+            r["actual"] = f"probe error: {type(e).__name__}: {str(e)[:120]}"
+            r["verdict"] = INFO
+    return r
+
+
 def check_kit_table_update_callable(s4_conn) -> dict:
     r = _row(
         name="Z_M4H_TABLE_UPDATE callable",
@@ -367,13 +425,16 @@ def run_preflight(ecc_conn, s4_conn, *,
     ]
     # Only continue with target-side probes if S/4 connection is up
     if checks[-1]["verdict"] == PASS:
+        kit_check = check_basis_kit_installed(s4_conn)
         checks.extend([
-            check_basis_kit_installed(s4_conn),
+            kit_check,
+            check_rfc_user_privilege(s4_conn),   # H0.2
             check_migration_bapis_present(s4_conn),
             check_target_intervals_readable(s4_conn),
         ])
-        # Kit-specific probes only if kit is present
-        if checks[-3]["verdict"] == PASS:
+        # Kit-specific probes only if kit is present (reference the kit check
+        # result directly — robust to reordering/adding checks above).
+        if kit_check["verdict"] == PASS:
             checks.extend([
                 check_kit_nr_modify_callable(s4_conn),
                 check_kit_table_update_callable(s4_conn),

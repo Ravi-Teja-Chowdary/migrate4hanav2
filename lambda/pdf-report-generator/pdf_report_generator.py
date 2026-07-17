@@ -394,14 +394,18 @@ def generate_pdf(report_data, output_path):
         ))
         ddh_table = [
             ["Outcome", "Count", "Rate"],
-            ["Attempted rows (cap = M4H_LOAD_MAX_ROWS env)", f"{ddh.get('total_attempted', 0):,}", "—"],
-            ["Created in S/4 (BAPI succeeded)",              f"{ddh.get('total_created_in_s4', 0):,}", ddh.get('create_rate', 'n/a')],
+            ["Cumulative records live on target (ledger)",   f"{ddh.get('cumulative_records_on_target', 0):,}", "—"],
+            ["Attempted rows this run (cap = M4H_LOAD_MAX_ROWS)", f"{ddh.get('total_attempted', 0):,}", "—"],
+            ["Created this run (new BAPI writes)",           f"{ddh.get('total_created_in_s4', 0):,}", ddh.get('create_rate', 'n/a')],
             ["Matched existing (idempotency / ledger hit)",  f"{ddh.get('total_matched_existing', 0):,}", ddh.get('idempotency_hit_rate', 'n/a')],
             ["Dead-lettered (spine refused row)",            f"{ddh.get('total_dead_lettered', 0):,}", ddh.get('dead_letter_rate', 'n/a')],
         ]
         ddh_tbl = Table(ddh_table, colWidths=[page_w * 0.55, page_w * 0.20, page_w * 0.25])
         ddh_tbl.setStyle(_table_style_base())
         story.append(ddh_tbl)
+        if ddh.get('scope_note'):
+            story.append(Spacer(1, 2 * mm))
+            story.append(Paragraph(f"<i>{ddh.get('scope_note')}</i>", ss["Body"]))
         story.append(Spacer(1, 3 * mm))
 
         # Spine orchestrators per object

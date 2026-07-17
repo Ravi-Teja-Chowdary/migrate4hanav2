@@ -175,11 +175,15 @@ def _ensure_jwt_secret():
        1. M4H_JWT_SECRET env var (12-factor; production)
        2. AWS Secrets Manager (M4H_JWT_SECRET_ARN env var) — production
        3. .jwt_secret file (LOCAL DEV ONLY — refused if M4H_ENV=prod)
-       4. auto-generate + persist to .jwt_secret (LOCAL DEV ONLY)
+       4. auto-generate + persist to .jwt_secret - ONLY in explicit dev mode
+          (M4H_DEV=1, or M4H_ENV in {dev,development,local,test})
 
-    Production must use option 1 or 2. Plaintext file fallback is gated
-    behind M4H_ENV != 'prod' so a misconfigured prod deploy fails closed
-    instead of silently writing a secret to disk.
+    Fail-closed by default (H0.1): with nothing configured and no dev opt-in,
+    startup REFUSES rather than minting a signing key. Previously an unset
+    M4H_ENV defaulted to 'dev' and silently auto-generated, so a prod deploy
+    that merely forgot M4H_ENV=prod failed *open* (self-minted, unstable-across-
+    restart secret). An existing .jwt_secret is still honored so returning local
+    boxes aren't broken; it is just never CREATED outside dev.
     """
     global _JWT_SECRET
     if _JWT_SECRET:
@@ -200,20 +204,31 @@ def _ensure_jwt_secret():
                 "Refusing to fall back to plaintext file in production path."
             )
 
-    env = os.environ.get("M4H_ENV", "dev").lower()
-    if env in ("prod", "production"):
-        raise RuntimeError(
-            "M4H_ENV=prod but no JWT secret available. "
-            "Set M4H_JWT_SECRET or M4H_JWT_SECRET_ARN. "
-            "Plaintext .jwt_secret fallback is disabled in production."
-        )
+    # H0.1: fail-closed by default. Dev auto-gen requires an explicit opt-in;
+    # a bare/prod deploy with nothing configured refuses rather than silently
+    # minting an unstable signing key.
+    env = os.environ.get("M4H_ENV", "").lower()
+    dev_mode = (env in ("dev", "development", "local", "test")
+                or os.environ.get("M4H_DEV") == "1")
 
+    # An EXISTING secret file marks an established dev box - honor it so returning
+    # local runs keep working, but never CREATE one outside explicit dev mode.
     secret_file = os.path.join(PROJECT_DIR, ".jwt_secret")
     if os.path.isfile(secret_file):
         with open(secret_file, "r", encoding="utf-8") as f:
             _JWT_SECRET = f.read().strip()
         if _JWT_SECRET:
             return
+
+    if not dev_mode:
+        raise RuntimeError(
+            "No JWT signing secret configured. "
+            "Production: set M4H_JWT_SECRET or M4H_JWT_SECRET_ARN (operator-managed, "
+            "stable across restarts). "
+            "Local dev: set M4H_DEV=1 to auto-generate a throwaway secret. "
+            "Refusing to auto-generate a signing key by default (fail-closed)."
+        )
+
     _JWT_SECRET = secrets.token_hex(32)
     with open(secret_file, "w", encoding="utf-8") as f:
         f.write(_JWT_SECRET)
@@ -221,7 +236,7 @@ def _ensure_jwt_secret():
         os.chmod(secret_file, 0o600)
     except Exception:
         pass
-    print("  [Auth] Generated dev-only JWT secret -> .jwt_secret (DO NOT use in prod)")
+    print("  [Auth] M4H_DEV: generated dev-only JWT secret -> .jwt_secret (DO NOT use in prod)")
 
 
 def _b64url_encode(data: bytes) -> str:

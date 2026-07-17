@@ -85,9 +85,22 @@ OWN_LOGICAL_SYSTEM = os.environ.get("M4H_TARGET_LOGSYS", "S4HCLNT100")
 IDOC_SENDER = os.environ.get("M4H_IDOC_SENDER", "M4HSENDER")
 
 
+def _wrap_resilient(conn_kwargs: dict):
+    """H0.3: wrap connection kwargs so a dropped RFC link mid-run auto-reconnects
+    (ResilientRfc). Gated by M4H_RFC_RESILIENT (default on); falls back to a raw
+    pyrfc.Connection if the wrapper can't be imported (e.g. minimal Lambda pkg)."""
+    from pyrfc import Connection
+    if os.environ.get("M4H_RFC_RESILIENT", "1") != "1":
+        return Connection(**conn_kwargs)
+    try:
+        from rfc_session import ResilientRfc
+        return ResilientRfc(conn_kwargs)
+    except Exception:
+        return Connection(**conn_kwargs)
+
+
 def _ecc(secret_id: str):
     sec = json.loads(SECRETS.get_secret_value(SecretId=secret_id)["SecretString"])
-    from pyrfc import Connection
     # Base connection kwargs from the secret. Optional gwhost/gwserv/saprouter
     # allow connection through a TCP forwarder (e.g. ngrok) where the published
     # port differs from the SAP-derived sapgw<NN> port.
@@ -102,7 +115,7 @@ def _ecc(secret_id: str):
     for opt in ("gwhost", "gwserv", "saprouter"):
         if sec.get(opt):
             kwargs[opt] = sec[opt]
-    return Connection(**kwargs)
+    return _wrap_resilient(kwargs)
 
 
 def _read_table(conn, table: str, fields: list, where: str = "", max_rows: int = MAX_ROWS_PER_TEMPLATE) -> list:
@@ -154,12 +167,14 @@ def _where_to_dict(where_clause: str) -> dict:
 
 
 def _target_connection():
-    """RFC connection to the TARGET S/4 (for loading data in), from local:target."""
+    """RFC connection to the TARGET S/4 (for loading data in), from local:target.
+    H0.3: wrapped in ResilientRfc so a dropped link mid-load auto-reconnects."""
     sec = json.loads(SECRETS.get_secret_value(SecretId=(os.environ.get("TARGET_SECRETS_ARN") or os.environ.get("S4_SECRETS_ARN") or "local:target"))["SecretString"])
-    from pyrfc import Connection
-    return Connection(ashost=sec["ashost"], sysnr=sec.get("sysnr", "00"),
-                      client=sec["client"], user=sec["user"],
-                      passwd=sec.get("passwd") or sec.get("password"), lang="EN")
+    return _wrap_resilient({
+        "ashost": sec["ashost"], "sysnr": sec.get("sysnr", "00"),
+        "client": sec["client"], "user": sec["user"],
+        "passwd": sec.get("passwd") or sec.get("password"), "lang": "EN",
+    })
 
 
 def _target_odata():
