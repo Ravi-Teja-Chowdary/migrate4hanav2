@@ -132,20 +132,21 @@ at runtime in MC-1.2 because they vary by release; the rest are stable across S/
 Replace file-upload staging (100 MB cap, ZIP constraints) with direct writes into the target
 HANA staging schema — our engine acts as the ETL tool.
 
-- [ ] **MC-1.1 — HANA staging connection layer.**
-  *What:* `hdbcli`-based connection manager to `SAPHANADB` on the target HANA, sourced from the
-  `connections.json` hana_* profile + a Secrets-Manager/env password (never persisted, same policy
-  as SAP RFC creds).
-  *Files:* new `lambda/utils/hana_staging.py`; extend `connections.json` schema doc.
-  *Done-when:* `connect()` opens a session, `SELECT CURRENT_USER FROM DUMMY` round-trips; creds
-  handled to the same standard as `M4H_TARGET_PASSWD`.
+- [x] **MC-1.1 — HANA staging connection layer.** ✅ 2026-07-18: `lambda/utils/hana_staging.py`
+  connects + round-trips live — `current_user()` returns user=SYSTEM, schema=SAPHANADB on
+  35.168.102.2:30215 (HANA 2.00.089). Prereqs confirmed: hdbcli 2.24.26; SQL ports 30213/30215
+  reachable (after re-whitelisting my rotated IP on SG sg-0a44bfae92e4e8db2); PLAINTEXT listener
+  (encrypt off default, `M4H_HANA_ENCRYPT=1` for prod TLS). Auth resolved: SAPHANADB is the locked
+  ABAP schema-owner — connect as SYSTEM (`M4H_HANA_USER=SYSTEM` env override added) with the CAL
+  master password (`M4H_HANA_PASSWD`). SAPHANADB schema holds 182,427 tables (full S/4 catalog).
 
-- [ ] **MC-1.2 — Staging-table introspection per MC object.**
-  *What:* given a migration project + object, discover the object's staging table(s) and column
-  definitions from `SYS.TABLES`/`SYS.TABLE_COLUMNS` (name pattern is release-specific — discover,
-  don't hardcode). Cache the schema map per run.
-  *Files:* `hana_staging.py` (`describe_staging(project, object)`).
-  *Done-when:* for a known MC object we print its staging table + typed columns live from the CAL.
+- [~] **MC-1.2 — Staging-table introspection per MC object.** ◑ 2026-07-18: the introspection
+  engine (`describe_staging`, `find_staging_tables` over TABLE_COLUMNS/TABLES) is built + live-
+  verified — `describe_staging("T023")` returns typed cols (MANDT NVARCHAR(3), MATKL NVARCHAR(9),
+  …), `find_staging_tables("T02%")` discovers by pattern. **Pending MC-2.1:** the actual MC staging
+  tables don't exist until a migration project is created with the staging-table method — so
+  mapping *MC object → its staging table(s)* waits on MC-2.1 creating a project, then this engine
+  discovers them (no dedicated migration schema present yet; only SAPHANADB).
 
 - [ ] **MC-1.3 — Transformed-data → staging-table writer.**
   *What:* take the transformation engine's output rows for an object and bulk-`INSERT` them into the
