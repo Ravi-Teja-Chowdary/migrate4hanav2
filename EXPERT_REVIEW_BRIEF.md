@@ -6,6 +6,42 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 
 **Date:** 2026-05-31 (review base); **2026-06-07 foundation pass (F1-F6) shipped; 2026-06-15 fire-and-forget loop closed; 2026-07-03 enterprise-hardening pass shipped** · **Branch reviewed:** `aws-lift-and-shift` · **Latest commit:** enterprise-hardening pass (mc-project-provisioner + salesforce upsert + snowpipe + extended catalogs/DAG + dry-run transport) · **Build status:** working prototype on a live system pair; **full AWS prod stack provisions and tears down cleanly end-to-end** (174 resource blocks, ~200 after expansion — see §13); **six production-grade foundations shipped 2026-06-07** (see §15 below for the full delta + 98-test green suite); **as of 2026-06-15 night, the only human touchpoints in the lifecycle are: (a) one-time `terraform apply` + `scripts/deploy-ui-aws.ps1`, (b) the 3 HMAC-signed SAP governance gates.**
 
+> **2026-07-19 — Live client-demo test (SPRO / VA03 / SE11): customer-creation blocker root-caused & fixed (FS-BP → OData), sales-order ID preservation PROVEN, full UI-component inventory added.**
+>
+> Ran the client's exact 3-condition ask against the live ECC (`Y01`, client 800) + live S/4 (`S4H` @ 35.168.102.2, kernel 916) pair. The client wants to open, in S/4: **`/nSPRO`** → 157 company codes, **`/nSE11`** → VBAK = 15,332 sales orders, **`/nVA03`** → a specific order at its original number — and see ECC data brought over by the tool. This session found and fixed the real blockers.
+>
+> **1. Customer creation was the hidden blocker — root-caused to Financial-Services BP (FS-BP).** The batch data-load appeared to "hang" for 10 min at ~0 CPU. It was not hung: the customer spine was creating **orphaned Business Partners that never became customers**, so KNA1 never grew and every dependent sales order would dead-letter. Two distinct causes:
+> - **Role-FM bug (fixed in `customer_spine.py`):** the spine called `BAPI_BUPA_ROLES_CHANGE` / `BAPI_BUPA_ROLES_ADD_2` — both `FU_NOT_FOUND` on this release. Correct FM is **`BAPI_BUPA_ROLE_ADD`** (singular; `BUSINESSPARTNER`+`BUSINESSPARTNERROLE`). Added as first choice, old names kept as fallback for other releases.
+> - **FS-BP consistency dump (the real one):** even with the correct role FM, committing a BP with the customer role dumps **`CX_FSBP_PARTNER_INCONSISTENT`** — this S/4 has the Financial-Services BP extension active, and the low-level `BAPI_BUPA_CREATE_FROM_DATA` + role + commit path can't satisfy its checks. **Fix: route Customer/Vendor through the OData `API_BUSINESS_PARTNER` service** (`bp_odata.create_customer/supplier`), which drives the standard BP-maintenance framework and handles FS-BP + CVI natively. Wired via new gate **`M4H_BP_VIA_ODATA=1`** — a spine-bypass in `unified_loader.load_object` (the OData branch already existed at ~line 671 but the spine registry always won). **Proven live:** customers now create in KNA1 (account group CUST) with company-code data; a 5-object pipeline run created 5 customers + 5 sales orders end-to-end (KNA1 215→221, VBAK 9,260→9,265, errors 0).
+>
+> **2. Sales-order ID preservation (condition #3) — PROVEN.** `M4H_PRESERVE_SRC_NUMBERS=1` makes the SO spine pass `SALESDOCUMENTIN`; it's honoured when the target doc type has an EXTERNAL number range covering the source number AND the number is free on target. Proved ECC order **`0005000041`** (type TA; external interval 02 = 5,000,000–5,999,999, empty) → S/4 order **`0005000041`** exactly (SAP: "Standard Order 5000041 has been saved").
+>
+> **3. IDES↔IDES collision caveat (important for demo framing).** This ECC and this S/4 are BOTH IDES and share demo data: S/4 already holds 215 customers / 9,260 orders, and most low-numbered ECC orders (4969+) **already exist** in S/4 — so their numbers can't be preserved (taken) and counts never read as a clean 157 / 15,332. **A real client's EMPTY S/4 has no collisions** → preservation works across the board and counts are exact. The tool behaviour is correct; the artefacts are an artefact of the shared-IDES test rig. Discovered target config (auto): company 1710, sales area 1710/10/00, plant 1710, cust_recon 0012104000.
+>
+> **4. What's proven vs. pending after this session:** customer creation (OData), material handling, sales-order creation, and exact ID preservation are all proven live. Company-code migration (condition #1) routes to the config/BC-Set transport lane and was not exercised this session (discovery confirmed 157 in ECC). Full-volume (19,575 customers via OData + 24,494 materials + 15,332 orders) is a multi-hour run.
+>
+> ### UI component inventory (active v2 app — `frontend/src`, React + Vite)
+>
+> The live UI is the **v2 wizard flow** (`App.jsx`); v1 pages (`ProjectTracker`, `VersionMatrix`, `Connections`, `CommandCenter`, `Gates`, `Dashboard`, `DataQuality`, `Runs`, `Pipeline`, `Logs`, `Report`, `Clients`) remain in-tree but are not routed. All screens are **real-backend-driven only** (no mock/sample data; honest offline/empty states) via `lib/api.js` + `lib/useApi.js` against the FastAPI `api_server.py`.
+>
+> | Route / Component | File | Purpose |
+> |---|---|---|
+> | `/login` | `pages/v2/Login.jsx` | AWS-style auth — Root-user tab (email+password) and IAM-user tab (email+password+client_id); JWT, fail-closed |
+> | `/` (Home) | `pages/v2/Home.jsx` | Landing — choose an Existing migration or start a New one |
+> | `/wizard/:runId/versions` | `pages/v2/WizardVersions.jsx` | Wizard step 1 — pick ECC source version (EHP0–8) × S/4 target version (2020–2025); 51-pair compatibility matrix |
+> | `/wizard/:runId/scope` | `pages/v2/WizardScope.jsx` | Wizard step 2 — full vs selective object scope |
+> | `/wizard/:runId/connect` | `pages/v2/WizardConnect.jsx` | Wizard step 3 — ECC + S/4 credentials, SAP-side setup instructions, permission-aware "Test connection" |
+> | `/project/:runId` | `pages/v2/Project.jsx` | Project home — brutally-honest tracker, Start-migration button, link to LiveOps, on-demand PDF report |
+> | `/live/:runId` | `pages/v2/LiveOps.jsx` | Full-screen live logs + step events streaming (`/api/logs/tail`), auto-scroll |
+> | `/conversion/:runId` | `pages/v2/ConversionDashboard.jsx` | Non-technical view — source-table → target-structure with plain-English narratives + live progress bars |
+> | `/admin` (root only) | `pages/v2/SuperuserConsole.jsx` | Root-only command console — clickable ops with when-to-use/danger labels + "I-UNDERSTAND" confirm for destructive actions |
+> | Shell | `components/v2/AppShell.jsx` | AWS-style top bar + content area; wizard nav lives inside pages |
+> | Resilience | `components/v2/ErrorBoundary.jsx` | Wraps every protected route so one render error shows a message+Retry instead of a blank page |
+> | State/libs | `lib/auth.jsx`, `lib/api.js`, `lib/useApi.js`, `lib/activeRun.jsx`, `lib/activeClient.jsx`, `lib/theme.js`, `lib/toast.jsx`, `lib/commands.js`, `lib/stages.js` | JWT/auth context, backend client, polling hook, active-run/client context, fresh light theme, toasts, command palette, 27-stage map |
+> | Shared components | `components/ui.jsx`, `components/dd.jsx`, `components/CommandPalette.jsx`, `components/RunPicker.jsx`, `components/ClientPicker.jsx` | Design-system primitives, dropdowns, ⌘K palette, run/client selectors |
+>
+> **Deploy:** `scripts/deploy-ui-aws.ps1` (S3 + CloudFront; SPA fallback via a CloudFront Function on the default behaviour — never a distribution-wide custom error response on the mixed S3+ALB distribution).
+
 > **2026-07-03 — Enterprise-hardening pass: MC project auto-provisioner, Salesforce live upsert, Snowpipe module, extended BAPI catalog + DAG + industry variants. Two SAP-support-voiding asks deliberately refused.**
 >
 > Response to an enterprise-ready gap-closure prompt covering Basis automation, pre-built content for 127 objects, and post-migration sink hardening. Each item was triaged for SAP-support risk before implementation. **Two items were refused because they would put the customer's SAP system outside SAP support coverage.** The remainder shipped.

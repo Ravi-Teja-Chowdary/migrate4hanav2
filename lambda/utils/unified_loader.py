@@ -270,7 +270,17 @@ class UnifiedLoader:
         # field coverage, EXTENSIONIN, dead-letter routing) instead of the
         # legacy single-BAPI path. Falls through to legacy on miss.
         spine_cls = get_spine(obj)
-        if spine_cls is not None:
+        # FS-BP-active targets (Financial Services BP extension) reject the
+        # low-level BAPI_BUPA create+role+commit path the customer/vendor spines
+        # use, dumping CX_FSBP_PARTNER_INCONSISTENT on commit. On such systems
+        # route Customer/Vendor through the OData API_BUSINESS_PARTNER path
+        # (legacy _load_one branch) which drives the standard BP maintenance
+        # framework and handles FS-BP + CVI natively. Gated by M4H_BP_VIA_ODATA
+        # and only taken when the OData service is actually live.
+        prefer_odata_bp = (obj in ("Customer", "Vendor")
+                           and os.environ.get("M4H_BP_VIA_ODATA", "") == "1"
+                           and self.odata_ready())
+        if spine_cls is not None and not prefer_odata_bp:
             # WS2 dynamic catalog hydration -- opt-in via M4H_DYNAMIC_CATALOG.
             # Called once per object_type per loader instance; the spine then
             # uses the resulting field-set as the EXTENSIONIN allowed-fields

@@ -14,6 +14,44 @@ architect in parallel.*
 
 ---
 
+## 2026-07-19  Live client-demo test — customer FS-BP→OData fix, SO ID-preservation proof, UI inventory
+
+Ran the client's exact 3-condition ask (open `/nSPRO` = 157 company codes, `/nSE11` = VBAK 15,332 sales orders, `/nVA03` = a specific order's original number in S/4) against the live ECC (`Y01`, client 800, 192.168.100.188) + live S/4 (`S4H` @ 35.168.102.2, kernel 916) pair.
+
+**Customer creation — the hidden blocker, root-caused in two layers:**
+1. **Role-FM bug** (`lambda/utils/customer_spine.py`): spine tried `BAPI_BUPA_ROLES_CHANGE` / `BAPI_BUPA_ROLES_ADD_2`, both `FU_NOT_FOUND` on this release. Fixed to prefer **`BAPI_BUPA_ROLE_ADD`** (singular signature: `BUSINESSPARTNER` + `BUSINESSPARTNERROLE`), old FMs kept as release fallbacks. Symptom before fix: the run created ~2,000 **orphaned BPs** (BUT000 grew, KNA1 flat at 215) at near-zero CPU — looked like a hang; it was a role never being assigned.
+2. **FS-BP consistency dump** (the real blocker): with the correct role FM, committing a BP with the customer role throws **`CX_FSBP_PARTNER_INCONSISTENT`** — this S/4 has the Financial-Services BP extension active and the low-level `BAPI_BUPA_CREATE_FROM_DATA`+role+commit path cannot satisfy its checks (confirmed independent of account group / role / TBD001 config). **Fix: route Customer/Vendor via OData `API_BUSINESS_PARTNER`** (`lambda/utils/bp_odata.py::create_customer/supplier`) — the standard BP-maintenance framework that handles FS-BP + CVI natively. Wired via **`M4H_BP_VIA_ODATA=1`**: a spine-bypass added to `lambda/utils/unified_loader.py::load_object` (`prefer_odata_bp` guard) that falls through to the existing OData branch (~line 671) instead of the spine registry. **Proven live:** OData created a real customer in KNA1 (`0001002391`, account group CUST, KNB1 company-code row present); a 5-object pipeline run (`M4H_BP_VIA_ODATA=1`) created 5 customers + 5 orders, errors 0, KNA1 215→221, VBAK 9,260→9,265.
+
+**Sales-order ID preservation (condition #3) — PROVEN.** `M4H_PRESERVE_SRC_NUMBERS=1` → `sales_order_spine.call_bapi` passes `SALESDOCUMENTIN`; honoured when the target doc type carries an EXTERNAL number range covering the source number and the number is free on target. ECC order `0005000041` (type TA; RV_BELEG external interval 02 = 5,000,000–5,999,999, empty on S/4) → S/4 order `0005000041` exactly. The spine's sample-customer/sample-material fallback (build_payload lines ~71/116) means preservation can be proven without the full customer/material dependency chain.
+
+**IDES↔IDES collision caveat.** ECC and S/4 are both IDES and share demo data: S/4 already holds 215 customers / 9,260 orders; most ECC order numbers (4969+) already exist in S/4, so those numbers can't be preserved and counts never read as a clean 157/15,332 here. A real client's EMPTY S/4 has no collision → preservation + exact counts hold. Auto-discovered target config: company 1710, sales area 1710/10/00, plant 1710, cust_recon 0012104000, standard BP grouping BP02.
+
+**Also this session:** wrote the missing `TBD001` (BP-grouping→customer-account-group) mapping via the Basis Kit `Z_M4HTABLE_UPSERT` (confirmed TBD001 was NOT the root cause once FS-BP was found); reset the stale cross-run ledger (was pointing at a prior target: Customer 848 / Material 464 vs S/4's real 215 customers). Fixes are validated and committed on `aws-lift-and-shift`.
+
+### UI component inventory (active v2 app — `frontend/src`, React + Vite)
+
+The live UI is the **v2 wizard flow** defined in `frontend/src/App.jsx`. The v1 pages (`ProjectTracker`, `VersionMatrix`, `Connections`, `CommandCenter`, `Gates`, `Dashboard`, `DataQuality`, `Runs`, `Pipeline`, `Logs`, `Report`, `Clients`) remain in-tree but are **not routed**. All screens are real-backend-driven only (no mock data; honest offline/empty states) through `lib/api.js` + `lib/useApi.js` against FastAPI `api_server.py`.
+
+| Route / Component | File | Purpose |
+|---|---|---|
+| `/login` | `pages/v2/Login.jsx` | AWS-style auth — Root tab (email+password), IAM tab (email+password+client_id); JWT, fail-closed |
+| `/` Home | `pages/v2/Home.jsx` | Choose Existing or New migration |
+| `/wizard/:runId/versions` | `pages/v2/WizardVersions.jsx` | Step 1 — ECC (EHP0–8) × S/4 (2020–2025) version pick; 51-pair matrix |
+| `/wizard/:runId/scope` | `pages/v2/WizardScope.jsx` | Step 2 — full vs selective object scope |
+| `/wizard/:runId/connect` | `pages/v2/WizardConnect.jsx` | Step 3 — ECC + S/4 creds, SAP-side setup, permission-aware Test connection |
+| `/project/:runId` | `pages/v2/Project.jsx` | Project home — honest tracker, Start-migration, LiveOps link, on-demand PDF |
+| `/live/:runId` | `pages/v2/LiveOps.jsx` | Full-screen live logs + step events (`/api/logs/tail`), auto-scroll |
+| `/conversion/:runId` | `pages/v2/ConversionDashboard.jsx` | Non-technical view — source→target with plain-English narratives + progress bars |
+| `/admin` (root) | `pages/v2/SuperuserConsole.jsx` | Root-only ops console — when-to-use/danger labels + I-UNDERSTAND confirm |
+| Shell | `components/v2/AppShell.jsx` | AWS-style top bar + content area |
+| Resilience | `components/v2/ErrorBoundary.jsx` | Per-route render-error guard (message + Retry, never a blank page) |
+| Libs | `lib/{auth,api,useApi,activeRun,activeClient,theme,toast,commands,stages}.*` | JWT/auth, backend client, polling hook, run/client context, theme, toasts, ⌘K palette, 27-stage map |
+| Shared UI | `components/{ui,dd,CommandPalette,RunPicker,ClientPicker}.jsx` | Design primitives, dropdowns, palette, run/client selectors |
+
+Deploy: `scripts/deploy-ui-aws.ps1` (S3 + CloudFront; SPA fallback via a CloudFront Function on the default behaviour only).
+
+---
+
 ## 2026-07-03  Enterprise-hardening pass — Basis-safe automation + content depth + sink hardening
 
 Response to an enterprise-ready gap-closure prompt covering (§1) SAP Basis

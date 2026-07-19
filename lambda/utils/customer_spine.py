@@ -102,11 +102,19 @@ class CustomerSpineOrchestrator(BaseSpineOrchestrator):
         # CVI), the role just needs to be added by a downstream tool.
         role_assigned = False
         role_attempts = []
-        for fm in ("BAPI_BUPA_ROLES_CHANGE", "BAPI_BUPA_ROLES_ADD_2"):
+        # Role-assignment BAPI + signature varies by S/4 release. On 2020/2022+
+        # the live FM is BAPI_BUPA_ROLE_ADD (singular; BUSINESSPARTNERROLE param);
+        # the ROLES-table variants (BAPI_BUPA_ROLES_CHANGE / _ADD_2) existed on
+        # older releases and return FU_NOT_FOUND here. Try ROLE_ADD first, then
+        # fall back so the spine still works across the supported release band.
+        role_fm_specs = (
+            ("BAPI_BUPA_ROLE_ADD",     {"BUSINESSPARTNER": bp, "BUSINESSPARTNERROLE": role}),
+            ("BAPI_BUPA_ROLES_CHANGE", {"BUSINESSPARTNER": bp, "ROLES": [{"PARTNERROLE": role}]}),
+            ("BAPI_BUPA_ROLES_ADD_2",  {"BUSINESSPARTNER": bp, "ROLES": [{"PARTNERROLE": role}]}),
+        )
+        for fm, fm_kwargs in role_fm_specs:
             try:
-                rrole = self.c.call(fm,
-                                     BUSINESSPARTNER=bp,
-                                     ROLES=[{"PARTNERROLE": role}])
+                rrole = self.c.call(fm, **fm_kwargs)
                 rret = rrole.get("RETURN") or []
                 if isinstance(rret, dict):
                     rret_list = [rret] if rret.get("TYPE") else []
