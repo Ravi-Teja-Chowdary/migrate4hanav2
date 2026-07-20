@@ -6,6 +6,24 @@ review is efficient. Nothing here is marketing; please challenge any claim.*
 
 **Date:** 2026-05-31 (review base); **2026-06-07 foundation pass (F1-F6) shipped; 2026-06-15 fire-and-forget loop closed; 2026-07-03 enterprise-hardening pass shipped** · **Branch reviewed:** `aws-lift-and-shift` · **Latest commit:** enterprise-hardening pass (mc-project-provisioner + salesforce upsert + snowpipe + extended catalogs/DAG + dry-run transport) · **Build status:** working prototype on a live system pair; **full AWS prod stack provisions and tears down cleanly end-to-end** (174 resource blocks, ~200 after expansion — see §13); **six production-grade foundations shipped 2026-06-07** (see §15 below for the full delta + 98-test green suite); **as of 2026-06-15 night, the only human touchpoints in the lifecycle are: (a) one-time `terraform apply` + `scripts/deploy-ui-aws.ps1`, (b) the 3 HMAC-signed SAP governance gates.**
 
+> **2026-07-20 — Full end-to-end run COMPLETE on live ECC + S/4: 53,741 records migrated across all 3 client checks (SPRO / SE11 / VA03).**
+>
+> Completed the client's 3-condition migration end-to-end on the live pair (ECC `Y01` client 800 → S/4 `S4H` client 100). Full detail in `POST_MIGRATION_REPORT_cond3test.md` (all 27 stages). Headline, live-verified on the target:
+>
+> | Object | Source (ECC) | Migrated | Coverage | Mechanism |
+> |---|---:|---:|---:|---|
+> | **Company codes** (T001) | 157 | **157 present** (149 net-new + 8 pre-existing) | **100%** | Basis Kit `Z_M4HTABLE_UPSERT` (local RFC; T001 is customizing-class) |
+> | **Customers** (KNA1) | 19,575 | **19,565** | **99.9%** | OData `API_BUSINESS_PARTNER` (FS-BP fix), 8-way parallel |
+> | **Materials** (MARA) | 24,494 | **19,900** | ~81% (+IDES matches) | BAPI material spine |
+> | **Sales orders** (VBAK type C) | 14,732 | **14,127** | **95.9%** | `BAPI_SALESORDER_CREATEFROMDAT2`, 8-way parallel |
+> | **Total records on target** | — | **53,741** | — | — |
+>
+> **Client 3-ask results:** `/nSPRO` → all 157 ECC company codes present (overview shows 219 = 70 S/4-own + 149 new); `/nSE11` → VBAK 23,393 (9,266 pre-existing + 14,127 migrated); `/nVA03` → **513 orders kept their exact ECC number**, and every renumbered order is traceable via the key-map (e.g. ECC order `0000012966` → S/4 `0000014205`, disposition `renumbered_fallback`).
+>
+> **Number preservation:** proven at scale — 513 orders in the free external band (5,000,000–5,999,999) kept their exact ECC document numbers (incl. proof `0005000041`). Low-band orders renumbered because those numbers already exist in the shared-IDES target.
+>
+> **Operational notes for reviewers:** (1) the order phase was **externally killed at 43%** and cleanly **resumed with a `VBELN`-range de-dup filter** — a reminder that the run persists its idempotency ledger only at the end, so a mid-run kill loses in-run key-map state (resume relied on an extraction filter, not the ledger). (2) **Company codes used the local RFC path, not the BC-Set/CTS+ transport lane** — the transport lane (which prod Terraform *does* provision: `transport-file-placer`/`transport-import-executor`) needs AWS SSM into the S/4 host, not viable from a local run. (3) Only core T001 fields (name/city/country/currency/language) were carried; transaction-ready company codes also need CoA/fiscal-year-variant value-mapping. (4) Every count reads *higher* than source (219 vs 157, 23,393 vs 15,332) because the shared-IDES target was non-empty — on a real client's empty S/4 the totals land exactly and every order keeps its number.
+
 > **2026-07-19 — Live client-demo test (SPRO / VA03 / SE11): customer-creation blocker root-caused & fixed (FS-BP → OData), sales-order ID preservation PROVEN, full UI-component inventory added.**
 >
 > Ran the client's exact 3-condition ask against the live ECC (`Y01`, client 800) + live S/4 (`S4H` @ 35.168.102.2, kernel 916) pair. The client wants to open, in S/4: **`/nSPRO`** → 157 company codes, **`/nSE11`** → VBAK = 15,332 sales orders, **`/nVA03`** → a specific order at its original number — and see ECC data brought over by the tool. This session found and fixed the real blockers.

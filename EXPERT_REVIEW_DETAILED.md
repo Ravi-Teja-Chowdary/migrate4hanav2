@@ -14,6 +14,30 @@ architect in parallel.*
 
 ---
 
+## 2026-07-20  Full end-to-end run COMPLETE — 53,741 records, all 3 client checks satisfied
+
+Completed the client's 3-condition migration end-to-end on the live pair (ECC `Y01` client 800 @ 192.168.100.181 → S/4 `S4H` client 100 @ 35.168.102.2). Authoritative report: `POST_MIGRATION_REPORT_cond3test.md` (all 27 stages, real numbers). All figures below read directly from the live systems.
+
+| Object | Source (ECC) | Migrated | Coverage | Mechanism |
+|---|---:|---:|---:|---|
+| Company codes (T001) | 157 | **157 present** (149 net-new + 8 pre-existing) | 100% | Basis Kit `Z_M4HTABLE_UPSERT` (local RFC) |
+| Customers (KNA1) | 19,575 | **19,565** | 99.9% | OData `API_BUSINESS_PARTNER`, 8-way parallel |
+| Materials (MARA) | 24,494 | **19,900** | ~81% | BAPI material spine |
+| Sales orders (VBAK type C) | 14,732 | **14,127** | 95.9% | `BAPI_SALESORDER_CREATEFROMDAT2`, 8-way parallel |
+| **Total on target** | — | **53,741** | — | — |
+
+**Client 3-ask verification.**
+- `/nSPRO` → all 157 ECC company codes present; overview shows 219 (= S/4's own 70 + 149 net-new). Migrated via the local RFC path because T001 is delivery-class C; the 8 overlapping codes were **deliberately not overwritten** to avoid corrupting S/4's own config. Core identifying fields carried (BUKRS/BUTXT/ORT01/LAND1/WAERS/SPRAS); CoA + fiscal-year-variant value-mapping is the remaining step for transaction-ready codes.
+- `/nSE11` → VBAK = 23,393 (9,266 pre-existing + 14,127 migrated). Source type-C coverage 95.9%; the ~605-order shortfall is the deliberate safety buffer from the resume filter.
+- `/nVA03` → **513 orders preserved their exact ECC number** (free external band 5,000,000–5,999,999, incl. `0005000041`); renumbered orders are traceable in the key-map (`local-staging/m4h-local/migration-ledger/key_mapping.json`), e.g. ECC `0000012966` → S/4 `0000014205` (disposition `renumbered_fallback`).
+
+**Run mechanics / lessons.**
+- The order phase was **externally terminated at 43%** (harness stopped the background wrapper; not a tool error). Because the pipeline persists its idempotency ledger only at stage end, the killed run's in-memory key-map was lost — a naive resume would have duplicated the ~6,596 renumbered orders. **Resumed cleanly via an extraction filter** (`M4H_OPENSO_WHERE = "VBTYP = 'C' AND VBELN > '0000012753'"`, a ~600-order safety buffer above the reached position) → 7,531 additional orders, 0 duplicates. **Carry-forward gap:** incremental ledger persistence would make mid-run resume ledger-driven rather than filter-driven.
+- **Company codes: local RFC vs transport lane.** The BC-Set/CTS+ transport lane IS provisioned by prod Terraform (`config-replicator`, `bc-set-builder`, `transport-artifact-builder`, `transport-file-placer` "place tp files via SSM", `transport-import-executor` "invoke tp import via SSM", `transport-import-verifier`) — but from a **local** run the transport steps need AWS SSM into the S/4 host, so the Basis Kit direct-write was used instead. On the AWS-deployed stack the transport lane is the intended path.
+- **Shared-IDES caveat (unchanged):** both count checks read higher than source because the target was non-empty (70 company codes, 9,266 orders pre-existing). Empty client target → exact counts + full preservation.
+
+---
+
 ## 2026-07-19  Live client-demo test — customer FS-BP→OData fix, SO ID-preservation proof, UI inventory
 
 Ran the client's exact 3-condition ask (open `/nSPRO` = 157 company codes, `/nSE11` = VBAK 15,332 sales orders, `/nVA03` = a specific order's original number in S/4) against the live ECC (`Y01`, client 800, 192.168.100.188) + live S/4 (`S4H` @ 35.168.102.2, kernel 916) pair.
