@@ -53,8 +53,24 @@ The client's low order `12966` — renumbered to `14205` with the wrong partner 
 
 **Band-cycling preservation.** A doc type has ONE external interval (`TVAK.NUMKE`); the range is tiled (01=1–4.9M, 02=5–6M ext, 03=10–15M int, 04 ext…). The driver groups orders by target interval, repoints `TA.NUMKE` per band headless (`Z_M4H_TABLE_UPDATE`) + `IUUC_RESET_NUMBER_RANGE_BUFFER`, and creates with `SALESDOCUMENTIN`. The **one non-headless step** is flipping an interval's `Ext` flag (`/nSNRO`): every RFC route failed — kit `Z_M4H_NR_MODIFY` raises `NR 009` (no `SUBOBJECT`/buffer handling; `NUMBER_RANGE_UPDATE_CLOSE` exception `NO_CHANGES_MADE` uncaught), `NUMBER_RANGE_INTERVAL_READ` doesn't exist, `/ISDFPS/NRIV_UPDATE` needs DFPS registration, no remote FM-delete. `run_client200_full.py` is resumable (persists customer key-map, skips existing orders).
 
+### 5. Master-data breadth on client 200 (Option A) — `run_client200_{vendors,profitcenters,costcenters}.py`
+Beyond the order book, faithful master data is accumulating on the clean client, each 0-failure and read-back verified:
+
+| Object | Count on 200 | Mechanism | Notes |
+|---|---:|---|---|
+| Customers | ~700 | OData `API_BUSINESS_PARTNER` (FLCU01) | real names |
+| **Vendors** | **2,415** | OData `API_BUSINESS_PARTNER` (FLVN01) | recon auto-discovered (SKB1 MITKZ=K); real names |
+| **Profit centers** | **306** | `BAPI_PROFITCENTER_CREATE` → A000 | IDs preserved; hierarchy harmonised to an existing target group (YBH110) |
+| **Cost centers** | **1,768** | `BAPI_COSTCENTER_CREATEMULTIPLE` → A000 | IDs preserved; reference migrated profit centers |
+
+**Dependency chain proven:** cost centers require a profit center (Profit Center Accounting active) and client 200 had 0 — so profit centers run first, then cost centers reference them. Profit centers in turn required a valid hierarchy group node (the `0001` cost-center node isn't a PC group; used `YBH110` from the copied PCA hierarchy) and a valid company-code assignment. Category mapping: ECC `KOSAR` harmonised to a valid target category (`G`); ECC values like `4` aren't valid on the target. This is exactly the "resolve one shared dependency/mapping, then it serves the whole object" pattern.
+
+**G/L accounts deferred:** target chart already holds 19,818 accounts; ECC's 14,408 live in *different* charts of accounts (INT/country-specific vs the target's), and the direct create BAPI (`BAPI_GL_ACC_MASTER_SAVE`) is not RFC-exposed. This is a value-mapping/harmonisation build (ECC account → target account), not a clean create.
+
 ### Honest gaps (graded)
 - **32 straggler orders (0.2%)** — odd/high number bands whose target interval is still internal; each needs the same one-checkbox `Ext` flip as band `01`. Reaching exactly 14,732 is that flip + a re-run.
+- **Material master → line items** — the create now passes ALL views (basic + MRP w/ lot size + sales + valuation); the ONLY blocker is the tax classification (`MG172`), a functional SD/tax config item (`TSKM`/`TSTL`/`TVST` empty on both clients; no tax type accepted; system's own materials carry `MLAN` but the config source isn't in the standard tables). Not a code bug — needs functional input. Line items are NOT among the client's 3 checks.
+- **G/L accounts** — value-mapping harmonisation (see §5), not yet built.
 - **Automated interval flip** — the kit needs a subobject- and buffer-aware NR function (or the right buffer-init FM) so band preservation needs no GUI at all. Recorded.
 - **Line items** — orders header-only; real items need **material-master migration with a sales view**, blocked on a target tax-classification config gap (`TSKM`/`TSTL`/`TVST` empty here while the client's own materials carry `MLAN`). Customizing-gap class → fix by extracting tax config from ECC and pushing via `Z_M4HTABLE_UPSERT`. `MaterialSpineOrchestrator` has no sales view yet.
 - **Doc-type fidelity** — orders created as `TA`; some source orders are `ZTM` (e.g. `12966`). Matching the exact doc type needs `ZTM`'s number range set up likewise.
