@@ -34,24 +34,25 @@ def tcp_open(host: str, port: int, timeout: float = 5.0) -> bool:
 
 
 def main() -> int:
-    # --- UPDATED: Directly using your live AWS public IP address ---
-    host = "35.168.102.2" 
-    pub = "35.168.102.2"
-    
     # Defaults for typical SAP CAL configurations
+    host = "35.168.102.2"
+    pub = "35.168.102.2"
     user = "MIGRATE_ADMI"
     target_client = "100"
     target_sysnr = "00"
 
-    # Safely load JSON values if the file is present, otherwise fallback gracefully
+    # Read the live target from connections.json so this tracks whatever appliance
+    # is current (a fresh CAL box gets a new IP) — fall back to the defaults above.
     try:
         conns = json.loads((ROOT / "connections.json").read_text())
         t = conns.get("lift_and_shift_target", {})
+        host = (t.get("target_ashost") or t.get("target_public_ip") or host).strip()
+        pub = (t.get("target_public_ip") or host).strip()
         user = t.get("target_user", user)
         target_client = t.get("target_client", target_client)
         target_sysnr = t.get("target_sysnr", target_sysnr)
     except Exception:
-        pass # Using hardcoded network fallbacks above
+        pass  # Using hardcoded network fallbacks above
 
     pw = os.environ.get("M4H_TARGET_PASSWD")
     if not pw:

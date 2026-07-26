@@ -104,3 +104,6 @@ scripts/dirty_kna1.csv
 scripts/dirty_mara.csv
 terraform/modules/observability/.terraform/
 terraform/modules/ws4/.terraform/
+
+# contains the CAL master password (dev convenience) — never commit
+scripts/configure-new-appliance.ps1

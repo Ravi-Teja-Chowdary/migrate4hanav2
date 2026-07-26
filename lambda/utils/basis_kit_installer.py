@@ -533,7 +533,9 @@ ENDLOOP.
 
 COMMIT WORK AND WAIT.
 ev_rows_updated = lv_ok.
-ev_status = |OK: | && lv_ok && | rows updated, | && lv_err && | errors|.
+* && concatenates CHARACTER operands only — lv_ok / lv_err are integers, so
+* embed them via { } in the string template (same fix as Z_M4HTABLE_UPSERT).
+ev_status = |OK: { lv_ok } rows updated, { lv_err } errors|.
 
 ENDFUNCTION.
 """,
@@ -648,10 +650,14 @@ FUNCTION Z_M4H_HEALTH_LOG.
 * customer created it during step 2 of install; otherwise returns
 * just the kit's own runtime health.
 
+* Dynamic table name: a STATIC SELECT on ZM4H_LOG is a *compile* error when the
+* optional audit table was never created (it usually isn't). Selecting via a
+* dynamic (lv_tab) name turns "table missing" into a catchable RUNTIME exception.
+DATA lv_tab TYPE string VALUE 'ZM4H_LOG'.
 TRY.
-    SELECT COUNT(*) FROM zm4h_log INTO ev_total.
+    SELECT COUNT(*) FROM (lv_tab) INTO ev_total.
     ev_status = 'OK: log table present'.
-  CATCH cx_sy_dynamic_osql_semantics.
+  CATCH cx_sy_dynamic_osql_semantics cx_sy_dynamic_osql_syntax.
     ev_total = 0.
     ev_status = 'ZM4H_LOG table not created (audit trail disabled)'.
 ENDTRY.
