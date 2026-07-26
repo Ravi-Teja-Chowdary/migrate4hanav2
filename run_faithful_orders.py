@@ -58,10 +58,32 @@ for kunnr in sorted({o["KUNNR"] for o in orders if o["KUNNR"]}):
     else:
         print(f"  {kunnr} FAILED: {res.get('messages')}")
 
-# 3) a saleable material in sales area 1710/10 on the target
-mvke = rt(sc, "MVKE", ["MATNR"], where="VKORG = '1710' AND VTWEG = '10'", rows=5)
+# 3) saleable materials in sales area 1710/10 on the target (set + a sample)
+mvke = rt(sc, "MVKE", ["MATNR"], where="VKORG = '1710' AND VTWEG = '10'", rows=9999)
+saleable = {m["MATNR"] for m in mvke if m.get("MATNR")}
 sample_mat = mvke[0]["MATNR"] if mvke else ""
-print(f"\nsample saleable material (1710/10): {sample_mat!r}")
+print(f"\nsaleable materials on target (1710/10): {len(saleable)}  sample={sample_mat!r}")
+
+# 3a) real line items per order from ECC VBAP. Use the order's actual material
+#     when it's already saleable on the target (many IDES materials overlap);
+#     otherwise the spine falls back to the sample material. Real quantity + UoM.
+def _num(q):
+    try: return str(int(float(q)))
+    except Exception: return "1"
+items_kept = 0
+for o in orders:
+    vbap = rt(ec, "VBAP", ["POSNR", "MATNR", "KWMENG", "VRKME"],
+              where=f"VBELN = '{o['VBELN']}'", rows=100)
+    its = []
+    for it in vbap:
+        mat = (it.get("MATNR") or "").strip()
+        if mat and mat in saleable:
+            km.add("Material", mat, mat)
+            its.append({"MATNR": mat, "MENGE": _num(it.get("KWMENG")),
+                        "MEINS": (it.get("VRKME") or "EA").strip() or "EA"})
+    o["items"] = its
+    items_kept += len(its)
+print(f"real saleable line items attached across {len(orders)} orders: {items_kept}")
 
 # 3b) a VALID sales-order type on the target (most-common existing type-C AUART)
 from collections import Counter
@@ -83,17 +105,20 @@ spine._so_cfg_cache = {"sorg": "1710", "chan": "10", "div": "00", "otype": otype
 print("\n-- creating sales orders (preservation ON) --")
 created = preserved = harmonized = 0
 for o in orders:
-    r = spine.load_one({"VBELN": o["VBELN"], "KUNNR": o["KUNNR"]})
+    r = spine.load_one({"VBELN": o["VBELN"], "KUNNR": o["KUNNR"],
+                        "items": o.get("items") or []})
     tgt = (r.target_key or "").strip()
     disp = r.disposition or r.status
     src_bp = km.resolve("Customer", o["KUNNR"])
+    nit = len(o.get("items") or [])
     if tgt:
         created += 1
         kept = tgt.lstrip("0") == o["VBELN"].lstrip("0")
         preserved += 1 if kept else 0
         soldto = "harmonized" if "harmoniz" in (disp or "") else f"BP {src_bp}"
         print(f"  SO {o['VBELN']} (cust {o['KUNNR']}) -> S/4 {tgt}  "
-              f"{'SAME #' if kept else 'renumbered'}  sold-to={soldto}")
+              f"{'SAME #' if kept else 'renumbered'}  sold-to={soldto}  "
+              f"items={nit if nit else 'sample'}")
     else:
         print(f"  SO {o['VBELN']} FAILED: {'; '.join((r.messages or [])[:2])}")
 
