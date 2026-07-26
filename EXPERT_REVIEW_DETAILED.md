@@ -14,6 +14,47 @@ architect in parallel.*
 
 ---
 
+## 2026-07-26  New appliance + EMPTY client 200; Basis Kit installs over RFC; faithful orders fixed; 513-order clean migration
+
+Moved the working environment off the shared-IDES client (100) onto a fresh "S/4HANA 2025, Fully-Activated Appliance" and then onto an **empty client (200)** — the first time the tool has run against a target that mirrors a real customer's empty S/4. Everything below is live-verified by read-back.
+
+### 1. Fresh-appliance provisioning — `configure_new_appliance.py` + `scripts/configure-new-appliance.ps1`
+One-shot runner: repoints `connections.json` + hosts file, runs the RFC access-repair chain, probes every write lane, prints PASS/FAIL + a manual checklist. Findings that shaped it:
+- **`MIGRATE_ADMI` doesn't exist on a fresh appliance** → `fix_migrate_admin.py` (only `BAPI_USER_CHANGE`) fails `01 124`. New **`ensure_target_user.py`** creates it (`BAPI_USER_CREATE1`, USTYP='S', SAP_ALL+SAP_NEW) as the first Phase-2 step; also fixes the chicken-and-egg where `mc_role_probe --sap-all` needs SAP_ALL to self-grant SAP_ALL.
+- **OData "published" false-positive fixed:** `_probe_https` treated an anonymous 401 as "published"; it now does an authenticated `bp_odata.is_service_active()` (200=published; 403 "No service found" ⇒ a required `/n/IWFND/MAINT_SERVICE` publish).
+- Interpreter gotcha: `pyrfc` lives only in Python 3.7 here (default `python` is 3.13/3.14 without it); the wrapper resolves the pyrfc-capable interpreter (and avoids a PowerShell splat quirk that char-split `-3.7` and hung `python -` on stdin).
+
+### 2. Basis Kit installs 100% over RFC — `rfc_kit_install.py` (no SE37/SE38)
+`RS_FUNCTION_POOL_INSERT` (create FUGR `ZM4H`) + `RPY_FUNCTIONMODULE_INSERT` (create each of the 6 kit FMs, `REMOTE_CALL='R'`) are both remote-enabled (`TFDIR-FMODE='R'`). Specifics:
+- **72-char truncation:** the `SOURCE` param (`RSSOURCE`) truncates lines at 72 chars → mangled identifiers (`IV_OBJECT`→`IV_OB`). Fix: pass source via **`NEW_SOURCE`** (`RSFB_SOURCE` = table of STRING).
+- **No remote FM-delete** (`RPY_FUNCTIONMODULE_DELETE`/`_UPDATE` absent; `RS_FUNCTION_POOL_DELETE` not RFC-enabled; `CNV_PE_GEN_REPO_FUGR_DELETE` → `PREFIX_NOT_ALLOWED`). Replacing a broken FM needs one SE80 group-delete.
+- **Remote syntax check:** `RS_ABAP_SYNTAX_CHECK_E(P_PROGRAM='SAPL<grp>')` returns exact include/line/message — used to pinpoint failures headless.
+- **Two latent ABAP bugs fixed in `basis_kit_installer.py`** (broke activation on kernel 816, cascading to the whole group): `Z_M4H_TABLE_UPDATE` concatenated integers with `&&` → `{ }` template; `Z_M4H_HEALTH_LOG` static `SELECT … FROM zm4h_log` on an absent table → dynamic `SELECT … FROM (lv_tab)`.
+- The kit's DDIC types are unnecessary for the RFC install (table params typed `SOLI_TAB`) → the SE38 report is skippable; the kit installs fully headless.
+- **Only remaining GUI step:** publish `API_BUSINESS_PARTNER` in `/n/IWFND/MAINT_SERVICE` — the maintenance FMs (`/IWFND/FM_ACTIVATE_SERVICE`, `_MAINT_SERVICE`) are dialog-only (`DYNPRO_SEND_IN_BACKGROUND` / `CNTL_ERROR`), and it must be done as `MIGRATE_ADMI` (SAP* is blocked: "No changes for SAP* allowed").
+
+### 3. Faithful-order defect fixed — `run_faithful_orders.py`
+Root cause of "business partner changed": `sales_order_spine.build_payload` resolves the sold-to via the key-map but then requires `tgt_cust in cfg["customers"]`, where `cfg["customers"]` comes from a 2,000-row `KNVV` scan — so a freshly-migrated BP is harmonised to a sample customer. Fix: migrate each order's real customer via OData first (build key-map), then **pre-seed `spine._so_cfg_cache`** with `{sorg:1710, chan:10, div:00, otype:<discovered from target VBAK, = TA (OR undefined)>, customers:set(migrated BPs), sample_material:<saleable MVKE mat>}`. Live on client 100: **45 orders, 45 kept exact number, 45 real customer** (`5000041` → BP for real "Tracy Collins", read-back-verified). `TA`'s external interval `02` = 5,000,000–5,999,999, so only that band preserves on the crowded client.
+
+### 4. Empty client 200 stood up + first clean migration — `run_client200_orders.py`
+Client 200 is a SAP-delivered "ready-to-activate" client (bare shell). An `SCCL` `SAP_CUST` copy from 100 brought customizing only: **T001=219, TVKO=6, TVAK=213, T077D=30**; business data **0/0/0**. Post-copy config (RFC): created `MIGRATE_ADMI` in 200 (didn't survive the copy), confirmed the kit is cross-client (`Z_M4H_STATUS`=M4H_KIT_1.1) and the BP OData service is active in client 200. First migration (header-only — 200 has no materials yet):
+
+| Metric | Result |
+|---|---|
+| Customers via OData | 102 created, 0 failed |
+| Orders created | **513** |
+| Kept exact ECC number | **513 / 513** |
+| Faithful (real) customer | **513 / 513** |
+| `VBAK` on client 200 after | **exactly 513** |
+
+Identical orders collided/renumbered on IDES client 100; on empty 200 every one preserves and the count is exact — the empty-client thesis, proven live.
+
+### Honest gaps (graded)
+- **Low-band number preservation** — the client's order `12966` sits in interval `01` (1–4,999,999, internal). Flipping `01` external + retargeting `TA.NUMKE` on the empty client is the fix; the kit's `Z_M4H_NR_MODIFY` raised `NR 009` as an uncaught exception (its `EXCEPTIONS OTHERS=4` guard doesn't cover the CLOSE/COMMIT path — a kit robustness fix). **Next step.**
+- **Line items** — orders header-only; real items need **material-master migration with a sales view**, blocked on a target tax-classification config gap (`TSKM`/`TSTL`/`TVST` empty here while the client's own materials carry `MLAN`). This is the customizing-gap class → fix by extracting tax config from ECC and pushing via `Z_M4HTABLE_UPSERT`, not hand-configuring S/4. `MaterialSpineOrchestrator` has no sales view yet.
+- **Full volume** — 513 is the preservable-band subset; the full 15,332 is pending.
+- **Balances / custom code / breadth** — FI/MM balance loaders, code remediation, and the 120+ object catalog to Tier-1 remain the engine-hardening grind, now cleanly measurable on client 200.
+
 ## 2026-07-20  Full end-to-end run COMPLETE — 53,741 records, all 3 client checks satisfied
 
 Completed the client's 3-condition migration end-to-end on the live pair (ECC `Y01` client 800 @ 192.168.100.181 → S/4 `S4H` client 100 @ 35.168.102.2). Authoritative report: `POST_MIGRATION_REPORT_cond3test.md` (all 27 stages, real numbers). All figures below read directly from the live systems.
