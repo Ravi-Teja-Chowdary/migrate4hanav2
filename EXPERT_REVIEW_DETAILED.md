@@ -36,23 +36,28 @@ One-shot runner: repoints `connections.json` + hosts file, runs the RFC access-r
 ### 3. Faithful-order defect fixed — `run_faithful_orders.py`
 Root cause of "business partner changed": `sales_order_spine.build_payload` resolves the sold-to via the key-map but then requires `tgt_cust in cfg["customers"]`, where `cfg["customers"]` comes from a 2,000-row `KNVV` scan — so a freshly-migrated BP is harmonised to a sample customer. Fix: migrate each order's real customer via OData first (build key-map), then **pre-seed `spine._so_cfg_cache`** with `{sorg:1710, chan:10, div:00, otype:<discovered from target VBAK, = TA (OR undefined)>, customers:set(migrated BPs), sample_material:<saleable MVKE mat>}`. Live on client 100: **45 orders, 45 kept exact number, 45 real customer** (`5000041` → BP for real "Tracy Collins", read-back-verified). `TA`'s external interval `02` = 5,000,000–5,999,999, so only that band preserves on the crowded client.
 
-### 4. Empty client 200 stood up + first clean migration — `run_client200_orders.py`
-Client 200 is a SAP-delivered "ready-to-activate" client (bare shell). An `SCCL` `SAP_CUST` copy from 100 brought customizing only: **T001=219, TVKO=6, TVAK=213, T077D=30**; business data **0/0/0**. Post-copy config (RFC): created `MIGRATE_ADMI` in 200 (didn't survive the copy), confirmed the kit is cross-client (`Z_M4H_STATUS`=M4H_KIT_1.1) and the BP OData service is active in client 200. First migration (header-only — 200 has no materials yet):
+### 4. Empty client 200 stood up + FULL order migration — `run_client200_orders.py` / `run_client200_full.py`
+Client 200 is a SAP-delivered "ready-to-activate" client (bare shell). An `SCCL` `SAP_CUST` copy from 100 brought customizing only: **T001=219, TVKO=6, TVAK=213, T077D=30**; business data **0/0/0**. Post-copy config (RFC): created `MIGRATE_ADMI` in 200 (didn't survive the copy), confirmed the kit is cross-client (`Z_M4H_STATUS`=M4H_KIT_1.1) and the BP OData service is active in client 200. The full ECC type-C order book was then migrated (header-only — 200 has no materials yet):
 
 | Metric | Result |
 |---|---|
-| Customers via OData | 102 created, 0 failed |
-| Orders created | **513** |
-| Kept exact ECC number | **513 / 513** |
-| Faithful (real) customer | **513 / 513** |
-| `VBAK` on client 200 after | **exactly 513** |
+| Source ECC type-C orders | 14,732 |
+| Distinct customers via OData | 597 created, 0 failed |
+| Orders created (this run) | **14,186** (+514 pre-existing = 14,700) |
+| Kept exact ECC number | **14,186 / 14,186 (0 renumbered)** |
+| Faithful (real) customer | all |
+| `VBAK` on client 200 after | **14,700 (99.8% of 14,732)** |
+| Skipped | 32 (odd/high bands, interval still internal) |
 
-Identical orders collided/renumbered on IDES client 100; on empty 200 every one preserves and the count is exact — the empty-client thesis, proven live.
+The client's low order `12966` — renumbered to `14205` with the wrong partner on IDES client 100 — is on 200 with its **exact number `12966` and correct customer CS_CUST_01 "Customer 01"** (BP 1000102), read-back verified. Identical orders collided/renumbered wholesale on IDES; on empty 200 every one preserves and the count is exact — the empty-client thesis, proven at full scale.
+
+**Band-cycling preservation.** A doc type has ONE external interval (`TVAK.NUMKE`); the range is tiled (01=1–4.9M, 02=5–6M ext, 03=10–15M int, 04 ext…). The driver groups orders by target interval, repoints `TA.NUMKE` per band headless (`Z_M4H_TABLE_UPDATE`) + `IUUC_RESET_NUMBER_RANGE_BUFFER`, and creates with `SALESDOCUMENTIN`. The **one non-headless step** is flipping an interval's `Ext` flag (`/nSNRO`): every RFC route failed — kit `Z_M4H_NR_MODIFY` raises `NR 009` (no `SUBOBJECT`/buffer handling; `NUMBER_RANGE_UPDATE_CLOSE` exception `NO_CHANGES_MADE` uncaught), `NUMBER_RANGE_INTERVAL_READ` doesn't exist, `/ISDFPS/NRIV_UPDATE` needs DFPS registration, no remote FM-delete. `run_client200_full.py` is resumable (persists customer key-map, skips existing orders).
 
 ### Honest gaps (graded)
-- **Low-band number preservation** — the client's order `12966` sits in interval `01` (1–4,999,999, internal). Flipping `01` external + retargeting `TA.NUMKE` on the empty client is the fix; the kit's `Z_M4H_NR_MODIFY` raised `NR 009` as an uncaught exception (its `EXCEPTIONS OTHERS=4` guard doesn't cover the CLOSE/COMMIT path — a kit robustness fix). **Next step.**
-- **Line items** — orders header-only; real items need **material-master migration with a sales view**, blocked on a target tax-classification config gap (`TSKM`/`TSTL`/`TVST` empty here while the client's own materials carry `MLAN`). This is the customizing-gap class → fix by extracting tax config from ECC and pushing via `Z_M4HTABLE_UPSERT`, not hand-configuring S/4. `MaterialSpineOrchestrator` has no sales view yet.
-- **Full volume** — 513 is the preservable-band subset; the full 15,332 is pending.
+- **32 straggler orders (0.2%)** — odd/high number bands whose target interval is still internal; each needs the same one-checkbox `Ext` flip as band `01`. Reaching exactly 14,732 is that flip + a re-run.
+- **Automated interval flip** — the kit needs a subobject- and buffer-aware NR function (or the right buffer-init FM) so band preservation needs no GUI at all. Recorded.
+- **Line items** — orders header-only; real items need **material-master migration with a sales view**, blocked on a target tax-classification config gap (`TSKM`/`TSTL`/`TVST` empty here while the client's own materials carry `MLAN`). Customizing-gap class → fix by extracting tax config from ECC and pushing via `Z_M4HTABLE_UPSERT`. `MaterialSpineOrchestrator` has no sales view yet.
+- **Doc-type fidelity** — orders created as `TA`; some source orders are `ZTM` (e.g. `12966`). Matching the exact doc type needs `ZTM`'s number range set up likewise.
 - **Balances / custom code / breadth** — FI/MM balance loaders, code remediation, and the 120+ object catalog to Tier-1 remain the engine-hardening grind, now cleanly measurable on client 200.
 
 ## 2026-07-20  Full end-to-end run COMPLETE — 53,741 records, all 3 client checks satisfied
