@@ -65,13 +65,6 @@ todo = [m for m in mara if m["MATNR"] not in done]
 print(f"to create: {len(todo)} (already on 200/mapped: {len(done)})", flush=True)
 
 
-def num(v):
-    try:
-        return str(float(v))
-    except Exception:
-        return "0"
-
-
 ok = fail = matkl_blanked = mbrsh_defaulted = 0
 skips, reasons = [], Counter()
 for i, m in enumerate(todo, 1):
@@ -93,17 +86,13 @@ for i, m in enumerate(todo, 1):
     cdx = {"BASE_UOM": "X"}
     if matkl:
         cd["MATL_GROUP"] = matkl; cdx["MATL_GROUP"] = "X"
+    # BAPI_MARA exposes NET_WEIGHT (QUAN, pass raw decimal string) + UNIT_OF_WT
+    # + SIZE_DIM. It has NO GROSS_WT / VOLUME fields, so those are not carried in
+    # the Basis view (they belong to the logistics/plant views, deferred).
     weu = m["GEWEI"] if m["GEWEI"] in tgt_meins else ""
-    if weu:
+    if weu and m["NTGEW"] and m["NTGEW"] not in ("", "0.000"):
         cd["UNIT_OF_WT"] = weu; cdx["UNIT_OF_WT"] = "X"
-        if m["BRGEW"]:
-            cd["GROSS_WT"] = num(m["BRGEW"]); cdx["GROSS_WT"] = "X"
-        if m["NTGEW"]:
-            cd["NET_WEIGHT"] = num(m["NTGEW"]); cdx["NET_WEIGHT"] = "X"
-    veu = m["VOLEH"] if m["VOLEH"] in tgt_meins else ""
-    if veu and m["VOLUM"]:
-        cd["VOLUME"] = num(m["VOLUM"]); cdx["VOLUME"] = "X"
-        cd["VOLUMEUNIT"] = veu; cdx["VOLUMEUNIT"] = "X"
+        cd["NET_WEIGHT"] = m["NTGEW"]; cdx["NET_WEIGHT"] = "X"
     if m["GROES"]:
         cd["SIZE_DIM"] = m["GROES"][:32]; cdx["SIZE_DIM"] = "X"
     desc = makt.get(matnr, matnr)[:40]
