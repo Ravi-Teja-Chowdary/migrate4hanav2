@@ -61,6 +61,8 @@ class Finding:
     auto_fixable: bool = False
     action: str = ""          # what the auto-fix does, or what the human must do
     samples: list = field(default_factory=list)
+    all_values: list = field(default_factory=list)   # full value set (for dedup/pipeline)
+    dedup_key: str = ""       # findings sharing this key merge into one decision
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -137,7 +139,47 @@ def org_gap(ec, sc, obj, src_tab, src_field, tgt_tab, tgt_field, unit_name, wher
                 f"the org unit created on the target."),
         count=len(unmapped), auto_fixable=False,
         action=f"DECIDE: map each source {unit_name} to a target {unit_name}",
-        samples=unmapped[:15],
+        samples=unmapped[:15], all_values=unmapped, dedup_key=f"org:{unit_name}",
+    )
+
+
+def catalog_gap(ec, sc, obj, src_tab, src_field, tgt_tab, tgt_field, name, where=""):
+    """Source values of a config key (order type, account group…) not defined on
+    the target = a config DECISION (define it, or map to a target value). Not
+    auto-fixed: these carry number ranges / account determination a human owns."""
+    src_vals = set(distinct(rt(ec, src_tab, [src_field], where), src_field))
+    tgt_vals = set(distinct(rt(sc, tgt_tab, [tgt_field]), tgt_field))
+    missing = sorted(src_vals - tgt_vals)
+    if not missing:
+        return None
+    return Finding(
+        wall=WALL_CONFIG, obj=obj,
+        title=f"{name}: {len(missing)} source values not defined on target",
+        detail=(f"The source uses {len(missing)} {name}(s) the target doesn't "
+                f"define (target has: {sorted(tgt_vals)[:12]}…). Each carries its "
+                f"own config (number ranges / account determination), so this is a "
+                f"decision: create it on the target or map to an existing one."),
+        count=len(missing), auto_fixable=False,
+        action=f"DECIDE: define each source {name} on target, or map to an existing one",
+        samples=missing[:15],
+    )
+
+
+def region_dq(ec, sc, obj, tab, land_field, regio_field):
+    """Records whose region code isn't valid on the target T005S — blanked at
+    load (optional field), the master record still lands faithfully."""
+    valid = {f"{r['LAND1']}|{r['BLAND']}" for r in rt(sc, "T005S", ["LAND1", "BLAND"])}
+    rows = rt(ec, tab, [land_field, regio_field])
+    bad = [r for r in rows if r[regio_field] and f"{r[land_field]}|{r[regio_field]}" not in valid]
+    if not bad:
+        return None
+    return Finding(
+        wall=WALL_DATA, obj=obj,
+        title=f"{len(bad)} {obj} records carry a region code the target rejects",
+        detail="Region blanked at load (optional address field); the record still lands.",
+        count=len(bad), auto_fixable=True,
+        action="auto-handled at load: blank invalid REGION",
+        samples=sorted({f"{r[land_field]}/{r[regio_field]}" for r in bad})[:10],
     )
 
 
@@ -220,9 +262,67 @@ def check_bank(ec, sc, apply_payloads):
     return findings
 
 
+def check_customer(ec, sc, apply_payloads):
+    """Customer (KNA1 → BP FLCU01). Sales-area + company-code org mapping,
+    account-group config, region data quality."""
+    F = [
+        org_gap(ec, sc, "customer", "KNVV", "VKORG", "TVKO", "VKORG", "sales org"),
+        org_gap(ec, sc, "customer", "KNVV", "VTWEG", "TVTW", "VTWEG", "distribution channel"),
+        org_gap(ec, sc, "customer", "KNVV", "SPART", "TSPA", "SPART", "division"),
+        org_gap(ec, sc, "customer", "KNB1", "BUKRS", "T001", "BUKRS", "company code"),
+        catalog_gap(ec, sc, "customer", "KNA1", "KTOKD", "T077D", "KTOKD", "customer account group"),
+        region_dq(ec, sc, "customer", "KNA1", "LAND1", "REGIO"),
+    ]
+    return [f for f in F if f]
+
+
+def check_vendor(ec, sc, apply_payloads):
+    """Vendor (LFA1 → BP FLVN01). Purchasing-org + company-code org mapping,
+    account-group config, region data quality."""
+    F = [
+        org_gap(ec, sc, "vendor", "LFM1", "EKORG", "T024E", "EKORG", "purchasing org"),
+        org_gap(ec, sc, "vendor", "LFB1", "BUKRS", "T001", "BUKRS", "company code"),
+        catalog_gap(ec, sc, "vendor", "LFA1", "KTOKK", "T077K", "KTOKK", "vendor account group"),
+        region_dq(ec, sc, "vendor", "LFA1", "LAND1", "REGIO"),
+    ]
+    return [f for f in F if f]
+
+
+def check_sales_order(ec, sc, apply_payloads):
+    """Sales order (VBAK). Sales-area org mapping + order-type config. Number
+    preservation is handled by the load driver (band-cycling), noted here."""
+    F = [
+        org_gap(ec, sc, "sales_order", "VBAK", "VKORG", "TVKO", "VKORG", "sales org"),
+        org_gap(ec, sc, "sales_order", "VBAK", "VTWEG", "TVTW", "VTWEG", "distribution channel"),
+        org_gap(ec, sc, "sales_order", "VBAK", "SPART", "TSPA", "SPART", "division"),
+        catalog_gap(ec, sc, "sales_order", "VBAK", "AUART", "TVAK", "AUART", "order type"),
+    ]
+    return [f for f in F if f]
+
+
+def check_cost_center(ec, sc, apply_payloads):
+    """Cost center (CSKS). Controlling-area + company-code org mapping."""
+    F = [
+        org_gap(ec, sc, "cost_center", "CSKS", "KOKRS", "TKA01", "KOKRS", "controlling area"),
+        org_gap(ec, sc, "cost_center", "CSKS", "BUKRS", "T001", "BUKRS", "company code"),
+    ]
+    return [f for f in F if f]
+
+
+def check_profit_center(ec, sc, apply_payloads):
+    """Profit center (CEPC). Controlling-area org mapping."""
+    F = [org_gap(ec, sc, "profit_center", "CEPC", "KOKRS", "TKA01", "KOKRS", "controlling area")]
+    return [f for f in F if f]
+
+
 RECIPES: dict = {
+    "customer": check_customer,
+    "vendor": check_vendor,
     "material": check_material,
     "bank": check_bank,
+    "sales_order": check_sales_order,
+    "cost_center": check_cost_center,
+    "profit_center": check_profit_center,
 }
 
 
@@ -246,6 +346,8 @@ def run(apply=False, objects=None):
         except Exception as ex:
             print(f"  ! {obj} check error: {type(ex).__name__}: {ex}", flush=True)
 
+    all_findings = merge_shared_decisions(all_findings)
+
     applied = []
     if apply:
         for tab, fields, rows in apply_payloads:
@@ -258,6 +360,40 @@ def run(apply=False, objects=None):
     write_checklist(all_findings, applied, apply)
     ec.close(); sc.close()
     return all_findings
+
+
+def merge_shared_decisions(findings):
+    """An org unit (sales org, plant…) referenced by several objects is ONE
+    mapping decision, not one per object. Merge findings sharing a dedup_key:
+    union their value sets, list the objects affected, keep a single entry."""
+    groups, order, passthrough = {}, [], []
+    for f in findings:
+        if not f.dedup_key:
+            passthrough.append(f); continue
+        if f.dedup_key not in groups:
+            groups[f.dedup_key] = []; order.append(f.dedup_key)
+        groups[f.dedup_key].append(f)
+    merged = []
+    for k in order:
+        fs = groups[k]
+        vals, objs = set(), set()
+        for f in fs:
+            vals |= set(f.all_values)
+            objs.add(f.obj)
+        base = fs[0]
+        base.all_values = sorted(vals)
+        base.count = len(base.all_values)
+        base.samples = base.all_values[:15]
+        base.obj = ", ".join(sorted(objs))
+        unit = k.split(":", 1)[1]      # dedup_key is "org:<unit name>"
+        # regenerate title/detail from the MERGED count (the originals baked the
+        # first object's per-object count into their text)
+        base.title = f"{unit}: {base.count} source values have no target equivalent"
+        base.detail = (f"The source uses {base.count} {unit}(s) that don't exist on "
+                       f"the target. Each needs a mapping decision (old {unit} → new "
+                       f"{unit}) or the org unit created on the target. Affects: {base.obj}.")
+        merged.append(base)
+    return passthrough + merged
 
 
 def write_checklist(findings, applied, applied_mode):
