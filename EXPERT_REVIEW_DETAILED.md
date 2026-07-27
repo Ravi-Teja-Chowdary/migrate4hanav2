@@ -14,6 +14,46 @@ architect in parallel.*
 
 ---
 
+## 2026-07-27  Master-data breadth on client 200 (materials 24,011 + banks 19,059) + live preflight harmonizer & decision checklist
+
+**Live-verified table counts on client 200 (read-back via RFC_READ_TABLE):**
+
+| Object | Table | On 200 | Source (ECC) | Coverage | Mechanism |
+|---|---|---:|---:|---:|---|
+| Customers | KNA1 | 700 | — | — | OData `API_BUSINESS_PARTNER` (FLCU01) |
+| Vendors | LFA1 | 2,416 | — | — | OData BP suppliers (FLVN01) |
+| **Materials (Basic view)** | MARA/MAKT | **24,011** | 24,494 | **98.0%** | `BAPI_MATERIAL_SAVEDATA` BASIC_VIEW only |
+| **Banks** | BNKA | **19,059** | 19,065 | **99.97%** | `BAPI_BANK_CREATE` + `T005-BNKEY='2'` |
+| Sales orders | VBAK | 14,700 | 14,732 | 99.8% | `BAPI_SALESORDER_CREATEFROMDAT2` |
+| Profit centers | CEPC | 307 | 306 | — | `BAPI_PROFITCENTER_CREATE` |
+| Cost centers | CSKS | 1,768 | 1,768 | 100% | `BAPI_COSTCENTER_CREATEMULTIPLE` |
+
+**Banks — governed external-key fix (`run_client200_banks.py`).** ECC bank keys are externally assigned; some violate the target's *country-specific* checks — Canada 10-char keys vs the S/4 9-char rule (`AR/103`), AU length-7 (`AR/102`). Empirically confirmed the fix by table-driving `T005-BNKEY` on the target and retrying a create: `BNKEY='4'` (default) → `AR/103`; `BNKEY='2'` (external key) → OK. The driver reads `T005` for exactly the source's bank countries, sets `BNKEY='2'` via the kit (34 countries), then loads. Also: REGION validated against target `T005S` (blank retired codes like `PQ`), SWIFT blanked unless length ∈ {8,11} (`AR/202`). Result **19,034 created / 6 failed** (`BF00/204/206` edge validations). Every real key preserved. Skip report: `local-staging/c200_bank_skips.json`.
+
+**Materials — Basic view only, with a prep step (`run_client200_materials.py` + `prep_client200_mat_customizing.py`).** Prep replicated the customizing the target lacked — **152 units (T006/T006A) + 447 material groups (T023/T023T)** — via `push_rows_via_kit` (delivery class C). The driver creates the client-level Basic view (MATNR preserved; identity, description MAKT/EN, base UoM, material group, net weight) with per-field harmonisation: skip missing MTART (T134, class G — heavy deps), skip missing MEINS, blank missing MATKL, default missing MBRSH. **24,011 created.** Misses (honest, `local-staging/c200_mat_skips.json`): ~328 custom material types the target doesn't define (`ZSER` 150, `XLMT` 100, `AEM` 34, …), 147 `M3/327` ("incorrect material type or plant"), 5 `MEINS:GAL`.
+
+*Bug found & fixed mid-run:* the first pass hit `ExternalRuntimeError` on ~12% of materials — root cause `RFC_INVALID_PARAMETER: field 'GROSS_WT' not found`. `BAPI_MARA` exposes `NET_WEIGHT`/`UNIT_OF_WT`/`SIZE_DIM` but has **no** `GROSS_WT`/`VOLUME` fields; passing them broke every material carrying a valid weight unit. Fixed to the fields the structure actually has (NET_WEIGHT passed as raw decimal string — it's QUAN, not FLTP); fail rate dropped to ~0.4%.
+
+**HONEST CORRECTION to the 2026-07-26 section (its point 5 / gap (b)).** That section claimed the material create "passes ALL views (basic/MRP/sales/valuation)" and is "blocked ONLY on the material tax-classification (`MG172`) … not a code bug." This session disproved the optimistic framing:
+
+1. **The sales view is blocked by a BAPI limitation, not a config gap.** After pushing `TSTL` (US→UTXJ) + `TSKM` (UTXJ→0/1/2) to client 200 and still hitting `MG172`, the exact payload was run on the fully-configured **source client 100** — it failed identically, and **failed even with no `TAXCLASSIFICATIONS` row at all** (same `MG172`). Conclusion: `BAPI_MATERIAL_SAVEDATA` ignores the tax table and unconditionally demands tax when `SALES_VIEW='X'`. Not fixable by config replication.
+2. **The valuation view needs Material Ledger production-startup** (`FINS_ML_UTIL 002` → transaction `CKMSTART`), which initialises ML period tables — not an RFC table push.
+3. **The root cause under both: an ECC↔S/4 org-structure mismatch.** ECC materials live in plants `1000/3000/1200/1100/0001`…; the S/4 target has `1710/1010/0001`… — **only `0001` overlaps**. Plant/MRP/sales/valuation views cannot land 1:1 without an org-mapping decision. **Corrected position: materials migrate faithfully as the client-level Basic view now; the org-keyed views are a follow-on gated on an org-mapping decision.**
+4. *Dead end recorded:* `SBUF_RESET_BUFFERED_TAB_REMOTE` refuses RFC callers (`RFC_CALLED_FROM_OUTSIDE`) — cannot reset a table buffer over RFC (not needed anyway; the kit's Open-SQL `MODIFY`+`COMMIT WORK AND WAIT` invalidates immediately on a single-server appliance).
+
+**NEW — `preflight_harmonizer.py`: live gap detector + one decision checklist.** Runs before any load; connects to the live ECC↔target pair, runs each object's `Recipe`, **auto-applies the safe/remote config fixes via the kit (`--apply`)**, and writes `MIGRATION_CHECKLIST.md` (human) + `migration_checklist.json` (pipeline), bucketed by four walls:
+
+- **#1 org-mapping** — distinct source org units with no target equivalent, via `org_gap()` (source `MARC.WERKS`/`MVKE.VKORG` vs target `T001W`/`TVKO`). On this pair it found **226 plants + 64 sales orgs** needing a business mapping decision. Never auto-fixable — surfaced as decisions.
+- **#3 config prerequisites** — `config_gap()` diffs a customizing table source-vs-target on its key; class-C/E/S rows auto-applied via `push_rows_via_kit`, class-G/heavy (T134) flagged for basis. Reads each side with its **own** field list (S/4 schema drift adds columns) and reads keys-only for non-auto/wide tables (RFC_READ_TABLE's ~512-byte row cap).
+- **#4 data quality** — bank key-length→`BNKEY=2`, retired regions, malformed SWIFT; auto-handled faithfully or flagged.
+- **#2 SAP limitations** — material sales/valuation views; surfaced, never auto-fixed.
+
+Design invariant preserved: nothing mangles source data or overrides a NO-GO; unfixable items become checklist entries, never silent losses. Adding an object = one `Recipe` dict entry + the check functions it composes. This is the architecture answer to "every damn thing": the tool cannot *decide* org mappings (a business call), but it now **detects every mismatch and hands the customer a clean, actionable checklist** — the same division of labour a Big-4 conversion team uses.
+
+New/changed files: `run_client200_banks.py`, `run_client200_materials.py`, `prep_client200_mat_customizing.py`, `preflight_harmonizer.py`, `MIGRATION_CHECKLIST.md`, `migration_checklist.json`.
+
+---
+
 ## 2026-07-26  New appliance + EMPTY client 200; Basis Kit installs over RFC; faithful orders fixed; 513-order clean migration
 
 Moved the working environment off the shared-IDES client (100) onto a fresh "S/4HANA 2025, Fully-Activated Appliance" and then onto an **empty client (200)** — the first time the tool has run against a target that mirrors a real customer's empty S/4. Everything below is live-verified by read-back.
