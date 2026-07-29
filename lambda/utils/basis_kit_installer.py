@@ -636,6 +636,131 @@ ev_status = |OK: { ev_rows_upserted } upserted, { ev_rows_failed } failed on { i
 
 ENDFUNCTION.
 """,
+    "Z_M4H_STAGING_LOAD": """
+FUNCTION Z_M4H_STAGING_LOAD.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     VALUE(IV_TABLE)  TYPE  CHAR30
+*"     VALUE(IV_FIELDS) TYPE  CHAR255
+*"     VALUE(IT_ROWS)   TYPE  SOLI_TAB
+*"  EXPORTING
+*"     VALUE(EV_STATUS) TYPE  BAPI_MSG
+*"     VALUE(EV_ROWS_UPSERTED) TYPE  I
+*"     VALUE(EV_ROWS_FAILED) TYPE  I
+*"----------------------------------------------------------------------
+* Dedicated SAP Migration Cockpit STAGING loader. Writes ONLY delivery-
+* class L tables (DD02L CONTFLAG = 'L' = "table for temporary data,
+* delivered empty") - i.e. the /1LT/DS* staging tables the MC generates.
+* Refuses every other class: never customizing (C/G/E/S), never
+* application/master data (A). Runs in the ABAP layer as the schema owner,
+* so it can populate MC staging tables that an external HANA user has no
+* grant on. MODIFY = idempotent upsert. MANDT is forced to the caller's
+* client so the MC reads the rows for the right client.
+
+DATA: lv_contflag TYPE dd02l-contflag.
+
+CLEAR: ev_status, ev_rows_upserted, ev_rows_failed.
+
+SELECT SINGLE contflag FROM dd02l INTO lv_contflag
+  WHERE tabname = iv_table AND as4local = 'A'.
+IF sy-subrc <> 0.
+  ev_status = |ERROR: table | && iv_table && | not found|.
+  RETURN.
+ENDIF.
+IF lv_contflag <> 'L'.
+  ev_status = |ERROR: | && iv_table && | delivery class | && lv_contflag
+           && | is not a staging table (L) - refused|.
+  RETURN.
+ENDIF.
+
+DATA: lt_fields TYPE TABLE OF string,
+      lv_fname  TYPE string,
+      lt_vals   TYPE TABLE OF string,
+      lv_val    TYPE string,
+      lv_idx    TYPE i,
+      ls_line   TYPE soli,
+      lr_row    TYPE REF TO data.
+FIELD-SYMBOLS: <row> TYPE any,
+               <fv>  TYPE any.
+
+SPLIT iv_fields AT ',' INTO TABLE lt_fields.
+CREATE DATA lr_row TYPE (iv_table).
+ASSIGN lr_row->* TO <row>.
+
+LOOP AT it_rows INTO ls_line.
+  TRY.
+      CLEAR <row>.
+      SPLIT ls_line-line AT '|' INTO TABLE lt_vals.
+      lv_idx = 0.
+      LOOP AT lt_fields INTO lv_fname.
+        lv_idx = lv_idx + 1.
+        CONDENSE lv_fname NO-GAPS.
+        TRANSLATE lv_fname TO UPPER CASE.
+        ASSIGN COMPONENT lv_fname OF STRUCTURE <row> TO <fv>.
+        IF sy-subrc = 0.
+          CLEAR lv_val.
+          READ TABLE lt_vals INDEX lv_idx INTO lv_val.
+          <fv> = lv_val.
+        ENDIF.
+      ENDLOOP.
+      ASSIGN COMPONENT 'MANDT' OF STRUCTURE <row> TO <fv>.
+      IF sy-subrc = 0.
+        <fv> = sy-mandt.
+      ENDIF.
+      MODIFY (iv_table) FROM <row>.
+      IF sy-subrc = 0.
+        ev_rows_upserted = ev_rows_upserted + 1.
+      ELSE.
+        ev_rows_failed = ev_rows_failed + 1.
+      ENDIF.
+    CATCH cx_root.
+      ev_rows_failed = ev_rows_failed + 1.
+  ENDTRY.
+ENDLOOP.
+
+COMMIT WORK AND WAIT.
+ev_status = |OK: { ev_rows_upserted } upserted, { ev_rows_failed } failed on { iv_table }|.
+
+ENDFUNCTION.
+""",
+    "Z_M4H_STAGING_CLEAR": """
+FUNCTION Z_M4H_STAGING_CLEAR.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     VALUE(IV_TABLE)  TYPE  CHAR30
+*"  EXPORTING
+*"     VALUE(EV_STATUS) TYPE  BAPI_MSG
+*"     VALUE(EV_ROWS_DELETED) TYPE  I
+*"----------------------------------------------------------------------
+* Companion to Z_M4H_STAGING_LOAD: empties a Migration Cockpit staging
+* table for a fresh reload. Same guard - ONLY delivery-class L staging
+* tables (never customizing C/G/E/S, never application A). Deletes the
+* caller's client only.
+
+DATA: lv_contflag TYPE dd02l-contflag.
+CLEAR: ev_status, ev_rows_deleted.
+
+SELECT SINGLE contflag FROM dd02l INTO lv_contflag
+  WHERE tabname = iv_table AND as4local = 'A'.
+IF sy-subrc <> 0.
+  ev_status = |ERROR: table | && iv_table && | not found|.
+  RETURN.
+ENDIF.
+IF lv_contflag <> 'L'.
+  ev_status = |ERROR: | && iv_table && | delivery class | && lv_contflag
+           && | is not a staging table (L) - refused|.
+  RETURN.
+ENDIF.
+
+DELETE FROM (iv_table).
+ev_rows_deleted = sy-dbcnt.
+COMMIT WORK AND WAIT.
+ev_status = |OK: { ev_rows_deleted } deleted from { iv_table }|.
+
+ENDFUNCTION.
+""",
     "Z_M4H_HEALTH_LOG": """
 FUNCTION Z_M4H_HEALTH_LOG.
 *"----------------------------------------------------------------------

@@ -14,6 +14,34 @@ architect in parallel.*
 
 ---
 
+## 2026-07-29 (later)  Material SALES + TAX views — MG172 broken via Migration Cockpit staging lane; the "migrate complete, not half-loaded" finding
+
+**Context.** The 2026-07-27 note graded material sales/valuation views as a deferred follow-on ("gated on an org-mapping decision"). This session drove it to ground: proved every lighter SAP-supported method is genuinely out, proved the Migration Cockpit lane clears `MG172`, and surfaced the architecture rule that resolves the whole thread.
+
+**Methods eliminated (each proven live, not assumed):**
+- `BAPI_MATERIAL_SAVEDATA` — ignores the `TAXCLASSIFICATIONS` table. On the *target*, `SALES_VIEW='X'` + `SALESDATA` `1710/10` + a valid `TAXCLASSIFICATIONS` row (`US/UTXJ/1`, the exact category the target's `TSTL` requires) still returns `MG 172`, and `MLAN` stays empty. Confirmed on the fully-configured client 100 too. Not a config gap — a BAPI limitation.
+- OData `API_PRODUCT_SRV` — **activated this session** (the 403 gate in the G/L note is cleared; required inserting the `/IWFND/C_MGDEAM` service→alias routing row for client 200, which had none — the appliance gateway was only registered for client 100). The service exposes **no sales-org (MVKE) entity** (`A_ProductSales` has no `VKORG`). Its `A_ProductSalesTax` child POSTs `201` but **does not persist unless the material already has a sales view** — proven on client 100 with a Basic-only material (POST→201, `MLAN` empty, GET-by-key→404). So it cannot bootstrap the sales view.
+- Basis Kit direct `MLAN` write — refused (`delivery class A is not customizing`), the guard working as designed.
+- IDoc `MATMAS` — modern inbound is `IDOC_INPUT_MATMAS_BAPI` (delegates to the same BAPI → same wall); no ALE config on 200 (no logical system, no partner profiles); the classic `IDOC_INPUT_MATMAS01` was probed via a kit wrapper but abandoned (see process note).
+
+**The lane that works — SAP Migration Cockpit "Product" object, direct HANA staging tables (S/4 2025, "Migrate Your Data" app).** Project `M4H_MATERIAL` (MTID `M01`, *Transfer Using Staging Tables*, schema `SAPHANADB`); adding "Product" generated the full `/1LT/DSS4H0000nn` staging set (basic `S_MARA`=011, sales `S_MVKE`=024, tax `S_MLAN`=026, plant 028, valuation 037–039). Automation built:
+- **Gateway self-heal:** kit-insert `/IWFND/C_MGDEAM` (`ZAPI_PRODUCT_SRV_0001 → LOCAL, IS_DEFAULT=X`) — reusable for any OData object on 200.
+- **`hana_staging.load_staging()`** (MC-1.3, was a stub) — bulk insert adaptive to the staging table's catalog columns; tested live.
+- **`Z_M4H_STAGING_LOAD` / `Z_M4H_STAGING_CLEAR`** — new kit FMs, guarded to **DD02L `CONTFLAG='L'` only** (staging/temp tables; refuse customizing C/G/E/S and application A). They write via ABAP Open-SQL *as the schema owner* — necessary because the `SAPHANADB`-owned `/1LT/` tables give even HANA `SYSTEM` no INSERT grant (privilege 258).
+- **Positional tax mapping fixed to TARGET config:** `S_MLAN` `TATYPn` from the *target* `TSTL` (`DE→TTX1`, `US→UTXJ`, `CA→CTX1/2/3`), not ECC's (`DE→ZWST`) — the ECC-category first pass produced an `MG` "invalid ZWST" mapping error caught in simulation.
+
+**Live result.** Staged 5 materials (011+024+026), MC `Prepare` recognized **5 instances**, mapping tasks confirmed (18; identity + `00002` external numbering), and **Simulate processed `S_MARA`/`S_MVKE`/`S_MLAN` with NO `MG172`** — recipient records generated. The tax classification that no lighter method could write went through the Cockpit cleanly.
+
+**The constraint / architecture finding.** The only simulation error was **`CNV_DMC_SIN 255` "Product already exists"** — the MC Product object migrates a **complete, net-new** material and refuses existing ones; partial basic re-staging risks blanking. And a verified scan found **no net-new materials with sales views remain** (the earlier BAPI step already loaded all ~24k as Basic). **Rule going forward: migrate materials COMPLETE via the Cockpit in one pass — never "BAPI basic first, add views later."** That two-step is precisely what created materials MC can't extend. Greenfield/fresh S/4: non-issue (all net-new → complete load, tax cleared). This appliance: the 24k Basic-only materials would need re-migrating complete to gain views.
+
+**Supporting deliverable — `org_mapper.py`.** Governed ECC→S/4 org-unit mapping: `detect` (source-used units + target-available + country bridge `VKORG→BUKRS→LAND1`, `WERKS→LAND1`) → `propose` by country (`auto`/`review`/`decision`) → `confirm` (`org_mapper.json`, human-confirmed rows never clobbered) → `resolve(dim, src)` for loaders. On this pair: sales-org/plant/dist-chan/division → **4 auto · 208 review · 137 decision**; DE→`1010`, US→`1710` auto-confirmed (155 rows); ES/FR/IT/NL/CN/MX/JP/… have no target org → decisions. Report `ORG_MAPPING.md`.
+
+**Process note (honest cost).** Probing the classic `IDOC_INPUT_MATMAS01` required deploying a probe FM into the kit group; SAP exposes **no remote FM-delete**, and one syntax-broken probe iteration disabled the entire `ZM4H` function group (a group compiles as one unit). `FUNCTION_DELETE` isn't RFC-enabled and the generic ABAP executor is (correctly) blocked by the client permission guard, so recovery required one SE37 delete by the operator. Lesson reinforced: reverse-engineering SAP internals is fragile; the supported Cockpit lane is the right investment. All probe FMs removed from kit source.
+
+**Files:** `run_client200_material_sales.py`, `org_mapper.py`, `ORG_MAPPING.md`, `org_mapper.json`, `run_client200_material_views.py`, `lambda/utils/hana_staging.py`, `lambda/utils/basis_kit_installer.py`, `rfc_kit_install.py`.
+
+---
+
 ## 2026-07-29  G/L accounts migrated via RFC (1,818) + harmonizer extended to 8 objects
 
 **G/L was previously deferred as "create-BAPI not RFC-exposed."** That was incorrect. Re-probing `TFDIR` (FMODE='R') surfaced **`GL_ACCT_MASTER_SAVE_RFC`** (+ `GL_ACCT_MASTER_MAINTAIN_RFC`, `..._SAVE_RAPRFC`). The OData route a reviewer suggested — `API_GLACCOUNTINCHARTOFACCOUNTS_SRV` — is **read-only** (POST → HTTP 405 "Creating operations are disabled"); the writable GL OData services (`FAP_MANAGE_GLACCOUNTMDATA_SRV`, `FAC_MANAGE_GLACCOUNT_SRV`, …) are unactivated (403/500). The RFC FM needs no gateway publish.

@@ -97,6 +97,19 @@ FM_SPECS = {
         "exports": [("EV_STATUS", "BAPI_MSG"), ("EV_ROWS_UPSERTED", "I"),
                     ("EV_ROWS_FAILED", "I")],
     },
+    "Z_M4H_STAGING_LOAD": {
+        "short": "M4H MC staging-table loader (delivery class L only)",
+        "imports": [("IV_TABLE", "CHAR30", None, False),
+                    ("IV_FIELDS", "CHAR255", None, False),
+                    ("IT_ROWS", "SOLI_TAB", None, False)],
+        "exports": [("EV_STATUS", "BAPI_MSG"), ("EV_ROWS_UPSERTED", "I"),
+                    ("EV_ROWS_FAILED", "I")],
+    },
+    "Z_M4H_STAGING_CLEAR": {
+        "short": "M4H MC staging-table clear (delivery class L only)",
+        "imports": [("IV_TABLE", "CHAR30", None, False)],
+        "exports": [("EV_STATUS", "BAPI_MSG"), ("EV_ROWS_DELETED", "I")],
+    },
     "Z_M4H_HEALTH_LOG": {
         "short": "M4H kit health / audit log",
         "imports": [("IV_LAST_N", "I", "100", True)],
