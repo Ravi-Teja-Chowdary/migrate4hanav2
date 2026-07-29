@@ -24,7 +24,9 @@ import os, sys, json, time
 from collections import Counter, defaultdict
 os.environ.setdefault("SAPNWRFC_HOME", os.path.join(os.getcwd(), "sapnwrfc"))
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+sys.path.insert(0, os.path.join(os.getcwd(), "lambda", "utils"))
 from pyrfc import Connection
+from basis_kit_installer import push_rows_via_kit
 
 DONEFILE = os.path.join("local-staging", "c200_glmap.json")
 SKIPFILE = os.path.join("local-staging", "c200_gl_skips.json")
@@ -55,6 +57,22 @@ ecc_charts = {r["KTOPL"] for r in rt(ec, "SKA1", ["KTOPL"])}
 tgt_charts = {r["KTOPL"] for r in rt(sc, "SKA1", ["KTOPL"])}
 charts = sorted(ecc_charts & tgt_charts)
 print(f"overlapping charts: {charts}", flush=True)
+
+# GOVERNED CONFIG STEP: the target's account-group number ranges (T077S) cap
+# below the customer's real ECC account numbers (e.g. INT groups end at 999999
+# but ECC has 1,111,000). Widen the upper bound (BISNR) to the max for the
+# groups of the charts we migrate, so real account numbers land in their natural
+# group. Reversible customizing (T077S, class C) via the Basis Kit.
+t7f = [f["FIELDNAME"] for f in sc.call("RFC_GET_STRUCTURE_DEFINITION", TABNAME="T077S").get("FIELDS", [])
+       if f["FIELDNAME"] != "MANDT"]
+widen = []
+for r in rt(sc, "T077S", t7f):
+    if r["KTOPL"] in charts and r["BISNR"] and r["BISNR"] < "9999999999":
+        widen.append(dict(r, BISNR="9999999999"))
+if widen:
+    res = push_rows_via_kit(sc, "T077S", t7f, widen)
+    print(f"widened {len(widen)} account-group ranges (BISNR→9999999999): "
+          f"upserted={res.get('upserted')} failed={res.get('failed')}", flush=True)
 
 # cost-element category map (KSTAR -> KATYP), any controlling area
 katyp = {}

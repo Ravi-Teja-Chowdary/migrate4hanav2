@@ -315,6 +315,45 @@ def check_profit_center(ec, sc, apply_payloads):
     return [f for f in F if f]
 
 
+def check_glaccount(ec, sc, apply_payloads):
+    """G/L accounts (SKA1) via GL_ACCT_MASTER_SAVE_RFC. Accounts migrate into
+    their OWN chart where it exists on the target; ECC charts with no target
+    equivalent are a chart-of-accounts mapping DECISION."""
+    findings = []
+    ecc = rt(ec, "SKA1", ["KTOPL", "SAKNR"])
+    tgt_charts = {r["KTOPL"] for r in rt(sc, "SKA1", ["KTOPL"])}
+    from collections import Counter as _C
+    by_chart = _C(r["KTOPL"] for r in ecc)
+    unmapped = {ch: n for ch, n in by_chart.items() if ch not in tgt_charts}
+    if unmapped:
+        naccts = sum(unmapped.values())
+        findings.append(Finding(
+            wall=WALL_ORG, obj="gl_account",
+            title=f"chart of accounts: {len(unmapped)} ECC charts ({naccts} accounts) not on target",
+            detail=("These ECC charts of accounts don't exist on the target, so their "
+                    "accounts can't migrate into a native chart. Decide: create the "
+                    "chart on the target, or map its accounts into a target operational "
+                    "chart (e.g. YCOA) with an account-level translation."),
+            count=len(unmapped), auto_fixable=False,
+            action="DECIDE: map each source chart of accounts to a target chart",
+            samples=[f"{ch}({n})" for ch, n in sorted(unmapped.items(), key=lambda x: -x[1])[:12]]))
+    overlap = sorted({r["KTOPL"] for r in ecc} & tgt_charts)
+    if overlap:
+        findings.append(Finding(
+            wall=WALL_CONFIG, obj="gl_account",
+            title=f"{len(overlap)} charts overlap — accounts migrate into their native chart",
+            detail=("Handled by run_client200_glaccounts.py (GL_ACCT_MASTER_SAVE_RFC): "
+                    "account number + all language texts preserved; GLACCOUNT_TYPE derived "
+                    "from balance-sheet + cost-element category; account-group number "
+                    "ranges auto-widened (governed T077S). Accounts whose group account "
+                    "number references a group chart not on the target are skipped (that "
+                    "group chart is a separate migration)."),
+            count=len(overlap), auto_fixable=True,
+            action="auto-migrated via GL_ACCT_MASTER_SAVE_RFC into native charts",
+            samples=overlap[:15]))
+    return findings
+
+
 RECIPES: dict = {
     "customer": check_customer,
     "vendor": check_vendor,
@@ -323,6 +362,7 @@ RECIPES: dict = {
     "sales_order": check_sales_order,
     "cost_center": check_cost_center,
     "profit_center": check_profit_center,
+    "gl_account": check_glaccount,
 }
 
 
