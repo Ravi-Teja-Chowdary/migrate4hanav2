@@ -2,6 +2,13 @@
 
 *Last updated: 2026-06-11*
 
+> **See also `DATA_MIGRATION_ROADMAP.md` (2026-07-29)** — the focused, current build plan
+> for **data-object coverage** (the three buckets: master data → open transactions →
+> balances). It is the engineering deep-dive on Tier 1 below, and realizes the "object
+> scaffolder" concept as the concrete **HANA staging engine** proven on 2026-07-29. Start
+> the data-coverage work from that doc; use the tiers here for the surrounding product
+> (connectivity, discovery, provisioning, code remediation, SaaS, cutover).
+
 ## The constraint
 
 The roadmap below assumes the **4 existing manual gates stay in place**
