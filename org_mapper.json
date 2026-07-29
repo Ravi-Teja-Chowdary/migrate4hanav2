@@ -1,0 +1,4308 @@
+{
+  "generated": "2026-07-29T13:51:23",
+  "dimensions": {
+    "sales_org": {
+      "1000": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 4706,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "3020": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 3667,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "0001": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1719,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "3000": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 1412,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2300": {
+        "target": "",
+        "country": "ES",
+        "confidence": "decision",
+        "rationale": "no target org for country ES \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 391,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "1020": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 348,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "2200": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 301,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "R300": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 299,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2400": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 291,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2500": {
+        "target": "",
+        "country": "NL",
+        "confidence": "decision",
+        "rationale": "no target org for country NL \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 289,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "R100": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 288,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "Z000": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 271,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "2800": {
+        "target": "",
+        "country": "CN",
+        "confidence": "decision",
+        "rationale": "no target org for country CN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 261,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7500": {
+        "target": "",
+        "country": "AR",
+        "confidence": "decision",
+        "rationale": "no target org for country AR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 243,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6000": {
+        "target": "",
+        "country": "MX",
+        "confidence": "decision",
+        "rationale": "no target org for country MX \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 232,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "5000": {
+        "target": "",
+        "country": "JP",
+        "confidence": "decision",
+        "rationale": "no target org for country JP \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 189,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2000": {
+        "target": "",
+        "country": "GB",
+        "confidence": "decision",
+        "rationale": "no target org for country GB \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 147,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CPF1": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 117,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "4110": {
+        "target": "",
+        "country": "KR",
+        "confidence": "decision",
+        "rationale": "no target org for country KR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 71,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "4000": {
+        "target": "",
+        "country": "CA",
+        "confidence": "decision",
+        "rationale": "no target org for country CA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 64,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "9000": {
+        "target": "",
+        "country": "RU",
+        "confidence": "decision",
+        "rationale": "no target org for country RU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 62,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "X100": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 59,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "8500": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 51,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "S300": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 41,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "0005": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 37,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "I001": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 26,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "CPB1": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 26,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "1030": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 23,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "7001": {
+        "target": "",
+        "country": "BR",
+        "confidence": "decision",
+        "rationale": "no target org for country BR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 22,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "S330": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 19,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CPC1": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 17,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "I002": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 16,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "SO01": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 15,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "SO02": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 15,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "4300": {
+        "target": "",
+        "country": "IN",
+        "confidence": "decision",
+        "rationale": "no target org for country IN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 15,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "FS01": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 15,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "SL31": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 13,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2820": {
+        "target": "",
+        "country": "CN",
+        "confidence": "decision",
+        "rationale": "no target org for country CN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 13,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7000": {
+        "target": "",
+        "country": "BR",
+        "confidence": "decision",
+        "rationale": "no target org for country BR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 11,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3050": {
+        "target": "",
+        "country": "GB",
+        "confidence": "decision",
+        "rationale": "no target org for country GB \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 10,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "4510": {
+        "target": "",
+        "country": "CA",
+        "confidence": "decision",
+        "rationale": "no target org for country CA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 8,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3010": {
+        "target": "",
+        "country": "BE",
+        "confidence": "decision",
+        "rationale": "no target org for country BE \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 7,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "5430": {
+        "target": "",
+        "country": "NL",
+        "confidence": "decision",
+        "rationale": "no target org for country NL \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 6,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "4520": {
+        "target": "",
+        "country": "CA",
+        "confidence": "decision",
+        "rationale": "no target org for country CA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 5,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "4530": {
+        "target": "",
+        "country": "CA",
+        "confidence": "decision",
+        "rationale": "no target org for country CA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 5,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "ZBD1": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 4,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "IN47": {
+        "target": "",
+        "country": "IN",
+        "confidence": "decision",
+        "rationale": "no target org for country IN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 4,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "FARR": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 4,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "CPF2": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 3,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2222": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 3,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2821": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 2,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2700": {
+        "target": "",
+        "country": "CH",
+        "confidence": "decision",
+        "rationale": "no target org for country CH \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "5431": {
+        "target": "",
+        "country": "NL",
+        "confidence": "decision",
+        "rationale": "no target org for country NL \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8000": {
+        "target": "",
+        "country": "CL",
+        "confidence": "decision",
+        "rationale": "no target org for country CL \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6101": {
+        "target": "",
+        "country": "MX",
+        "confidence": "decision",
+        "rationale": "no target org for country MX \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "TM2": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "2 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010"
+        ],
+        "confirmed": true
+      },
+      "2220": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "0006": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "8520": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8530": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8580": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8590": {
+        "target": "",
+        "country": "NZ",
+        "confidence": "decision",
+        "rationale": "no target org for country NZ \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3700": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "6650": {
+        "target": "",
+        "country": "SA",
+        "confidence": "decision",
+        "rationale": "no target org for country SA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2822": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "4 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      }
+    },
+    "plant": {
+      "1000": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 6654,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "3000": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 4468,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "1200": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 3125,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "1100": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 2931,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "0001": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 2275,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "3200": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 1929,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "0002": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1332,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "3800": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 1256,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2300": {
+        "target": "",
+        "country": "ES",
+        "confidence": "decision",
+        "rationale": "no target org for country ES \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1068,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3100": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 905,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2800": {
+        "target": "",
+        "country": "CN",
+        "confidence": "decision",
+        "rationale": "no target org for country CN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 669,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "SG01": {
+        "target": "",
+        "country": "SG",
+        "confidence": "decision",
+        "rationale": "no target org for country SG \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 592,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "5000": {
+        "target": "",
+        "country": "JP",
+        "confidence": "decision",
+        "rationale": "no target org for country JP \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 499,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7500": {
+        "target": "",
+        "country": "AR",
+        "confidence": "decision",
+        "rationale": "no target org for country AR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 409,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2400": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 342,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2500": {
+        "target": "",
+        "country": "NL",
+        "confidence": "decision",
+        "rationale": "no target org for country NL \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 340,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "1300": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 310,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "7000": {
+        "target": "",
+        "country": "BR",
+        "confidence": "decision",
+        "rationale": "no target org for country BR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 297,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6000": {
+        "target": "",
+        "country": "MX",
+        "confidence": "decision",
+        "rationale": "no target org for country MX \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 286,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2200": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 282,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3500": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 240,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "3010": {
+        "target": "",
+        "country": "BE",
+        "confidence": "decision",
+        "rationale": "no target org for country BE \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 226,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "9000": {
+        "target": "",
+        "country": "RU",
+        "confidence": "decision",
+        "rationale": "no target org for country RU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 214,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2810": {
+        "target": "",
+        "country": "CN",
+        "confidence": "decision",
+        "rationale": "no target org for country CN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 180,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3400": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 154,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2000": {
+        "target": "",
+        "country": "GB",
+        "confidence": "decision",
+        "rationale": "no target org for country GB \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 152,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7510": {
+        "target": "",
+        "country": "AR",
+        "confidence": "decision",
+        "rationale": "no target org for country AR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 149,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3700": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 143,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "9100": {
+        "target": "",
+        "country": "RU",
+        "confidence": "decision",
+        "rationale": "no target org for country RU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 104,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "RFDC": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 102,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "RFST": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 101,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "4110": {
+        "target": "",
+        "country": "KR",
+        "confidence": "decision",
+        "rationale": "no target org for country KR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 96,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3300": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 90,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "3600": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 85,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "4300": {
+        "target": "",
+        "country": "IN",
+        "confidence": "decision",
+        "rationale": "no target org for country IN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 79,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "1400": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 77,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "0005": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 74,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "4000": {
+        "target": "",
+        "country": "CA",
+        "confidence": "decision",
+        "rationale": "no target org for country CA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 69,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "R100": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 65,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "R314": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 61,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "R101": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 60,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "R310": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 60,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "R311": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 60,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "R312": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 60,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "R313": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 60,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "R315": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 60,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "R316": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 60,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "XLP1": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 59,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "CPF3": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 57,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "CPF2": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 57,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "8500": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 52,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "R300": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 51,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "R301": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 51,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "CHP1": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 47,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "R110": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 47,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "R111": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 47,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "R112": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 47,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "4100": {
+        "target": "",
+        "country": "CN",
+        "confidence": "decision",
+        "rationale": "no target org for country CN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 45,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "ZFOX": {
+        "target": "",
+        "country": "CN",
+        "confidence": "decision",
+        "rationale": "no target org for country CN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 41,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "S300": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 41,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "CHP2": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 40,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "6100": {
+        "target": "",
+        "country": "MX",
+        "confidence": "decision",
+        "rationale": "no target org for country MX \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 38,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "0006": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 35,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2820": {
+        "target": "",
+        "country": "CN",
+        "confidence": "decision",
+        "rationale": "no target org for country CN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 33,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CPF1": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 29,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "6702": {
+        "target": "",
+        "country": "EG",
+        "confidence": "decision",
+        "rationale": "no target org for country EG \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 29,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2840": {
+        "target": "",
+        "country": "HK",
+        "confidence": "decision",
+        "rationale": "no target org for country HK \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 29,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CPC2": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 28,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "7530": {
+        "target": "",
+        "country": "AR",
+        "confidence": "decision",
+        "rationale": "no target org for country AR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 28,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7010": {
+        "target": "",
+        "country": "BR",
+        "confidence": "decision",
+        "rationale": "no target org for country BR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 27,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2010": {
+        "target": "",
+        "country": "GB",
+        "confidence": "decision",
+        "rationale": "no target org for country GB \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 27,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "R320": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 27,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "CPB1": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 26,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "CPF4": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 25,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "1500": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 24,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "6710": {
+        "target": "",
+        "country": "EG",
+        "confidence": "decision",
+        "rationale": "no target org for country EG \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 23,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "IN47": {
+        "target": "",
+        "country": "IN",
+        "confidence": "decision",
+        "rationale": "no target org for country IN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 22,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7520": {
+        "target": "",
+        "country": "AR",
+        "confidence": "decision",
+        "rationale": "no target org for country AR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 22,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "R120": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 22,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "R121": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 22,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "7011": {
+        "target": "",
+        "country": "BR",
+        "confidence": "decision",
+        "rationale": "no target org for country BR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 20,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CPC1": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 20,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "S330": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 19,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "0007": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 18,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "0008": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 18,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "SL31": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 17,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "6700": {
+        "target": "",
+        "country": "EG",
+        "confidence": "decision",
+        "rationale": "no target org for country EG \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 17,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "PL01": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 17,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "PL02": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 17,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "C100": {
+        "target": "",
+        "country": "CN",
+        "confidence": "decision",
+        "rationale": "no target org for country CN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 16,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CHD2": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 16,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "CPC3": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 16,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CHD3": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 15,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "2100": {
+        "target": "",
+        "country": "PT",
+        "confidence": "decision",
+        "rationale": "no target org for country PT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 13,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6650": {
+        "target": "",
+        "country": "SA",
+        "confidence": "decision",
+        "rationale": "no target org for country SA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 13,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CPF5": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 13,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "S360": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 13,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "S331": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 13,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6651": {
+        "target": "",
+        "country": "SA",
+        "confidence": "decision",
+        "rationale": "no target org for country SA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 11,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6652": {
+        "target": "",
+        "country": "SA",
+        "confidence": "decision",
+        "rationale": "no target org for country SA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 11,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CHD1": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 11,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "2210": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 11,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7540": {
+        "target": "",
+        "country": "CL",
+        "confidence": "decision",
+        "rationale": "no target org for country CL \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 11,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8522": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 11,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2505": {
+        "target": "",
+        "country": "NL",
+        "confidence": "decision",
+        "rationale": "no target org for country NL \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 11,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3050": {
+        "target": "",
+        "country": "GB",
+        "confidence": "decision",
+        "rationale": "no target org for country GB \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 10,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2830": {
+        "target": "",
+        "country": "IN",
+        "confidence": "decision",
+        "rationale": "no target org for country IN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 10,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7550": {
+        "target": "",
+        "country": "CO",
+        "confidence": "decision",
+        "rationale": "no target org for country CO \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 10,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CHP3": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 9,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "3350": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 9,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "5410": {
+        "target": "",
+        "country": "NL",
+        "confidence": "decision",
+        "rationale": "no target org for country NL \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 9,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CHP4": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 8,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "S320": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 8,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "6712": {
+        "target": "",
+        "country": "EG",
+        "confidence": "decision",
+        "rationale": "no target org for country EG \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 8,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3150": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 8,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "AC00": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 7,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "2220": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 7,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3105": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 7,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "5100": {
+        "target": "",
+        "country": "JP",
+        "confidence": "decision",
+        "rationale": "no target org for country JP \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 7,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "DC01": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 7,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "DC02": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 7,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "DC04": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 7,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "DC05": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 7,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "S332": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 7,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "PL05": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 7,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "6750": {
+        "target": "",
+        "country": "AE",
+        "confidence": "decision",
+        "rationale": "no target org for country AE \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 6,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6751": {
+        "target": "",
+        "country": "AE",
+        "confidence": "decision",
+        "rationale": "no target org for country AE \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 6,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6752": {
+        "target": "",
+        "country": "AE",
+        "confidence": "decision",
+        "rationale": "no target org for country AE \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 6,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6753": {
+        "target": "",
+        "country": "AE",
+        "confidence": "decision",
+        "rationale": "no target org for country AE \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 6,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6754": {
+        "target": "",
+        "country": "AE",
+        "confidence": "decision",
+        "rationale": "no target org for country AE \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 6,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2240": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 6,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "1600": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 6,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "4510": {
+        "target": "",
+        "country": "CA",
+        "confidence": "decision",
+        "rationale": "no target org for country CA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 6,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "DC03": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 6,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "DC06": {
+        "target": "",
+        "country": "GB",
+        "confidence": "decision",
+        "rationale": "no target org for country GB \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 6,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "S361": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 6,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "6755": {
+        "target": "",
+        "country": "AE",
+        "confidence": "decision",
+        "rationale": "no target org for country AE \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 5,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2230": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 5,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "4520": {
+        "target": "",
+        "country": "CA",
+        "confidence": "decision",
+        "rationale": "no target org for country CA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 5,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "4530": {
+        "target": "",
+        "country": "CA",
+        "confidence": "decision",
+        "rationale": "no target org for country CA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 5,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "4540": {
+        "target": "",
+        "country": "CA",
+        "confidence": "decision",
+        "rationale": "no target org for country CA \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 5,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6101": {
+        "target": "",
+        "country": "MX",
+        "confidence": "decision",
+        "rationale": "no target org for country MX \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 4,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "ZCBM": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 4,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "CHD4": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 4,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "FARR": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 4,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "S333": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 4,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "S334": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 4,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "S335": {
+        "target": "",
+        "country": "IT",
+        "confidence": "decision",
+        "rationale": "no target org for country IT \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 4,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "ZBP1": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 3,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "7031": {
+        "target": "",
+        "country": "BR",
+        "confidence": "decision",
+        "rationale": "no target org for country BR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 3,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6701": {
+        "target": "",
+        "country": "EG",
+        "confidence": "decision",
+        "rationale": "no target org for country EG \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 3,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "CHD7": {
+        "target": "",
+        "country": "BR",
+        "confidence": "decision",
+        "rationale": "no target org for country BR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 3,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2222": {
+        "target": "",
+        "country": "FR",
+        "confidence": "decision",
+        "rationale": "no target org for country FR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 3,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "ZCMU": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 3,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "2821": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 2,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "BRF1": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 2,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "ZBRF": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 2,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "SCU1": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 2,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "3110": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 2,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "3999": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 2,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "IN48": {
+        "target": "",
+        "country": "IN",
+        "confidence": "decision",
+        "rationale": "no target org for country IN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "1901": {
+        "target": "",
+        "country": "",
+        "confidence": "decision",
+        "rationale": "no target org for country (unknown) \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7100": {
+        "target": "",
+        "country": "BR",
+        "confidence": "decision",
+        "rationale": "no target org for country BR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "5420": {
+        "target": "",
+        "country": "NL",
+        "confidence": "decision",
+        "rationale": "no target org for country NL \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "ZTEW": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 2,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "8533": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2835": {
+        "target": "",
+        "country": "CN",
+        "confidence": "decision",
+        "rationale": "no target org for country CN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "7535": {
+        "target": "",
+        "country": "AR",
+        "confidence": "decision",
+        "rationale": "no target org for country AR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "6711": {
+        "target": "",
+        "country": "EG",
+        "confidence": "decision",
+        "rationale": "no target org for country EG \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "REST": {
+        "target": "",
+        "country": "",
+        "confidence": "decision",
+        "rationale": "no target org for country (unknown) \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 2,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3850": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 2,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "6703": {
+        "target": "",
+        "country": "EG",
+        "confidence": "decision",
+        "rationale": "no target org for country EG \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "SL39": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "6102": {
+        "target": "",
+        "country": "MX",
+        "confidence": "decision",
+        "rationale": "no target org for country MX \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3111": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "3112": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "C_P1": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "3997": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "3998": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "PL04": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "2730": {
+        "target": "",
+        "country": "CH",
+        "confidence": "decision",
+        "rationale": "no target org for country CH \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "HANA": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "6201": {
+        "target": "",
+        "country": "MX",
+        "confidence": "decision",
+        "rationale": "no target org for country MX \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "SCA1": {
+        "target": "",
+        "country": "HK",
+        "confidence": "decision",
+        "rationale": "no target org for country HK \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "SCE1": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "SCL1": {
+        "target": "",
+        "country": "AR",
+        "confidence": "decision",
+        "rationale": "no target org for country AR \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "ZDC2": {
+        "target": "",
+        "country": "",
+        "confidence": "decision",
+        "rationale": "no target org for country (unknown) \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8524": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8536": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8581": {
+        "target": "",
+        "country": "AU",
+        "confidence": "decision",
+        "rationale": "no target org for country AU \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8591": {
+        "target": "",
+        "country": "NZ",
+        "confidence": "decision",
+        "rationale": "no target org for country NZ \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "8592": {
+        "target": "",
+        "country": "NZ",
+        "confidence": "decision",
+        "rationale": "no target org for country NZ \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "3750": {
+        "target": "1710",
+        "country": "US",
+        "confidence": "review",
+        "rationale": "7 target orgs for US; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0003",
+          "1710",
+          "1711",
+          "1712",
+          "1720",
+          "FOBP",
+          "FORP"
+        ],
+        "confirmed": true
+      },
+      "AC01": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC02": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC03": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC04": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC05": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC06": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC07": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC08": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC09": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC10": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC11": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC12": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC13": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC14": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC15": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC16": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC17": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC18": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC19": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC20": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC21": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC22": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC23": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC24": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC25": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC26": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC27": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC28": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC29": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "AC30": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "4310": {
+        "target": "",
+        "country": "IN",
+        "confidence": "decision",
+        "rationale": "no target org for country IN \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "2822": {
+        "target": "1010",
+        "country": "DE",
+        "confidence": "review",
+        "rationale": "5 target orgs for DE; picked S/4 best-practice",
+        "source_count": 1,
+        "alternatives": [
+          "0001",
+          "1010",
+          "1011",
+          "1012",
+          "1020"
+        ],
+        "confirmed": true
+      },
+      "4200": {
+        "target": "",
+        "country": "JP",
+        "confidence": "decision",
+        "rationale": "no target org for country JP \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      },
+      "9099": {
+        "target": "",
+        "country": "",
+        "confidence": "decision",
+        "rationale": "no target org for country (unknown) \u2014 create one, consolidate onto an existing target org, or skip these records",
+        "source_count": 1,
+        "alternatives": [],
+        "confirmed": false
+      }
+    },
+    "distribution_channel": {
+      "10": {
+        "target": "10",
+        "country": "",
+        "confidence": "auto",
+        "rationale": "same value exists on target",
+        "source_count": 7080,
+        "alternatives": [],
+        "confirmed": true
+      },
+      "30": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 2420,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "01": {
+        "target": "01",
+        "country": "",
+        "confidence": "auto",
+        "rationale": "same value exists on target",
+        "source_count": 2045,
+        "alternatives": [],
+        "confirmed": true
+      },
+      "14": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 1477,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "12": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 1199,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "Z0": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 271,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "24": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 248,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "R1": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 152,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "R5": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 152,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "R4": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 135,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "R6": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 134,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "C1": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 120,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "22": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 72,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "20": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 61,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "X1": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 59,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "40": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 53,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "S3": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 41,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "R2": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 40,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "16": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 36,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "CB": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 26,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "C2": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 20,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "S1": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 19,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "L1": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 15,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "BD": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 4,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      },
+      "Z1": {
+        "target": "10",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical channel 10",
+        "source_count": 1,
+        "alternatives": [
+          "01",
+          "10"
+        ],
+        "confirmed": false
+      }
+    },
+    "division": {
+      "01": {
+        "target": "01",
+        "country": "",
+        "confidence": "auto",
+        "rationale": "same value exists on target",
+        "source_count": 4042,
+        "alternatives": [],
+        "confirmed": true
+      },
+      "07": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 2913,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "00": {
+        "target": "00",
+        "country": "",
+        "confidence": "auto",
+        "rationale": "same value exists on target",
+        "source_count": 1797,
+        "alternatives": [],
+        "confirmed": true
+      },
+      "02": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 535,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "13": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 409,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "10": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 198,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "04": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 194,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "06": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 161,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "08": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 133,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "20": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 115,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "17": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 109,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "15": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 108,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "R1": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 101,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "18": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 83,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "05": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 62,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "XL": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 59,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "30": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 59,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "03": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 58,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "09": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 53,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "12": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 42,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "S3": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 30,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "I1": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 21,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "S1": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 19,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "AM": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 17,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "16": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 13,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "50": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 7,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "40": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 5,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "14": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 3,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "28": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 1,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "A1": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 1,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "Z1": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 1,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      },
+      "19": {
+        "target": "00",
+        "country": "",
+        "confidence": "review",
+        "rationale": "not on target; collapse to canonical division 00",
+        "source_count": 1,
+        "alternatives": [
+          "00",
+          "01"
+        ],
+        "confirmed": false
+      }
+    }
+  }
+}

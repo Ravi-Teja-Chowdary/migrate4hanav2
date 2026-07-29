@@ -160,6 +160,81 @@ class HanaStaging:
         cur.close()
         return out
 
+    # ── MC-1.3: bulk load transformed rows into a staging table ─────────────────
+    def load_staging(self, table_name: str, rows: list, *, schema: Optional[str] = None,
+                     columns: Optional[list] = None, batch: int = 5000,
+                     truncate: bool = False) -> dict:
+        """Bulk-insert transformed rows into an MC staging table.
+
+        ``rows``     list of dicts keyed by staging column name (case-insensitive).
+        ``columns``  explicit column order; default = the intersection of the row
+                     keys with the table's real columns (from the HANA catalog),
+                     so callers can hand over a superset and we only write what
+                     the staging table actually has.
+        ``truncate`` optional DELETE of the staging table before load (a re-runnable
+                     full refresh — MC staging tables are load targets, safe to clear).
+
+        Idempotency is the MC object's job (its key columns); this returns the
+        counts. Uses executemany in batches inside one transaction, committing per
+        batch so a mid-run failure leaves a known-good prefix.
+        """
+        sch = schema or self.schema
+        catalog = {c["column"].upper(): c["column"] for c in self.describe_staging(table_name, sch)}
+        if not catalog:
+            raise HanaStagingError(f'staging table "{sch}"."{table_name}" not found / no columns '
+                                   f"(is the MC project + Material object created?)")
+        if columns is None:
+            seen, cols = set(), []
+            for r in rows:                     # preserve first-seen order across rows
+                for k in r:
+                    if k.upper() in catalog and k.upper() not in seen:
+                        seen.add(k.upper()); cols.append(catalog[k.upper()])
+        else:
+            cols = [catalog[c.upper()] for c in columns if c.upper() in catalog]
+        if not cols:
+            raise HanaStagingError("no row keys match staging-table columns")
+        conn = self.connect(); cur = conn.cursor()
+        if truncate:
+            cur.execute(f'DELETE FROM "{sch}"."{table_name}"')
+            conn.commit()
+        collist = ",".join(f'"{c}"' for c in cols)
+        ph = ",".join("?" for _ in cols)
+        sql = f'INSERT INTO "{sch}"."{table_name}" ({collist}) VALUES ({ph})'
+        upper = [c.upper() for c in cols]
+        inserted = failed = 0; errors = []
+        for i in range(0, len(rows), batch):
+            chunk = rows[i:i + batch]
+            data = [[_pick(r, uc) for uc in upper] for r in chunk]
+            try:
+                cur.executemany(sql, data); conn.commit(); inserted += len(chunk)
+            except Exception as e:  # noqa: BLE001 — fall back to row-by-row to isolate bad rows
+                conn.rollback()
+                for row in data:
+                    try:
+                        cur.execute(sql, row); inserted += 1
+                    except Exception as e2:  # noqa: BLE001
+                        failed += 1
+                        if len(errors) < 10:
+                            errors.append(str(e2)[:120])
+                conn.commit()
+        cur.close()
+        return {"table": table_name, "schema": sch, "columns": cols,
+                "rows_sent": len(rows), "inserted": inserted, "failed": failed, "errors": errors}
+
+
+def _pick(row: dict, upper_col: str):
+    """Case-insensitive value lookup for a staging column; '' becomes None only
+    where the caller passed nothing (missing key), else the given value as-is."""
+    if upper_col in row:
+        return row[upper_col]
+    lc = upper_col.lower()
+    if lc in row:
+        return row[lc]
+    for k, v in row.items():
+        if k.upper() == upper_col:
+            return v
+    return None
+
 
 def from_connections(conns: dict, **overrides) -> HanaStaging:
     """Build a HanaStaging from a loaded connections.json dict."""
