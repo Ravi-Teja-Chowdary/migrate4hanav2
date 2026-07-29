@@ -1,6 +1,6 @@
 # migrate4hana — Migration Decision Checklist
 
-_Generated 2026-07-27 15:12 · 5 auto-handled · **11 need a human**_
+_Generated 2026-07-29 11:30 · 6 auto-handled · **12 need a human**_
 
 This is the honest gap between your ECC data and the new S/4 system. Everything under 🧭 is a **business decision**; the rest we handle.
 
@@ -51,6 +51,13 @@ _The old and new systems have different org structures. Pick a mapping for each 
   
   → _DECIDE: map each source division to a target division_
 
+- ⛔ **decide** — **chart of accounts: 12 ECC charts (5609 accounts) not on target**  
+  These ECC charts of accounts don't exist on the target, so their accounts can't migrate into a native chart. Decide: create the chart on the target, or map its accounts into a target operational chart (e.g. YCOA) with an account-level translation.
+  
+  _e.g._ `INT1(1203), CAUS(1156), INTA(1101), CAGB(544), CACA(540), CAAU(354), PCEC(262), CONS(221), BANK(158), ACIA(49), CA20(11), PCG(10)`
+  
+  → _DECIDE: map each source chart of accounts to a target chart_
+
 
 ## 🔧 Config switches
 
@@ -83,6 +90,13 @@ _Settings the target is missing. Class-C/G ones we flip automatically; the rest 
   _e.g._ `AEM, BLG, BLGA, COMP, CONU, DOCU, PLM, XLMT, YCON, ZHT1`
   
   → _DECIDE: create these material types on target, or skip those materials_
+
+- ✅ auto — **12 charts overlap — accounts migrate into their native chart**  
+  Handled by run_client200_glaccounts.py (GL_ACCT_MASTER_SAVE_RFC): account number + all language texts preserved; GLACCOUNT_TYPE derived from balance-sheet + cost-element category; account-group number ranges auto-widened (governed T077S). Accounts whose group account number references a group chart not on the target are skipped (that group chart is a separate migration).
+  
+  _e.g._ `CACN, CAES, CAFR, CAIN, CAJP, CAKR, CANA, CARU, CATW, GKR, IKR, INT`
+  
+  → _auto-migrated via GL_ACCT_MASTER_SAVE_RFC into native charts_
 
 - ✅ auto — **T006: 1 customizing rows missing on target**  
   T006 (delivery class C) has 1 entries in ECC not present on the target. Base unit of measure.
@@ -135,4 +149,4 @@ _Not fixable from outside — we take the supported path instead._
   → _ACCEPT: Basic view migrates now; sales/valuation views are a follow-on_
 
 
-> 5 auto-fixable items detected. Re-run with `--apply` to flip the safe config switches.
+> 6 auto-fixable items detected. Re-run with `--apply` to flip the safe config switches.

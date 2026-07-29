@@ -1,7 +1,7 @@
 {
-  "generated": "2026-07-27T15:12:41",
-  "auto_fixable": 5,
-  "needs_human": 11,
+  "generated": "2026-07-29T11:30:22",
+  "auto_fixable": 6,
+  "needs_human": 12,
   "applied": [],
   "findings": [
     {
@@ -212,6 +212,56 @@
         "DOUR",
         "ECO1",
         "ECO2"
+      ],
+      "all_values": [],
+      "dedup_key": ""
+    },
+    {
+      "wall": "org-mapping",
+      "obj": "gl_account",
+      "title": "chart of accounts: 12 ECC charts (5609 accounts) not on target",
+      "detail": "These ECC charts of accounts don't exist on the target, so their accounts can't migrate into a native chart. Decide: create the chart on the target, or map its accounts into a target operational chart (e.g. YCOA) with an account-level translation.",
+      "count": 12,
+      "auto_fixable": false,
+      "action": "DECIDE: map each source chart of accounts to a target chart",
+      "samples": [
+        "INT1(1203)",
+        "CAUS(1156)",
+        "INTA(1101)",
+        "CAGB(544)",
+        "CACA(540)",
+        "CAAU(354)",
+        "PCEC(262)",
+        "CONS(221)",
+        "BANK(158)",
+        "ACIA(49)",
+        "CA20(11)",
+        "PCG(10)"
+      ],
+      "all_values": [],
+      "dedup_key": ""
+    },
+    {
+      "wall": "config-prerequisite",
+      "obj": "gl_account",
+      "title": "12 charts overlap \u2014 accounts migrate into their native chart",
+      "detail": "Handled by run_client200_glaccounts.py (GL_ACCT_MASTER_SAVE_RFC): account number + all language texts preserved; GLACCOUNT_TYPE derived from balance-sheet + cost-element category; account-group number ranges auto-widened (governed T077S). Accounts whose group account number references a group chart not on the target are skipped (that group chart is a separate migration).",
+      "count": 12,
+      "auto_fixable": true,
+      "action": "auto-migrated via GL_ACCT_MASTER_SAVE_RFC into native charts",
+      "samples": [
+        "CACN",
+        "CAES",
+        "CAFR",
+        "CAIN",
+        "CAJP",
+        "CAKR",
+        "CANA",
+        "CARU",
+        "CATW",
+        "GKR",
+        "IKR",
+        "INT"
       ],
       "all_values": [],
       "dedup_key": ""

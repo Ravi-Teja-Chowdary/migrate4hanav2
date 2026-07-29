@@ -14,6 +14,26 @@ architect in parallel.*
 
 ---
 
+## 2026-07-29  G/L accounts migrated via RFC (1,818) + harmonizer extended to 8 objects
+
+**G/L was previously deferred as "create-BAPI not RFC-exposed."** That was incorrect. Re-probing `TFDIR` (FMODE='R') surfaced **`GL_ACCT_MASTER_SAVE_RFC`** (+ `GL_ACCT_MASTER_MAINTAIN_RFC`, `..._SAVE_RAPRFC`). The OData route a reviewer suggested — `API_GLACCOUNTINCHARTOFACCOUNTS_SRV` — is **read-only** (POST → HTTP 405 "Creating operations are disabled"); the writable GL OData services (`FAP_MANAGE_GLACCOUNTMDATA_SRV`, `FAC_MANAGE_GLACCOUNT_SRV`, …) are unactivated (403/500). The RFC FM needs no gateway publish.
+
+**Driver `run_client200_glaccounts.py`** creates ECC accounts into their native chart where it also exists on the target — **12 overlapping charts** (INT/IKR/GKR/CARU/CAFR/CAIN/CAJP/CAKR/CANA/CATW/CACN/CAES). **1,818 accounts created**, SKA1 21,637. Mechanics established live:
+
+- **Deep structure** (introspected via `get_function_description`, not DDIC): `ACCOUNT_COA = {KEYY:{KTOPL,SAKNR}, DATA:{GLACCOUNT_TYPE,KTOKS,XBILK,GVTYP,BILKT}, ACTION:'I'}`; `ACCOUNT_NAMES` rows `{KEYY:{KTOPL,SAKNR,SPRAS}, DATA:{TXT20,TXT50}, ACTION:'I'}`. `RFC_GET_STRUCTURE_DEFINITION` flattens the nested key/data — misleading; pyrfc's function description is authoritative.
+- **Maintenance-language rule** (`FH743`): the description must exist in the CHART's maintenance language (INT is maintained in German 'D', not 'E'). We carry every ECC `SKAT` language (deduped) + guarantee EN & DE fallback.
+- **`GLACCOUNT_TYPE`** (X/N/P/S) derived from `SKA1.XBILK` + ECC cost-element category `CSKB.KATYP` (secondary 21/31/41/42/43 → S; other cost element → P; else N).
+- **Governed range-widen** (`FH013`): the target account-group number ranges (`T077S.BISNR`) capped at 999,999 but ECC has accounts >1,000,000. A governed kit push widens `BISNR→9999999999` for the migrated charts (same pattern as bank `T005-BNKEY`), recovering ~366 (INT 609→963).
+- **Retry chain**: `FH740` (group account required) → add `BILKT`; `FH065` (group account not on target group chart) → clean skip; `FH002` (bad GVTYP) → blank; `FH174` (orphan text from a prior partial) → master-only re-save.
+
+**Honest residual (skip-reported, not lost):** `FH065` **1,700** — the account's `BILKT` references a GROUP chart of accounts not migrated to the target (a separate object); `FH742` 55 (a required non-Latin maintenance language); `FH013` 28, `FH743` 20, `FH740` 3 (edge cases). Plus **5,609 accounts in 12 ECC charts with no target equivalent** — a chart-of-accounts mapping decision, now surfaced by the harmonizer's `check_glaccount`.
+
+**External-guidance evaluation (empirical).** The reviewer's material path (`API_PRODUCT_SRV` OData to bypass the BAPI `MG172`) is directionally right but the service is **403 (unactivated)** — one-time gateway publish required, then testable. The CKMSTART/ML-startup automation (valuation view) and the org-mapper config layer remain to build.
+
+**Harmonizer**: `check_glaccount` added → 8 objects, live checklist **12 human decisions + 6 auto-fixes**. Files: `run_client200_glaccounts.py`, `preflight_harmonizer.py`.
+
+---
+
 ## 2026-07-27  Master-data breadth on client 200 (materials 24,011 + banks 19,059) + live preflight harmonizer & decision checklist
 
 **Live-verified table counts on client 200 (read-back via RFC_READ_TABLE):**
