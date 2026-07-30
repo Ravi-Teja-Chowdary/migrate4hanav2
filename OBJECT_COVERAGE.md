@@ -104,6 +104,17 @@ subset. "100+" is real and if anything conservative.
 
 ---
 
+## Grind machinery (built — Option B enablers)
+The tooling to drive this board is in place:
+- **`migration_engine.py`** — runs any object from a recipe (Phase A).
+- **`scaffold_recipe.py`** — auto-generates a recipe skeleton from a staging table +
+  source table (auto-maps same-named/aliased columns, tags org units). Proven:
+  an unedited scaffold ran straight through the engine.
+- **`reconciler.py`** — source↔target key/count/**sum-to-the-cent** reconciliation;
+  the gate that turns 📥 into ✅. Proven on migrated G/L (INT 98.6% match).
+
+Per-object workflow: **scaffold → refine → stage (engine) → migrate (app) → reconcile.**
+
 ## How coverage grows (and its hard dependencies)
 Each object, to reach ✅, needs: **(a)** its staging tables generated on the target
 (added to an MC project — a Fiori step, or the RFC add-object API if it proves

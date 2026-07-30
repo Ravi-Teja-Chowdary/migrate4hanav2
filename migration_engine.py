@@ -223,8 +223,8 @@ class Engine:
 
     # ── stage one structure ────────────────────────────────────────────────────
     def stage_structure(self, struct, truncate=True, verify=True):
-        table = self.discover_staging(struct["staging_signature"],
-                                      os.environ.get("M4H_STG_" + struct["id"].upper()))
+        override = struct.get("staging_table") or os.environ.get("M4H_STG_" + struct["id"].upper())
+        table = self.discover_staging(struct.get("staging_signature", []), override)
         builder = struct.get("builder", "declarative")
         if builder == "declarative":
             rows, skipped = self.build_declarative(struct)
