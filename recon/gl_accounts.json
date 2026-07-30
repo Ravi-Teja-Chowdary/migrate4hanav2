@@ -1,0 +1,8 @@
+[
+  {"object": "GL-INT (chart INT)",
+   "source": {"conn": "ecc",    "table": "SKA1", "keys": ["SAKNR"], "where": "KTOPL = 'INT'"},
+   "target": {"conn": "target", "table": "SKA1", "keys": ["SAKNR"], "where": "KTOPL = 'INT'"}},
+  {"object": "GL-GKR (chart GKR)",
+   "source": {"conn": "ecc",    "table": "SKA1", "keys": ["SAKNR"], "where": "KTOPL = 'GKR'"},
+   "target": {"conn": "target", "table": "SKA1", "keys": ["SAKNR"], "where": "KTOPL = 'GKR'"}}
+]
