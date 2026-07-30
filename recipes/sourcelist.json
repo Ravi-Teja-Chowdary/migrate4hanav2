@@ -1,0 +1,109 @@
+{
+  "object": "SourceList",
+  "description": "SCAFFOLD \u2014 SourceList from EORD into /1LT/DSS4H001124. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001124",
+      "staging_signature": [
+        "ZEORD",
+        "MATNR",
+        "WERKS"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "EORD",
+        "fields": [
+          "AUTET",
+          "BDATU",
+          "EBELN",
+          "EBELP",
+          "EKORG",
+          "FEBEL",
+          "FLIFN",
+          "LIFNR",
+          "MATNR",
+          "NOTKZ",
+          "VDATU",
+          "WERKS",
+          "ZEORD"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "ZEORD",
+          "src": "ZEORD",
+          "fn": "copy"
+        },
+        {
+          "col": "MATNR",
+          "src": "MATNR",
+          "fn": "copy"
+        },
+        {
+          "col": "WERKS",
+          "src": "WERKS",
+          "fn": "org",
+          "dim": "plant"
+        },
+        {
+          "col": "VDATU",
+          "src": "VDATU",
+          "fn": "copy"
+        },
+        {
+          "col": "BDATU",
+          "src": "BDATU",
+          "fn": "copy"
+        },
+        {
+          "col": "LIFNR",
+          "src": "LIFNR",
+          "fn": "copy"
+        },
+        {
+          "col": "EKORG",
+          "src": "EKORG",
+          "fn": "copy"
+        },
+        {
+          "col": "EBELN",
+          "src": "EBELN",
+          "fn": "copy"
+        },
+        {
+          "col": "EBELP",
+          "src": "EBELP",
+          "fn": "copy"
+        },
+        {
+          "col": "FEBEL",
+          "src": "FEBEL",
+          "fn": "copy"
+        },
+        {
+          "col": "FLIFN",
+          "src": "FLIFN",
+          "fn": "copy"
+        },
+        {
+          "col": "NOTKZ",
+          "src": "NOTKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "AUTET",
+          "src": "AUTET",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "TYPE"
+  ],
+  "_note": "13/14 columns auto-mapped; 1 need a decision (default/const/custom source field)."
+}

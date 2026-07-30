@@ -1,0 +1,230 @@
+{
+  "object": "InternalOrder",
+  "description": "SCAFFOLD \u2014 InternalOrder from AUFK into /1LT/DSS4H000626. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000626",
+      "staging_signature": [
+        "KOKRS",
+        "AUART",
+        "KTEXT"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "AUFK",
+        "fields": [
+          "ABGSL",
+          "ABKRS",
+          "ABUKR",
+          "AKSTL",
+          "ANFAUFNR",
+          "AUART",
+          "AUFEX",
+          "BUKRS",
+          "CYCLE",
+          "FUNC_AREA",
+          "GSBER",
+          "KALSM",
+          "KDAUF",
+          "KDPOS",
+          "KOKRS",
+          "KOSTV",
+          "KTEXT",
+          "PRCTR",
+          "USER0",
+          "USER1",
+          "USER2",
+          "USER3",
+          "USER4",
+          "USER5",
+          "USER6",
+          "USER7",
+          "USER8",
+          "USER9",
+          "VERAA_USER",
+          "WAERS",
+          "WERKS",
+          "ZSCHL",
+          "ZSCHM"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "KOKRS",
+          "src": "KOKRS",
+          "fn": "copy"
+        },
+        {
+          "col": "AUART",
+          "src": "AUART",
+          "fn": "copy"
+        },
+        {
+          "col": "KTEXT",
+          "src": "KTEXT",
+          "fn": "copy"
+        },
+        {
+          "col": "BUKRS",
+          "src": "BUKRS",
+          "fn": "copy"
+        },
+        {
+          "col": "GSBER",
+          "src": "GSBER",
+          "fn": "copy"
+        },
+        {
+          "col": "WERKS",
+          "src": "WERKS",
+          "fn": "org",
+          "dim": "plant"
+        },
+        {
+          "col": "PRCTR",
+          "src": "PRCTR",
+          "fn": "copy"
+        },
+        {
+          "col": "KOSTV",
+          "src": "KOSTV",
+          "fn": "copy"
+        },
+        {
+          "col": "AKSTL",
+          "src": "AKSTL",
+          "fn": "copy"
+        },
+        {
+          "col": "ABUKR",
+          "src": "ABUKR",
+          "fn": "copy"
+        },
+        {
+          "col": "KDAUF",
+          "src": "KDAUF",
+          "fn": "copy"
+        },
+        {
+          "col": "KDPOS",
+          "src": "KDPOS",
+          "fn": "copy"
+        },
+        {
+          "col": "AUFEX",
+          "src": "AUFEX",
+          "fn": "copy"
+        },
+        {
+          "col": "ANFAUFNR",
+          "src": "ANFAUFNR",
+          "fn": "copy"
+        },
+        {
+          "col": "FUNC_AREA",
+          "src": "FUNC_AREA",
+          "fn": "copy"
+        },
+        {
+          "col": "VERAA_USER",
+          "src": "VERAA_USER",
+          "fn": "copy"
+        },
+        {
+          "col": "CYCLE",
+          "src": "CYCLE",
+          "fn": "copy"
+        },
+        {
+          "col": "WAERS",
+          "src": "WAERS",
+          "fn": "copy"
+        },
+        {
+          "col": "KALSM",
+          "src": "KALSM",
+          "fn": "copy"
+        },
+        {
+          "col": "ZSCHL",
+          "src": "ZSCHL",
+          "fn": "copy"
+        },
+        {
+          "col": "ABGSL",
+          "src": "ABGSL",
+          "fn": "copy"
+        },
+        {
+          "col": "ZSCHM",
+          "src": "ZSCHM",
+          "fn": "copy"
+        },
+        {
+          "col": "USER0",
+          "src": "USER0",
+          "fn": "copy"
+        },
+        {
+          "col": "USER1",
+          "src": "USER1",
+          "fn": "copy"
+        },
+        {
+          "col": "USER2",
+          "src": "USER2",
+          "fn": "copy"
+        },
+        {
+          "col": "USER3",
+          "src": "USER3",
+          "fn": "copy"
+        },
+        {
+          "col": "USER4",
+          "src": "USER4",
+          "fn": "copy"
+        },
+        {
+          "col": "USER5",
+          "src": "USER5",
+          "fn": "copy"
+        },
+        {
+          "col": "USER6",
+          "src": "USER6",
+          "fn": "copy"
+        },
+        {
+          "col": "USER7",
+          "src": "USER7",
+          "fn": "copy"
+        },
+        {
+          "col": "USER8",
+          "src": "USER8",
+          "fn": "copy"
+        },
+        {
+          "col": "USER9",
+          "src": "USER9",
+          "fn": "copy"
+        },
+        {
+          "col": "ABKRS",
+          "src": "ABKRS",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "ORDERNUMBER",
+    "PS_POSID"
+  ],
+  "_note": "33/35 columns auto-mapped; 2 need a decision (default/const/custom source field)."
+}

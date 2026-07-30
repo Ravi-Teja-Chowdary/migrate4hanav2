@@ -1,0 +1,63 @@
+{
+  "object": "InspMethod",
+  "description": "SCAFFOLD \u2014 InspMethod from QMTB into /1LT/DSS4H000618. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000618",
+      "staging_signature": [
+        "WERKS",
+        "PMTNR",
+        "GUELTIGAB"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "QMTB",
+        "fields": [
+          "GUELTIGAB",
+          "LOEKZ",
+          "PMTNR",
+          "SORTFELD",
+          "WERKS"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "WERKS",
+          "src": "WERKS",
+          "fn": "org",
+          "dim": "plant"
+        },
+        {
+          "col": "PMTNR",
+          "src": "PMTNR",
+          "fn": "copy"
+        },
+        {
+          "col": "GUELTIGAB",
+          "src": "GUELTIGAB",
+          "fn": "copy"
+        },
+        {
+          "col": "LOEKZ",
+          "src": "LOEKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "SORTFELD",
+          "src": "SORTFELD",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "TEXT10",
+    "TEXT20",
+    "TEXT40"
+  ],
+  "_note": "5/8 columns auto-mapped; 3 need a decision (default/const/custom source field)."
+}

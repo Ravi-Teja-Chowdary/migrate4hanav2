@@ -22,14 +22,22 @@ from migration_engine import Engine
 # staging column -> org_mapper dimension
 ORG_DIMS = {"VKORG": "sales_org", "VTWEG": "distribution_channel",
             "WERKS": "plant", "DWERK": "plant", "SPART": "division"}
-# common staging<->source name aliases (MC often renames the material key)
-ALIASES = {"PRODUCT": "MATNR", "MATERIAL": "MATNR"}
+# common staging<->source name aliases (MC frequently renames keys semantically)
+ALIASES = {"PRODUCT": "MATNR", "MATERIAL": "MATNR",
+           "RATE_TYPE": "KURST", "FROM_CURR": "FCURR", "TO_CURRNCY": "TCURR",
+           "MERCHANDISECATEGORY": "MATKL"}
+# columns whose values are material-like numbers → strip leading zeros
+LSTRIP = {"PRODUCT", "MATERIAL", "MATNR", "MATERIALBYCUSTOMER"}
 SKIP = ("MANDT",)  # never map; kit forces client
 
 
 def ddic_fields(eng, table):
-    r = eng.tgt.call("DDIF_FIELDINFO_GET", TABNAME=table)
-    return {f["FIELDNAME"] for f in r.get("DFIES_TAB", [])}
+    """Real DB column names of `table` from DD03L on the SOURCE (ECC), so we never
+    map a staging column onto a DDIC field RFC_READ_TABLE can't read (FIELD_NOT_VALID).
+    Drop '.INCLUDE'/'.APPEND' markers (they start with '.')."""
+    rows = eng.read_table(eng.ecc, "DD03L", ["FIELDNAME"], "TABNAME = '%s'" % table)
+    return {r["FIELDNAME"].strip() for r in rows
+            if r.get("FIELDNAME", "").strip() and not r["FIELDNAME"].startswith(".")}
 
 
 def scaffold(eng, staging_table, source_table, sid, obj):
@@ -44,7 +52,7 @@ def scaffold(eng, staging_table, source_table, sid, obj):
         used.append(src)
         if col in ORG_DIMS:
             mapping.append({"col": col, "src": src, "fn": "org", "dim": ORG_DIMS[col]})
-        elif col in ALIASES:
+        elif col in LSTRIP or src == "MATNR":
             mapping.append({"col": col, "src": src, "fn": "lstrip0"})
         else:
             mapping.append({"col": col, "src": src, "fn": "copy"})

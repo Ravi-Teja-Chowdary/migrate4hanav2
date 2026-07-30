@@ -113,10 +113,24 @@ class Engine:
 
     # ── primitives ─────────────────────────────────────────────────────────────
     def read_table(self, conn, table, fields, where="", rowcount=0):
-        r = conn.call("RFC_READ_TABLE", QUERY_TABLE=table, DELIMITER="~",
-                      OPTIONS=([{"TEXT": where}] if where else []),
-                      FIELDS=[{"FIELDNAME": f} for f in fields], ROWCOUNT=rowcount)
-        return [dict(zip(fields, x["WA"].split("~"))) for x in r.get("DATA", [])]
+        """RFC_READ_TABLE with automatic wide-row handling. RFC_READ_TABLE caps the
+        output row at ~512 bytes; when the selected columns exceed that the ABAP side
+        raises DATA_BUFFER_EXCEEDED. We recursively split the field list and merge the
+        halves positionally — identical QUERY/WHERE/ROWCOUNT return rows in the same
+        order, so a zip by row index reconstructs each record (source reads are
+        read-only, so order is stable across the two calls)."""
+        try:
+            r = conn.call("RFC_READ_TABLE", QUERY_TABLE=table, DELIMITER="~",
+                          OPTIONS=([{"TEXT": where}] if where else []),
+                          FIELDS=[{"FIELDNAME": f} for f in fields], ROWCOUNT=rowcount)
+            return [dict(zip(fields, x["WA"].split("~"))) for x in r.get("DATA", [])]
+        except Exception as e:
+            if "DATA_BUFFER_EXCEEDED" not in str(getattr(e, "key", "")) + str(e) or len(fields) <= 1:
+                raise
+            mid = len(fields) // 2
+            left = self.read_table(conn, table, fields[:mid], where, rowcount)
+            right = self.read_table(conn, table, fields[mid:], where, rowcount)
+            return [{**l, **r} for l, r in zip(left, right)]
 
     def discover_staging(self, signature, override=None):
         """Find the /1LT/ MC staging table that contains ALL columns in `signature`.

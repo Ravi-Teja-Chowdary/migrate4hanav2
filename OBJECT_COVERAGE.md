@@ -4,7 +4,21 @@
 No spin: an object is only ticked up a level when it has been done and verified.
 Updated every time an object moves. Companion to `DATA_MIGRATION_ROADMAP.md`.*
 
-**Last updated:** 2026-07-30
+**Last updated:** 2026-07-30 (M02_FULL catalog unlock)
+
+## Catalog unlock — all 230 objects are staged & addressable (2026-07-30)
+The founder created MC project **M02_FULL** (Mass Transfer **M02**) and added **all
+230 standard migration objects** in one Fiori pass (Select-All), generating **1,245
+staging tables**. We then found SAP's own registry table **`/1LT/DS_MAPPING`**
+(SYS_ID, MT_ID, COBJ_IDENT, STRUCT_IDENT, STAGING_TAB) — the authoritative
+object→structure→staging-table catalog we had been reverse-engineering by column
+signature. It is read over RFC (`object_catalog.py`) because the external HANA
+SYSTEM user has no SELECT grant on the SAPHANADB `/1LT/` tables (priv 258).
+
+Consequence: every object's exact staging table is now known — **no signature
+guessing**. The grind is now: pick object → scaffold against its registered staging
+table → stage → reconcile. ECC source is **live (Y01)**. All ~45 CORE (data-bearing,
+non-industry) source tables confirmed present.
 
 ## The honest reality (read this first)
 "Proving the engine on object X" **means writing X's recipe and running it** — there
@@ -25,10 +39,17 @@ subset. "100+" is real and if anything conservative.
 ## Summary (2026-07-30)
 | Level | Count | Notes |
 |---|---:|---|
-| 📥 staged via the engine | **3** | Product, Profit Center, Production Supply Area |
+| 🗂️ addressable in M02 (staging tables generated) | **230** | full standard catalog; `catalog/ds_mapping.json` |
+| 📥 staged via the engine | **11** | Product, Profit Center, Production Supply Area, **Bank, Cost Center, Activity Type, Source List, Inspection Method** (full); **Internal Order, Merchandise Category, Exchange Rate** (partial — refine) |
 | 🟨 legacy (pre-engine loaders) | **~8** | Customer, Vendor, Material-basic, Bank, Sales order, Cost center, Profit center, G/L |
 | ✅ **migrated + reconciled via the engine** | **0** | the app-gated Migrate + reconcile is not yet run on a persistent target |
-| ⬜ not started | **~90+** | the grind ahead |
+| ⬜ recipe not yet written | **~219** | the grind ahead — but every one now has a known staging table |
+
+> **What changed today:** the ceiling moved from "3 staged, ~90 not started (no
+> staging tables)" to "**230 objects have staging tables and are individually
+> addressable; 11 staged; recipes are now a scaffolder run away.**" Engine hardened
+> this session: DD03L field-validity, automatic wide-row splitting (RFC 512-byte
+> cap), semantic key aliases — so wide objects (CSKS, KNA1, LFA1, EKKO…) read cleanly.
 
 > Blunt truth: **zero objects are fully migrated-and-reconciled through the new engine
 > yet.** Staging is proven on 3; the actual Migrate step is app-gated and needs a
@@ -48,8 +69,12 @@ subset. "100+" is real and if anything conservative.
 | Cost center | 🟨 legacy | recipe ⬜ |
 | G/L account | 🟨 legacy | via GL_ACCT_MASTER_SAVE_RFC; recipe ⬜ |
 | Cost element (primary/secondary) | ⬜ none | |
-| Activity type | ⬜ none | |
-| Internal order | ⬜ none | |
+| Activity type | 📥 staged | `recipes/activitytype.json` (CSLA→S_CSLA, tab 000669) |
+| Internal order | 📥 staged | `recipes/internalorder.json` (AUFK→S_AUFK); org-plant filter — refine |
+| Cost center | 📥 staged | CSKS→S_CSKS, tab 000655 (52 cols via wide-read); also 🟨 legacy |
+| Bank | 📥 staged | `recipes/bank.json` (BNKA→S_BNKA, tab 000120); also 🟨 legacy |
+| Source list | 📥 staged | `recipes/sourcelist.json` (EORD→S_EORD, tab 001124) |
+| Inspection method | 📥 staged | `recipes/inspmethod.json` (QMTB→S_QMTB, tab 000618) |
 | Fixed asset master | ⬜ none | Phase B |
 | Bill of material (BOM) | ⬜ none | Phase B |
 | Routing / task list | ⬜ none | Phase B |
