@@ -1,0 +1,26 @@
+{
+  "object": "ProfitCenter",
+  "description": "Profit center master + text — a fully-declarative SECOND object, proving the engine runs a new object with zero new code (only this recipe)",
+  "structures": [
+    {
+      "id": "master",
+      "staging_signature": ["PRCTR", "KTEXT"],
+      "builder": "declarative",
+      "source": {"conn": "ecc", "table": "CEPC",
+                 "fields": ["PRCTR", "KOKRS", "DATAB", "DATBI", "VERAK", "ABTEI"],
+                 "where": "KOKRS = '1000'", "limit": 20},
+      "text_join": {"table": "CEPCT", "field": "KTEXT", "on": "PRCTR",
+                    "where": "SPRAS = 'E' AND KOKRS = '1000'"},
+      "map": [
+        {"col": "KOKRS", "src": "KOKRS", "fn": "copy"},
+        {"col": "PRCTR", "src": "PRCTR", "fn": "copy"},
+        {"col": "DATAB", "src": "DATAB", "fn": "copy"},
+        {"col": "DATBI", "src": "DATBI", "fn": "copy"},
+        {"col": "VERAK", "src": "VERAK", "fn": "copy"},
+        {"col": "ABTEI", "src": "ABTEI", "fn": "copy"},
+        {"col": "KTEXT", "from_text_join": true, "default": ""},
+        {"col": "LANGU", "fn": "const", "val": "E"}
+      ]
+    }
+  ]
+}

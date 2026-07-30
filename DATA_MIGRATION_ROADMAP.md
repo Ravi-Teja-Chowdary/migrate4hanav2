@@ -70,14 +70,16 @@ Order is **non-negotiable**: master data → open transactions → balances. You
 AR open item before its customer exists, or a stock balance before its material+plant exist.
 The Phase E dependency engine enforces this.
 
-### Phase A — Universal staging engine  ⬜  *(the multiplier — do first)*
+### Phase A — Universal staging engine  ✅ *(done 2026-07-30)*
 - **Goal:** one engine that runs any Cockpit object from a recipe.
-- **Deliverables:** recipe format + object registry; generic staging-table discovery/typing;
-  generic source→staging mapper (reuse `org_mapper`); run-driver (handles what's automatable
-  vs the SAP-app-gated Simulate/Migrate click); generic reconciler hook.
-- **Done when:** the material Product object is re-expressed as a recipe and runs through the
-  generic engine end-to-end (matching today's hand-built result), and a *second* object runs
-  from a recipe with **zero new code**.
+- **Delivered:** `migration_engine.py` + `recipes/` (JSON recipe format, `recipes/README.md`).
+  Generic staging-table discovery by column **signature**; declarative source→staging mapper
+  with transforms (copy/lstrip0/const/**org**-resolve via `org_mapper`) + named custom builders
+  for complex structures; `key_scope` driving-set; clear+load via kit FMs; verify hook.
+- **Done — proven live:** `recipes/product.json` (basic+sales+tax, org-mapped) ran end-to-end
+  through the generic engine; `recipes/profit_center.json` — a fully-declarative **second
+  object** — ran with **zero new engine code** (20 rows, text-join working). Adding an object
+  is now a recipe, not code.
 
 ### Phase B — Finish Bucket 1 (master-data breadth)  ⬜
 - **Objects:** fixed-asset master, BOM, routings, work centers, pricing conditions, purchasing

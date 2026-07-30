@@ -1,0 +1,40 @@
+{
+  "object": "Product",
+  "description": "Material master — basic + sales-org view + tax classification (reproduces run_client200_material_sales.py via the generic engine)",
+  "key_scope": {
+    "driver": {"conn": "ecc", "table": "MVKE", "key": "MATNR",
+               "fields": ["MATNR", "VKORG"], "where": "VKORG = '3020'"},
+    "require_org_mapped": {"field": "VKORG", "dim": "sales_org"},
+    "require_on_target": {"table": "MARA", "key_field": "MATNR"},
+    "limit": 10
+  },
+  "structures": [
+    {
+      "id": "basic",
+      "staging_signature": ["PRODUCT", "MTART"],
+      "builder": "product_basic_from_target"
+    },
+    {
+      "id": "sales",
+      "staging_signature": ["PRODUCT", "VKORG", "MTPOS"],
+      "builder": "declarative",
+      "source": {"conn": "ecc", "table": "MVKE",
+                 "fields": ["MATNR", "VKORG", "VTWEG", "VRKME", "DWERK", "MTPOS"]},
+      "key_src": "MATNR",
+      "map": [
+        {"col": "PRODUCT", "src": "MATNR", "fn": "lstrip0"},
+        {"col": "VKORG", "src": "VKORG", "fn": "org", "dim": "sales_org"},
+        {"col": "VTWEG", "src": "VTWEG", "fn": "org", "dim": "distribution_channel", "default": "10"},
+        {"col": "VRKME", "src": "VRKME", "fn": "copy"},
+        {"col": "DWERK", "src": "DWERK", "fn": "org", "dim": "plant", "allow_blank": true},
+        {"col": "MTPOS", "src": "MTPOS", "fn": "copy", "default": "NORM"}
+      ]
+    },
+    {
+      "id": "tax",
+      "staging_signature": ["PRODUCT", "TATYP1"],
+      "builder": "product_tax_positional",
+      "source": {}
+    }
+  ]
+}
