@@ -1,0 +1,22 @@
+{
+  "object": "ProductionSupplyArea",
+  "description": "PP-KAB production supply area — a third declarative object (plant org-mapped), further proof the engine generalizes with only a recipe",
+  "structures": [
+    {
+      "id": "master",
+      "staging_signature": ["WERKS", "PRVBE", "LGORT"],
+      "builder": "declarative",
+      "source": {"conn": "ecc", "table": "PVBE",
+                 "fields": ["WERKS", "PRVBE", "LGORT", "RGVER", "LGBZO", "ABLAD"],
+                 "where": "WERKS = '1000'", "limit": 15},
+      "map": [
+        {"col": "WERKS", "src": "WERKS", "fn": "org", "dim": "plant"},
+        {"col": "PRVBE", "src": "PRVBE", "fn": "copy"},
+        {"col": "LGORT", "src": "LGORT", "fn": "copy"},
+        {"col": "RGVER", "src": "RGVER", "fn": "copy"},
+        {"col": "LGBZO", "src": "LGBZO", "fn": "copy"},
+        {"col": "ABLAD", "src": "ABLAD", "fn": "copy"}
+      ]
+    }
+  ]
+}
