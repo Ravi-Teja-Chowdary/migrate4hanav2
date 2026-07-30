@@ -1,0 +1,297 @@
+{
+  "object": "OpenItemAp",
+  "description": "SCAFFOLD \u2014 OpenItemAp from BSIK into /1LT/DSS4H000729. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000729",
+      "staging_signature": [
+        "BUKRS",
+        "XBLNR",
+        "LIFNR"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "BSIK",
+        "fields": [
+          "BLART",
+          "BLDAT",
+          "BUKRS",
+          "BUPLA",
+          "BVTYP",
+          "DMBE2",
+          "DMBE3",
+          "DMBTR",
+          "DTWS1",
+          "DTWS2",
+          "DTWS3",
+          "DTWS4",
+          "FKBER",
+          "HBKID",
+          "HKTID",
+          "KIDNO",
+          "KOSTL",
+          "LANDL",
+          "LIFNR",
+          "LZBKZ",
+          "MWSKZ",
+          "PRCTR",
+          "SGTXT",
+          "SKFBT",
+          "UMSKZ",
+          "WAERS",
+          "WRBTR",
+          "XBLNR",
+          "XREF1",
+          "XREF2",
+          "XREF3",
+          "ZBD1P",
+          "ZBD1T",
+          "ZBD2P",
+          "ZBD2T",
+          "ZBD3T",
+          "ZFBDT",
+          "ZLSCH",
+          "ZLSPR",
+          "ZTERM",
+          "ZUONR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "BUKRS",
+          "src": "BUKRS",
+          "fn": "copy"
+        },
+        {
+          "col": "XBLNR",
+          "src": "XBLNR",
+          "fn": "copy"
+        },
+        {
+          "col": "LIFNR",
+          "src": "LIFNR",
+          "fn": "copy"
+        },
+        {
+          "col": "BLART",
+          "src": "BLART",
+          "fn": "copy"
+        },
+        {
+          "col": "UMSKZ",
+          "src": "UMSKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "BLDAT",
+          "src": "BLDAT",
+          "fn": "copy"
+        },
+        {
+          "col": "SGTXT",
+          "src": "SGTXT",
+          "fn": "copy"
+        },
+        {
+          "col": "WAERS",
+          "src": "WAERS",
+          "fn": "copy"
+        },
+        {
+          "col": "WRBTR",
+          "src": "WRBTR",
+          "fn": "copy"
+        },
+        {
+          "col": "DMBTR",
+          "src": "DMBTR",
+          "fn": "copy"
+        },
+        {
+          "col": "DMBE2",
+          "src": "DMBE2",
+          "fn": "copy"
+        },
+        {
+          "col": "DMBE3",
+          "src": "DMBE3",
+          "fn": "copy"
+        },
+        {
+          "col": "MWSKZ",
+          "src": "MWSKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "BUPLA",
+          "src": "BUPLA",
+          "fn": "copy"
+        },
+        {
+          "col": "ZTERM",
+          "src": "ZTERM",
+          "fn": "copy"
+        },
+        {
+          "col": "ZFBDT",
+          "src": "ZFBDT",
+          "fn": "copy"
+        },
+        {
+          "col": "ZLSCH",
+          "src": "ZLSCH",
+          "fn": "copy"
+        },
+        {
+          "col": "ZLSPR",
+          "src": "ZLSPR",
+          "fn": "copy"
+        },
+        {
+          "col": "KIDNO",
+          "src": "KIDNO",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD1T",
+          "src": "ZBD1T",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD1P",
+          "src": "ZBD1P",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD2T",
+          "src": "ZBD2T",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD2P",
+          "src": "ZBD2P",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD3T",
+          "src": "ZBD3T",
+          "fn": "copy"
+        },
+        {
+          "col": "SKFBT",
+          "src": "SKFBT",
+          "fn": "copy"
+        },
+        {
+          "col": "HBKID",
+          "src": "HBKID",
+          "fn": "copy"
+        },
+        {
+          "col": "HKTID",
+          "src": "HKTID",
+          "fn": "copy"
+        },
+        {
+          "col": "BVTYP",
+          "src": "BVTYP",
+          "fn": "copy"
+        },
+        {
+          "col": "DTWS1",
+          "src": "DTWS1",
+          "fn": "copy"
+        },
+        {
+          "col": "DTWS2",
+          "src": "DTWS2",
+          "fn": "copy"
+        },
+        {
+          "col": "DTWS3",
+          "src": "DTWS3",
+          "fn": "copy"
+        },
+        {
+          "col": "DTWS4",
+          "src": "DTWS4",
+          "fn": "copy"
+        },
+        {
+          "col": "LZBKZ",
+          "src": "LZBKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "LANDL",
+          "src": "LANDL",
+          "fn": "copy"
+        },
+        {
+          "col": "XREF1",
+          "src": "XREF1",
+          "fn": "copy"
+        },
+        {
+          "col": "XREF2",
+          "src": "XREF2",
+          "fn": "copy"
+        },
+        {
+          "col": "XREF3",
+          "src": "XREF3",
+          "fn": "copy"
+        },
+        {
+          "col": "PRCTR",
+          "src": "PRCTR",
+          "fn": "copy"
+        },
+        {
+          "col": "FKBER",
+          "src": "FKBER",
+          "fn": "copy"
+        },
+        {
+          "col": "KOSTL",
+          "src": "KOSTL",
+          "fn": "copy"
+        },
+        {
+          "col": "ZUONR",
+          "src": "ZUONR",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "DOCLN",
+    "GL_ACCOUNT",
+    "GKONT",
+    "WWERT",
+    "BKTXT",
+    "HWAER",
+    "HWAE2",
+    "HWAE3",
+    "SECTIONCODE",
+    "VATDATE",
+    "TAX_CALC_DATE",
+    "ACSKT",
+    "PSPNR",
+    "JOINT_VENTURE",
+    "RECOVERY_IND",
+    "EQUITY_GROUP",
+    "MATERIAL_LONG",
+    "GLO_REF1_BR",
+    "ESRNR",
+    "ESRRE",
+    "PART_BUSINESSPLACE",
+    "INVEST_IND"
+  ],
+  "_note": "41/63 columns auto-mapped; 22 need a decision (default/const/custom source field)."
+}

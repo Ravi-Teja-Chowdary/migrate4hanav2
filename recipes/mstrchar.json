@@ -1,0 +1,158 @@
+{
+  "object": "MstrChar",
+  "description": "SCAFFOLD \u2014 MstrChar from QPMK into /1LT/DSS4H000712. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000712",
+      "staging_signature": [
+        "ZAEHLER",
+        "MKMNR",
+        "GUELTIGAB"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "QPMK",
+        "fields": [
+          "CHARACT_ID1",
+          "DUMMY10",
+          "DUMMY20",
+          "DUMMY40",
+          "GUELTIGAB",
+          "KONSISTENT",
+          "LOEKZ",
+          "MERKGEW",
+          "MKMNR",
+          "SOLLWERT",
+          "SORTFELD",
+          "STELLEN",
+          "TOLERANZOB",
+          "TOLERANZUN",
+          "ZAEHLER"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "ZAEHLER",
+          "src": "ZAEHLER",
+          "fn": "copy"
+        },
+        {
+          "col": "MKMNR",
+          "src": "MKMNR",
+          "fn": "copy"
+        },
+        {
+          "col": "GUELTIGAB",
+          "src": "GUELTIGAB",
+          "fn": "copy"
+        },
+        {
+          "col": "LOEKZ",
+          "src": "LOEKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "KONSISTENT",
+          "src": "KONSISTENT",
+          "fn": "copy"
+        },
+        {
+          "col": "SORTFELD",
+          "src": "SORTFELD",
+          "fn": "copy"
+        },
+        {
+          "col": "CHARACT_ID1",
+          "src": "CHARACT_ID1",
+          "fn": "copy"
+        },
+        {
+          "col": "STELLEN",
+          "src": "STELLEN",
+          "fn": "copy"
+        },
+        {
+          "col": "MERKGEW",
+          "src": "MERKGEW",
+          "fn": "copy"
+        },
+        {
+          "col": "DUMMY10",
+          "src": "DUMMY10",
+          "fn": "copy"
+        },
+        {
+          "col": "DUMMY20",
+          "src": "DUMMY20",
+          "fn": "copy"
+        },
+        {
+          "col": "DUMMY40",
+          "src": "DUMMY40",
+          "fn": "copy"
+        },
+        {
+          "col": "SOLLWERT",
+          "src": "SOLLWERT",
+          "fn": "copy"
+        },
+        {
+          "col": "TOLERANZUN",
+          "src": "TOLERANZUN",
+          "fn": "copy"
+        },
+        {
+          "col": "TOLERANZOB",
+          "src": "TOLERANZOB",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "NAME_CHAR",
+    "SOLLWERT_N",
+    "IND_SOLLWERT",
+    "MASSEINHSW_ISO",
+    "TOLERANZUN_N",
+    "IND_TOLERANZUN",
+    "TOLERANZOB_N",
+    "IND_TOLERANZOB",
+    "LW_PLS_LMT",
+    "IND_LW_PLS_LMT",
+    "UP_PLS_LMT",
+    "IND_UP_PLS_LMT",
+    "TOL_CHG_VALID_FROM",
+    "TOL_CHG_VALID_UNTIL",
+    "CHG_TO_LOWER_SPEC_LIMIT",
+    "IND_CHG_TO_LOWER_SPEC_LIMIT",
+    "CHG_TO_UPPER_SPEC_LIMIT",
+    "IND_CHG_TO_UPPER_SPEC_LIMIT",
+    "LW_LMT_1",
+    "IND_LW_LMT_1",
+    "UP_LMT_1",
+    "IND_UP_LMT_1",
+    "LW_LMT_2",
+    "IND_LW_LMT_2",
+    "UP_LMT_2",
+    "IND_UP_LMT_2",
+    "NO_OF_VALUE_CLASSES",
+    "CLASS_WIDTH_N",
+    "IND_CLASS_MIDTH",
+    "CLASS_MIDPOINT_N",
+    "IND_CLASS_MIDPOINT",
+    "DEF_CODE_GRP_GENERAL",
+    "DEF_CODE_GENERAL",
+    "LW_DEF_CODE_GRP",
+    "LW_DEF_CODE",
+    "UP_DEF_CODE_GRP",
+    "UP_DEF_CODE",
+    "CLASS_WIDTH",
+    "CLASS_MIDPOINT"
+  ],
+  "_note": "15/54 columns auto-mapped; 39 need a decision (default/const/custom source field)."
+}

@@ -1,0 +1,233 @@
+{
+  "object": "FuncLoc2",
+  "description": "SCAFFOLD \u2014 FuncLoc2 from IFLOT into /1LT/DSS4H000530. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000530",
+      "staging_signature": [
+        "TPLKZ",
+        "FLTYP",
+        "INVNR"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "IFLOT",
+        "fields": [
+          "ANSDT",
+          "ANSWT",
+          "BAUJJ",
+          "BAUMM",
+          "BEGRU",
+          "BRGEW",
+          "EINZL",
+          "EQART",
+          "FLTYP",
+          "GEWEI",
+          "GROES",
+          "HERLD",
+          "HERST",
+          "IEQUI",
+          "IFLOT_SNTYPE",
+          "IFLOT_SRTYPE",
+          "INGRP",
+          "INVNR",
+          "IWERK",
+          "MAPAR",
+          "POSNR",
+          "RBNR",
+          "SERGE",
+          "SUBMT",
+          "TPLKZ",
+          "TPLMA",
+          "TYPBZ",
+          "WAERS"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "TPLKZ",
+          "src": "TPLKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "FLTYP",
+          "src": "FLTYP",
+          "fn": "copy"
+        },
+        {
+          "col": "INVNR",
+          "src": "INVNR",
+          "fn": "copy"
+        },
+        {
+          "col": "BEGRU",
+          "src": "BEGRU",
+          "fn": "copy"
+        },
+        {
+          "col": "BRGEW",
+          "src": "BRGEW",
+          "fn": "copy"
+        },
+        {
+          "col": "GEWEI",
+          "src": "GEWEI",
+          "fn": "copy"
+        },
+        {
+          "col": "EQART",
+          "src": "EQART",
+          "fn": "copy"
+        },
+        {
+          "col": "IFLOT_SNTYPE",
+          "src": "IFLOT_SNTYPE",
+          "fn": "copy"
+        },
+        {
+          "col": "IFLOT_SRTYPE",
+          "src": "IFLOT_SRTYPE",
+          "fn": "copy"
+        },
+        {
+          "col": "GROES",
+          "src": "GROES",
+          "fn": "copy"
+        },
+        {
+          "col": "HERST",
+          "src": "HERST",
+          "fn": "copy"
+        },
+        {
+          "col": "TYPBZ",
+          "src": "TYPBZ",
+          "fn": "copy"
+        },
+        {
+          "col": "MAPAR",
+          "src": "MAPAR",
+          "fn": "copy"
+        },
+        {
+          "col": "HERLD",
+          "src": "HERLD",
+          "fn": "copy"
+        },
+        {
+          "col": "BAUJJ",
+          "src": "BAUJJ",
+          "fn": "copy"
+        },
+        {
+          "col": "BAUMM",
+          "src": "BAUMM",
+          "fn": "copy"
+        },
+        {
+          "col": "SERGE",
+          "src": "SERGE",
+          "fn": "copy"
+        },
+        {
+          "col": "ANSWT",
+          "src": "ANSWT",
+          "fn": "copy"
+        },
+        {
+          "col": "WAERS",
+          "src": "WAERS",
+          "fn": "copy"
+        },
+        {
+          "col": "ANSDT",
+          "src": "ANSDT",
+          "fn": "copy"
+        },
+        {
+          "col": "INGRP",
+          "src": "INGRP",
+          "fn": "copy"
+        },
+        {
+          "col": "IWERK",
+          "src": "IWERK",
+          "fn": "copy"
+        },
+        {
+          "col": "RBNR",
+          "src": "RBNR",
+          "fn": "copy"
+        },
+        {
+          "col": "TPLMA",
+          "src": "TPLMA",
+          "fn": "copy"
+        },
+        {
+          "col": "POSNR",
+          "src": "POSNR",
+          "fn": "copy"
+        },
+        {
+          "col": "IEQUI",
+          "src": "IEQUI",
+          "fn": "copy"
+        },
+        {
+          "col": "EINZL",
+          "src": "EINZL",
+          "fn": "copy"
+        },
+        {
+          "col": "SUBMT",
+          "src": "SUBMT",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "EXTERNAL_NUMBER",
+    "ALKEY",
+    "KTX01",
+    "INBDT",
+    "GWLDT_K",
+    "GWLEN_K",
+    "MGANR_K",
+    "WAGET_O",
+    "GAERB_O",
+    "GWLDT_L",
+    "GWLEN_L",
+    "MGANR_L",
+    "WAGET_I",
+    "GAERB_I",
+    "SWERK",
+    "MAINTROOM",
+    "ARBPL_LOCATION",
+    "SORTFIELD",
+    "STORT",
+    "BEBER",
+    "ABCKZ",
+    "ARBPL_ORG",
+    "WERGW",
+    "BUKRS",
+    "GSBER",
+    "ANLNR",
+    "ANLUN",
+    "KOSTL",
+    "PROID",
+    "AUFNR_S",
+    "DAUFN",
+    "VKORG",
+    "VTWEG",
+    "SPART",
+    "VKBUR",
+    "VKGRP"
+  ],
+  "_note": "28/64 columns auto-mapped; 36 need a decision (default/const/custom source field)."
+}

@@ -1,0 +1,74 @@
+{
+  "object": "GlAccount3",
+  "description": "SCAFFOLD \u2014 GlAccount3 from SKA1 into /1LT/DSS4H000544. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "general",
+      "staging_table": "/1LT/DSS4H000544",
+      "staging_signature": [
+        "KTOPL",
+        "SAKNR",
+        "GVTYP"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "SKA1",
+        "fields": [
+          "BILKT",
+          "FUNC_AREA",
+          "GVTYP",
+          "KTOKS",
+          "KTOPL",
+          "SAKNR",
+          "VBUND"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "KTOPL",
+          "src": "KTOPL",
+          "fn": "copy"
+        },
+        {
+          "col": "SAKNR",
+          "src": "SAKNR",
+          "fn": "copy"
+        },
+        {
+          "col": "GVTYP",
+          "src": "GVTYP",
+          "fn": "copy"
+        },
+        {
+          "col": "KTOKS",
+          "src": "KTOKS",
+          "fn": "copy"
+        },
+        {
+          "col": "FUNC_AREA",
+          "src": "FUNC_AREA",
+          "fn": "copy"
+        },
+        {
+          "col": "VBUND",
+          "src": "VBUND",
+          "fn": "copy"
+        },
+        {
+          "col": "BILKT",
+          "src": "BILKT",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "GLACCOUNT_TYPE",
+    "GLACCOUNT_SUBTYPE",
+    "MAIN_SAKNR"
+  ],
+  "_note": "7/10 columns auto-mapped; 3 need a decision (default/const/custom source field)."
+}

@@ -1,0 +1,83 @@
+{
+  "object": "CoBusProc",
+  "description": "SCAFFOLD \u2014 CoBusProc from CBPR into /1LT/DSS4H000251. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000251",
+      "staging_signature": [
+        "CO_BUSPROC",
+        "CO_AREA"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "CBPR",
+        "fields": [
+          "KOKRS",
+          "PRZNR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "CO_BUSPROC",
+          "src": "PRZNR",
+          "fn": "copy"
+        },
+        {
+          "col": "CO_AREA",
+          "src": "KOKRS",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "VALID_TO",
+    "VALID_FROM",
+    "LANGU",
+    "NAME",
+    "DESCRIPT",
+    "PROCESS_OWNER_USER",
+    "PROCESS_OWNER",
+    "BPROC_HIER_GRP",
+    "COMP_CODE",
+    "BUS_AREA",
+    "OBJ_CURRCY_ISO",
+    "PROFIT_CTR",
+    "PLANT",
+    "SALESORG",
+    "DISTR_CHAN",
+    "DIVISION",
+    "COST_CENTER_GRP",
+    "COSTCENTER",
+    "WORKFLOW_TASK_TYPE",
+    "WORKFLOW_TASK_ID",
+    "EXT_VALUE_ADDED",
+    "INT_VALUE_ADDED",
+    "CATEGORY",
+    "COST_BEHAVIOR",
+    "ADD_ATTRIBUTE",
+    "ATTRIBUTE_1",
+    "ATTRIBUTE_2",
+    "COST_DRIVER",
+    "COSTDRV_DESCRIP",
+    "OUTPUT_UNIT",
+    "OUTPUT_FACTOR",
+    "ALLOC_CATEGORY",
+    "ALLOC_COST_ELEM",
+    "PRICE_INDICATOR",
+    "MANUAL_ACT_QTY",
+    "AVERAGE_PRICE_IND",
+    "MANUAL_PLAN_QTY",
+    "PREDIS_FXD_COST",
+    "ACT_ALLOC_CATEG",
+    "ACT_PRICE_IND",
+    "PLAN_TEMPLATE",
+    "PROC_TEMPLATE",
+    "CSTG_SHEET"
+  ],
+  "_note": "2/45 columns auto-mapped; 43 need a decision (default/const/custom source field)."
+}

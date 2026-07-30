@@ -1,0 +1,46 @@
+{
+  "object": "QmCatalog",
+  "description": "SCAFFOLD \u2014 QmCatalog from QPGR into /1LT/DSS4H001013. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001013",
+      "staging_signature": [
+        "KATALOGART",
+        "CODEGRUPPE",
+        "STATUS"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "QPGR",
+        "fields": [
+          "CODEGRUPPE",
+          "KATALOGART",
+          "STATUS"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "KATALOGART",
+          "src": "KATALOGART",
+          "fn": "copy"
+        },
+        {
+          "col": "CODEGRUPPE",
+          "src": "CODEGRUPPE",
+          "fn": "copy"
+        },
+        {
+          "col": "STATUS",
+          "src": "STATUS",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [],
+  "_note": "3/3 columns auto-mapped; 0 need a decision (default/const/custom source field)."
+}

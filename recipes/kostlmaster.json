@@ -1,0 +1,353 @@
+{
+  "object": "KostlMaster",
+  "description": "SCAFFOLD \u2014 KostlMaster from CSKS into /1LT/DSS4H000655. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000655",
+      "staging_signature": [
+        "KOKRS",
+        "KOSTL",
+        "DATAB"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "CSKS",
+        "fields": [
+          "ABTEI",
+          "ANRED",
+          "BKZER",
+          "BKZKP",
+          "BKZKS",
+          "BKZOB",
+          "BUKRS",
+          "CPD_TEMPL",
+          "CPI_TEMPL",
+          "DATAB",
+          "DATBI",
+          "DATLT",
+          "DRNAM",
+          "GSBER",
+          "JV_JIBCL",
+          "JV_JIBSA",
+          "JV_OTYPE",
+          "KALSM",
+          "KHINR",
+          "KOKRS",
+          "KOSAR",
+          "KOSTL",
+          "LAND1",
+          "MGEFL",
+          "NAME1",
+          "NAME2",
+          "NAME3",
+          "NAME4",
+          "ORT01",
+          "ORT02",
+          "PFACH",
+          "PKZER",
+          "PKZKP",
+          "PKZKS",
+          "PRCTR",
+          "PSTL2",
+          "PSTLZ",
+          "REGIO",
+          "SCD_TEMPL",
+          "SCI_TEMPL",
+          "SPRAS",
+          "STRAS",
+          "TELBX",
+          "TELF1",
+          "TELF2",
+          "TELFX",
+          "TELTX",
+          "TELX1",
+          "TXJCD",
+          "VERAK",
+          "VERAK_USER",
+          "WAERS"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "KOKRS",
+          "src": "KOKRS",
+          "fn": "copy"
+        },
+        {
+          "col": "KOSTL",
+          "src": "KOSTL",
+          "fn": "copy"
+        },
+        {
+          "col": "DATAB",
+          "src": "DATAB",
+          "fn": "copy"
+        },
+        {
+          "col": "DATBI",
+          "src": "DATBI",
+          "fn": "copy"
+        },
+        {
+          "col": "VERAK_USER",
+          "src": "VERAK_USER",
+          "fn": "copy"
+        },
+        {
+          "col": "VERAK",
+          "src": "VERAK",
+          "fn": "copy"
+        },
+        {
+          "col": "ABTEI",
+          "src": "ABTEI",
+          "fn": "copy"
+        },
+        {
+          "col": "KOSAR",
+          "src": "KOSAR",
+          "fn": "copy"
+        },
+        {
+          "col": "KHINR",
+          "src": "KHINR",
+          "fn": "copy"
+        },
+        {
+          "col": "BUKRS",
+          "src": "BUKRS",
+          "fn": "copy"
+        },
+        {
+          "col": "GSBER",
+          "src": "GSBER",
+          "fn": "copy"
+        },
+        {
+          "col": "WAERS",
+          "src": "WAERS",
+          "fn": "copy"
+        },
+        {
+          "col": "PRCTR",
+          "src": "PRCTR",
+          "fn": "copy"
+        },
+        {
+          "col": "MGEFL",
+          "src": "MGEFL",
+          "fn": "copy"
+        },
+        {
+          "col": "BKZKP",
+          "src": "BKZKP",
+          "fn": "copy"
+        },
+        {
+          "col": "PKZKP",
+          "src": "PKZKP",
+          "fn": "copy"
+        },
+        {
+          "col": "BKZKS",
+          "src": "BKZKS",
+          "fn": "copy"
+        },
+        {
+          "col": "PKZKS",
+          "src": "PKZKS",
+          "fn": "copy"
+        },
+        {
+          "col": "BKZER",
+          "src": "BKZER",
+          "fn": "copy"
+        },
+        {
+          "col": "PKZER",
+          "src": "PKZER",
+          "fn": "copy"
+        },
+        {
+          "col": "BKZOB",
+          "src": "BKZOB",
+          "fn": "copy"
+        },
+        {
+          "col": "CPI_TEMPL",
+          "src": "CPI_TEMPL",
+          "fn": "copy"
+        },
+        {
+          "col": "CPD_TEMPL",
+          "src": "CPD_TEMPL",
+          "fn": "copy"
+        },
+        {
+          "col": "SCI_TEMPL",
+          "src": "SCI_TEMPL",
+          "fn": "copy"
+        },
+        {
+          "col": "SCD_TEMPL",
+          "src": "SCD_TEMPL",
+          "fn": "copy"
+        },
+        {
+          "col": "KALSM",
+          "src": "KALSM",
+          "fn": "copy"
+        },
+        {
+          "col": "ANRED",
+          "src": "ANRED",
+          "fn": "copy"
+        },
+        {
+          "col": "NAME1",
+          "src": "NAME1",
+          "fn": "copy"
+        },
+        {
+          "col": "NAME2",
+          "src": "NAME2",
+          "fn": "copy"
+        },
+        {
+          "col": "NAME3",
+          "src": "NAME3",
+          "fn": "copy"
+        },
+        {
+          "col": "NAME4",
+          "src": "NAME4",
+          "fn": "copy"
+        },
+        {
+          "col": "STRAS",
+          "src": "STRAS",
+          "fn": "copy"
+        },
+        {
+          "col": "PSTLZ",
+          "src": "PSTLZ",
+          "fn": "copy"
+        },
+        {
+          "col": "PSTL2",
+          "src": "PSTL2",
+          "fn": "copy"
+        },
+        {
+          "col": "PFACH",
+          "src": "PFACH",
+          "fn": "copy"
+        },
+        {
+          "col": "ORT01",
+          "src": "ORT01",
+          "fn": "copy"
+        },
+        {
+          "col": "ORT02",
+          "src": "ORT02",
+          "fn": "copy"
+        },
+        {
+          "col": "LAND1",
+          "src": "LAND1",
+          "fn": "copy"
+        },
+        {
+          "col": "REGIO",
+          "src": "REGIO",
+          "fn": "copy"
+        },
+        {
+          "col": "TXJCD",
+          "src": "TXJCD",
+          "fn": "copy"
+        },
+        {
+          "col": "SPRAS",
+          "src": "SPRAS",
+          "fn": "copy"
+        },
+        {
+          "col": "TELBX",
+          "src": "TELBX",
+          "fn": "copy"
+        },
+        {
+          "col": "TELF1",
+          "src": "TELF1",
+          "fn": "copy"
+        },
+        {
+          "col": "TELF2",
+          "src": "TELF2",
+          "fn": "copy"
+        },
+        {
+          "col": "TELFX",
+          "src": "TELFX",
+          "fn": "copy"
+        },
+        {
+          "col": "TELTX",
+          "src": "TELTX",
+          "fn": "copy"
+        },
+        {
+          "col": "TELX1",
+          "src": "TELX1",
+          "fn": "copy"
+        },
+        {
+          "col": "DATLT",
+          "src": "DATLT",
+          "fn": "copy"
+        },
+        {
+          "col": "DRNAM",
+          "src": "DRNAM",
+          "fn": "copy"
+        },
+        {
+          "col": "JV_OTYPE",
+          "src": "JV_OTYPE",
+          "fn": "copy"
+        },
+        {
+          "col": "JV_JIBCL",
+          "src": "JV_JIBCL",
+          "fn": "copy"
+        },
+        {
+          "col": "JV_JIBSA",
+          "src": "JV_JIBSA",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "LANGU",
+    "KTEXT",
+    "LTEXT",
+    "FKBER",
+    "SKI_TEMPL",
+    "SKD_TEMPL",
+    "BUDGET_COST_CTR",
+    "AVC_PROFILE",
+    "AVC_ACTIVE",
+    "JV_VENTURE",
+    "JV_REC_IND",
+    "JV_EQUITY_TYP"
+  ],
+  "_note": "52/64 columns auto-mapped; 12 need a decision (default/const/custom source field)."
+}

@@ -1,0 +1,126 @@
+{
+  "object": "BatchesPlant",
+  "description": "SCAFFOLD \u2014 BatchesPlant from MCH1 into /1LT/DSS4H000126. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000126",
+      "staging_signature": [
+        "MATERIAL",
+        "VERAB",
+        "QNDAT"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "MCH1",
+        "fields": [
+          "FVDT1",
+          "FVDT2",
+          "FVDT3",
+          "FVDT4",
+          "FVDT5",
+          "FVDT6",
+          "HERKL",
+          "HERKR",
+          "LICHA",
+          "LIFNR",
+          "LWEDT",
+          "MATNR",
+          "MTVER",
+          "QNDAT",
+          "VERAB"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "MATERIAL",
+          "src": "MATNR",
+          "fn": "lstrip0"
+        },
+        {
+          "col": "VERAB",
+          "src": "VERAB",
+          "fn": "copy"
+        },
+        {
+          "col": "QNDAT",
+          "src": "QNDAT",
+          "fn": "copy"
+        },
+        {
+          "col": "LIFNR",
+          "src": "LIFNR",
+          "fn": "copy"
+        },
+        {
+          "col": "LICHA",
+          "src": "LICHA",
+          "fn": "copy"
+        },
+        {
+          "col": "LWEDT",
+          "src": "LWEDT",
+          "fn": "copy"
+        },
+        {
+          "col": "HERKL",
+          "src": "HERKL",
+          "fn": "copy"
+        },
+        {
+          "col": "HERKR",
+          "src": "HERKR",
+          "fn": "copy"
+        },
+        {
+          "col": "MTVER",
+          "src": "MTVER",
+          "fn": "copy"
+        },
+        {
+          "col": "FVDT1",
+          "src": "FVDT1",
+          "fn": "copy"
+        },
+        {
+          "col": "FVDT2",
+          "src": "FVDT2",
+          "fn": "copy"
+        },
+        {
+          "col": "FVDT3",
+          "src": "FVDT3",
+          "fn": "copy"
+        },
+        {
+          "col": "FVDT4",
+          "src": "FVDT4",
+          "fn": "copy"
+        },
+        {
+          "col": "FVDT5",
+          "src": "FVDT5",
+          "fn": "copy"
+        },
+        {
+          "col": "FVDT6",
+          "src": "FVDT6",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "BATCH",
+    "PLANT",
+    "PROD_DATE",
+    "EXPIRYDATE",
+    "RESTRICTED",
+    "BWTAR",
+    "CLASSNUM"
+  ],
+  "_note": "15/22 columns auto-mapped; 7 need a decision (default/const/custom source field)."
+}

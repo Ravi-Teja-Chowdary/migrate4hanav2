@@ -1,0 +1,26 @@
+{
+  "object": "WbsElement",
+  "description": "SCAFFOLD \u2014 WbsElement from PRPS into /1LT/DSS4H001239. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001239",
+      "staging_signature": [
+        "PROJECT_DEFINITION"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "PRPS",
+        "fields": [],
+        "where": "",
+        "limit": 20
+      },
+      "map": []
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "PROJECT_DEFINITION"
+  ],
+  "_note": "0/1 columns auto-mapped; 1 need a decision (default/const/custom source field)."
+}

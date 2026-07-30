@@ -1,0 +1,51 @@
+{
+  "object": "CustmatInf",
+  "description": "SCAFFOLD \u2014 CustmatInf from KNMT into /1LT/DSS4H000254. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000254",
+      "staging_signature": [
+        "MATERIAL"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "KNMT",
+        "fields": [
+          "MATNR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "MATERIAL",
+          "src": "MATNR",
+          "fn": "lstrip0"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "SALESORGANIZATION",
+    "DISTRIBUTIONCHANNEL",
+    "CUSTOMER",
+    "MATERIALBYCUSTOMER",
+    "MATERIALDESCRIPTIONBYCUSTOMER",
+    "CUSTOMERMATERIALSEARCHTERM",
+    "PLANT",
+    "DELIVERYPRIORITY",
+    "MINDELIVERYQTYINBASEUNIT",
+    "PARTIALDELIVERYISALLOWED",
+    "MAXNMBROFPARTIALDELIVERY",
+    "UNDERDELIVTOLRTDLMTRATIOINPCT",
+    "OVERDELIVTOLRTDLMTRATIOINPCT",
+    "UNLIMITEDOVERDELIVERYISALLOWED",
+    "CUSTOMERMATERIALITEMUSAGE",
+    "SALESUNIT",
+    "SALESQTYTOBASEQTYDNMNTR",
+    "SALESQTYTOBASEQTYNMRTR"
+  ],
+  "_note": "1/19 columns auto-mapped; 18 need a decision (default/const/custom source field)."
+}

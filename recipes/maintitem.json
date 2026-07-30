@@ -1,0 +1,162 @@
+{
+  "object": "MaintItem",
+  "description": "SCAFFOLD \u2014 MaintItem from MPOS into /1LT/DSS4H000670. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000670",
+      "staging_signature": [
+        "WAPOS",
+        "PSTXT",
+        "MITYP"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "MPOS",
+        "fields": [
+          "ANLZU",
+          "APFKT",
+          "AUART",
+          "BAUTL",
+          "EQUNR",
+          "GEWRK",
+          "GSBER",
+          "ILART",
+          "IWERK",
+          "MITYP",
+          "NO_AUFRELKZ",
+          "PLNAL",
+          "PLNNR",
+          "PLNTY",
+          "PRIOK",
+          "PSTXT",
+          "QMART",
+          "TASK_DETERMINE",
+          "WAPOS",
+          "WPGRP",
+          "WSTRA"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "WAPOS",
+          "src": "WAPOS",
+          "fn": "copy"
+        },
+        {
+          "col": "PSTXT",
+          "src": "PSTXT",
+          "fn": "copy"
+        },
+        {
+          "col": "MITYP",
+          "src": "MITYP",
+          "fn": "copy"
+        },
+        {
+          "col": "WSTRA",
+          "src": "WSTRA",
+          "fn": "copy"
+        },
+        {
+          "col": "EQUNR",
+          "src": "EQUNR",
+          "fn": "copy"
+        },
+        {
+          "col": "BAUTL",
+          "src": "BAUTL",
+          "fn": "copy"
+        },
+        {
+          "col": "IWERK",
+          "src": "IWERK",
+          "fn": "copy"
+        },
+        {
+          "col": "AUART",
+          "src": "AUART",
+          "fn": "copy"
+        },
+        {
+          "col": "QMART",
+          "src": "QMART",
+          "fn": "copy"
+        },
+        {
+          "col": "GEWRK",
+          "src": "GEWRK",
+          "fn": "copy"
+        },
+        {
+          "col": "WPGRP",
+          "src": "WPGRP",
+          "fn": "copy"
+        },
+        {
+          "col": "ILART",
+          "src": "ILART",
+          "fn": "copy"
+        },
+        {
+          "col": "GSBER",
+          "src": "GSBER",
+          "fn": "copy"
+        },
+        {
+          "col": "PRIOK",
+          "src": "PRIOK",
+          "fn": "copy"
+        },
+        {
+          "col": "NO_AUFRELKZ",
+          "src": "NO_AUFRELKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "TASK_DETERMINE",
+          "src": "TASK_DETERMINE",
+          "fn": "copy"
+        },
+        {
+          "col": "PLNTY",
+          "src": "PLNTY",
+          "fn": "copy"
+        },
+        {
+          "col": "PLNNR",
+          "src": "PLNNR",
+          "fn": "copy"
+        },
+        {
+          "col": "PLNAL",
+          "src": "PLNAL",
+          "fn": "copy"
+        },
+        {
+          "col": "APFKT",
+          "src": "APFKT",
+          "fn": "copy"
+        },
+        {
+          "col": "ANLZU",
+          "src": "ANLZU",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "NRANGE_IND",
+    "TPLNR",
+    "WERGW",
+    "MAINTCMPLNCCALCULATIONMETHOD",
+    "MAINTCMPLNCSTRTDTEOFFSETINDAYS",
+    "MAINTCMPLNCENDDATEOFFSETINDAYS",
+    "MI_TEXT"
+  ],
+  "_note": "21/28 columns auto-mapped; 7 need a decision (default/const/custom source field)."
+}

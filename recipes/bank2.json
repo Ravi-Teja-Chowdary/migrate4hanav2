@@ -1,0 +1,96 @@
+{
+  "object": "Bank2",
+  "description": "SCAFFOLD \u2014 Bank2 from BNKA into /1LT/DSS4H000120. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "general",
+      "staging_table": "/1LT/DSS4H000120",
+      "staging_signature": [
+        "BANKS",
+        "BANKL",
+        "BANKA"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "BNKA",
+        "fields": [
+          "BANKA",
+          "BANKL",
+          "BANKS",
+          "BGRUP",
+          "BNKLZ",
+          "BRNCH",
+          "ORT01",
+          "PROVZ",
+          "STRAS",
+          "SWIFT",
+          "XPGRO"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "BANKS",
+          "src": "BANKS",
+          "fn": "copy"
+        },
+        {
+          "col": "BANKL",
+          "src": "BANKL",
+          "fn": "copy"
+        },
+        {
+          "col": "BANKA",
+          "src": "BANKA",
+          "fn": "copy"
+        },
+        {
+          "col": "PROVZ",
+          "src": "PROVZ",
+          "fn": "copy"
+        },
+        {
+          "col": "STRAS",
+          "src": "STRAS",
+          "fn": "copy"
+        },
+        {
+          "col": "ORT01",
+          "src": "ORT01",
+          "fn": "copy"
+        },
+        {
+          "col": "BRNCH",
+          "src": "BRNCH",
+          "fn": "copy"
+        },
+        {
+          "col": "SWIFT",
+          "src": "SWIFT",
+          "fn": "copy"
+        },
+        {
+          "col": "XPGRO",
+          "src": "XPGRO",
+          "fn": "copy"
+        },
+        {
+          "col": "BNKLZ",
+          "src": "BNKLZ",
+          "fn": "copy"
+        },
+        {
+          "col": "BGRUP",
+          "src": "BGRUP",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "ISNOTOVERWRITE"
+  ],
+  "_note": "11/12 columns auto-mapped; 1 need a decision (default/const/custom source field)."
+}

@@ -41,7 +41,7 @@
         {
           "col": "MATNR",
           "src": "MATNR",
-          "fn": "copy"
+          "fn": "lstrip0"
         },
         {
           "col": "WERKS",

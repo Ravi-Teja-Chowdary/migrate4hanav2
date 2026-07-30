@@ -1,0 +1,75 @@
+{
+  "object": "PsProject",
+  "description": "SCAFFOLD \u2014 PsProject from PROJ into /1LT/DSS4H000992. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000992",
+      "staging_signature": [
+        "FUNC_AREA"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "PROJ",
+        "fields": [
+          "FUNC_AREA"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "FUNC_AREA",
+          "src": "FUNC_AREA",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "PROJECT_DEFINITION",
+    "PROJECT_PROFILE",
+    "DESCRIPTION",
+    "RESPONSIBLE_NO",
+    "APPLICANT_NO",
+    "CONTROLLING_AREA",
+    "COMPANY_CODE",
+    "BUSINESS_AREA",
+    "PLANT",
+    "LOCATION",
+    "PROFIT_CTR",
+    "PROJECT_CURRENCY",
+    "START_DATE",
+    "FINISH_DATE",
+    "CALENDAR",
+    "TIME_UNIT",
+    "FCST_START",
+    "FCST_FINISH",
+    "BUDGET_PROFILE",
+    "PLAN_PROFILE",
+    "INTEREST_PROF",
+    "INVEST_PROFILE",
+    "RES_ANAL_KEY",
+    "SIMULATION_PROFILE",
+    "PARTNER_PROFILE",
+    "NETWORK_PROFILE",
+    "WBS_SCHED_PROFILE",
+    "SCHED_SCENARIO",
+    "PLAN_BASIC",
+    "PLAN_FCST",
+    "OBJECTCLASS",
+    "STATISTICAL",
+    "PLANINTEGRATED",
+    "TAXJURCODE",
+    "WBS_STATUS_PROFILE",
+    "PROJECT_STOCK",
+    "VALUATION_SPEC_STOCK",
+    "GROUPING_INDICATOR",
+    "SALESORG",
+    "DISTR_CHAN",
+    "DIVISION",
+    "DLI_PROFILE"
+  ],
+  "_note": "1/43 columns auto-mapped; 42 need a decision (default/const/custom source field)."
+}

@@ -1,0 +1,178 @@
+{
+  "object": "ProductVer",
+  "description": "SCAFFOLD \u2014 ProductVer from MKAL into /1LT/DSS4H000944. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000944",
+      "staging_signature": [
+        "MATNR",
+        "WERKS",
+        "VERID"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "MKAL",
+        "fields": [
+          "ADATU",
+          "ALNAL",
+          "ALORT",
+          "BDATU",
+          "BSTMA",
+          "BSTMI",
+          "CSPLT",
+          "ELPRO",
+          "MATKO",
+          "MATNR",
+          "MDV01",
+          "MDV02",
+          "MKSP",
+          "PLNNR",
+          "PLNTY",
+          "PRVBE",
+          "SERKZ",
+          "STLAL",
+          "STLAN",
+          "TEXT1",
+          "UCMAT",
+          "VERID",
+          "VERTO",
+          "WERKS"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "MATNR",
+          "src": "MATNR",
+          "fn": "lstrip0"
+        },
+        {
+          "col": "WERKS",
+          "src": "WERKS",
+          "fn": "org",
+          "dim": "plant"
+        },
+        {
+          "col": "VERID",
+          "src": "VERID",
+          "fn": "copy"
+        },
+        {
+          "col": "TEXT1",
+          "src": "TEXT1",
+          "fn": "copy"
+        },
+        {
+          "col": "ADATU",
+          "src": "ADATU",
+          "fn": "copy"
+        },
+        {
+          "col": "BDATU",
+          "src": "BDATU",
+          "fn": "copy"
+        },
+        {
+          "col": "MKSP",
+          "src": "MKSP",
+          "fn": "copy"
+        },
+        {
+          "col": "BSTMI",
+          "src": "BSTMI",
+          "fn": "copy"
+        },
+        {
+          "col": "BSTMA",
+          "src": "BSTMA",
+          "fn": "copy"
+        },
+        {
+          "col": "PLNTY",
+          "src": "PLNTY",
+          "fn": "copy"
+        },
+        {
+          "col": "PLNNR",
+          "src": "PLNNR",
+          "fn": "copy"
+        },
+        {
+          "col": "ALNAL",
+          "src": "ALNAL",
+          "fn": "copy"
+        },
+        {
+          "col": "STLAL",
+          "src": "STLAL",
+          "fn": "copy"
+        },
+        {
+          "col": "STLAN",
+          "src": "STLAN",
+          "fn": "copy"
+        },
+        {
+          "col": "CSPLT",
+          "src": "CSPLT",
+          "fn": "copy"
+        },
+        {
+          "col": "SERKZ",
+          "src": "SERKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "MDV01",
+          "src": "MDV01",
+          "fn": "copy"
+        },
+        {
+          "col": "MDV02",
+          "src": "MDV02",
+          "fn": "copy"
+        },
+        {
+          "col": "MATKO",
+          "src": "MATKO",
+          "fn": "copy"
+        },
+        {
+          "col": "VERTO",
+          "src": "VERTO",
+          "fn": "copy"
+        },
+        {
+          "col": "ELPRO",
+          "src": "ELPRO",
+          "fn": "copy"
+        },
+        {
+          "col": "ALORT",
+          "src": "ALORT",
+          "fn": "copy"
+        },
+        {
+          "col": "UCMAT",
+          "src": "UCMAT",
+          "fn": "copy"
+        },
+        {
+          "col": "PRVBE",
+          "src": "PRVBE",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "PVS_PNODE",
+    "EWM_LGNUM",
+    "EWM_LGPLA",
+    "TSA_PRVBE"
+  ],
+  "_note": "24/28 columns auto-mapped; 4 need a decision (default/const/custom source field)."
+}

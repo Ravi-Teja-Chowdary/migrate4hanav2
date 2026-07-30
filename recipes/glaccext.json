@@ -1,0 +1,39 @@
+{
+  "object": "GlAccExt",
+  "description": "SCAFFOLD \u2014 GlAccExt from SKA1 into /1LT/DSS4H000549. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "general",
+      "staging_table": "/1LT/DSS4H000549",
+      "staging_signature": [
+        "KTOPL",
+        "SAKNR"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "SKA1",
+        "fields": [
+          "KTOPL",
+          "SAKNR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "KTOPL",
+          "src": "KTOPL",
+          "fn": "copy"
+        },
+        {
+          "col": "SAKNR",
+          "src": "SAKNR",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [],
+  "_note": "2/2 columns auto-mapped; 0 need a decision (default/const/custom source field)."
+}

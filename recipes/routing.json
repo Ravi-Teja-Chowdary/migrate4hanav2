@@ -1,0 +1,42 @@
+{
+  "object": "Routing",
+  "description": "SCAFFOLD \u2014 Routing from PLKO into /1LT/DSS4H001070. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001070",
+      "staging_signature": [
+        "PLNNR",
+        "AENNR"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "PLKO",
+        "fields": [
+          "AENNR",
+          "PLNNR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "PLNNR",
+          "src": "PLNNR",
+          "fn": "copy"
+        },
+        {
+          "col": "AENNR",
+          "src": "AENNR",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "STLAN",
+    "CAPID"
+  ],
+  "_note": "2/4 columns auto-mapped; 2 need a decision (default/const/custom source field)."
+}

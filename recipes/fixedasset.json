@@ -1,0 +1,86 @@
+{
+  "object": "FixedAsset",
+  "description": "SCAFFOLD \u2014 FixedAsset from ANLA into /1LT/DSS4H000492. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000492",
+      "staging_signature": [
+        "BUKRS",
+        "ANLN1",
+        "ANLN2"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "ANLA",
+        "fields": [
+          "ANLKL",
+          "ANLN1",
+          "ANLN2",
+          "BUKRS",
+          "INVNR",
+          "MEINS",
+          "MENGE",
+          "SERNR",
+          "TXT50"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "BUKRS",
+          "src": "BUKRS",
+          "fn": "copy"
+        },
+        {
+          "col": "ANLN1",
+          "src": "ANLN1",
+          "fn": "copy"
+        },
+        {
+          "col": "ANLN2",
+          "src": "ANLN2",
+          "fn": "copy"
+        },
+        {
+          "col": "ANLKL",
+          "src": "ANLKL",
+          "fn": "copy"
+        },
+        {
+          "col": "TXT50",
+          "src": "TXT50",
+          "fn": "copy"
+        },
+        {
+          "col": "SERNR",
+          "src": "SERNR",
+          "fn": "copy"
+        },
+        {
+          "col": "INVNR",
+          "src": "INVNR",
+          "fn": "copy"
+        },
+        {
+          "col": "MENGE",
+          "src": "MENGE",
+          "fn": "copy"
+        },
+        {
+          "col": "MEINS",
+          "src": "MEINS",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "TXA50_MORE",
+    "HISTORY",
+    "MAIN_DESCRIPT"
+  ],
+  "_note": "9/12 columns auto-mapped; 3 need a decision (default/const/custom source field)."
+}

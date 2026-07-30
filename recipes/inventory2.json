@@ -1,0 +1,54 @@
+{
+  "object": "Inventory2",
+  "description": "SCAFFOLD \u2014 Inventory2 from MKPF into /1LT/DSS4H000628. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000628",
+      "staging_signature": [
+        "MBLNR",
+        "BLDAT",
+        "BKTXT"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "MKPF",
+        "fields": [
+          "BKTXT",
+          "BLDAT",
+          "MBLNR",
+          "XABLN"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "MBLNR",
+          "src": "MBLNR",
+          "fn": "copy"
+        },
+        {
+          "col": "BLDAT",
+          "src": "BLDAT",
+          "fn": "copy"
+        },
+        {
+          "col": "BKTXT",
+          "src": "BKTXT",
+          "fn": "copy"
+        },
+        {
+          "col": "XABLN",
+          "src": "XABLN",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "BUKRS"
+  ],
+  "_note": "4/5 columns auto-mapped; 1 need a decision (default/const/custom source field)."
+}

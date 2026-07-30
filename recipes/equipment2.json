@@ -1,0 +1,206 @@
+{
+  "object": "Equipment2",
+  "description": "SCAFFOLD \u2014 Equipment2 from EQUI into /1LT/DSS4H000462. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000462",
+      "staging_signature": [
+        "EQUNR",
+        "EQTYP",
+        "INVNR"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "EQUI",
+        "fields": [
+          "ANSDT",
+          "ANSWT",
+          "BAUJJ",
+          "BAUMM",
+          "BEGRU",
+          "BRGEW",
+          "EQART",
+          "EQTYP",
+          "EQUI_SNTYPE",
+          "EQUI_SRTYPE",
+          "EQUNR",
+          "GERNR",
+          "GEWEI",
+          "GROES",
+          "HERLD",
+          "HERST",
+          "INBDT",
+          "INVNR",
+          "MATNR",
+          "SERGE",
+          "TYPBZ",
+          "WAERS"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "EQUNR",
+          "src": "EQUNR",
+          "fn": "copy"
+        },
+        {
+          "col": "EQTYP",
+          "src": "EQTYP",
+          "fn": "copy"
+        },
+        {
+          "col": "INVNR",
+          "src": "INVNR",
+          "fn": "copy"
+        },
+        {
+          "col": "INBDT",
+          "src": "INBDT",
+          "fn": "copy"
+        },
+        {
+          "col": "BEGRU",
+          "src": "BEGRU",
+          "fn": "copy"
+        },
+        {
+          "col": "BRGEW",
+          "src": "BRGEW",
+          "fn": "copy"
+        },
+        {
+          "col": "GEWEI",
+          "src": "GEWEI",
+          "fn": "copy"
+        },
+        {
+          "col": "GROES",
+          "src": "GROES",
+          "fn": "copy"
+        },
+        {
+          "col": "EQART",
+          "src": "EQART",
+          "fn": "copy"
+        },
+        {
+          "col": "EQUI_SNTYPE",
+          "src": "EQUI_SNTYPE",
+          "fn": "copy"
+        },
+        {
+          "col": "EQUI_SRTYPE",
+          "src": "EQUI_SRTYPE",
+          "fn": "copy"
+        },
+        {
+          "col": "HERST",
+          "src": "HERST",
+          "fn": "copy"
+        },
+        {
+          "col": "HERLD",
+          "src": "HERLD",
+          "fn": "copy"
+        },
+        {
+          "col": "TYPBZ",
+          "src": "TYPBZ",
+          "fn": "copy"
+        },
+        {
+          "col": "BAUJJ",
+          "src": "BAUJJ",
+          "fn": "copy"
+        },
+        {
+          "col": "BAUMM",
+          "src": "BAUMM",
+          "fn": "copy"
+        },
+        {
+          "col": "SERGE",
+          "src": "SERGE",
+          "fn": "copy"
+        },
+        {
+          "col": "ANSWT",
+          "src": "ANSWT",
+          "fn": "copy"
+        },
+        {
+          "col": "WAERS",
+          "src": "WAERS",
+          "fn": "copy"
+        },
+        {
+          "col": "ANSDT",
+          "src": "ANSDT",
+          "fn": "copy"
+        },
+        {
+          "col": "MATNR",
+          "src": "MATNR",
+          "fn": "lstrip0"
+        },
+        {
+          "col": "GERNR",
+          "src": "GERNR",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "NRANGE_IND",
+    "DATAB",
+    "EQKTX",
+    "MAPAR",
+    "GWLDT_K",
+    "GWLEN_K",
+    "MGANR_K",
+    "WAGET_O",
+    "GAERB_O",
+    "GWLDT_L",
+    "GWLEN_L",
+    "MGANR_L",
+    "WAGET_I",
+    "GAERB_I",
+    "SWERK",
+    "STORT",
+    "MAINTROOM",
+    "BEBER",
+    "ARBPL_LOCATION",
+    "ABCKZ",
+    "SORTFIELD",
+    "INGRP",
+    "IWERK",
+    "ARBPL_ORG",
+    "WERGW",
+    "RBNR",
+    "BUKRS",
+    "GSBER",
+    "ANLNR",
+    "ANLUN",
+    "KOSTL",
+    "PROID",
+    "AUFNR_S",
+    "DAUFN",
+    "TPLNR",
+    "HEQUI",
+    "POSNR",
+    "TECHID",
+    "SUBMT",
+    "VKORG",
+    "VTWEG",
+    "SPART",
+    "VKBUR",
+    "VKGRP",
+    "BATCH"
+  ],
+  "_note": "22/67 columns auto-mapped; 45 need a decision (default/const/custom source field)."
+}

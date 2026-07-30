@@ -1,0 +1,230 @@
+{
+  "object": "PrctrMstr2",
+  "description": "SCAFFOLD \u2014 PrctrMstr2 from CEPC into /1LT/DSS4H000913. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000913",
+      "staging_signature": [
+        "KOKRS",
+        "PRCTR",
+        "DATAB"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "CEPC",
+        "fields": [
+          "ABTEI",
+          "ANRED",
+          "DATAB",
+          "DATBI",
+          "DATLT",
+          "DRNAM",
+          "KHINR",
+          "KOKRS",
+          "LAND1",
+          "LOCK_IND",
+          "NAME1",
+          "NAME2",
+          "NAME3",
+          "NAME4",
+          "ORT01",
+          "ORT02",
+          "PCA_TEMPLATE",
+          "PFACH",
+          "PRCTR",
+          "PSTL2",
+          "PSTLZ",
+          "REGIO",
+          "SEGMENT",
+          "STRAS",
+          "TELBX",
+          "TELF1",
+          "TELF2",
+          "TELFX",
+          "TELTX",
+          "TELX1",
+          "TXJCD",
+          "VERAK",
+          "VERAK_USER"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "KOKRS",
+          "src": "KOKRS",
+          "fn": "copy"
+        },
+        {
+          "col": "PRCTR",
+          "src": "PRCTR",
+          "fn": "copy"
+        },
+        {
+          "col": "DATAB",
+          "src": "DATAB",
+          "fn": "copy"
+        },
+        {
+          "col": "DATBI",
+          "src": "DATBI",
+          "fn": "copy"
+        },
+        {
+          "col": "VERAK",
+          "src": "VERAK",
+          "fn": "copy"
+        },
+        {
+          "col": "VERAK_USER",
+          "src": "VERAK_USER",
+          "fn": "copy"
+        },
+        {
+          "col": "KHINR",
+          "src": "KHINR",
+          "fn": "copy"
+        },
+        {
+          "col": "ABTEI",
+          "src": "ABTEI",
+          "fn": "copy"
+        },
+        {
+          "col": "SEGMENT",
+          "src": "SEGMENT",
+          "fn": "copy"
+        },
+        {
+          "col": "ANRED",
+          "src": "ANRED",
+          "fn": "copy"
+        },
+        {
+          "col": "NAME1",
+          "src": "NAME1",
+          "fn": "copy"
+        },
+        {
+          "col": "NAME2",
+          "src": "NAME2",
+          "fn": "copy"
+        },
+        {
+          "col": "NAME3",
+          "src": "NAME3",
+          "fn": "copy"
+        },
+        {
+          "col": "NAME4",
+          "src": "NAME4",
+          "fn": "copy"
+        },
+        {
+          "col": "STRAS",
+          "src": "STRAS",
+          "fn": "copy"
+        },
+        {
+          "col": "ORT01",
+          "src": "ORT01",
+          "fn": "copy"
+        },
+        {
+          "col": "ORT02",
+          "src": "ORT02",
+          "fn": "copy"
+        },
+        {
+          "col": "LAND1",
+          "src": "LAND1",
+          "fn": "copy"
+        },
+        {
+          "col": "TELBX",
+          "src": "TELBX",
+          "fn": "copy"
+        },
+        {
+          "col": "TELF1",
+          "src": "TELF1",
+          "fn": "copy"
+        },
+        {
+          "col": "TELF2",
+          "src": "TELF2",
+          "fn": "copy"
+        },
+        {
+          "col": "TELFX",
+          "src": "TELFX",
+          "fn": "copy"
+        },
+        {
+          "col": "TELTX",
+          "src": "TELTX",
+          "fn": "copy"
+        },
+        {
+          "col": "TELX1",
+          "src": "TELX1",
+          "fn": "copy"
+        },
+        {
+          "col": "DATLT",
+          "src": "DATLT",
+          "fn": "copy"
+        },
+        {
+          "col": "DRNAM",
+          "src": "DRNAM",
+          "fn": "copy"
+        },
+        {
+          "col": "TXJCD",
+          "src": "TXJCD",
+          "fn": "copy"
+        },
+        {
+          "col": "PFACH",
+          "src": "PFACH",
+          "fn": "copy"
+        },
+        {
+          "col": "PSTLZ",
+          "src": "PSTLZ",
+          "fn": "copy"
+        },
+        {
+          "col": "PSTL2",
+          "src": "PSTL2",
+          "fn": "copy"
+        },
+        {
+          "col": "REGIO",
+          "src": "REGIO",
+          "fn": "copy"
+        },
+        {
+          "col": "LOCK_IND",
+          "src": "LOCK_IND",
+          "fn": "copy"
+        },
+        {
+          "col": "PCA_TEMPLATE",
+          "src": "PCA_TEMPLATE",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "LANGU",
+    "KTEXT",
+    "LTEXT"
+  ],
+  "_note": "33/36 columns auto-mapped; 3 need a decision (default/const/custom source field)."
+}

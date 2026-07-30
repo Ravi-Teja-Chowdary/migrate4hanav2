@@ -1,0 +1,79 @@
+{
+  "object": "SdCondition",
+  "description": "SCAFFOLD \u2014 SdCondition from KONH into /1LT/DSS4H001091. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001091",
+      "staging_signature": [
+        "KNUMH",
+        "KSCHL",
+        "DATAB"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "KONH",
+        "fields": [
+          "DATAB",
+          "DATBI",
+          "KNUMH",
+          "KSCHL"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "KNUMH",
+          "src": "KNUMH",
+          "fn": "copy"
+        },
+        {
+          "col": "KSCHL",
+          "src": "KSCHL",
+          "fn": "copy"
+        },
+        {
+          "col": "DATAB",
+          "src": "DATAB",
+          "fn": "copy"
+        },
+        {
+          "col": "DATBI",
+          "src": "DATBI",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "VKORG",
+    "VTWEG",
+    "SPART",
+    "KUNNR",
+    "MATNR",
+    "CPD_MP_ID",
+    "WBS_BILL_ELEMENT",
+    "WBS_WORKPACKAGE",
+    "SERVICE_DELIV_ORG",
+    "PERNR",
+    "WORK_ITEM_ID",
+    "KONDA",
+    "KONDM",
+    "MSR_REFUND_CODE",
+    "VARCOND",
+    "INCO1",
+    "KRECH",
+    "KBETR_EXT",
+    "KONWA",
+    "KPEIN",
+    "KMEIN",
+    "KUMZA",
+    "KUMNE",
+    "MEINS",
+    "MXWRT",
+    "GKWRT"
+  ],
+  "_note": "4/30 columns auto-mapped; 26 need a decision (default/const/custom source field)."
+}

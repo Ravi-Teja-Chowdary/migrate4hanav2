@@ -1,0 +1,34 @@
+{
+  "object": "ProdConsump",
+  "description": "SCAFFOLD \u2014 ProdConsump from MARA into /1LT/DSS4H000945. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000945",
+      "staging_signature": [
+        "MATERIAL"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "MARA",
+        "fields": [
+          "MATNR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "MATERIAL",
+          "src": "MATNR",
+          "fn": "lstrip0"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "PLANT"
+  ],
+  "_note": "1/2 columns auto-mapped; 1 need a decision (default/const/custom source field)."
+}

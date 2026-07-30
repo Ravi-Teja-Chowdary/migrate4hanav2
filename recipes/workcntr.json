@@ -1,0 +1,449 @@
+{
+  "object": "WorkCntr",
+  "description": "SCAFFOLD \u2014 WorkCntr from CRHD into /1LT/DSS4H001241. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001241",
+      "staging_signature": [
+        "ARBPL",
+        "WERKS",
+        "VERWE"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "CRHD",
+        "fields": [
+          "ARBPL",
+          "FORT1",
+          "FORT2",
+          "FORT3",
+          "FORTN",
+          "KTSCH",
+          "KTSCH_REF",
+          "LOANZ",
+          "LOANZ_REF",
+          "LOART",
+          "LOART_REF",
+          "ORTGR",
+          "PAR01",
+          "PAR02",
+          "PAR03",
+          "PAR04",
+          "PAR05",
+          "PAR06",
+          "PARU1",
+          "PARU2",
+          "PARU3",
+          "PARU4",
+          "PARU5",
+          "PARU6",
+          "PARV1",
+          "PARV2",
+          "PARV3",
+          "PARV4",
+          "PARV5",
+          "PARV6",
+          "PLANV",
+          "PRVBE",
+          "RASCH",
+          "RASCH_REF",
+          "RGEKZ",
+          "RSANZ",
+          "RSANZ_REF",
+          "STAND",
+          "STEUS",
+          "STEUS_REF",
+          "SUBSYS",
+          "VERAN",
+          "VERWE",
+          "VGARB",
+          "VGDIM",
+          "VGE01",
+          "VGE02",
+          "VGE03",
+          "VGE04",
+          "VGE05",
+          "VGE06",
+          "VGM01",
+          "VGM02",
+          "VGM03",
+          "VGM04",
+          "VGM05",
+          "VGM06",
+          "VGWTS",
+          "WERKS",
+          "ZEIWM",
+          "ZEIWN",
+          "ZGR01",
+          "ZGR02",
+          "ZGR03",
+          "ZGR04",
+          "ZGR05",
+          "ZGR06",
+          "ZWMIN",
+          "ZWNOR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "ARBPL",
+          "src": "ARBPL",
+          "fn": "copy"
+        },
+        {
+          "col": "WERKS",
+          "src": "WERKS",
+          "fn": "org",
+          "dim": "plant"
+        },
+        {
+          "col": "VERWE",
+          "src": "VERWE",
+          "fn": "copy"
+        },
+        {
+          "col": "VERAN",
+          "src": "VERAN",
+          "fn": "copy"
+        },
+        {
+          "col": "STAND",
+          "src": "STAND",
+          "fn": "copy"
+        },
+        {
+          "col": "SUBSYS",
+          "src": "SUBSYS",
+          "fn": "copy"
+        },
+        {
+          "col": "PRVBE",
+          "src": "PRVBE",
+          "fn": "copy"
+        },
+        {
+          "col": "PLANV",
+          "src": "PLANV",
+          "fn": "copy"
+        },
+        {
+          "col": "RGEKZ",
+          "src": "RGEKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "VGWTS",
+          "src": "VGWTS",
+          "fn": "copy"
+        },
+        {
+          "col": "VGM01",
+          "src": "VGM01",
+          "fn": "copy"
+        },
+        {
+          "col": "VGM02",
+          "src": "VGM02",
+          "fn": "copy"
+        },
+        {
+          "col": "VGM03",
+          "src": "VGM03",
+          "fn": "copy"
+        },
+        {
+          "col": "VGM04",
+          "src": "VGM04",
+          "fn": "copy"
+        },
+        {
+          "col": "VGM05",
+          "src": "VGM05",
+          "fn": "copy"
+        },
+        {
+          "col": "VGM06",
+          "src": "VGM06",
+          "fn": "copy"
+        },
+        {
+          "col": "ZGR01",
+          "src": "ZGR01",
+          "fn": "copy"
+        },
+        {
+          "col": "ZGR02",
+          "src": "ZGR02",
+          "fn": "copy"
+        },
+        {
+          "col": "ZGR03",
+          "src": "ZGR03",
+          "fn": "copy"
+        },
+        {
+          "col": "ZGR04",
+          "src": "ZGR04",
+          "fn": "copy"
+        },
+        {
+          "col": "ZGR05",
+          "src": "ZGR05",
+          "fn": "copy"
+        },
+        {
+          "col": "ZGR06",
+          "src": "ZGR06",
+          "fn": "copy"
+        },
+        {
+          "col": "STEUS",
+          "src": "STEUS",
+          "fn": "copy"
+        },
+        {
+          "col": "STEUS_REF",
+          "src": "STEUS_REF",
+          "fn": "copy"
+        },
+        {
+          "col": "KTSCH",
+          "src": "KTSCH",
+          "fn": "copy"
+        },
+        {
+          "col": "KTSCH_REF",
+          "src": "KTSCH_REF",
+          "fn": "copy"
+        },
+        {
+          "col": "RASCH",
+          "src": "RASCH",
+          "fn": "copy"
+        },
+        {
+          "col": "RASCH_REF",
+          "src": "RASCH_REF",
+          "fn": "copy"
+        },
+        {
+          "col": "LOART",
+          "src": "LOART",
+          "fn": "copy"
+        },
+        {
+          "col": "LOART_REF",
+          "src": "LOART_REF",
+          "fn": "copy"
+        },
+        {
+          "col": "LOANZ",
+          "src": "LOANZ",
+          "fn": "copy"
+        },
+        {
+          "col": "LOANZ_REF",
+          "src": "LOANZ_REF",
+          "fn": "copy"
+        },
+        {
+          "col": "RSANZ",
+          "src": "RSANZ",
+          "fn": "copy"
+        },
+        {
+          "col": "RSANZ_REF",
+          "src": "RSANZ_REF",
+          "fn": "copy"
+        },
+        {
+          "col": "VGE01",
+          "src": "VGE01",
+          "fn": "copy"
+        },
+        {
+          "col": "VGE02",
+          "src": "VGE02",
+          "fn": "copy"
+        },
+        {
+          "col": "VGE03",
+          "src": "VGE03",
+          "fn": "copy"
+        },
+        {
+          "col": "VGE04",
+          "src": "VGE04",
+          "fn": "copy"
+        },
+        {
+          "col": "VGE05",
+          "src": "VGE05",
+          "fn": "copy"
+        },
+        {
+          "col": "VGE06",
+          "src": "VGE06",
+          "fn": "copy"
+        },
+        {
+          "col": "FORT1",
+          "src": "FORT1",
+          "fn": "copy"
+        },
+        {
+          "col": "FORT2",
+          "src": "FORT2",
+          "fn": "copy"
+        },
+        {
+          "col": "FORT3",
+          "src": "FORT3",
+          "fn": "copy"
+        },
+        {
+          "col": "FORTN",
+          "src": "FORTN",
+          "fn": "copy"
+        },
+        {
+          "col": "ORTGR",
+          "src": "ORTGR",
+          "fn": "copy"
+        },
+        {
+          "col": "ZWNOR",
+          "src": "ZWNOR",
+          "fn": "copy"
+        },
+        {
+          "col": "ZEIWN",
+          "src": "ZEIWN",
+          "fn": "copy"
+        },
+        {
+          "col": "ZWMIN",
+          "src": "ZWMIN",
+          "fn": "copy"
+        },
+        {
+          "col": "ZEIWM",
+          "src": "ZEIWM",
+          "fn": "copy"
+        },
+        {
+          "col": "VGDIM",
+          "src": "VGDIM",
+          "fn": "copy"
+        },
+        {
+          "col": "VGARB",
+          "src": "VGARB",
+          "fn": "copy"
+        },
+        {
+          "col": "PAR01",
+          "src": "PAR01",
+          "fn": "copy"
+        },
+        {
+          "col": "PARV1",
+          "src": "PARV1",
+          "fn": "copy"
+        },
+        {
+          "col": "PARU1",
+          "src": "PARU1",
+          "fn": "copy"
+        },
+        {
+          "col": "PAR02",
+          "src": "PAR02",
+          "fn": "copy"
+        },
+        {
+          "col": "PARV2",
+          "src": "PARV2",
+          "fn": "copy"
+        },
+        {
+          "col": "PARU2",
+          "src": "PARU2",
+          "fn": "copy"
+        },
+        {
+          "col": "PAR03",
+          "src": "PAR03",
+          "fn": "copy"
+        },
+        {
+          "col": "PARV3",
+          "src": "PARV3",
+          "fn": "copy"
+        },
+        {
+          "col": "PARU3",
+          "src": "PARU3",
+          "fn": "copy"
+        },
+        {
+          "col": "PAR04",
+          "src": "PAR04",
+          "fn": "copy"
+        },
+        {
+          "col": "PARV4",
+          "src": "PARV4",
+          "fn": "copy"
+        },
+        {
+          "col": "PARU4",
+          "src": "PARU4",
+          "fn": "copy"
+        },
+        {
+          "col": "PAR05",
+          "src": "PAR05",
+          "fn": "copy"
+        },
+        {
+          "col": "PARV5",
+          "src": "PARV5",
+          "fn": "copy"
+        },
+        {
+          "col": "PARU5",
+          "src": "PARU5",
+          "fn": "copy"
+        },
+        {
+          "col": "PAR06",
+          "src": "PAR06",
+          "fn": "copy"
+        },
+        {
+          "col": "PARV6",
+          "src": "PARV6",
+          "fn": "copy"
+        },
+        {
+          "col": "PARU6",
+          "src": "PARU6",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "SPRAS",
+    "KTEXT",
+    "PPSKZ",
+    "KAPAR",
+    "NAME"
+  ],
+  "_note": "69/74 columns auto-mapped; 5 need a decision (default/const/custom source field)."
+}

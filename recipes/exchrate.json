@@ -1,0 +1,54 @@
+{
+  "object": "ExchRate",
+  "description": "SCAFFOLD \u2014 ExchRate from TCURR into /1LT/DSS4H000484. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "rates",
+      "staging_table": "/1LT/DSS4H000484",
+      "staging_signature": [
+        "RATE_TYPE",
+        "FROM_CURR",
+        "TO_CURRNCY"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "TCURR",
+        "fields": [
+          "FCURR",
+          "KURST",
+          "TCURR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "RATE_TYPE",
+          "src": "KURST",
+          "fn": "copy"
+        },
+        {
+          "col": "FROM_CURR",
+          "src": "FCURR",
+          "fn": "copy"
+        },
+        {
+          "col": "TO_CURRNCY",
+          "src": "TCURR",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "VALID_FROM",
+    "EXCH_RATE",
+    "FROM_FACTOR",
+    "TO_FACTOR",
+    "EXCH_RATE_V",
+    "FROM_FACTOR_V",
+    "TO_FACTOR_V"
+  ],
+  "_note": "3/10 columns auto-mapped; 7 need a decision (default/const/custom source field)."
+}

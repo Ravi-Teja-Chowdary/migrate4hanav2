@@ -40,14 +40,15 @@ subset. "100+" is real and if anything conservative.
 | Level | Count | Notes |
 |---|---:|---|
 | 🗂️ addressable in M02 (staging tables generated) | **230** | full standard catalog; `catalog/ds_mapping.json` |
-| 📥 staged via the engine | **11** | Product, Profit Center, Production Supply Area, **Bank, Cost Center, Activity Type, Source List, Inspection Method** (full); **Internal Order, Merchandise Category, Exchange Rate** (partial — refine) |
+| 📥 staged via the engine | **52** | across **14 functional areas** (FI/CO, MM, SD, PP, QM, PM, PS, Classification, DMS, balances, open items, assets) — see `M02_GRIND_LOG.md`. ~35 have substantial maps; ~15 are thin key-only maps pending field mapping |
 | 🟨 legacy (pre-engine loaders) | **~8** | Customer, Vendor, Material-basic, Bank, Sales order, Cost center, Profit center, G/L |
 | ✅ **migrated + reconciled via the engine** | **0** | the app-gated Migrate + reconcile is not yet run on a persistent target |
-| ⬜ recipe not yet written | **~219** | the grind ahead — but every one now has a known staging table |
+| ⬜ recipe not yet written | **~178** | mostly industry objects (EHS, oil&gas PRA, JVA, treasury, HCM) with no ECC source data |
 
 > **What changed today:** the ceiling moved from "3 staged, ~90 not started (no
-> staging tables)" to "**230 objects have staging tables and are individually
-> addressable; 11 staged; recipes are now a scaffolder run away.**" Engine hardened
+> staging tables)" to "**230 objects addressable; 52 staged across 14 functional
+> areas via one automated `grind.py` pass.**" `grind.py` + `object_catalog.py` +
+> `M02_GRIND_LOG.md` are the machinery. Engine hardened
 > this session: DD03L field-validity, automatic wide-row splitting (RFC 512-byte
 > cap), semantic key aliases — so wide objects (CSKS, KNA1, LFA1, EKKO…) read cleanly.
 

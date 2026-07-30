@@ -1,0 +1,182 @@
+{
+  "object": "Class2",
+  "description": "SCAFFOLD \u2014 Class2 from KLAH into /1LT/DSS4H000179. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000179",
+      "staging_signature": [
+        "CLASS",
+        "KLART",
+        "STATU"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "KLAH",
+        "fields": [
+          "AUSGD",
+          "BGRKL",
+          "BGRKP",
+          "BGRSE",
+          "BISDT",
+          "CLASS",
+          "CLMUL",
+          "CLOBK",
+          "DOKAR",
+          "DOKNR",
+          "DOKTL",
+          "DOKVR",
+          "KLAGR",
+          "KLART",
+          "LEIST",
+          "LOCLA",
+          "NNORM",
+          "NORMN",
+          "POTPR",
+          "SICHT",
+          "STATU",
+          "VERSD",
+          "VERSI",
+          "VONDT",
+          "VWSTL"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "CLASS",
+          "src": "CLASS",
+          "fn": "copy"
+        },
+        {
+          "col": "KLART",
+          "src": "KLART",
+          "fn": "copy"
+        },
+        {
+          "col": "STATU",
+          "src": "STATU",
+          "fn": "copy"
+        },
+        {
+          "col": "KLAGR",
+          "src": "KLAGR",
+          "fn": "copy"
+        },
+        {
+          "col": "SICHT",
+          "src": "SICHT",
+          "fn": "copy"
+        },
+        {
+          "col": "LOCLA",
+          "src": "LOCLA",
+          "fn": "copy"
+        },
+        {
+          "col": "VONDT",
+          "src": "VONDT",
+          "fn": "copy"
+        },
+        {
+          "col": "BISDT",
+          "src": "BISDT",
+          "fn": "copy"
+        },
+        {
+          "col": "BGRKP",
+          "src": "BGRKP",
+          "fn": "copy"
+        },
+        {
+          "col": "BGRKL",
+          "src": "BGRKL",
+          "fn": "copy"
+        },
+        {
+          "col": "BGRSE",
+          "src": "BGRSE",
+          "fn": "copy"
+        },
+        {
+          "col": "DOKNR",
+          "src": "DOKNR",
+          "fn": "copy"
+        },
+        {
+          "col": "DOKAR",
+          "src": "DOKAR",
+          "fn": "copy"
+        },
+        {
+          "col": "DOKTL",
+          "src": "DOKTL",
+          "fn": "copy"
+        },
+        {
+          "col": "DOKVR",
+          "src": "DOKVR",
+          "fn": "copy"
+        },
+        {
+          "col": "NNORM",
+          "src": "NNORM",
+          "fn": "copy"
+        },
+        {
+          "col": "NORMN",
+          "src": "NORMN",
+          "fn": "copy"
+        },
+        {
+          "col": "AUSGD",
+          "src": "AUSGD",
+          "fn": "copy"
+        },
+        {
+          "col": "VERSD",
+          "src": "VERSD",
+          "fn": "copy"
+        },
+        {
+          "col": "VERSI",
+          "src": "VERSI",
+          "fn": "copy"
+        },
+        {
+          "col": "LEIST",
+          "src": "LEIST",
+          "fn": "copy"
+        },
+        {
+          "col": "VWSTL",
+          "src": "VWSTL",
+          "fn": "copy"
+        },
+        {
+          "col": "POTPR",
+          "src": "POTPR",
+          "fn": "copy"
+        },
+        {
+          "col": "CLOBK",
+          "src": "CLOBK",
+          "fn": "copy"
+        },
+        {
+          "col": "CLMUL",
+          "src": "CLMUL",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "AENNR",
+    "CHECK_XWE",
+    "MEINS_ISO"
+  ],
+  "_note": "25/28 columns auto-mapped; 3 need a decision (default/const/custom source field)."
+}

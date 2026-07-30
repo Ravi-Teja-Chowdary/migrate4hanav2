@@ -1,0 +1,110 @@
+{
+  "object": "PpPsa",
+  "description": "SCAFFOLD \u2014 PpPsa from PVBE into /1LT/DSS4H000834. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000834",
+      "staging_signature": [
+        "WERKS",
+        "PRVBE",
+        "LGORT"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "PVBE",
+        "fields": [
+          "ABLAD",
+          "FABKLV",
+          "LGBZO",
+          "LGORT",
+          "PINTVD",
+          "PINTVM",
+          "PRVBE",
+          "RGVER",
+          "SCHGRUPV",
+          "SPROGV",
+          "WERKS"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "WERKS",
+          "src": "WERKS",
+          "fn": "org",
+          "dim": "plant"
+        },
+        {
+          "col": "PRVBE",
+          "src": "PRVBE",
+          "fn": "copy"
+        },
+        {
+          "col": "LGORT",
+          "src": "LGORT",
+          "fn": "copy"
+        },
+        {
+          "col": "RGVER",
+          "src": "RGVER",
+          "fn": "copy"
+        },
+        {
+          "col": "LGBZO",
+          "src": "LGBZO",
+          "fn": "copy"
+        },
+        {
+          "col": "ABLAD",
+          "src": "ABLAD",
+          "fn": "copy"
+        },
+        {
+          "col": "FABKLV",
+          "src": "FABKLV",
+          "fn": "copy"
+        },
+        {
+          "col": "SCHGRUPV",
+          "src": "SCHGRUPV",
+          "fn": "copy"
+        },
+        {
+          "col": "SPROGV",
+          "src": "SPROGV",
+          "fn": "copy"
+        },
+        {
+          "col": "PINTVD",
+          "src": "PINTVD",
+          "fn": "copy"
+        },
+        {
+          "col": "PINTVM",
+          "src": "PINTVM",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "LOADINGPOINT",
+    "AD_NAME1",
+    "AD_NAME2",
+    "AD_BLDNG",
+    "AD_STREET",
+    "AD_HSNM1",
+    "AD_STRSPP1",
+    "AD_STRSPP2",
+    "AD_STRSPP3",
+    "AD_LCTN",
+    "AD_CITY1",
+    "AD_PSTCD1",
+    "LAND1",
+    "REGIO"
+  ],
+  "_note": "11/25 columns auto-mapped; 14 need a decision (default/const/custom source field)."
+}

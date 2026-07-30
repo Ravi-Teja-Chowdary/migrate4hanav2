@@ -1,0 +1,164 @@
+{
+  "object": "PurOrder2",
+  "description": "SCAFFOLD \u2014 PurOrder2 from EKKO into /1LT/DSS4H001004. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001004",
+      "staging_signature": [
+        "EBELN",
+        "BUKRS",
+        "BSART"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "EKKO",
+        "fields": [
+          "BEDAT",
+          "BSART",
+          "BUKRS",
+          "EBELN",
+          "EKGRP",
+          "EKORG",
+          "IHREZ",
+          "INCO1",
+          "LIFNR",
+          "LIFRE",
+          "STCEG_L",
+          "TELF1",
+          "UNSEZ",
+          "VERKF",
+          "WAERS",
+          "WKURS",
+          "ZBD1P",
+          "ZBD1T",
+          "ZBD2P",
+          "ZBD2T",
+          "ZBD3T",
+          "ZTERM"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "EBELN",
+          "src": "EBELN",
+          "fn": "copy"
+        },
+        {
+          "col": "BUKRS",
+          "src": "BUKRS",
+          "fn": "copy"
+        },
+        {
+          "col": "BSART",
+          "src": "BSART",
+          "fn": "copy"
+        },
+        {
+          "col": "LIFNR",
+          "src": "LIFNR",
+          "fn": "copy"
+        },
+        {
+          "col": "EKORG",
+          "src": "EKORG",
+          "fn": "copy"
+        },
+        {
+          "col": "EKGRP",
+          "src": "EKGRP",
+          "fn": "copy"
+        },
+        {
+          "col": "BEDAT",
+          "src": "BEDAT",
+          "fn": "copy"
+        },
+        {
+          "col": "ZTERM",
+          "src": "ZTERM",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD1T",
+          "src": "ZBD1T",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD2T",
+          "src": "ZBD2T",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD3T",
+          "src": "ZBD3T",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD1P",
+          "src": "ZBD1P",
+          "fn": "copy"
+        },
+        {
+          "col": "ZBD2P",
+          "src": "ZBD2P",
+          "fn": "copy"
+        },
+        {
+          "col": "WAERS",
+          "src": "WAERS",
+          "fn": "copy"
+        },
+        {
+          "col": "WKURS",
+          "src": "WKURS",
+          "fn": "copy"
+        },
+        {
+          "col": "LIFRE",
+          "src": "LIFRE",
+          "fn": "copy"
+        },
+        {
+          "col": "INCO1",
+          "src": "INCO1",
+          "fn": "copy"
+        },
+        {
+          "col": "VERKF",
+          "src": "VERKF",
+          "fn": "copy"
+        },
+        {
+          "col": "TELF1",
+          "src": "TELF1",
+          "fn": "copy"
+        },
+        {
+          "col": "IHREZ",
+          "src": "IHREZ",
+          "fn": "copy"
+        },
+        {
+          "col": "UNSEZ",
+          "src": "UNSEZ",
+          "fn": "copy"
+        },
+        {
+          "col": "STCEG_L",
+          "src": "STCEG_L",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "INCOV",
+    "INCO2_L",
+    "INCO3_L"
+  ],
+  "_note": "22/25 columns auto-mapped; 3 need a decision (default/const/custom source field)."
+}

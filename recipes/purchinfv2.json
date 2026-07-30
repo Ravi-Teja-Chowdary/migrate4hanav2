@@ -1,0 +1,178 @@
+{
+  "object": "PurchInfV2",
+  "description": "SCAFFOLD \u2014 PurchInfV2 from EINA into /1LT/DSS4H000993. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000993",
+      "staging_signature": [
+        "INFNR",
+        "MATNR",
+        "MATKL"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "EINA",
+        "fields": [
+          "IDNLF",
+          "INFNR",
+          "KOLIF",
+          "LIFAB",
+          "LIFBI",
+          "LIFNR",
+          "LMEIN",
+          "MAHN1",
+          "MAHN2",
+          "MAHN3",
+          "MATKL",
+          "MATNR",
+          "MEINS",
+          "MFRNR",
+          "REGIO",
+          "RELIF",
+          "SORTL",
+          "TELF1",
+          "TXZ01",
+          "UMREN",
+          "UMREZ",
+          "URZLA",
+          "VABME",
+          "VERKF",
+          "WGLIF"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "INFNR",
+          "src": "INFNR",
+          "fn": "copy"
+        },
+        {
+          "col": "MATNR",
+          "src": "MATNR",
+          "fn": "lstrip0"
+        },
+        {
+          "col": "MATKL",
+          "src": "MATKL",
+          "fn": "copy"
+        },
+        {
+          "col": "LIFNR",
+          "src": "LIFNR",
+          "fn": "copy"
+        },
+        {
+          "col": "TXZ01",
+          "src": "TXZ01",
+          "fn": "copy"
+        },
+        {
+          "col": "SORTL",
+          "src": "SORTL",
+          "fn": "copy"
+        },
+        {
+          "col": "MEINS",
+          "src": "MEINS",
+          "fn": "copy"
+        },
+        {
+          "col": "UMREZ",
+          "src": "UMREZ",
+          "fn": "copy"
+        },
+        {
+          "col": "UMREN",
+          "src": "UMREN",
+          "fn": "copy"
+        },
+        {
+          "col": "IDNLF",
+          "src": "IDNLF",
+          "fn": "copy"
+        },
+        {
+          "col": "VERKF",
+          "src": "VERKF",
+          "fn": "copy"
+        },
+        {
+          "col": "TELF1",
+          "src": "TELF1",
+          "fn": "copy"
+        },
+        {
+          "col": "MAHN1",
+          "src": "MAHN1",
+          "fn": "copy"
+        },
+        {
+          "col": "MAHN2",
+          "src": "MAHN2",
+          "fn": "copy"
+        },
+        {
+          "col": "MAHN3",
+          "src": "MAHN3",
+          "fn": "copy"
+        },
+        {
+          "col": "LMEIN",
+          "src": "LMEIN",
+          "fn": "copy"
+        },
+        {
+          "col": "VABME",
+          "src": "VABME",
+          "fn": "copy"
+        },
+        {
+          "col": "WGLIF",
+          "src": "WGLIF",
+          "fn": "copy"
+        },
+        {
+          "col": "KOLIF",
+          "src": "KOLIF",
+          "fn": "copy"
+        },
+        {
+          "col": "URZLA",
+          "src": "URZLA",
+          "fn": "copy"
+        },
+        {
+          "col": "REGIO",
+          "src": "REGIO",
+          "fn": "copy"
+        },
+        {
+          "col": "MFRNR",
+          "src": "MFRNR",
+          "fn": "copy"
+        },
+        {
+          "col": "LIFAB",
+          "src": "LIFAB",
+          "fn": "copy"
+        },
+        {
+          "col": "LIFBI",
+          "src": "LIFBI",
+          "fn": "copy"
+        },
+        {
+          "col": "RELIF",
+          "src": "RELIF",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [],
+  "_note": "25/25 columns auto-mapped; 0 need a decision (default/const/custom source field)."
+}

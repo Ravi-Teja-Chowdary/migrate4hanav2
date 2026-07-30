@@ -1,0 +1,80 @@
+{
+  "object": "Bom",
+  "description": "SCAFFOLD \u2014 Bom from STKO into /1LT/DSS4H000134. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000134",
+      "staging_signature": [
+        "STLAL",
+        "DATUV",
+        "STLST"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "STKO",
+        "fields": [
+          "AENNR",
+          "BMENG",
+          "CADKZ",
+          "DATUV",
+          "LABOR",
+          "STLAL",
+          "STLST"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "STLAL",
+          "src": "STLAL",
+          "fn": "copy"
+        },
+        {
+          "col": "DATUV",
+          "src": "DATUV",
+          "fn": "copy"
+        },
+        {
+          "col": "STLST",
+          "src": "STLST",
+          "fn": "copy"
+        },
+        {
+          "col": "AENNR",
+          "src": "AENNR",
+          "fn": "copy"
+        },
+        {
+          "col": "BMENG",
+          "src": "BMENG",
+          "fn": "copy"
+        },
+        {
+          "col": "LABOR",
+          "src": "LABOR",
+          "fn": "copy"
+        },
+        {
+          "col": "CADKZ",
+          "src": "CADKZ",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "MATNR",
+    "WERKS",
+    "STLAN",
+    "EMPTIES_UOM",
+    "BASE_UNIT",
+    "BOM_TEXT",
+    "BOM_LTEXT",
+    "ALT_TEXT",
+    "ALT_LTEXT"
+  ],
+  "_note": "7/16 columns auto-mapped; 9 need a decision (default/const/custom source field)."
+}

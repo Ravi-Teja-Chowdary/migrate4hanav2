@@ -1,0 +1,94 @@
+{
+  "object": "SdSchedAgr",
+  "description": "SCAFFOLD \u2014 SdSchedAgr from VBAK into /1LT/DSS4H001105. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001105",
+      "staging_signature": [
+        "VBELN",
+        "AUART",
+        "VKORG"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "VBAK",
+        "fields": [
+          "AUART",
+          "SPART",
+          "VBELN",
+          "VKBUR",
+          "VKGRP",
+          "VKORG",
+          "VTWEG"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "VBELN",
+          "src": "VBELN",
+          "fn": "copy"
+        },
+        {
+          "col": "AUART",
+          "src": "AUART",
+          "fn": "copy"
+        },
+        {
+          "col": "VKORG",
+          "src": "VKORG",
+          "fn": "org",
+          "dim": "sales_org"
+        },
+        {
+          "col": "VTWEG",
+          "src": "VTWEG",
+          "fn": "org",
+          "dim": "distribution_channel"
+        },
+        {
+          "col": "SPART",
+          "src": "SPART",
+          "fn": "org",
+          "dim": "division"
+        },
+        {
+          "col": "VKBUR",
+          "src": "VKBUR",
+          "fn": "copy"
+        },
+        {
+          "col": "VKGRP",
+          "src": "VKGRP",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "SOLD_TO",
+    "SHIP_TO",
+    "REQ_DATE_H",
+    "PURCH_NO_C",
+    "PURCH_DATE",
+    "PO_METH_S",
+    "DOC_DATE",
+    "SALES_DIST",
+    "DLV_BLOCK",
+    "BILL_BLOCK",
+    "ORD_REASON",
+    "CT_VALID_F",
+    "CT_VALID_T",
+    "PLDLVSTYP",
+    "SHIP_COND",
+    "DLVSCHDUSE",
+    "SHIP_TYPE",
+    "INCOTERMSV",
+    "INCOTERMS2L",
+    "INCOTERMS3L"
+  ],
+  "_note": "7/27 columns auto-mapped; 20 need a decision (default/const/custom source field)."
+}

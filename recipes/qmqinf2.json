@@ -1,0 +1,114 @@
+{
+  "object": "QmQinf2",
+  "description": "SCAFFOLD \u2014 QmQinf2 from QINF into /1LT/DSS4H001019. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001019",
+      "staging_signature": [
+        "MATNR",
+        "WERK",
+        "LIEFERANT"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "QINF",
+        "fields": [
+          "CERTCONTROL",
+          "FREI_DAT",
+          "FREI_MGKZ",
+          "FREI_MNG",
+          "LIEFERANT",
+          "MATNR",
+          "QSSYSDAT",
+          "QSSYSFAM",
+          "REVLV",
+          "SPERRFKT",
+          "SPERRGRUND",
+          "VARIABNAHM",
+          "VORLABN",
+          "WERK"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "MATNR",
+          "src": "MATNR",
+          "fn": "lstrip0"
+        },
+        {
+          "col": "WERK",
+          "src": "WERK",
+          "fn": "copy"
+        },
+        {
+          "col": "LIEFERANT",
+          "src": "LIEFERANT",
+          "fn": "copy"
+        },
+        {
+          "col": "REVLV",
+          "src": "REVLV",
+          "fn": "copy"
+        },
+        {
+          "col": "FREI_DAT",
+          "src": "FREI_DAT",
+          "fn": "copy"
+        },
+        {
+          "col": "FREI_MNG",
+          "src": "FREI_MNG",
+          "fn": "copy"
+        },
+        {
+          "col": "SPERRGRUND",
+          "src": "SPERRGRUND",
+          "fn": "copy"
+        },
+        {
+          "col": "SPERRFKT",
+          "src": "SPERRFKT",
+          "fn": "copy"
+        },
+        {
+          "col": "FREI_MGKZ",
+          "src": "FREI_MGKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "QSSYSFAM",
+          "src": "QSSYSFAM",
+          "fn": "copy"
+        },
+        {
+          "col": "QSSYSDAT",
+          "src": "QSSYSDAT",
+          "fn": "copy"
+        },
+        {
+          "col": "VORLABN",
+          "src": "VORLABN",
+          "fn": "copy"
+        },
+        {
+          "col": "VARIABNAHM",
+          "src": "VARIABNAHM",
+          "fn": "copy"
+        },
+        {
+          "col": "CERTCONTROL",
+          "src": "CERTCONTROL",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "NOINSP_CL"
+  ],
+  "_note": "14/15 columns auto-mapped; 1 need a decision (default/const/custom source field)."
+}

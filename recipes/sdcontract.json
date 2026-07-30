@@ -1,0 +1,166 @@
+{
+  "object": "SdContract",
+  "description": "SCAFFOLD \u2014 SdContract from VBAK into /1LT/DSS4H001094. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001094",
+      "staging_signature": [
+        "VBELN",
+        "VKORG",
+        "VTWEG"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "VBAK",
+        "fields": [
+          "AUDAT",
+          "AUGRU",
+          "BSTDK",
+          "BSTNK",
+          "FAKSK",
+          "GUEBG",
+          "GUEEN",
+          "KTEXT",
+          "KVGR1",
+          "KVGR2",
+          "KVGR3",
+          "KVGR4",
+          "KVGR5",
+          "SPART",
+          "VBELN",
+          "VKBUR",
+          "VKGRP",
+          "VKORG",
+          "VSBED",
+          "VTWEG"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "VBELN",
+          "src": "VBELN",
+          "fn": "copy"
+        },
+        {
+          "col": "VKORG",
+          "src": "VKORG",
+          "fn": "org",
+          "dim": "sales_org"
+        },
+        {
+          "col": "VTWEG",
+          "src": "VTWEG",
+          "fn": "org",
+          "dim": "distribution_channel"
+        },
+        {
+          "col": "SPART",
+          "src": "SPART",
+          "fn": "org",
+          "dim": "division"
+        },
+        {
+          "col": "VKBUR",
+          "src": "VKBUR",
+          "fn": "copy"
+        },
+        {
+          "col": "VKGRP",
+          "src": "VKGRP",
+          "fn": "copy"
+        },
+        {
+          "col": "BSTNK",
+          "src": "BSTNK",
+          "fn": "copy"
+        },
+        {
+          "col": "BSTDK",
+          "src": "BSTDK",
+          "fn": "copy"
+        },
+        {
+          "col": "KTEXT",
+          "src": "KTEXT",
+          "fn": "copy"
+        },
+        {
+          "col": "GUEBG",
+          "src": "GUEBG",
+          "fn": "copy"
+        },
+        {
+          "col": "GUEEN",
+          "src": "GUEEN",
+          "fn": "copy"
+        },
+        {
+          "col": "FAKSK",
+          "src": "FAKSK",
+          "fn": "copy"
+        },
+        {
+          "col": "AUGRU",
+          "src": "AUGRU",
+          "fn": "copy"
+        },
+        {
+          "col": "AUDAT",
+          "src": "AUDAT",
+          "fn": "copy"
+        },
+        {
+          "col": "VSBED",
+          "src": "VSBED",
+          "fn": "copy"
+        },
+        {
+          "col": "KVGR1",
+          "src": "KVGR1",
+          "fn": "copy"
+        },
+        {
+          "col": "KVGR2",
+          "src": "KVGR2",
+          "fn": "copy"
+        },
+        {
+          "col": "KVGR3",
+          "src": "KVGR3",
+          "fn": "copy"
+        },
+        {
+          "col": "KVGR4",
+          "src": "KVGR4",
+          "fn": "copy"
+        },
+        {
+          "col": "KVGR5",
+          "src": "KVGR5",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "COART",
+    "SOLD_TO",
+    "SHIP_TO",
+    "PRSDT",
+    "INCOV",
+    "INCO1",
+    "INCO2_L",
+    "INCO3_L",
+    "ZTERM",
+    "BILL_SCHED",
+    "PYMT_METH",
+    "WBS_ELEM",
+    "NAME",
+    "TELEPHONE"
+  ],
+  "_note": "20/34 columns auto-mapped; 14 need a decision (default/const/custom source field)."
+}

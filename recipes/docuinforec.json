@@ -1,0 +1,58 @@
+{
+  "object": "DocuInforec",
+  "description": "SCAFFOLD \u2014 DocuInforec from DRAW into /1LT/DSS4H000352. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000352",
+      "staging_signature": [
+        "DOCUMENTNUMBER",
+        "DOCUMENTTYPE",
+        "DOCUMENTPART"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "DRAW",
+        "fields": [
+          "DOKAR",
+          "DOKNR",
+          "DOKTL",
+          "DOKVR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "DOCUMENTNUMBER",
+          "src": "DOKNR",
+          "fn": "copy"
+        },
+        {
+          "col": "DOCUMENTTYPE",
+          "src": "DOKAR",
+          "fn": "copy"
+        },
+        {
+          "col": "DOCUMENTPART",
+          "src": "DOKTL",
+          "fn": "copy"
+        },
+        {
+          "col": "DOCUMENTVERSION",
+          "src": "DOKVR",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "DESCRIPTION",
+    "CADINDICATOR",
+    "REFDOCUMENTNUMBER",
+    "REFDOCUMENTPART",
+    "REFDOCUMENTVERSION"
+  ],
+  "_note": "4/9 columns auto-mapped; 5 need a decision (default/const/custom source field)."
+}

@@ -1,0 +1,166 @@
+{
+  "object": "Charact",
+  "description": "SCAFFOLD \u2014 Charact from CABN into /1LT/DSS4H000159. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000159",
+      "staging_signature": [
+        "ATNAM",
+        "AENNR",
+        "ATKLA"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "CABN",
+        "fields": [
+          "AENNR",
+          "ANZDZ",
+          "ANZST",
+          "ATAEN",
+          "ATAUTH",
+          "ATEND",
+          "ATERF",
+          "ATFOR",
+          "ATINT",
+          "ATKLA",
+          "ATKLE",
+          "ATMST",
+          "ATNAM",
+          "ATPRF",
+          "ATPRT",
+          "ATSCH",
+          "ATSON",
+          "ATUNS",
+          "ATVOR",
+          "AUSWAHLMGE",
+          "WERKS"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "ATNAM",
+          "src": "ATNAM",
+          "fn": "copy"
+        },
+        {
+          "col": "AENNR",
+          "src": "AENNR",
+          "fn": "copy"
+        },
+        {
+          "col": "ATKLA",
+          "src": "ATKLA",
+          "fn": "copy"
+        },
+        {
+          "col": "ATMST",
+          "src": "ATMST",
+          "fn": "copy"
+        },
+        {
+          "col": "ATAUTH",
+          "src": "ATAUTH",
+          "fn": "copy"
+        },
+        {
+          "col": "ATFOR",
+          "src": "ATFOR",
+          "fn": "copy"
+        },
+        {
+          "col": "ANZST",
+          "src": "ANZST",
+          "fn": "copy"
+        },
+        {
+          "col": "ANZDZ",
+          "src": "ANZDZ",
+          "fn": "copy"
+        },
+        {
+          "col": "ATKLE",
+          "src": "ATKLE",
+          "fn": "copy"
+        },
+        {
+          "col": "ATSCH",
+          "src": "ATSCH",
+          "fn": "copy"
+        },
+        {
+          "col": "ATINT",
+          "src": "ATINT",
+          "fn": "copy"
+        },
+        {
+          "col": "ATVOR",
+          "src": "ATVOR",
+          "fn": "copy"
+        },
+        {
+          "col": "ATERF",
+          "src": "ATERF",
+          "fn": "copy"
+        },
+        {
+          "col": "ATUNS",
+          "src": "ATUNS",
+          "fn": "copy"
+        },
+        {
+          "col": "ATSON",
+          "src": "ATSON",
+          "fn": "copy"
+        },
+        {
+          "col": "ATPRT",
+          "src": "ATPRT",
+          "fn": "copy"
+        },
+        {
+          "col": "ATPRF",
+          "src": "ATPRF",
+          "fn": "copy"
+        },
+        {
+          "col": "WERKS",
+          "src": "WERKS",
+          "fn": "org",
+          "dim": "plant"
+        },
+        {
+          "col": "AUSWAHLMGE",
+          "src": "AUSWAHLMGE",
+          "fn": "copy"
+        },
+        {
+          "col": "ATEND",
+          "src": "ATEND",
+          "fn": "copy"
+        },
+        {
+          "col": "ATAEN",
+          "src": "ATAEN",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "EXPONENT_TYPE",
+    "EXPONENT",
+    "MSEHI_1",
+    "MSEHI_2",
+    "ATBEW",
+    "ATBEW_RES",
+    "ADT_CLASS",
+    "ADT_CLASS_TYPE",
+    "CHARTYP",
+    "CHECKOPT"
+  ],
+  "_note": "21/31 columns auto-mapped; 10 need a decision (default/const/custom source field)."
+}

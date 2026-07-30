@@ -25,7 +25,12 @@ ORG_DIMS = {"VKORG": "sales_org", "VTWEG": "distribution_channel",
 # common staging<->source name aliases (MC frequently renames keys semantically)
 ALIASES = {"PRODUCT": "MATNR", "MATERIAL": "MATNR",
            "RATE_TYPE": "KURST", "FROM_CURR": "FCURR", "TO_CURRNCY": "TCURR",
-           "MERCHANDISECATEGORY": "MATKL"}
+           "MERCHANDISECATEGORY": "MATKL",
+           # controlling / CO
+           "CO_AREA": "KOKRS", "CO_BUSPROC": "PRZNR",
+           # document management (DRAW keys)
+           "DOCUMENTTYPE": "DOKAR", "DOCUMENTNUMBER": "DOKNR",
+           "DOCUMENTPART": "DOKTL", "DOCUMENTVERSION": "DOKVR"}
 # columns whose values are material-like numbers → strip leading zeros
 LSTRIP = {"PRODUCT", "MATERIAL", "MATNR", "MATERIALBYCUSTOMER"}
 SKIP = ("MANDT",)  # never map; kit forces client

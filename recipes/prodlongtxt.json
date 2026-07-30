@@ -1,0 +1,34 @@
+{
+  "object": "ProdLongtxt",
+  "description": "SCAFFOLD \u2014 ProdLongtxt from MARA into /1LT/DSS4H000974. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000974",
+      "staging_signature": [
+        "PRODUCT"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "MARA",
+        "fields": [
+          "MATNR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "PRODUCT",
+          "src": "MATNR",
+          "fn": "lstrip0"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "RUN_ID"
+  ],
+  "_note": "1/2 columns auto-mapped; 1 need a decision (default/const/custom source field)."
+}

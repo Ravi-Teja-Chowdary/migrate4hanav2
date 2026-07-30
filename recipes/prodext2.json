@@ -1,0 +1,99 @@
+{
+  "object": "ProdExt2",
+  "description": "SCAFFOLD \u2014 ProdExt2 from MAKT into /1LT/DSS4H000948. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "text",
+      "staging_table": "/1LT/DSS4H000948",
+      "staging_signature": [
+        "PRODUCT"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "MAKT",
+        "fields": [
+          "MATNR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "PRODUCT",
+          "src": "MATNR",
+          "fn": "lstrip0"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "RUN_ID",
+    "MATKL",
+    "SPART",
+    "XCHPF",
+    "MTPOS_MARA",
+    "MSTAE",
+    "MSTDE",
+    "SERLV",
+    "QMPUR",
+    "KUNNR",
+    "BSTME",
+    "EKWSL",
+    "VABME",
+    "TRAGR",
+    "MSTAV",
+    "MSTDV",
+    "SOM_CYCLE",
+    "SOM_CYCLE_RULE",
+    "SOM_TC_SCHEMA",
+    "IPRKZ",
+    "RAUBE",
+    "ETIAR",
+    "ETIFO",
+    "WESCH",
+    "MHDHB",
+    "MHDRZ",
+    "SLED_BBD",
+    "MHDLP",
+    "RDMHD",
+    "HNDLCODE",
+    "WHMATGR",
+    "WHSTC",
+    "HUTYP_DFLT",
+    "SERIAL",
+    "PILFERABLE",
+    "HAZMAT",
+    "QQTIME",
+    "QQTIMEUOM",
+    "QGRP",
+    "HUTYP",
+    "MAXC",
+    "MAXC_TOL",
+    "TARE_VAR",
+    "MAXL",
+    "MAXDIM_UOM",
+    "MAXB",
+    "MAXH",
+    "WAUSM",
+    "WVRKM",
+    "WEKGR",
+    "BWSCL",
+    "WLADG",
+    "SSTUF",
+    "LSTVZ",
+    "LDVZL",
+    "LDBZL",
+    "LSTFL",
+    "LDVFL",
+    "LDBFL",
+    "VDVZL",
+    "VDBZL",
+    "VDVFL",
+    "VDBFL",
+    "ZZ1_CUSTOMFIELDHIGHRIS_PRD",
+    "ZZ1_CUSTOMFIELDRISKMIT_PRD",
+    "ZZ1_CUSTOMFIELDRISKREA_PRD"
+  ],
+  "_note": "1/67 columns auto-mapped; 66 need a decision (default/const/custom source field)."
+}

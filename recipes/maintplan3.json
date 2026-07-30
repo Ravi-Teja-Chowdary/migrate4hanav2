@@ -1,0 +1,162 @@
+{
+  "object": "MaintPlan3",
+  "description": "SCAFFOLD \u2014 MaintPlan3 from MPLA into /1LT/DSS4H000672. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000672",
+      "staging_signature": [
+        "WARPL",
+        "MPTYP",
+        "STRAT"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "MPLA",
+        "fields": [
+          "ABRHO",
+          "BEGRU",
+          "CALL_CONFIRM",
+          "FABKL",
+          "HORIZ",
+          "HORIZ_DAYS",
+          "HORIZ_QUALIFIER",
+          "HUNIT",
+          "MPTYP",
+          "PLAN_SORT",
+          "SFAKT",
+          "STADT",
+          "STICH",
+          "STRAT",
+          "SZAEH",
+          "TONEG",
+          "TOPOS",
+          "VSNEG",
+          "VSPOS",
+          "WARPL",
+          "WPTXT"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "WARPL",
+          "src": "WARPL",
+          "fn": "copy"
+        },
+        {
+          "col": "MPTYP",
+          "src": "MPTYP",
+          "fn": "copy"
+        },
+        {
+          "col": "STRAT",
+          "src": "STRAT",
+          "fn": "copy"
+        },
+        {
+          "col": "WPTXT",
+          "src": "WPTXT",
+          "fn": "copy"
+        },
+        {
+          "col": "VSPOS",
+          "src": "VSPOS",
+          "fn": "copy"
+        },
+        {
+          "col": "TOPOS",
+          "src": "TOPOS",
+          "fn": "copy"
+        },
+        {
+          "col": "VSNEG",
+          "src": "VSNEG",
+          "fn": "copy"
+        },
+        {
+          "col": "TONEG",
+          "src": "TONEG",
+          "fn": "copy"
+        },
+        {
+          "col": "SFAKT",
+          "src": "SFAKT",
+          "fn": "copy"
+        },
+        {
+          "col": "FABKL",
+          "src": "FABKL",
+          "fn": "copy"
+        },
+        {
+          "col": "HORIZ",
+          "src": "HORIZ",
+          "fn": "copy"
+        },
+        {
+          "col": "HORIZ_DAYS",
+          "src": "HORIZ_DAYS",
+          "fn": "copy"
+        },
+        {
+          "col": "HORIZ_QUALIFIER",
+          "src": "HORIZ_QUALIFIER",
+          "fn": "copy"
+        },
+        {
+          "col": "ABRHO",
+          "src": "ABRHO",
+          "fn": "copy"
+        },
+        {
+          "col": "HUNIT",
+          "src": "HUNIT",
+          "fn": "copy"
+        },
+        {
+          "col": "CALL_CONFIRM",
+          "src": "CALL_CONFIRM",
+          "fn": "copy"
+        },
+        {
+          "col": "STADT",
+          "src": "STADT",
+          "fn": "copy"
+        },
+        {
+          "col": "STICH",
+          "src": "STICH",
+          "fn": "copy"
+        },
+        {
+          "col": "SZAEH",
+          "src": "SZAEH",
+          "fn": "copy"
+        },
+        {
+          "col": "PLAN_SORT",
+          "src": "PLAN_SORT",
+          "fn": "copy"
+        },
+        {
+          "col": "BEGRU",
+          "src": "BEGRU",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "NRANGE_IND",
+    "ZYKL1",
+    "OFFS1",
+    "ZEIEH",
+    "PAK_TEXT",
+    "POINT",
+    "MP_TEXT"
+  ],
+  "_note": "21/28 columns auto-mapped; 7 need a decision (default/const/custom source field)."
+}

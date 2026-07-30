@@ -1,0 +1,183 @@
+{
+  "object": "GlBalance",
+  "description": "SCAFFOLD \u2014 GlBalance from BSIS into /1LT/DSS4H000554. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000554",
+      "staging_signature": [
+        "BUKRS",
+        "XBLNR",
+        "HKONT"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "BSIS",
+        "fields": [
+          "AUFNR",
+          "BLART",
+          "BLDAT",
+          "BUKRS",
+          "DMBE2",
+          "DMBE3",
+          "DMBTR",
+          "HKONT",
+          "KOSTL",
+          "MWSKZ",
+          "PRCTR",
+          "SGTXT",
+          "VALUT",
+          "WAERS",
+          "WRBTR",
+          "XBLNR",
+          "ZUONR"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "BUKRS",
+          "src": "BUKRS",
+          "fn": "copy"
+        },
+        {
+          "col": "XBLNR",
+          "src": "XBLNR",
+          "fn": "copy"
+        },
+        {
+          "col": "HKONT",
+          "src": "HKONT",
+          "fn": "copy"
+        },
+        {
+          "col": "BLART",
+          "src": "BLART",
+          "fn": "copy"
+        },
+        {
+          "col": "BLDAT",
+          "src": "BLDAT",
+          "fn": "copy"
+        },
+        {
+          "col": "SGTXT",
+          "src": "SGTXT",
+          "fn": "copy"
+        },
+        {
+          "col": "WAERS",
+          "src": "WAERS",
+          "fn": "copy"
+        },
+        {
+          "col": "WRBTR",
+          "src": "WRBTR",
+          "fn": "copy"
+        },
+        {
+          "col": "DMBTR",
+          "src": "DMBTR",
+          "fn": "copy"
+        },
+        {
+          "col": "DMBE2",
+          "src": "DMBE2",
+          "fn": "copy"
+        },
+        {
+          "col": "DMBE3",
+          "src": "DMBE3",
+          "fn": "copy"
+        },
+        {
+          "col": "MWSKZ",
+          "src": "MWSKZ",
+          "fn": "copy"
+        },
+        {
+          "col": "ZUONR",
+          "src": "ZUONR",
+          "fn": "copy"
+        },
+        {
+          "col": "VALUT",
+          "src": "VALUT",
+          "fn": "copy"
+        },
+        {
+          "col": "KOSTL",
+          "src": "KOSTL",
+          "fn": "copy"
+        },
+        {
+          "col": "PRCTR",
+          "src": "PRCTR",
+          "fn": "copy"
+        },
+        {
+          "col": "AUFNR",
+          "src": "AUFNR",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "LDGRP",
+    "DOCLN",
+    "GKONT",
+    "WWERT",
+    "ACC_PRINCIPLE",
+    "BKTXT",
+    "HWAER",
+    "HWAE2",
+    "HWAE3",
+    "TXJCD",
+    "RASSC",
+    "RMVCT",
+    "PERNR",
+    "HBKID",
+    "HKTID",
+    "FB_SEGMENT",
+    "PSPNR",
+    "MATERIAL_LONG",
+    "WORKITEM_ID",
+    "NPLNR",
+    "FUNC_AREA_LONG",
+    "JOINT_VENTURE",
+    "RECOVERY_IND",
+    "EQUITY_GROUP",
+    "COPA_KOSTL",
+    "COPA_PRCTR",
+    "COPA_FB_SEGMENT",
+    "COPA_PSPNR",
+    "COPA_KNDNR",
+    "COPA_KDGRP",
+    "COPA_BRSCH",
+    "COPA_KMLAND",
+    "COPA_BZIRK",
+    "COPA_ARTNR",
+    "COPA_KMMAKL",
+    "COPA_VKORG",
+    "COPA_VTWEG",
+    "COPA_SPART",
+    "COPA_WERKS",
+    "COPA_RKAUFNR",
+    "COPA_KUNRE",
+    "COPA_KUNWE",
+    "COPA_FKART",
+    "COPA_FKBER",
+    "COPA_GSBER",
+    "COPA_KAUFN",
+    "COPA_KDPOS",
+    "COPA_KSTRG",
+    "COPA_PPRCTR",
+    "COPA_SERVICE_DOC_ID",
+    "COPA_SERVICE_DOC_ITEM_ID",
+    "COPA_SERVICE_DOC_TYPE"
+  ],
+  "_note": "17/69 columns auto-mapped; 52 need a decision (default/const/custom source field)."
+}

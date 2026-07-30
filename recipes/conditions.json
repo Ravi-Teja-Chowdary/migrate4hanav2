@@ -1,0 +1,87 @@
+{
+  "object": "Conditions",
+  "description": "SCAFFOLD \u2014 Conditions from KONH into /1LT/DSS4H000220. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H000220",
+      "staging_signature": [
+        "KNUMH",
+        "KAPPL",
+        "KSCHL"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "KONH",
+        "fields": [
+          "DATAB",
+          "DATBI",
+          "KAPPL",
+          "KNUMH",
+          "KSCHL",
+          "LICDT",
+          "LICNO"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "KNUMH",
+          "src": "KNUMH",
+          "fn": "copy"
+        },
+        {
+          "col": "KAPPL",
+          "src": "KAPPL",
+          "fn": "copy"
+        },
+        {
+          "col": "KSCHL",
+          "src": "KSCHL",
+          "fn": "copy"
+        },
+        {
+          "col": "DATAB",
+          "src": "DATAB",
+          "fn": "copy"
+        },
+        {
+          "col": "DATBI",
+          "src": "DATBI",
+          "fn": "copy"
+        },
+        {
+          "col": "LICNO",
+          "src": "LICNO",
+          "fn": "copy"
+        },
+        {
+          "col": "LICDT",
+          "src": "LICDT",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "KRECH",
+    "KBETR_EXT",
+    "KONWA",
+    "KPEIN",
+    "KMEIN",
+    "KUMZA",
+    "KUMNE",
+    "MEINS",
+    "KZNEP",
+    "VALTG",
+    "VALDT",
+    "ZTERM",
+    "MXWRT",
+    "GKWRT",
+    "MWSK1",
+    "MWSK2"
+  ],
+  "_note": "7/23 columns auto-mapped; 16 need a decision (default/const/custom source field)."
+}

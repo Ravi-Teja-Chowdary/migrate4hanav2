@@ -1,0 +1,67 @@
+{
+  "object": "SelectedSet",
+  "description": "SCAFFOLD \u2014 SelectedSet from QPAM into /1LT/DSS4H001111. Refine map / fill unmapped, then run through migration_engine.",
+  "structures": [
+    {
+      "id": "master",
+      "staging_table": "/1LT/DSS4H001111",
+      "staging_signature": [
+        "WERKS",
+        "KATALOGART",
+        "AUSWAHLMGE"
+      ],
+      "builder": "declarative",
+      "source": {
+        "conn": "ecc",
+        "table": "QPAM",
+        "fields": [
+          "AUSWAHLMGE",
+          "KATALOGART",
+          "KSP01",
+          "KTX01",
+          "STATUS",
+          "WERKS"
+        ],
+        "where": "",
+        "limit": 20
+      },
+      "map": [
+        {
+          "col": "WERKS",
+          "src": "WERKS",
+          "fn": "org",
+          "dim": "plant"
+        },
+        {
+          "col": "KATALOGART",
+          "src": "KATALOGART",
+          "fn": "copy"
+        },
+        {
+          "col": "AUSWAHLMGE",
+          "src": "AUSWAHLMGE",
+          "fn": "copy"
+        },
+        {
+          "col": "KSP01",
+          "src": "KSP01",
+          "fn": "copy"
+        },
+        {
+          "col": "STATUS",
+          "src": "STATUS",
+          "fn": "copy"
+        },
+        {
+          "col": "KTX01",
+          "src": "KTX01",
+          "fn": "copy"
+        }
+      ]
+    }
+  ],
+  "_unmapped_staging_columns": [
+    "TEXT"
+  ],
+  "_note": "6/7 columns auto-mapped; 1 need a decision (default/const/custom source field)."
+}
