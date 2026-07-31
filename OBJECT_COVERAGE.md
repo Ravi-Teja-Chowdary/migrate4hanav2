@@ -43,6 +43,7 @@ subset. "100+" is real and if anything conservative.
 | 📥 staged via the engine | **52** | across **14 functional areas** (FI/CO, MM, SD, PP, QM, PM, PS, Classification, DMS, balances, open items, assets) — see `M02_GRIND_LOG.md`. ~35 have substantial maps; ~15 are thin key-only maps pending field mapping |
 | 🟨 legacy (pre-engine loaders) | **~8** | Customer, Vendor, Material-basic, Bank, Sales order, Cost center, Profit center, G/L |
 | ✅ **migrated + reconciled (headless, support-safe)** | **2** | **Bank** (`BAPI_BANK_CREATE`) + **G/L account** (`GL_ACCT_MASTER_SAVE_RFC`, chart INT) — ECC → official BAPI → commit → reconciled, zero GUI (`bapi_migrate.py`). Direct-API lane. G/L also surfaced real config gaps: 20/24 net-new blocked by account groups (SEM/ERG.) missing on target chart INT — a client customizing dependency, safely detected via TESTMODE. |
+| 🔧 **migrator built + validated, 0 net-new on this box** | **1** | **Cost Center** (`BAPI_COSTCENTER_CREATEMULTIPLE`, org-map 1000→A000, TESTRUN-validated). Net-new=0 because this IDES↔IDES pair fully overlaps cost-center numbers; same create pattern as Bank/G/L — ready for real client data. |
 | ⬜ recipe not yet written | **~178** | mostly industry objects (EHS, oil&gas PRA, JVA, treasury, HCM) with no ECC source data |
 
 > **What changed today:** the ceiling moved from "3 staged, ~90 not started (no

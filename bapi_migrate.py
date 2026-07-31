@@ -147,7 +147,53 @@ def migrate_glaccount(eng, limit, commit, coa="INT"):
         print(f"=== GLAccount: created={ok} === RECONCILE: {landed}/{len(netnew)} on target (chart {coa})")
 
 
-HANDLERS = {"GLAccount": migrate_glaccount}   # objects needing a custom (non-flat) BAPI shape
+def migrate_costcenter(eng, limit, commit, src_ca="1000", tgt_ca="A000",
+                       hier="0001", comp="1010", cur="EUR"):
+    """Cost centers via SAP official BAPI_COSTCENTER_CREATEMULTIPLE (support-safe).
+    Org-maps ECC controlling area -> target (default 1000->A000) and lands each on the
+    target's existing hierarchy node / company code / a valid profit center. Every
+    record is TESTRUN-validated before write. Net-new only.
+    NOTE: on an IDES<->IDES pair cost-center numbers fully overlap (net-new=0); on a
+    real client whose fresh S/4 lacks the cost centers this creates + reconciles them."""
+    ecc, tgt = eng.ecc, eng.tgt
+    tgt_cc = {r["KOSTL"].strip() for r in eng.read_table(tgt, "CSKS", ["KOSTL"], "KOKRS = '%s'" % tgt_ca)}
+    a000_pc = {r["PRCTR"].strip() for r in eng.read_table(tgt, "CEPC", ["PRCTR"], "KOKRS = '%s'" % tgt_ca)}
+    def_pc = sorted(a000_pc)[0] if a000_pc else ""
+    src = eng.read_table(ecc, "CSKS", ["KOSTL", "DATAB", "DATBI", "VERAK", "KOSAR", "PRCTR"],
+                         "KOKRS = '%s'" % src_ca)
+    nm = {r["KOSTL"].strip(): r for r in eng.read_table(ecc, "CSKT", ["KOSTL", "KTEXT", "LTEXT"],
+          "KOKRS = '%s' AND SPRAS = 'E'" % src_ca)}
+    netnew = [r for r in src if r["KOSTL"].strip() not in tgt_cc][:limit]
+    print(f"CostCenter {src_ca}->{tgt_ca}: source={len(src)} on-target={len(tgt_cc)} "
+          f"net-new={len(netnew)}" + ("" if commit else "  [DRY/TESTRUN]"))
+    if not netnew:
+        print("  net-new=0 (full overlap on this system) — nothing to create."); return
+    rows = []
+    for r in netnew:
+        k = r["KOSTL"].strip(); t = nm.get(k, {})
+        pc = r["PRCTR"].strip() if r["PRCTR"].strip() in a000_pc else def_pc
+        rows.append({"COSTCENTER": k, "VALID_FROM": r["DATAB"].strip() or "20200101",
+                     "VALID_TO": r["DATBI"].strip() or "99991231",
+                     "PERSON_IN_CHARGE": r["VERAK"].strip()[:20],
+                     "COSTCENTER_TYPE": r["KOSAR"].strip() or "G", "COSTCTR_HIER_GRP": hier,
+                     "COMP_CODE": comp, "CURRENCY": cur, "PROFIT_CTR": pc,
+                     "NAME": (t.get("KTEXT", "").strip() or ("CC " + k))[:20],
+                     "DESCRIPT": (t.get("LTEXT", "").strip() or t.get("KTEXT", "").strip() or ("Cost center " + k))[:40]})
+    ret = tgt.call("BAPI_COSTCENTER_CREATEMULTIPLE", CONTROLLINGAREA=tgt_ca,
+                   COSTCENTERLIST=rows, TESTRUN="X").get("RETURN", [])
+    errs = [x for x in ret if x["TYPE"] in ("E", "A")]
+    print(f"  TESTRUN: {len(errs)} errors")
+    for x in errs[:8]:
+        print(f"     ERR row {x.get('ROW','')}: {x['MESSAGE'][:75]}")
+    if commit and not errs:
+        tgt.call("BAPI_COSTCENTER_CREATEMULTIPLE", CONTROLLINGAREA=tgt_ca, COSTCENTERLIST=rows, TESTRUN="")
+        tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        after = {r["KOSTL"].strip() for r in eng.read_table(tgt, "CSKS", ["KOSTL"], "KOKRS = '%s'" % tgt_ca)}
+        landed = sum(1 for r in netnew if r["KOSTL"].strip() in after)
+        print(f"=== CostCenter RECONCILE: {landed}/{len(netnew)} now in {tgt_ca} ===")
+
+
+HANDLERS = {"GLAccount": migrate_glaccount, "CostCenter": migrate_costcenter}
 
 
 if __name__ == "__main__":
