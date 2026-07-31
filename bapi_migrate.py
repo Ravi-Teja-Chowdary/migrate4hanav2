@@ -193,7 +193,96 @@ def migrate_costcenter(eng, limit, commit, src_ca="1000", tgt_ca="A000",
         print(f"=== CostCenter RECONCILE: {landed}/{len(netnew)} now in {tgt_ca} ===")
 
 
-HANDLERS = {"GLAccount": migrate_glaccount, "CostCenter": migrate_costcenter}
+def migrate_characteristic(eng, limit, commit):
+    """Characteristics via BAPI_CHARACT_CREATE (support-safe, client-level, no org)."""
+    ecc, tgt = eng.ecc, eng.tgt
+    tset = {r["ATNAM"].strip() for r in eng.read_table(tgt, "CABN", ["ATNAM"])}
+    src = eng.read_table(ecc, "CABN", ["ATINN", "ATNAM", "ATFOR", "ANZST", "ANZDZ"])
+    desc = {r["ATINN"].strip(): r["ATBEZ"].strip()
+            for r in eng.read_table(ecc, "CABNT", ["ATINN", "ATBEZ", "SPRAS"], "SPRAS = 'E'")}
+    netnew = [r for r in src if r["ATNAM"].strip() and r["ATNAM"].strip() not in tset][:limit]
+    print(f"Characteristic: net-new={len(netnew)}" + ("" if commit else "  [DRY]"))
+    ok = fail = 0
+    for r in netnew:
+        nm = r["ATNAM"].strip(); fmt = r["ATFOR"].strip() or "CHAR"
+        det = {"CHARACT_NAME": nm, "DATA_TYPE": fmt, "STATUS": "1"}
+        if fmt in ("NUM", "CURR"):
+            det["LENGTH"] = str(int(r["ANZST"] or 0) or 1); det["DECIMALS"] = str(int(r["ANZDZ"] or 0))
+        elif fmt == "CHAR":
+            det["LENGTH"] = str(int(r["ANZST"] or 0) or 30)
+        dsc = [{"LANGUAGE_INT": "E", "LANGUAGE_ISO": "EN", "DESCRIPTION": desc.get(r["ATINN"].strip(), nm)[:30]}]
+        if not commit:
+            continue
+        er = [x for x in [tgt.call("BAPI_CHARACT_CREATE", CHARACTDETAIL=det, CHARACTDESCR=dsc).get("RETURN", {})]
+              if x.get("TYPE") in ("E", "A")]
+        if er:
+            fail += 1; tgt.call("BAPI_TRANSACTION_ROLLBACK")
+        else:
+            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
+    if commit:
+        after = {r["ATNAM"].strip() for r in eng.read_table(tgt, "CABN", ["ATNAM"])}
+        landed = sum(1 for r in netnew if r["ATNAM"].strip() in after)
+        print(f"=== Characteristic created={ok} failed={fail} | RECONCILE {landed}/{len(netnew)} ===")
+
+
+def migrate_class(eng, limit, commit):
+    """Classes via BAPI_CLASS_CREATE (support-safe, no org)."""
+    ecc, tgt = eng.ecc, eng.tgt
+    tk = {(r["CLASS"].strip(), r["KLART"].strip()) for r in eng.read_table(tgt, "KLAH", ["CLASS", "KLART"])}
+    src = eng.read_table(ecc, "KLAH", ["CLASS", "KLART"])
+    netnew = [r for r in src if (r["CLASS"].strip(), r["KLART"].strip()) not in tk][:limit]
+    print(f"Class: net-new={len(netnew)}" + ("" if commit else "  [DRY]"))
+    ok = fail = 0
+    for r in netnew:
+        cls, kl = r["CLASS"].strip(), r["KLART"].strip()
+        if not commit:
+            continue
+        res = tgt.call("BAPI_CLASS_CREATE", CLASSNUMNEW=cls, CLASSTYPENEW=kl,
+                       CLASSBASICDATA={"STATUS": "1"},
+                       CLASSDESCRIPTIONS=[{"LANGU": "E", "LANGU_ISO": "EN", "CATCHWORD": cls[:30]}], TESTRUN="")
+        if [x for x in res.get("RETURN", []) if x["TYPE"] in ("E", "A")]:
+            fail += 1; tgt.call("BAPI_TRANSACTION_ROLLBACK")
+        else:
+            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
+    if commit:
+        ta = {(r["CLASS"].strip(), r["KLART"].strip()) for r in eng.read_table(tgt, "KLAH", ["CLASS", "KLART"])}
+        landed = sum(1 for r in netnew if (r["CLASS"].strip(), r["KLART"].strip()) in ta)
+        print(f"=== Class created={ok} failed={fail} | RECONCILE {landed}/{len(netnew)} ===")
+
+
+def migrate_profitcenter(eng, limit, commit, src_ca="1000", tgt_ca="A000"):
+    """Profit centers via BAPI_PROFITCENTER_CREATE (support-safe). Org-map 1000->A000.
+    Net-new=0 on IDES<->IDES (full overlap); ready for real client data."""
+    ecc, tgt = eng.ecc, eng.tgt
+    tset = {r["PRCTR"].strip() for r in eng.read_table(tgt, "CEPC", ["PRCTR"], "KOKRS = '%s'" % tgt_ca)}
+    src = {r["PRCTR"].strip(): r for r in eng.read_table(ecc, "CEPC", ["PRCTR"], "KOKRS = '%s'" % src_ca)}
+    nm = {r["PRCTR"].strip(): r for r in eng.read_table(ecc, "CEPCT", ["PRCTR", "KTEXT", "LTEXT"],
+          "KOKRS = '%s' AND SPRAS = 'E'" % src_ca)}
+    netnew = [p for p in src if p not in tset][:limit]
+    print(f"ProfitCenter {src_ca}->{tgt_ca}: net-new={len(netnew)}" + ("" if commit else "  [DRY]"))
+    if not netnew:
+        print("  net-new=0 (full overlap on this system) — nothing to create."); return
+    ok = fail = 0
+    for p in netnew:
+        t = nm.get(p, {})
+        basic = {"PRCTR_NAME": (t.get("KTEXT", "").strip() or p)[:20],
+                 "LONG_TEXT": (t.get("LTEXT", "").strip() or p)[:40], "PRCTR_HIER_GRP": ""}
+        if not commit:
+            continue
+        res = tgt.call("BAPI_PROFITCENTER_CREATE", PROFITCENTERID={"CO_AREA": tgt_ca, "PROFIT_CTR": p},
+                       BASICDATA=basic, VALIDFROM="20200101", VALIDTO="99991231", TESTRUN="")
+        r = res.get("RETURN", {})
+        if (r if isinstance(r, dict) else {}).get("TYPE") in ("E", "A"):
+            fail += 1
+        else:
+            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
+    if commit:
+        print(f"=== ProfitCenter created={ok} failed={fail} ===")
+
+
+HANDLERS = {"GLAccount": migrate_glaccount, "CostCenter": migrate_costcenter,
+            "Characteristic": migrate_characteristic, "Class": migrate_class,
+            "ProfitCenter": migrate_profitcenter}
 
 
 if __name__ == "__main__":
