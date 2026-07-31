@@ -134,9 +134,18 @@ whose S/4 has materials fully extended. Blocked-here = target data gap, NOT a to
 | Open delivery (inbound/outbound) | ⬜ none | `BAPI_OUTB_DELIVERY_CREATE_SLS` present; follows sales order |
 
 ## Bucket 3 — Balances (the high-stakes core)
+**Lane: `bucket3_migrate.py`** (direct-API, support-safe — posts via `BAPI_ACC_DOCUMENT_POST`,
+every document must balance to zero or SAP refuses it; never table-injected). Proven on
+the fully-configured client 100. The FI posting mechanism is proven (balanced journal
+entry posted headless, BELNR read back). Key real-world dependencies surfaced: (1) post
+to a company code whose **posting period is open** (go-live date); (2) accounts must be
+**classified for document splitting** — the engine self-adapts with a CHECK/drop loop;
+(3) faithful takeover needs a **chart-of-accounts map** when source chart (INT) ≠ target
+operational chart (YCOA) — a governed step like org-mapping; identity+automatic on same-COA.
+
 | Object | Status | Mechanism / notes |
 |---|---|---|
-| G/L account balances | ⬜ none | Phase D1 — post to migration clearing acct |
+| G/L account balances | ✅ engine proven | `BAPI_ACC_DOCUMENT_POST`; reads ECC GLT0 net balances, posts balance-sheet accounts vs a takeover clearing account, **reconciled 6/6 to the cent** (doc 0100000004/2026, cocode 1010). Faithful full run needs a governed INT→YCOA account map. |
 | G/L / AR open items | ⬜ none | Phase D2 |
 | AP open items | ⬜ none | Phase D2 |
 | Inventory / material stock (qty+value) | ⬜ none | Phase D3 — BAPI_GOODSMVT_CREATE mvt 561 |
