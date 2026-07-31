@@ -374,9 +374,57 @@ def migrate_equipment(eng, limit, commit, plant="1710"):
         print(f"=== Equipment created={ok} failed={fail} | RECONCILE {landed}/{len(made)} ===")
 
 
+def migrate_fixedasset(eng, limit, commit, cmap=None):
+    """Fixed asset masters via SAP official BAPI_FIXEDASSET_CREATE1 (support-safe) — the
+    sanctioned FI-AA takeover API. Org-maps ECC company code -> target (default
+    1000->1010, 3000->1710), lands only assets whose asset CLASS exists on the target
+    (else a customizing gap the client closes), and TESTRUN-validates every asset before
+    the real create. Target assigns the asset number (internal numbering). Net-new only.
+    NOTE: this creates the asset MASTER; cumulative takeover VALUES are Bucket-3 balances."""
+    ecc, tgt = eng.ecc, eng.tgt
+    cmap = cmap or {"1000": "1010", "3000": "1710"}
+    tcls = {r["ANLKL"].strip() for r in eng.read_table(tgt, "ANKA", ["ANLKL"])}
+    faap = {r["BUKRS"].strip() for r in eng.read_table(tgt, "T093C", ["BUKRS", "AFAPL"])}
+    src = eng.read_table(ecc, "ANLA", ["BUKRS", "ANLN1", "ANLN2", "ANLKL", "TXT50"], "ANLN2 = '0000'")
+    cand = [r for r in src if cmap.get(r["BUKRS"].strip()) in faap and r["ANLKL"].strip() in tcls]
+    gap = [r for r in src if cmap.get(r["BUKRS"].strip()) in faap and r["ANLKL"].strip() not in tcls]
+    netnew = cand[:limit]
+    print(f"FixedAsset: mappable&class-on-target={len(cand)} config-gap(class missing)={len(gap)} "
+          f"processing={len(netnew)}" + ("" if commit else "  [DRY/TESTRUN]"))
+    ok = fail = 0; errors = []; made = []
+    for r in netnew:
+        cc = cmap[r["BUKRS"].strip()]; cls = r["ANLKL"].strip()
+        gen = {"ASSETCLASS": cls, "DESCRIPT": (r["TXT50"].strip() or "Asset " + r["ANLN1"].strip())[:50]}
+        src_key = "%s/%s" % (r["BUKRS"].strip(), r["ANLN1"].strip())
+        vr = tgt.call("BAPI_FIXEDASSET_CREATE1", KEY={"COMPANYCODE": cc}, GENERALDATA=gen, TESTRUN="X").get("RETURN", {})
+        vl = vr if isinstance(vr, list) else [vr]
+        verr = [m for m in vl if m.get("TYPE") in ("E", "A")]
+        if verr:
+            fail += 1; errors.append("%s: %s" % (src_key, verr[0].get("MESSAGE", "")[:65])); continue
+        if not commit:
+            continue
+        res = tgt.call("BAPI_FIXEDASSET_CREATE1", KEY={"COMPANYCODE": cc}, GENERALDATA=gen)
+        rl = res.get("RETURN", {}); rl = rl if isinstance(rl, list) else [rl]
+        newno = (res.get("ASSET", {}) or {}).get("ASSETMAINO", "").strip()
+        if any(m.get("TYPE") in ("E", "A") for m in rl) or not newno:
+            fail += 1; errors.append("%s: %s" % (src_key, (rl[0].get("MESSAGE", "") if rl else "no number")[:65]))
+            tgt.call("BAPI_TRANSACTION_ROLLBACK")
+        else:
+            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1; made.append((cc, newno))
+    if commit:
+        print(f"=== FixedAsset created={ok} failed={fail} ===")
+        for e in errors[:8]:
+            print("   ERR", e)
+        after = {(r["BUKRS"].strip(), r["ANLN1"].strip().lstrip("0"))
+                 for r in eng.read_table(tgt, "ANLA", ["BUKRS", "ANLN1"])}
+        landed = sum(1 for cc, no in made if (cc, no.lstrip("0")) in after)
+        print(f"RECONCILE: {landed}/{len(made)} assets now on target")
+
+
 HANDLERS = {"GLAccount": migrate_glaccount, "CostCenter": migrate_costcenter,
             "Characteristic": migrate_characteristic, "Class": migrate_class,
             "ProfitCenter": migrate_profitcenter, "Equipment": migrate_equipment,
+            "FixedAsset": migrate_fixedasset,
             "Customer": migrate_customer, "Vendor": migrate_vendor}
 
 
