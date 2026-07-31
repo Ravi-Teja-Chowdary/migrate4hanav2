@@ -421,10 +421,57 @@ def migrate_fixedasset(eng, limit, commit, cmap=None):
         print(f"RECONCILE: {landed}/{len(made)} assets now on target")
 
 
+def migrate_document(eng, limit, commit):
+    """Document info records (DMS) via SAP official BAPI_DOCUMENT_CREATE2 (support-safe).
+    Lands only documents whose document TYPE exists on the target (else a customizing
+    gap). Self-adapting numbering: tries to preserve the original document number
+    (external-numbered types); if the type is internal-numbered the target assigns the
+    number instead. Net-new only."""
+    ecc, tgt = eng.ecc, eng.tgt
+    tdwa = {r["DOKAR"].strip() for r in eng.read_table(tgt, "TDWA", ["DOKAR"])}
+    tdraw = {(r["DOKAR"].strip(), r["DOKNR"].strip(), r["DOKTL"].strip(), r["DOKVR"].strip())
+             for r in eng.read_table(tgt, "DRAW", ["DOKAR", "DOKNR", "DOKTL", "DOKVR"])}
+    src = eng.read_table(ecc, "DRAW", ["DOKAR", "DOKNR", "DOKTL", "DOKVR", "DWNAM"])
+    netnew = [r for r in src if r["DOKAR"].strip() in tdwa
+              and (r["DOKAR"].strip(), r["DOKNR"].strip(), r["DOKTL"].strip(), r["DOKVR"].strip()) not in tdraw]
+    gap = [r for r in src if r["DOKAR"].strip() not in tdwa]
+    proc = netnew[:limit]
+    print(f"Document: net-new(type-on-target)={len(netnew)} config-gap(type missing)={len(gap)} "
+          f"processing={len(proc)}" + ("" if commit else "  [DRY]"))
+    before = len(tdraw)
+    ok = fail = 0; errors = []
+    for r in proc:
+        typ = r["DOKAR"].strip(); num = r["DOKNR"].strip()
+        base = {"DOCUMENTTYPE": typ, "DOCUMENTPART": r["DOKTL"].strip() or "000",
+                "DOCUMENTVERSION": r["DOKVR"].strip() or "00", "DESCRIPTION": ("Document " + num)[:40],
+                "USERNAME": r["DWNAM"].strip()[:12]}
+        if not commit:
+            continue
+        dd = dict(base, DOCUMENTNUMBER=num)
+        res = tgt.call("BAPI_DOCUMENT_CREATE2", DOCUMENTDATA=dd)
+        rl = res.get("RETURN", {}); rl = rl if isinstance(rl, list) else [rl]
+        if any("internally" in (m.get("MESSAGE", "") or "") for m in rl):   # internal-numbered type
+            tgt.call("BAPI_TRANSACTION_ROLLBACK")
+            res = tgt.call("BAPI_DOCUMENT_CREATE2", DOCUMENTDATA=base)
+            rl = res.get("RETURN", {}); rl = rl if isinstance(rl, list) else [rl]
+        if any(m.get("TYPE") in ("E", "A") for m in rl):
+            fail += 1; errors.append("%s/%s: %s" % (typ, num, (rl[0].get("MESSAGE", "") if rl else "")[:60]))
+            tgt.call("BAPI_TRANSACTION_ROLLBACK")
+        else:
+            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
+    if commit:
+        print(f"=== Document created={ok} failed={fail} ===")
+        for e in errors[:8]:
+            print("   ERR", e)
+        after = len({(r["DOKAR"].strip(), r["DOKNR"].strip(), r["DOKTL"].strip(), r["DOKVR"].strip())
+                     for r in eng.read_table(tgt, "DRAW", ["DOKAR", "DOKNR", "DOKTL", "DOKVR"])})
+        print(f"RECONCILE: target DRAW {before} -> {after} (+{after - before})")
+
+
 HANDLERS = {"GLAccount": migrate_glaccount, "CostCenter": migrate_costcenter,
             "Characteristic": migrate_characteristic, "Class": migrate_class,
             "ProfitCenter": migrate_profitcenter, "Equipment": migrate_equipment,
-            "FixedAsset": migrate_fixedasset,
+            "FixedAsset": migrate_fixedasset, "Document": migrate_document,
             "Customer": migrate_customer, "Vendor": migrate_vendor}
 
 

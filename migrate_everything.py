@@ -46,6 +46,7 @@ DIRECT = {
     "Z_CHARACT_M02": "Characteristic", "Z_CLASS_2_M02": "Class",
     "Z_KOSTL_MASTER_M02": "CostCenter", "Z_PRCTR_MSTR2_M02": "ProfitCenter",
     "Z_EQUIPMENT_2_M02": "Equipment", "Z_FIXED_ASSET_M02": "FixedAsset",
+    "Z_DOCU_INFOREC_M02": "Document",
 }
 
 
