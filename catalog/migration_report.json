@@ -1,0 +1,1370 @@
+[
+ {
+  "object": "Z_BANK_2_M02",
+  "lane": "direct-api",
+  "handler": "Bank",
+  "result": "ready"
+ },
+ {
+  "object": "Z_CHARACT_M02",
+  "lane": "direct-api",
+  "handler": "Characteristic",
+  "result": "ready"
+ },
+ {
+  "object": "Z_CLASS_2_M02",
+  "lane": "direct-api",
+  "handler": "Class",
+  "result": "ready"
+ },
+ {
+  "object": "Z_CUSTOMER_2_M02",
+  "lane": "direct-api",
+  "handler": "Customer",
+  "result": "ready"
+ },
+ {
+  "object": "Z_GL_ACCOUNT_3_M02",
+  "lane": "direct-api",
+  "handler": "GLAccount",
+  "result": "ready"
+ },
+ {
+  "object": "Z_KOSTL_MASTER_M02",
+  "lane": "direct-api",
+  "handler": "CostCenter",
+  "result": "ready"
+ },
+ {
+  "object": "Z_PRCTR_MSTR2_M02",
+  "lane": "direct-api",
+  "handler": "ProfitCenter",
+  "result": "ready"
+ },
+ {
+  "object": "Z_VENDOR_2_M02",
+  "lane": "direct-api",
+  "handler": "Vendor",
+  "result": "ready"
+ },
+ {
+  "object": "Z_ACT_PRICE_M02",
+  "lane": "staging",
+  "src": "ACT_PRICE_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_BATCHES_M02",
+  "lane": "staging",
+  "src": "MCH1",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_BATCHES_PLANT_M02",
+  "lane": "staging",
+  "src": "MCH1",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_BATCH_DETN_M02",
+  "lane": "staging",
+  "src": "BDT_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_BOM_3_M02",
+  "lane": "staging",
+  "src": "STKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_BOM_M02",
+  "lane": "staging",
+  "src": "STKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_CHANGE_MSTR_M02",
+  "lane": "staging",
+  "src": "AENR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CHARACT_GRP_M02",
+  "lane": "staging",
+  "src": "VCH_HL_GRP",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CLASS_HIERA_M02",
+  "lane": "staging",
+  "src": "KLAH",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_CLF_DRAW_M02",
+  "lane": "staging",
+  "src": "CLF_KSSK_HEAD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CLF_EINA_M02",
+  "lane": "staging",
+  "src": "CLF_KSSK_HEAD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CLF_MARA_M02",
+  "lane": "staging",
+  "src": "CLF_MAT_KSSK_HEAD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CLF_OBJ_M02",
+  "lane": "staging",
+  "src": "CLF_MAT_KSSK_HEAD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CLF_QMTB_M02",
+  "lane": "staging",
+  "src": "CLF_KSSK_HEAD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CLF_QPAM_M02",
+  "lane": "staging",
+  "src": "CLF_KSSK_HEAD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CLF_QPGR_M02",
+  "lane": "staging",
+  "src": "CLF_KSSK_HEAD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CLF_QPMK_M02",
+  "lane": "staging",
+  "src": "CLF_KSSK_HEAD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CONDITIONS_M02",
+  "lane": "staging",
+  "src": "KONH",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_CONFIG_PROF_M02",
+  "lane": "staging",
+  "src": "ATTRIBUTES",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CONSENT_M02",
+  "lane": "staging",
+  "src": "CONSENT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CONTRACTS_M02",
+  "lane": "staging",
+  "src": "EKKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_CON_CONTRACT_M02",
+  "lane": "staging",
+  "src": "HEADDATAIN",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CO_BUS_PROC_M02",
+  "lane": "staging",
+  "src": "BUSINESS_PROCESS",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CO_STAKEYFIG_M02",
+  "lane": "staging",
+  "src": "KEYFIGURE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CRED_CTRL_M02",
+  "lane": "staging",
+  "src": "MIG_FILES",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CUSTMAT_INF_M02",
+  "lane": "staging",
+  "src": "KNMT",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_CUST_EXT_TH_M02",
+  "lane": "staging",
+  "src": "FITHA_PBUPL_D",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_CUST_UKM_2_M02",
+  "lane": "staging",
+  "src": "UKM_PROFILE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_DD_MANDATE_M02",
+  "lane": "staging",
+  "src": "DD_MANDATE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_DG_CBR_UP_2_M02",
+  "lane": "staging",
+  "src": "CCI_ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_DG_PP_PROD_2_M02",
+  "lane": "staging",
+  "src": "CCI_ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_DG_SUB_TNAM_M02",
+  "lane": "staging",
+  "src": "TNAME",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_DG_UNP_PROD_M02",
+  "lane": "staging",
+  "src": "CRR_ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_DOCU_INFOREC_M02",
+  "lane": "staging",
+  "src": "DRAW",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_EAM_MEAS_DOC_M02",
+  "lane": "staging",
+  "src": "MEASUREMENT_DOCU",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EAM_MEAS_PNT_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EAM_NOTIF_M02",
+  "lane": "staging",
+  "src": "NOTIF_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EFD_REINF_M02",
+  "lane": "staging",
+  "src": "REINF_FILES",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_ADEF_M02",
+  "lane": "staging",
+  "src": "ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_AGGRCL_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_CDEF_M02",
+  "lane": "staging",
+  "src": "ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_CLASSIF_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_EMSUB_M02",
+  "lane": "staging",
+  "src": "ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_IDEV_M02",
+  "lane": "staging",
+  "src": "ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_LOCATION_M02",
+  "lane": "staging",
+  "src": "LOCATION",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_LOC_HR_2_M02",
+  "lane": "staging",
+  "src": "LHR_REVISION",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_LOC_HR_3_M02",
+  "lane": "staging",
+  "src": "LHR_REVISION",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_MDEF_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_PHYSPARM_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_RAWMAT_2_M02",
+  "lane": "staging",
+  "src": "EHFNDD_CCI",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_REQ_M02",
+  "lane": "staging",
+  "src": "ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_SCEN_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_SDEF_M02",
+  "lane": "staging",
+  "src": "ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_TDEF_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EHS_UNP_PR_2_M02",
+  "lane": "staging",
+  "src": "EHFNDD_CCI",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EQUIPMENT_2_M02",
+  "lane": "staging",
+  "src": "EQUI",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_EQUI_BOM_M02",
+  "lane": "staging",
+  "src": "STKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_EQUI_TL_M02",
+  "lane": "staging",
+  "src": "PLKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_EWM_BIN_ASN_M02",
+  "lane": "staging",
+  "src": "EWM_BINMAT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EWM_BIN_M02",
+  "lane": "staging",
+  "src": "LAGP",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_EWM_BIN_SORT_M02",
+  "lane": "staging",
+  "src": "LAGPS",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EWM_STOCK_2_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_EXCH_RATE_M02",
+  "lane": "staging",
+  "src": "TCURR",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_FIRA_CONTR_2_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_FIXED_ASSET_M02",
+  "lane": "staging",
+  "src": "ANLA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_FI_HIST_BAL3_M02",
+  "lane": "staging",
+  "src": "ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_FLOC_TL_M02",
+  "lane": "staging",
+  "src": "PLKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_FL_CONTAINER_M02",
+  "lane": "staging",
+  "src": "FLOG_SHPTCTN",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_FL_SUPLRITEM_M02",
+  "lane": "staging",
+  "src": "FLOG_SUPLRITEM",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_FUNC_BOM_M02",
+  "lane": "staging",
+  "src": "FL_BOM_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_FUNC_LOC_2_M02",
+  "lane": "staging",
+  "src": "IFLOT",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_GENMT_TL_M02",
+  "lane": "staging",
+  "src": "PLKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_GL_ACC_EXT_M02",
+  "lane": "staging",
+  "src": "SKA1",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_GL_BALANCE_M02",
+  "lane": "staging",
+  "src": "BSIS",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_HANDL_UNIT_M02",
+  "lane": "staging",
+  "src": "BUNDLES",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_HCM_EMPLOYEE_M02",
+  "lane": "staging",
+  "src": "EMPLOYEE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_HCM_OBJECT_M02",
+  "lane": "staging",
+  "src": "PD_OBJECT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_HCM_RELAT_M02",
+  "lane": "staging",
+  "src": "PD_OBJECT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_INSP_METHOD_M02",
+  "lane": "staging",
+  "src": "QMTB",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_INSP_PLAN_2_M02",
+  "lane": "staging",
+  "src": "PLKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_INTORDER_2_M02",
+  "lane": "staging",
+  "src": "AUFK",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_INVENTORY_2_M02",
+  "lane": "staging",
+  "src": "MARA",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_JVA_JOA_M02",
+  "lane": "staging",
+  "src": "JOA",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_JVA_PARTNER_M02",
+  "lane": "staging",
+  "src": "T8JO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_JVA_SUS_CC_M02",
+  "lane": "staging",
+  "src": "T8J_SUS_CC",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_JVA_SUS_JV_M02",
+  "lane": "staging",
+  "src": "T8J_SUS_VENTURE",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_JVA_SUS_PRJ_M02",
+  "lane": "staging",
+  "src": "T8JP",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_JVA_VENTURE2_M02",
+  "lane": "staging",
+  "src": "JOINT_VENTURE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_LCM_LEGALDOC_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_LCM_LEGALTR_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_LISTEXCL_CND_M02",
+  "lane": "staging",
+  "src": "LE_CND_HDR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_LSTAR_CREATE_M02",
+  "lane": "staging",
+  "src": "CSLA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_MAINT_ITEM_M02",
+  "lane": "staging",
+  "src": "MPOS",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_MAINT_PLAN_3_M02",
+  "lane": "staging",
+  "src": "MPLA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_MATDET_2_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_MAT_COMMCODE_M02",
+  "lane": "staging",
+  "src": "MARC",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_MAT_CONSUMP_M02",
+  "lane": "staging",
+  "src": "MARA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_MAT_LEGAL_M02",
+  "lane": "staging",
+  "src": "MARA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_MAT_VARIANT2_M02",
+  "lane": "staging",
+  "src": "MARA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_MEMO_RECORD_M02",
+  "lane": "staging",
+  "src": "FQM_FLOW",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_MGM_INCIDENT_M02",
+  "lane": "staging",
+  "src": "INCIDENT_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_MM_CONDITION_M02",
+  "lane": "staging",
+  "src": "KONH",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_MOC_ISSUE_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_MSTR_CHAR_M02",
+  "lane": "staging",
+  "src": "QPMK",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_NJIT_COMGRP_M02",
+  "lane": "staging",
+  "src": "NJIT_GROUP",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_NJIT_CUST_M02",
+  "lane": "staging",
+  "src": "NJIT_CUST_HDR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_NJIT_PKG_GRP_M02",
+  "lane": "staging",
+  "src": "NJIT_PKG_HDR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_NJIT_SUPCTR2_M02",
+  "lane": "staging",
+  "src": "NJIT_SC_HDR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_OPEN_ITEM_AP_M02",
+  "lane": "staging",
+  "src": "BSIK",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_OPEN_ITEM_AR_M02",
+  "lane": "staging",
+  "src": "BSID",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PC_CRR_CCC_M02",
+  "lane": "staging",
+  "src": "CRR_ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_CRR_SCC_M02",
+  "lane": "staging",
+  "src": "CRR_ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_CRR_SLI_M02",
+  "lane": "staging",
+  "src": "CRR_ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_ECOPRTY_M02",
+  "lane": "staging",
+  "src": "ECOTOX",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_MBC_M02",
+  "lane": "staging",
+  "src": "CCI",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_PHYSPRTY_M02",
+  "lane": "staging",
+  "src": "PHYS_CHEM",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_SBC_AC_M02",
+  "lane": "staging",
+  "src": "COMPOSITION",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_SBC_CBI_M02",
+  "lane": "staging",
+  "src": "COMPOSITION",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_SBC_POLY_M02",
+  "lane": "staging",
+  "src": "SUBSTANCE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_SDS_CRR_M02",
+  "lane": "staging",
+  "src": "CRR_ROOT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_SDS_SHIPM_M02",
+  "lane": "staging",
+  "src": "SHIPMENT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_SFTYPRTY_M02",
+  "lane": "staging",
+  "src": "SAFETY_RELATED",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PC_USE_M02",
+  "lane": "staging",
+  "src": "USE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PM_MAINTORD2_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PP_MSTRRCP_M02",
+  "lane": "staging",
+  "src": "RECIPE_GROUP",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PP_PROCORD_M02",
+  "lane": "staging",
+  "src": "ORD_HDR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PP_PRODNORD_M02",
+  "lane": "staging",
+  "src": "ORD_HDR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PP_PSA_M02",
+  "lane": "staging",
+  "src": "PVBE",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PRA_CAMALOXF_M02",
+  "lane": "staging",
+  "src": "ALLOC_XREF_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_CAMCHEMA_M02",
+  "lane": "staging",
+  "src": "CA_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_CAMMKTGA_M02",
+  "lane": "staging",
+  "src": "MKTGA_H",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_CAMWMCTX_M02",
+  "lane": "staging",
+  "src": "CT_MP_WC_X",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_CATCTVOL_M02",
+  "lane": "staging",
+  "src": "CA_VOL_H",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_CIMPDX_M02",
+  "lane": "staging",
+  "src": "CI_PDX",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_CIMPRRUL_M02",
+  "lane": "staging",
+  "src": "PRCS_RULES_HDR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_CIMXLTN_M02",
+  "lane": "staging",
+  "src": "CI_TRANSLATIONS",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_JEMACTRL_M02",
+  "lane": "staging",
+  "src": "RD_ACCCNTRL",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_JETOPBAL_M02",
+  "lane": "staging",
+  "src": "ACCT_DOC_HDR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_OWMCUSTR_M02",
+  "lane": "staging",
+  "src": "CUST_MD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_OWMDOIAC_M02",
+  "lane": "staging",
+  "src": "RV_DOI_ACC_DATA",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_OWMDOI_M02",
+  "lane": "staging",
+  "src": "OIU_DO_DI",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PRA_OWMDOMWX_M02",
+  "lane": "staging",
+  "src": "DOI_MPWC_XREF",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_OWMJVTR_M02",
+  "lane": "staging",
+  "src": "JV_PUC",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_OWMJV_M02",
+  "lane": "staging",
+  "src": "VENTURE_EXTN",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_OWMLSE_M02",
+  "lane": "staging",
+  "src": "LSE_ID",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_OWMVENDR_M02",
+  "lane": "staging",
+  "src": "VEND_MD",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRMDNAD_M02",
+  "lane": "staging",
+  "src": "DN",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRMDNAP_M02",
+  "lane": "staging",
+  "src": "DN_AP",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRMDNND_M02",
+  "lane": "staging",
+  "src": "DN_ND",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRMMPAD_M02",
+  "lane": "staging",
+  "src": "MP",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRMMPAP_M02",
+  "lane": "staging",
+  "src": "MP_AP",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRMWAWCD_M02",
+  "lane": "staging",
+  "src": "WELL",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRMWCTS_M02",
+  "lane": "staging",
+  "src": "WC_TST",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRMWDTCM_M02",
+  "lane": "staging",
+  "src": "WC_DN_TCM",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRMWMTRX_M02",
+  "lane": "staging",
+  "src": "TR_MP_WC_REF",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRTMPVOL_M02",
+  "lane": "staging",
+  "src": "MP_VOL_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_PRTWCVOL_M02",
+  "lane": "staging",
+  "src": "WC_VOL_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_RDMCNTR_M02",
+  "lane": "staging",
+  "src": "CONTRACTS",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_RDMFRML_M02",
+  "lane": "staging",
+  "src": "VL_FRML_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_RDMSSDIV_M02",
+  "lane": "staging",
+  "src": "SD_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_RDMSSDIX_M02",
+  "lane": "staging",
+  "src": "SS_DOI_XREF",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_RDMSTXRT_M02",
+  "lane": "staging",
+  "src": "VL_STTR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_RDMTCD_M02",
+  "lane": "staging",
+  "src": "TAX_CAL_DATA",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_RDMVCR_M02",
+  "lane": "staging",
+  "src": "VL_VCR",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRA_RDMWCTAX_M02",
+  "lane": "staging",
+  "src": "RD_TAXCLASS",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PRODUCT_M02",
+  "lane": "staging",
+  "src": "MARA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PRODUCT_VER_M02",
+  "lane": "staging",
+  "src": "MKAL",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PROD_CONSUMP_M02",
+  "lane": "staging",
+  "src": "MARA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PROD_EXT_2_M02",
+  "lane": "staging",
+  "src": "MARA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PROD_LONGTXT_M02",
+  "lane": "staging",
+  "src": "MARA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PROD_SERV_M02",
+  "lane": "staging",
+  "src": "MARA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PSM_FMFUND_M02",
+  "lane": "staging",
+  "src": "R_FUNDCORETP",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_PS_CTLCYC_2_M02",
+  "lane": "staging",
+  "src": "PKHD",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PS_CTL_CYC_M02",
+  "lane": "staging",
+  "src": "PKHD",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PS_NETWORK_M02",
+  "lane": "staging",
+  "src": "AUFK",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PS_PROJECT_M02",
+  "lane": "staging",
+  "src": "PROJ",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PURCH_INF_V2_M02",
+  "lane": "staging",
+  "src": "EINA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PUR_INF_E_V2_M02",
+  "lane": "staging",
+  "src": "EINA",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_PUR_ORDER_2_M02",
+  "lane": "staging",
+  "src": "EKKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_QM_CATALOG_M02",
+  "lane": "staging",
+  "src": "QPGR",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_QM_QINF_2_M02",
+  "lane": "staging",
+  "src": "QINF",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_RE_CONTR_2_M02",
+  "lane": "staging",
+  "src": "GENERAL_DATA",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RE_ENBLUG_M02",
+  "lane": "staging",
+  "src": "GENERAL_DATA",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RE_OCCUPANCY_M02",
+  "lane": "staging",
+  "src": "REINTEGRATIONOBJ",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RE_USABLOBJ2_M02",
+  "lane": "staging",
+  "src": "R_REUSABLEOBJECTTP",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RFM_ASSTMT_M02",
+  "lane": "staging",
+  "src": "ASSORTMENT_MODULE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RFM_MCCVR_M02",
+  "lane": "staging",
+  "src": "MRCHDSCATCVRSTRCN",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RFM_MCHNAS_M02",
+  "lane": "staging",
+  "src": "MCHIERNODEASSIGN",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RFM_MCHNCVR_M02",
+  "lane": "staging",
+  "src": "MCHIERNODECVRSTRN",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RFM_MCHN_M02",
+  "lane": "staging",
+  "src": "MRCHDSCATHIERNODE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RFM_MCRAAS_M02",
+  "lane": "staging",
+  "src": "MCREFARTICLE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_RFM_MC_M02",
+  "lane": "staging",
+  "src": "T023",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_RFM_PROD2DC_M02",
+  "lane": "staging",
+  "src": "PRODDCLISTING",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_ROUTING_M02",
+  "lane": "staging",
+  "src": "PLKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SCHED_AGRMNT_M02",
+  "lane": "staging",
+  "src": "EKKO",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SD_CONDITION_M02",
+  "lane": "staging",
+  "src": "KONH",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SD_CONTRACT_M02",
+  "lane": "staging",
+  "src": "VBAK",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SD_FRGDS_CND_M02",
+  "lane": "staging",
+  "src": "FRGDS_HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_SD_SCHED_AGR_M02",
+  "lane": "staging",
+  "src": "VBAK",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SELECTED_SET_M02",
+  "lane": "staging",
+  "src": "QPAM",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SELSET_CODE_M02",
+  "lane": "staging",
+  "src": "QPAC",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SEPA_MANDATE_M02",
+  "lane": "staging",
+  "src": "SEPA_MANDATE",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SLS_ORDER_2_M02",
+  "lane": "staging",
+  "src": "VBAK",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SOURCE_LIST_M02",
+  "lane": "staging",
+  "src": "EORD",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_SRVC_CONTR_3_M02",
+  "lane": "staging",
+  "src": "A_SERVICECONTR0001",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_SRVC_ORDER_M02",
+  "lane": "staging",
+  "src": "HEADER",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_SUBSTANCE_M02",
+  "lane": "staging",
+  "src": "EHFNDD_SUB",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_SW_CONSTR_M02",
+  "lane": "staging",
+  "src": "STRUCT_HEAD_SW",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_TR_COM_PAPER_M02",
+  "lane": "staging",
+  "src": "STRUCTURE_CP",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_TR_DA_NOTICE_M02",
+  "lane": "staging",
+  "src": "STRUCTURE_DAN",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_TR_FOREX_OPT_M02",
+  "lane": "staging",
+  "src": "STRUCTURE_COPT",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_TR_FX_COLLAR_M02",
+  "lane": "staging",
+  "src": "STRUCTURE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_TR_FX_SWAP_M02",
+  "lane": "staging",
+  "src": "STRUCTURE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_TR_FX_TR_M02",
+  "lane": "staging",
+  "src": "STRUCTURE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_TR_IR_INSTR_M02",
+  "lane": "staging",
+  "src": "STRUCTURE",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_TR_POSITION_M02",
+  "lane": "staging",
+  "src": "POSITION_VAL",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_VEND_EXT_TH_M02",
+  "lane": "staging",
+  "src": "FITHA_PBUPL_K",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_WBS_ELEMENT_M02",
+  "lane": "staging",
+  "src": "PROJ",
+  "result": "no-source"
+ },
+ {
+  "object": "Z_WORK_CNTR_M02",
+  "lane": "staging",
+  "src": "CRHD",
+  "result": "mappable"
+ },
+ {
+  "object": "Z_WTY_CLAIM_M02",
+  "lane": "staging",
+  "src": "WTY_HEADER",
+  "result": "no-source"
+ }
+]
