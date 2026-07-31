@@ -184,7 +184,226 @@ def migrate_gl_balances(eng, limit, commit, src_cc="1000", tgt_cc="1010", coa="Y
     print(f"  RECONCILE (to the cent): {ok}/{len(items)} posted balances match source exactly")
 
 
-HANDLERS = {"GLBalances": migrate_gl_balances}
+def _postable_clearing(eng, tgt_cc, coa="YCOA"):
+    """A splitting-classified balance-sheet G/L account usable as the takeover clearing."""
+    ska = {r["SAKNR"].strip(): r for r in
+           eng.read_table(eng.tgt, "SKA1", ["SAKNR", "KTOPL", "XBILK", "GLACCOUNT_TYPE"])
+           if r["KTOPL"].strip() == coa}
+    postable = {r["SAKNR"].strip() for r in
+                eng.read_table(eng.tgt, "SKB1", ["SAKNR", "BUKRS", "MITKZ", "XSPEB"])
+                if r["BUKRS"].strip() == tgt_cc and r["MITKZ"].strip() == "" and r["XSPEB"].strip() == ""}
+    bs = [a for a, r in ska.items() if r["XBILK"].strip() == "X"
+          and r["GLACCOUNT_TYPE"].strip() == "X" and a in postable]
+    # verify by a trivial balanced CHECK against itself; return the first that validates
+    import datetime
+    pdate = os.environ.get("M4H_TAKEOVER_DATE") or datetime.date.today().strftime("%Y%m%d")
+    hdr = {"USERNAME": "MIGRATE", "COMP_CODE": tgt_cc, "DOC_DATE": pdate, "PSTNG_DATE": pdate, "DOC_TYPE": "SA"}
+    for a in sorted(bs):
+        gl = [{"ITEMNO_ACC": "0000000001", "GL_ACCOUNT": a, "ITEM_TEXT": "t"},
+              {"ITEMNO_ACC": "0000000002", "GL_ACCOUNT": a, "ITEM_TEXT": "t"}]
+        am = [{"ITEMNO_ACC": "0000000001", "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "1.00"},
+              {"ITEMNO_ACC": "0000000002", "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "-1.00"}]
+        r = eng.tgt.call("BAPI_ACC_DOCUMENT_CHECK", DOCUMENTHEADER=hdr, ACCOUNTGL=gl, CURRENCYAMOUNT=am)
+        if not [m for m in r.get("RETURN", []) if m.get("TYPE") in ("E", "A")]:
+            return a
+    return bs[0] if bs else ""
+
+
+def _open_items(eng, kind, limit, commit, tgt_cc="1010", doc_type=None):
+    """Shared AR/AP open-item takeover. kind='AR'(customer) or 'AP'(vendor).
+    Recreates each open receivable/payable on the target via BAPI_ACC_DOCUMENT_POST:
+    DR customer / CR clearing (AR) or DR clearing / CR vendor (AP), preserving the source
+    amount, so the open item lands with its balance. Reconciled against target BSID/BSIK.
+    NOTE: a faithful run maps each source partner (ECC KUNNR/LIFNR) to its target BP; source
+    partners here don't share numbers with target BPs (CVI), so this posts source open-item
+    AMOUNTS onto existing target partners (positional demo) purely to prove the engine."""
+    import datetime, collections
+    ecc, tgt = eng.ecc, eng.tgt
+    if kind == "AR":
+        parts = [(r["KUNNR"].strip()) for r in eng.read_table(tgt, "KNB1", ["KUNNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc]
+        src = eng.read_table(ecc, "BSID", ["BUKRS", "KUNNR", "BELNR", "DMBTR", "SHKZG", "WAERS"])
+        recon_tab, part_lbl, dt = "BSID", "customer", (doc_type or "SA")
+    else:
+        parts = [(r["LIFNR"].strip()) for r in eng.read_table(tgt, "LFB1", ["LIFNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc]
+        src = eng.read_table(ecc, "BSIK", ["BUKRS", "LIFNR", "BELNR", "DMBTR", "SHKZG", "WAERS"])
+        recon_tab, part_lbl, dt = "BSIK", "vendor", (doc_type or "SA")
+    parts = sorted(set(parts))
+    amts_src = [round(_amt(r["DMBTR"]), 2) for r in src if round(_amt(r["DMBTR"]), 2) > 0][:limit]
+    pairs = list(zip(parts, amts_src))[:limit]   # (target partner, source open amount)
+    clearing = _postable_clearing(eng, tgt_cc)
+    pdate = os.environ.get("M4H_TAKEOVER_DATE") or datetime.date.today().strftime("%Y%m%d")
+    print(f"{kind}OpenItems -> {tgt_cc}: target {part_lbl}s={len(parts)} source-open-items={len(src)} "
+          f"clearing={clearing} processing={len(pairs)}" + ("" if commit else "  [DRY]"))
+    if not pairs or not clearing:
+        print("  nothing to post (no partners or clearing)."); return
+    before = len([r for r in eng.read_table(tgt, recon_tab, ["BELNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc])
+    ok = fail = 0; errs = []
+    for i, (partner, amt) in enumerate(pairs, start=1):
+        hdr = {"USERNAME": "MIGRATE", "COMP_CODE": tgt_cc, "DOC_DATE": pdate, "PSTNG_DATE": pdate,
+               "DOC_TYPE": dt, "REF_DOC_NO": ("M4H-%s-OI" % kind)[:16], "HEADER_TXT": "%s open item takeover" % kind}
+        pln = "0000000001"; cln = "0000000002"
+        if kind == "AR":
+            party = [{"ITEMNO_ACC": pln, "CUSTOMER": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": pdate}]
+            amounts = [{"ITEMNO_ACC": pln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % amt},
+                       {"ITEMNO_ACC": cln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % (-amt)}]
+            kw = {"ACCOUNTRECEIVABLE": party}
+        else:
+            party = [{"ITEMNO_ACC": pln, "VENDOR_NO": partner, "COMP_CODE": tgt_cc}]
+            amounts = [{"ITEMNO_ACC": pln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % (-amt)},
+                       {"ITEMNO_ACC": cln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % amt}]
+            kw = {"ACCOUNTPAYABLE": party}
+        glc = [{"ITEMNO_ACC": cln, "GL_ACCOUNT": clearing, "ITEM_TEXT": "%s takeover clearing" % kind}]
+        if not commit:
+            continue
+        res = tgt.call("BAPI_ACC_DOCUMENT_POST", DOCUMENTHEADER=hdr, ACCOUNTGL=glc, CURRENCYAMOUNT=amounts, **kw)
+        perr = [m for m in res.get("RETURN", []) if m.get("TYPE") in ("E", "A")]
+        if perr:
+            fail += 1; errs.append("%s %s: %s" % (part_lbl, partner, perr[0].get("MESSAGE", "")[:60]))
+            tgt.call("BAPI_TRANSACTION_ROLLBACK")
+        else:
+            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
+    if commit:
+        print(f"=== {kind}OpenItems created={ok} failed={fail} ===")
+        for x in errs[:8]:
+            print("   ERR", x)
+        after = len([r for r in eng.read_table(tgt, recon_tab, ["BELNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc])
+        print(f"RECONCILE: target {recon_tab} open items {before} -> {after} (+{after - before})")
+
+
+def _mm_open_date(eng, comp):
+    """Last day of the current open MM period (from MARV) for a company code."""
+    import datetime, calendar
+    mv = [r for r in eng.read_table(eng.tgt, "MARV", ["BUKRS", "LFGJA", "LFMON"]) if r["BUKRS"].strip() == comp]
+    if not mv:
+        return datetime.date.today().strftime("%Y%m%d")
+    y = int(mv[0]["LFGJA"].strip() or datetime.date.today().year)
+    m = int(mv[0]["LFMON"].strip() or datetime.date.today().month)
+    return "%04d%02d%02d" % (y, m, calendar.monthrange(y, m)[1])
+
+
+def migrate_inventory_balances(eng, limit, commit, plant="1010", sloc=None):
+    """Inventory/stock balance takeover via SAP official BAPI_GOODSMVT_CREATE, movement
+    type 561 (initial stock entry against the initialization account — the SAP-sanctioned
+    way to bring opening stock into S/4). Posts opening quantity for materials that exist
+    on the target plant and carry a price; the value follows the material's price
+    automatically. Reconciled against target MARD (LABST). Net-new stock only.
+    NOTE: source materials (IDES) differ from target Best-Practices materials, so source
+    stock QUANTITIES are posted onto existing target plant materials (positional demo) to
+    prove the engine; a faithful run maps source material -> target material."""
+    import datetime
+    ecc, tgt = eng.ecc, eng.tgt
+    # prefer a storage location that already holds stock on this plant (guaranteed valid for
+    # goods movements — some special slocs reject a 561 with a T184L item-category error).
+    if not sloc:
+        import collections
+        used = collections.Counter(r["LGORT"].strip() for r in eng.read_table(tgt, "MARD", ["WERKS", "LGORT", "LABST"])
+                                   if r["WERKS"].strip() == plant and _amt(r["LABST"]) > 0)
+        sloc = used.most_common(1)[0][0] if used else next(
+            (r["LGORT"].strip() for r in eng.read_table(tgt, "T001L", ["WERKS", "LGORT"])
+             if r["WERKS"].strip() == plant and r["LGORT"].strip().endswith("A")), "101A")
+    marc = [r["MATNR"].strip() for r in eng.read_table(tgt, "MARC", ["MATNR", "WERKS"]) if r["WERKS"].strip() == plant]
+    mbew = {r["MATNR"].strip() for r in eng.read_table(tgt, "MBEW", ["MATNR", "STPRS", "VERPR"])
+            if r["STPRS"].strip().strip("0.") or r["VERPR"].strip().strip("0.")}
+    meins = {r["MATNR"].strip(): r["MEINS"].strip() for r in eng.read_table(tgt, "MARA", ["MATNR", "MEINS"])}
+    mats = [m for m in marc if m in mbew][:limit]
+    # source stock quantities to bring over (positional)
+    qtys = [int(float(_amt(r["LABST"]))) or 1 for r in eng.read_table(ecc, "MARD", ["MATNR", "LABST"])
+            if _amt(r["LABST"]) > 0][:limit]
+    pairs = list(zip(mats, (qtys + [1] * len(mats))[:len(mats)]))
+    # MM postings use the material-ledger open period (MARV), which differs from the FI
+    # period; derive the open MM period from the company code and post on its last day.
+    pdate = os.environ.get("M4H_INV_DATE") or _mm_open_date(eng, "1010")
+    print(f"InventoryBalances plant {plant}/{sloc}: priced-materials-on-plant={len(mats)} "
+          f"processing={len(pairs)}" + ("" if commit else "  [DRY]"))
+    if not pairs or not sloc:
+        print("  nothing to post (no materials/storage loc)."); return
+    before = len([r for r in eng.read_table(tgt, "MARD", ["MATNR", "WERKS", "LABST"])
+                  if r["WERKS"].strip() == plant and _amt(r["LABST"]) > 0])
+    ok = fail = 0; errs = []
+    for mat, qty in pairs:
+        if not commit:
+            continue
+        hdr = {"PSTNG_DATE": pdate, "DOC_DATE": pdate}
+        item = [{"MATERIAL": mat, "PLANT": plant, "STGE_LOC": sloc, "MOVE_TYPE": "561",
+                 "ENTRY_QNT": str(qty), "ENTRY_UOM": meins.get(mat, "ST")}]
+        res = tgt.call("BAPI_GOODSMVT_CREATE", GOODSMVT_HEADER=hdr, GOODSMVT_CODE={"GM_CODE": "05"},
+                       GOODSMVT_ITEM=item)
+        perr = [m for m in res.get("RETURN", []) if m.get("TYPE") in ("E", "A")]
+        if perr or not (res.get("MATERIALDOCUMENT") or "").strip():
+            fail += 1; errs.append("%s: %s" % (mat, (perr[0].get("MESSAGE", "") if perr else "no doc")[:60]))
+            tgt.call("BAPI_TRANSACTION_ROLLBACK")
+        else:
+            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
+    if commit:
+        print(f"=== InventoryBalances created={ok} failed={fail} ===")
+        for x in errs[:8]:
+            print("   ERR", x)
+        after = len([r for r in eng.read_table(tgt, "MARD", ["MATNR", "WERKS", "LABST"])
+                     if r["WERKS"].strip() == plant and _amt(r["LABST"]) > 0])
+        print(f"RECONCILE: target MARD stock lines (plant {plant}) {before} -> {after} (+{after - before})")
+
+
+def migrate_asset_values(eng, limit, commit, tgt_cc="1710", curr="USD"):
+    """Fixed-asset VALUE takeover via SAP official BAPI_FIXEDASSET_OVRTAKE_CREATE — the
+    sanctioned legacy asset data transfer. Creates the asset master AND its cumulated
+    takeover values (acquisition value + accumulated ordinary depreciation) per
+    depreciation area, as of the company code's asset transfer date (T093C). Reconciled
+    against target ANLC. This is the Bucket-3 companion to the Bucket-1 asset MASTER
+    lander. NOTE: source assets differ from target; source ANLC values are taken onto new
+    target assets (positional demo) to prove the engine — a faithful run maps source
+    asset -> target asset and uses the real per-area values."""
+    ecc, tgt = eng.ecc, eng.tgt
+    tdate = next((r["DATUM"].strip() for r in eng.read_table(tgt, "T093C", ["BUKRS", "DATUM"])
+                  if r["BUKRS"].strip() == tgt_cc), "")
+    fy = tdate[:4] if tdate else str(datetime.date.today().year)
+    cls = next((r["ANLKL"].strip() for r in eng.read_table(tgt, "ANKA", ["ANLKL"])), "")
+    # source asset values (ANLC area 01): acquisition (KANSW), accumulated ord dep (KNAFA)
+    src = [r for r in eng.read_table(ecc, "ANLC", ["BUKRS", "ANLN1", "GJAHR", "AFABE", "KANSW", "KNAFA"])
+           if r["AFABE"].strip() in ("01", "1") and _amt(r["KANSW"]) > 0][:limit]
+    print(f"AssetValues -> {tgt_cc} (transfer date {tdate}, class {cls}): "
+          f"source-asset-values={len(src)} processing={len(src)}" + ("" if commit else "  [DRY]"))
+    if not src or not cls or not tdate:
+        print("  missing transfer date / asset class / source values."); return
+    ok = fail = 0; errs = []; made = []
+    for r in src:
+        acq = round(_amt(r["KANSW"]), 2); dep = round(_amt(r["KNAFA"]), 2)
+        gen = {"ASSETCLASS": cls, "DESCRIPT": ("Takeover asset " + r["ANLN1"].strip())[:50]}
+        cum = [{"FISC_YEAR": fy, "AREA": "01", "ACQ_VALUE": "%.2f" % acq,
+                "ORD_DEP": "%.2f" % (-abs(dep)), "CURRENCY": curr}]
+        if not commit:
+            continue
+        res = tgt.call("BAPI_FIXEDASSET_OVRTAKE_CREATE", KEY={"COMPANYCODE": tgt_cc},
+                       GENERALDATA=gen, CUMULATEDVALUES=cum)
+        rl = res.get("RETURN", {}); rl = rl if isinstance(rl, list) else [rl]
+        newno = (res.get("ASSET", {}) or {}).get("ASSETMAINO", "").strip()
+        if any(m.get("TYPE") in ("E", "A") for m in rl) or not newno:
+            fail += 1; errs.append("%s: %s" % (r["ANLN1"].strip(),
+                        next((m["MESSAGE"][:60] for m in rl if m.get("TYPE") in ("E", "A")), "no asset")))
+            tgt.call("BAPI_TRANSACTION_ROLLBACK")
+        else:
+            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1; made.append(newno)
+    if commit:
+        print(f"=== AssetValues created={ok} failed={fail} ===")
+        for x in errs[:8]:
+            print("   ERR", x)
+        anlc = {r["ANLN1"].strip().lstrip("0") for r in eng.read_table(tgt, "ANLC", ["ANLN1", "KANSW"])
+                if _amt(r["KANSW"]) > 0}
+        landed = sum(1 for m in made if m.lstrip("0") in anlc)
+        print(f"RECONCILE: {landed}/{len(made)} assets now carry takeover values in ANLC")
+
+
+def migrate_ar_open_items(eng, limit, commit):
+    _open_items(eng, "AR", limit, commit)
+
+
+def migrate_ap_open_items(eng, limit, commit):
+    _open_items(eng, "AP", limit, commit)
+
+
+HANDLERS = {"GLBalances": migrate_gl_balances,
+            "AROpenItems": migrate_ar_open_items, "APOpenItems": migrate_ap_open_items,
+            "InventoryBalances": migrate_inventory_balances,
+            "AssetValues": migrate_asset_values}
 
 
 if __name__ == "__main__":
