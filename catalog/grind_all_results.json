@@ -1,0 +1,1996 @@
+[
+ {
+  "object": "Z_ACT_PRICE_M02",
+  "struct": "S_ACT_PRICE_HEADER",
+  "src": "ACT_PRICE_HEADER",
+  "table": "/1LT/DSS4H000119",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_BANK_2_M02",
+  "struct": "S_BNKA",
+  "src": "BNKA",
+  "table": "/1LT/DSS4H000120",
+  "mapped": 11,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_BATCHES_M02",
+  "struct": "S_BATCH",
+  "src": "MCH1",
+  "table": "/1LT/DSS4H000121",
+  "mapped": 15,
+  "built": 20,
+  "verified": 10,
+  "result": "staged"
+ },
+ {
+  "object": "Z_BATCHES_PLANT_M02",
+  "struct": "S_BATCH",
+  "src": "MCH1",
+  "table": "/1LT/DSS4H000126",
+  "mapped": 15,
+  "built": 20,
+  "verified": 10,
+  "result": "staged"
+ },
+ {
+  "object": "Z_BATCH_DETN_M02",
+  "struct": "S_BDT_HEADER",
+  "src": "BDT_HEADER",
+  "table": "/1LT/DSS4H000131",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_BOM_3_M02",
+  "struct": "S_BOM_HEADER",
+  "src": "STKO",
+  "table": "/1LT/DSS4H000144",
+  "mapped": 7,
+  "built": 20,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_BOM_M02",
+  "struct": "S_BOM_HEADER",
+  "src": "STKO",
+  "table": "/1LT/DSS4H000134",
+  "mapped": 7,
+  "built": 20,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_CHANGE_MSTR_M02",
+  "struct": "S_CHANGEMASTER",
+  "src": "AENR",
+  "table": "/1LT/DSS4H000154",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CHARACT_GRP_M02",
+  "struct": "S_VCH_HL_GRP",
+  "src": "VCH_HL_GRP",
+  "table": "/1LT/DSS4H000175",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CHARACT_M02",
+  "struct": "S_CABN",
+  "src": "CABN",
+  "table": "/1LT/DSS4H000159",
+  "mapped": 21,
+  "built": 0,
+  "verified": 0,
+  "result": "empty"
+ },
+ {
+  "object": "Z_CLASS_2_M02",
+  "struct": "S_KLAH",
+  "src": "KLAH",
+  "table": "/1LT/DSS4H000179",
+  "mapped": 25,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_CLASS_HIERA_M02",
+  "struct": "S_KLAH",
+  "src": "KLAH",
+  "table": "/1LT/DSS4H000186",
+  "mapped": 2,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_CLF_DRAW_M02",
+  "struct": "S_CLF_KSSK_HEAD",
+  "src": "CLF_KSSK_HEAD",
+  "table": "/1LT/DSS4H000188",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CLF_EINA_M02",
+  "struct": "S_CLF_KSSK_HEAD",
+  "src": "CLF_KSSK_HEAD",
+  "table": "/1LT/DSS4H000192",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CLF_MARA_M02",
+  "struct": "S_CLF_MAT_KSSK_HEAD",
+  "src": "CLF_MAT_KSSK_HEAD",
+  "table": "/1LT/DSS4H000196",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CLF_OBJ_M02",
+  "struct": "S_CLF_MAT_KSSK_HEAD",
+  "src": "CLF_MAT_KSSK_HEAD",
+  "table": "/1LT/DSS4H000200",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CLF_QMTB_M02",
+  "struct": "S_CLF_KSSK_HEAD",
+  "src": "CLF_KSSK_HEAD",
+  "table": "/1LT/DSS4H000204",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CLF_QPAM_M02",
+  "struct": "S_CLF_KSSK_HEAD",
+  "src": "CLF_KSSK_HEAD",
+  "table": "/1LT/DSS4H000208",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CLF_QPGR_M02",
+  "struct": "S_CLF_KSSK_HEAD",
+  "src": "CLF_KSSK_HEAD",
+  "table": "/1LT/DSS4H000212",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CLF_QPMK_M02",
+  "struct": "S_CLF_KSSK_HEAD",
+  "src": "CLF_KSSK_HEAD",
+  "table": "/1LT/DSS4H000216",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CONDITIONS_M02",
+  "struct": "S_CONDITIONS",
+  "src": "KONH",
+  "table": "/1LT/DSS4H000220",
+  "mapped": 7,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_CONFIG_PROF_M02",
+  "struct": "S_ATTRIBUTES",
+  "src": "ATTRIBUTES",
+  "table": "/1LT/DSS4H000227",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CONSENT_M02",
+  "struct": "S_CONSENT",
+  "src": "CONSENT",
+  "table": "/1LT/DSS4H000232",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CONTRACTS_M02",
+  "struct": "S_EKKO",
+  "src": "EKKO",
+  "table": "/1LT/DSS4H000234",
+  "mapped": 19,
+  "built": 20,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_CON_CONTRACT_M02",
+  "struct": "HEADDATAIN",
+  "src": "HEADDATAIN",
+  "table": "/1LT/DSS4H000241",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CO_BUS_PROC_M02",
+  "struct": "S_BUSINESS_PROCESS",
+  "src": "BUSINESS_PROCESS",
+  "table": "/1LT/DSS4H000251",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CO_STAKEYFIG_M02",
+  "struct": "S_KEYFIGURE",
+  "src": "KEYFIGURE",
+  "table": "/1LT/DSS4H000252",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CRED_CTRL_M02",
+  "struct": "S_MIG_FILES",
+  "src": "MIG_FILES",
+  "table": "/1LT/DSS4H000253",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CUSTMAT_INF_M02",
+  "struct": "S_CUSTMAT",
+  "src": "KNMT",
+  "table": "/1LT/DSS4H000254",
+  "mapped": 1,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_CUSTOMER_2_M02",
+  "struct": "S_CUST_GEN",
+  "src": "KNA1",
+  "table": "/1LT/DSS4H000262",
+  "mapped": 56,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_CUST_EXT_3_M02",
+  "struct": "S_CUST_GEN",
+  "src": "KNA1",
+  "table": "/1LT/DSS4H000295",
+  "mapped": 10,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_CUST_EXT_TH_M02",
+  "struct": "S_FITHA_PBUPL_D",
+  "src": "FITHA_PBUPL_D",
+  "table": "/1LT/DSS4H000327",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_CUST_UKM_2_M02",
+  "struct": "S_UKM_PROFILE",
+  "src": "UKM_PROFILE",
+  "table": "/1LT/DSS4H000328",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_DD_MANDATE_M02",
+  "struct": "S_DD_MANDATE",
+  "src": "DD_MANDATE",
+  "table": "/1LT/DSS4H000330",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_DG_CBR_UP_2_M02",
+  "struct": "S_CCI_ROOT",
+  "src": "CCI_ROOT",
+  "table": "/1LT/DSS4H000331",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_DG_PP_PROD_2_M02",
+  "struct": "S_CCI_ROOT",
+  "src": "CCI_ROOT",
+  "table": "/1LT/DSS4H000337",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_DG_SUB_TNAM_M02",
+  "struct": "S_TNAME",
+  "src": "TNAME",
+  "table": "/1LT/DSS4H000348",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_DG_UNP_PROD_M02",
+  "struct": "S_CRR_ROOT",
+  "src": "CRR_ROOT",
+  "table": "/1LT/DSS4H000350",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_DOCU_INFOREC_M02",
+  "struct": "S_DOCUMENTDATA",
+  "src": "DRAW",
+  "table": "/1LT/DSS4H000352",
+  "mapped": 4,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_EAM_MEAS_DOC_M02",
+  "struct": "S_MEASUREMENT_DOCU",
+  "src": "MEASUREMENT_DOCU",
+  "table": "/1LT/DSS4H000356",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EAM_MEAS_PNT_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000357",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EAM_NOTIF_M02",
+  "struct": "S_NOTIF_HEADER",
+  "src": "NOTIF_HEADER",
+  "table": "/1LT/DSS4H000358",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EFD_REINF_M02",
+  "struct": "S_REINF_FILES",
+  "src": "REINF_FILES",
+  "table": "/1LT/DSS4H000366",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_ADEF_M02",
+  "struct": "S_ROOT",
+  "src": "ROOT",
+  "table": "/1LT/DSS4H000367",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_AGGRCL_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000370",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_CDEF_M02",
+  "struct": "S_ROOT",
+  "src": "ROOT",
+  "table": "/1LT/DSS4H000372",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_CLASSIF_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000378",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_EMSUB_M02",
+  "struct": "S_ROOT",
+  "src": "ROOT",
+  "table": "/1LT/DSS4H000380",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_IDEV_M02",
+  "struct": "S_ROOT",
+  "src": "ROOT",
+  "table": "/1LT/DSS4H000383",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_LOCATION_M02",
+  "struct": "S_LOCATION",
+  "src": "LOCATION",
+  "table": "/1LT/DSS4H000386",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_LOC_HR_2_M02",
+  "struct": "S_LHR_REVISION",
+  "src": "LHR_REVISION",
+  "table": "/1LT/DSS4H000394",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_LOC_HR_3_M02",
+  "struct": "S_LHR_REVISION",
+  "src": "LHR_REVISION",
+  "table": "/1LT/DSS4H000396",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_MDEF_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000398",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_PHYSPARM_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000401",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_RAWMAT_2_M02",
+  "struct": "S_EHFNDD_CCI",
+  "src": "EHFNDD_CCI",
+  "table": "/1LT/DSS4H000404",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_REQ_M02",
+  "struct": "S_ROOT",
+  "src": "ROOT",
+  "table": "/1LT/DSS4H000409",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_SCEN_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000436",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_SDEF_M02",
+  "struct": "S_ROOT",
+  "src": "ROOT",
+  "table": "/1LT/DSS4H000445",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_TDEF_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000451",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EHS_UNP_PR_2_M02",
+  "struct": "S_EHFNDD_CCI",
+  "src": "EHFNDD_CCI",
+  "table": "/1LT/DSS4H000455",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EQUIPMENT_2_M02",
+  "struct": "S_EQUI",
+  "src": "EQUI",
+  "table": "/1LT/DSS4H000462",
+  "mapped": 22,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_EQUI_BOM_M02",
+  "struct": "S_BOM_HEADER",
+  "src": "STKO",
+  "table": "/1LT/DSS4H000465",
+  "mapped": 6,
+  "built": 20,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_EQUI_TL_M02",
+  "struct": "S_TASKLIST_HDR",
+  "src": "PLKO",
+  "table": "/1LT/DSS4H000467",
+  "mapped": 11,
+  "built": 9,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_EWM_BIN_ASN_M02",
+  "struct": "S_EWM_BINMAT",
+  "src": "EWM_BINMAT",
+  "table": "/1LT/DSS4H000479",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EWM_BIN_M02",
+  "struct": "S_LAGP",
+  "src": "LAGP",
+  "table": "/1LT/DSS4H000478",
+  "mapped": 11,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_EWM_BIN_SORT_M02",
+  "struct": "S_LAGPS",
+  "src": "LAGPS",
+  "table": "/1LT/DSS4H000480",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EWM_STOCK_2_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000481",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_EXCH_RATE_M02",
+  "struct": "S_TCURR",
+  "src": "TCURR",
+  "table": "/1LT/DSS4H000484",
+  "mapped": 3,
+  "built": 20,
+  "verified": 11,
+  "result": "staged"
+ },
+ {
+  "object": "Z_FIRA_CONTR_2_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000485",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_FIXED_ASSET_M02",
+  "struct": "S_KEY",
+  "src": "ANLA",
+  "table": "/1LT/DSS4H000492",
+  "mapped": 9,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_FI_HIST_BAL3_M02",
+  "struct": "S_ROOT",
+  "src": "ROOT",
+  "table": "/1LT/DSS4H000510",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_FLOC_TL_M02",
+  "struct": "S_TASKLIST_HDR",
+  "src": "PLKO",
+  "table": "/1LT/DSS4H000512",
+  "mapped": 11,
+  "built": 9,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_FL_CONTAINER_M02",
+  "struct": "S_FLOG_SHPTCTN",
+  "src": "FLOG_SHPTCTN",
+  "table": "/1LT/DSS4H000523",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_FL_SUPLRITEM_M02",
+  "struct": "S_FLOG_SUPLRITEM",
+  "src": "FLOG_SUPLRITEM",
+  "table": "/1LT/DSS4H000525",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_FUNC_BOM_M02",
+  "struct": "S_FL_BOM_HEADER",
+  "src": "FL_BOM_HEADER",
+  "table": "/1LT/DSS4H000528",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_FUNC_LOC_2_M02",
+  "struct": "S_FUN_LOCATION",
+  "src": "IFLOT",
+  "table": "/1LT/DSS4H000530",
+  "mapped": 28,
+  "built": 20,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_GENMT_TL_M02",
+  "struct": "S_TASKLIST_HDR",
+  "src": "PLKO",
+  "table": "/1LT/DSS4H000533",
+  "mapped": 12,
+  "built": 9,
+  "verified": 9,
+  "result": "staged"
+ },
+ {
+  "object": "Z_GL_ACCOUNT_3_M02",
+  "struct": "S_GENERAL",
+  "src": "SKA1",
+  "table": "/1LT/DSS4H000544",
+  "mapped": 7,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_GL_ACC_EXT_M02",
+  "struct": "S_GENERAL",
+  "src": "SKA1",
+  "table": "/1LT/DSS4H000549",
+  "mapped": 2,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_GL_BALANCE_M02",
+  "struct": "S_BSIS",
+  "src": "BSIS",
+  "table": "/1LT/DSS4H000554",
+  "mapped": 17,
+  "built": 20,
+  "verified": 2,
+  "result": "staged"
+ },
+ {
+  "object": "Z_HANDL_UNIT_M02",
+  "struct": "BUNDLES",
+  "src": "BUNDLES",
+  "table": "/1LT/DSS4H000561",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_HCM_EMPLOYEE_M02",
+  "struct": "S_EMPLOYEE",
+  "src": "EMPLOYEE",
+  "table": "/1LT/DSS4H000564",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_HCM_OBJECT_M02",
+  "struct": "S_PD_OBJECT",
+  "src": "PD_OBJECT",
+  "table": "/1LT/DSS4H000603",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_HCM_RELAT_M02",
+  "struct": "S_PD_OBJECT",
+  "src": "PD_OBJECT",
+  "table": "/1LT/DSS4H000615",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_INSP_METHOD_M02",
+  "struct": "S_QMTB",
+  "src": "QMTB",
+  "table": "/1LT/DSS4H000618",
+  "mapped": 5,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_INSP_PLAN_2_M02",
+  "struct": "S_GROUP",
+  "src": "PLKO",
+  "table": "/1LT/DSS4H000621",
+  "mapped": 1,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_INTORDER_2_M02",
+  "struct": "S_AUFK",
+  "src": "AUFK",
+  "table": "/1LT/DSS4H000626",
+  "mapped": 33,
+  "built": 1,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_INVENTORY_2_M02",
+  "struct": "S_MARA",
+  "src": "MARA",
+  "table": "/1LT/DSS4H000628",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_JVA_JOA_M02",
+  "struct": "S_JOA",
+  "src": "JOA",
+  "table": "/1LT/DSS4H000630",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_JVA_PARTNER_M02",
+  "struct": "S_T8JO",
+  "src": "T8JO",
+  "table": "/1LT/DSS4H000643",
+  "mapped": 15,
+  "built": 0,
+  "verified": 0,
+  "result": "empty"
+ },
+ {
+  "object": "Z_JVA_SUS_CC_M02",
+  "struct": "S_T8J_SUS_CC",
+  "src": "T8J_SUS_CC",
+  "table": "/1LT/DSS4H000644",
+  "mapped": 5,
+  "built": 0,
+  "verified": 0,
+  "result": "empty"
+ },
+ {
+  "object": "Z_JVA_SUS_JV_M02",
+  "struct": "S_T8J_SUS_VENTURE",
+  "src": "T8J_SUS_VENTURE",
+  "table": "/1LT/DSS4H000645",
+  "mapped": 5,
+  "built": 0,
+  "verified": 0,
+  "result": "empty"
+ },
+ {
+  "object": "Z_JVA_SUS_PRJ_M02",
+  "struct": "S_T8JP",
+  "src": "T8JP",
+  "table": "/1LT/DSS4H000646",
+  "mapped": 5,
+  "built": 0,
+  "verified": 0,
+  "result": "empty"
+ },
+ {
+  "object": "Z_JVA_VENTURE2_M02",
+  "struct": "S_JOINT_VENTURE",
+  "src": "JOINT_VENTURE",
+  "table": "/1LT/DSS4H000647",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_KOSTL_MASTER_M02",
+  "struct": "S_CSKS",
+  "src": "CSKS",
+  "table": "/1LT/DSS4H000655",
+  "mapped": 52,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_LCM_LEGALDOC_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000656",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_LCM_LEGALTR_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000658",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_LISTEXCL_CND_M02",
+  "struct": "S_LE_CND_HDR",
+  "src": "LE_CND_HDR",
+  "table": "/1LT/DSS4H000667",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_LSTAR_CREATE_M02",
+  "struct": "S_CSLA",
+  "src": "CSLA",
+  "table": "/1LT/DSS4H000669",
+  "mapped": 16,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_MAINT_ITEM_M02",
+  "struct": "S_ITEM",
+  "src": "MPOS",
+  "table": "/1LT/DSS4H000670",
+  "mapped": 21,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_MAINT_PLAN_3_M02",
+  "struct": "S_MPLA",
+  "src": "MPLA",
+  "table": "/1LT/DSS4H000672",
+  "mapped": 21,
+  "built": 20,
+  "verified": 0,
+  "result": "empty"
+ },
+ {
+  "object": "Z_MATDET_2_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000675",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_MAT_COMMCODE_M02",
+  "struct": "S_MARITC",
+  "src": "MARC",
+  "table": "/1LT/DSS4H000678",
+  "mapped": 1,
+  "built": 20,
+  "verified": 8,
+  "result": "staged"
+ },
+ {
+  "object": "Z_MAT_CONSUMP_M02",
+  "struct": "S_MARA",
+  "src": "MARA",
+  "table": "/1LT/DSS4H000679",
+  "mapped": 1,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_MAT_LEGAL_M02",
+  "struct": "S_MARLRG",
+  "src": "MARA",
+  "table": "/1LT/DSS4H000681",
+  "mapped": 1,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_MAT_VARIANT2_M02",
+  "struct": "S_MATVAR",
+  "src": "MARA",
+  "table": "/1LT/DSS4H000682",
+  "mapped": 1,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_MEMO_RECORD_M02",
+  "struct": "S_FQM_FLOW",
+  "src": "FQM_FLOW",
+  "table": "/1LT/DSS4H000684",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_MGM_INCIDENT_M02",
+  "struct": "S_INCIDENT_HEADER",
+  "src": "INCIDENT_HEADER",
+  "table": "/1LT/DSS4H000685",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_MM_CONDITION_M02",
+  "struct": "S_CONDITIONS",
+  "src": "KONH",
+  "table": "/1LT/DSS4H000699",
+  "mapped": 4,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_MOC_ISSUE_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000702",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_MSTR_CHAR_M02",
+  "struct": "S_QPMK",
+  "src": "QPMK",
+  "table": "/1LT/DSS4H000712",
+  "mapped": 15,
+  "built": 20,
+  "verified": 0,
+  "result": "empty"
+ },
+ {
+  "object": "Z_NJIT_COMGRP_M02",
+  "struct": "S_NJIT_GROUP",
+  "src": "NJIT_GROUP",
+  "table": "/1LT/DSS4H000717",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_NJIT_CUST_M02",
+  "struct": "S_NJIT_CUST_HDR",
+  "src": "NJIT_CUST_HDR",
+  "table": "/1LT/DSS4H000719",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_NJIT_PKG_GRP_M02",
+  "struct": "S_NJIT_PKG_HDR",
+  "src": "NJIT_PKG_HDR",
+  "table": "/1LT/DSS4H000723",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_NJIT_SUPCTR2_M02",
+  "struct": "S_NJIT_SC_HDR",
+  "src": "NJIT_SC_HDR",
+  "table": "/1LT/DSS4H000726",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_OPEN_ITEM_AP_M02",
+  "struct": "S_BSIK",
+  "src": "BSIK",
+  "table": "/1LT/DSS4H000729",
+  "mapped": 41,
+  "built": 20,
+  "verified": 9,
+  "result": "staged"
+ },
+ {
+  "object": "Z_OPEN_ITEM_AR_M02",
+  "struct": "S_BSID",
+  "src": "BSID",
+  "table": "/1LT/DSS4H000739",
+  "mapped": 42,
+  "built": 20,
+  "verified": 8,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PC_CRR_CCC_M02",
+  "struct": "S_CRR_ROOT",
+  "src": "CRR_ROOT",
+  "table": "/1LT/DSS4H000749",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_CRR_SCC_M02",
+  "struct": "S_CRR_ROOT",
+  "src": "CRR_ROOT",
+  "table": "/1LT/DSS4H000751",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_CRR_SLI_M02",
+  "struct": "S_CRR_ROOT",
+  "src": "CRR_ROOT",
+  "table": "/1LT/DSS4H000753",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_ECOPRTY_M02",
+  "struct": "S_ECOTOX",
+  "src": "ECOTOX",
+  "table": "/1LT/DSS4H000757",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_MBC_M02",
+  "struct": "S_CCI",
+  "src": "CCI",
+  "table": "/1LT/DSS4H000777",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_PHYSPRTY_M02",
+  "struct": "S_PHYS_CHEM",
+  "src": "PHYS_CHEM",
+  "table": "/1LT/DSS4H000783",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_SBC_AC_M02",
+  "struct": "S_COMPOSITION",
+  "src": "COMPOSITION",
+  "table": "/1LT/DSS4H000790",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_SBC_CBI_M02",
+  "struct": "S_COMPOSITION",
+  "src": "COMPOSITION",
+  "table": "/1LT/DSS4H000792",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_SBC_POLY_M02",
+  "struct": "S_SUBSTANCE",
+  "src": "SUBSTANCE",
+  "table": "/1LT/DSS4H000794",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_SDS_CRR_M02",
+  "struct": "S_CRR_ROOT",
+  "src": "CRR_ROOT",
+  "table": "/1LT/DSS4H000797",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_SDS_SHIPM_M02",
+  "struct": "S_SHIPMENT",
+  "src": "SHIPMENT",
+  "table": "/1LT/DSS4H000799",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_SFTYPRTY_M02",
+  "struct": "S_SAFETY_RELATED",
+  "src": "SAFETY_RELATED",
+  "table": "/1LT/DSS4H000801",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PC_USE_M02",
+  "struct": "S_USE",
+  "src": "USE",
+  "table": "/1LT/DSS4H000807",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PM_MAINTORD2_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H000811",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PP_MSTRRCP_M02",
+  "struct": "S_RECIPE_GROUP",
+  "src": "RECIPE_GROUP",
+  "table": "/1LT/DSS4H000822",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PP_PROCORD_M02",
+  "struct": "S_ORD_HDR",
+  "src": "ORD_HDR",
+  "table": "/1LT/DSS4H000832",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PP_PRODNORD_M02",
+  "struct": "S_ORD_HDR",
+  "src": "ORD_HDR",
+  "table": "/1LT/DSS4H000833",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PP_PSA_M02",
+  "struct": "S_PVBE",
+  "src": "PVBE",
+  "table": "/1LT/DSS4H000834",
+  "mapped": 11,
+  "built": 18,
+  "verified": 18,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PRA_CAMALOXF_M02",
+  "struct": "S_ALLOC_XREF_HEADER",
+  "src": "ALLOC_XREF_HEADER",
+  "table": "/1LT/DSS4H000836",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_CAMCHEMA_M02",
+  "struct": "S_CA_HEADER",
+  "src": "CA_HEADER",
+  "table": "/1LT/DSS4H000838",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_CAMMKTGA_M02",
+  "struct": "S_MKTGA_H",
+  "src": "MKTGA_H",
+  "table": "/1LT/DSS4H000841",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_CAMWMCTX_M02",
+  "struct": "S_CT_MP_WC_X",
+  "src": "CT_MP_WC_X",
+  "table": "/1LT/DSS4H000844",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_CATCTVOL_M02",
+  "struct": "S_CA_VOL_H",
+  "src": "CA_VOL_H",
+  "table": "/1LT/DSS4H000845",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_CIMPDX_M02",
+  "struct": "S_CI_PDX",
+  "src": "CI_PDX",
+  "table": "/1LT/DSS4H000848",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_CIMPRRUL_M02",
+  "struct": "S_PRCS_RULES_HDR",
+  "src": "PRCS_RULES_HDR",
+  "table": "/1LT/DSS4H000849",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_CIMXLTN_M02",
+  "struct": "S_CI_TRANSLATIONS",
+  "src": "CI_TRANSLATIONS",
+  "table": "/1LT/DSS4H000851",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_JEMACTRL_M02",
+  "struct": "S_RD_ACCCNTRL",
+  "src": "RD_ACCCNTRL",
+  "table": "/1LT/DSS4H000852",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_JETOPBAL_M02",
+  "struct": "S_ACCT_DOC_HDR",
+  "src": "ACCT_DOC_HDR",
+  "table": "/1LT/DSS4H000853",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_OWMCUSTR_M02",
+  "struct": "S_CUST_MD",
+  "src": "CUST_MD",
+  "table": "/1LT/DSS4H000858",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_OWMDOIAC_M02",
+  "struct": "S_RV_DOI_ACC_DATA",
+  "src": "RV_DOI_ACC_DATA",
+  "table": "/1LT/DSS4H000868",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_OWMDOI_M02",
+  "struct": "S_OIU_DO_DI",
+  "src": "OIU_DO_DI",
+  "table": "/1LT/DSS4H000859",
+  "mapped": 10,
+  "built": 0,
+  "verified": 0,
+  "result": "empty"
+ },
+ {
+  "object": "Z_PRA_OWMDOMWX_M02",
+  "struct": "S_DOI_MPWC_XREF",
+  "src": "DOI_MPWC_XREF",
+  "table": "/1LT/DSS4H000870",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_OWMJVTR_M02",
+  "struct": "S_JV_PUC",
+  "src": "JV_PUC",
+  "table": "/1LT/DSS4H000873",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_OWMJV_M02",
+  "struct": "S_VENTURE_EXTN",
+  "src": "VENTURE_EXTN",
+  "table": "/1LT/DSS4H000871",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_OWMLSE_M02",
+  "struct": "S_LSE_ID",
+  "src": "LSE_ID",
+  "table": "/1LT/DSS4H000875",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_OWMVENDR_M02",
+  "struct": "S_VEND_MD",
+  "src": "VEND_MD",
+  "table": "/1LT/DSS4H000876",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRMDNAD_M02",
+  "struct": "S_DN",
+  "src": "DN",
+  "table": "/1LT/DSS4H000880",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRMDNAP_M02",
+  "struct": "S_DN_AP",
+  "src": "DN_AP",
+  "table": "/1LT/DSS4H000881",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRMDNND_M02",
+  "struct": "S_DN_ND",
+  "src": "DN_ND",
+  "table": "/1LT/DSS4H000883",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRMMPAD_M02",
+  "struct": "S_MP",
+  "src": "MP",
+  "table": "/1LT/DSS4H000885",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRMMPAP_M02",
+  "struct": "S_MP_AP",
+  "src": "MP_AP",
+  "table": "/1LT/DSS4H000887",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRMWAWCD_M02",
+  "struct": "S_WELL",
+  "src": "WELL",
+  "table": "/1LT/DSS4H000889",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRMWCTS_M02",
+  "struct": "S_WC_TST",
+  "src": "WC_TST",
+  "table": "/1LT/DSS4H000893",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRMWDTCM_M02",
+  "struct": "S_WC_DN_TCM",
+  "src": "WC_DN_TCM",
+  "table": "/1LT/DSS4H000895",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRMWMTRX_M02",
+  "struct": "S_TR_MP_WC_REF",
+  "src": "TR_MP_WC_REF",
+  "table": "/1LT/DSS4H000896",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRTMPVOL_M02",
+  "struct": "S_MP_VOL_HEADER",
+  "src": "MP_VOL_HEADER",
+  "table": "/1LT/DSS4H000897",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_PRTWCVOL_M02",
+  "struct": "S_WC_VOL_HEADER",
+  "src": "WC_VOL_HEADER",
+  "table": "/1LT/DSS4H000899",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_RDMCNTR_M02",
+  "struct": "S_CONTRACTS",
+  "src": "CONTRACTS",
+  "table": "/1LT/DSS4H000901",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_RDMFRML_M02",
+  "struct": "S_VL_FRML_HEADER",
+  "src": "VL_FRML_HEADER",
+  "table": "/1LT/DSS4H000902",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_RDMSSDIV_M02",
+  "struct": "S_SD_HEADER",
+  "src": "SD_HEADER",
+  "table": "/1LT/DSS4H000904",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_RDMSSDIX_M02",
+  "struct": "S_SS_DOI_XREF",
+  "src": "SS_DOI_XREF",
+  "table": "/1LT/DSS4H000905",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_RDMSTXRT_M02",
+  "struct": "S_VL_STTR",
+  "src": "VL_STTR",
+  "table": "/1LT/DSS4H000906",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_RDMTCD_M02",
+  "struct": "S_TAX_CAL_DATA",
+  "src": "TAX_CAL_DATA",
+  "table": "/1LT/DSS4H000907",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_RDMVCR_M02",
+  "struct": "S_VL_VCR",
+  "src": "VL_VCR",
+  "table": "/1LT/DSS4H000911",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRA_RDMWCTAX_M02",
+  "struct": "S_RD_TAXCLASS",
+  "src": "RD_TAXCLASS",
+  "table": "/1LT/DSS4H000912",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PRCTR_MSTR2_M02",
+  "struct": "S_CEPC",
+  "src": "CEPC",
+  "table": "/1LT/DSS4H000913",
+  "mapped": 33,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PRODUCT_M02",
+  "struct": "S_MARA",
+  "src": "MARA",
+  "table": "/1LT/DSS4H000915",
+  "mapped": 101,
+  "built": 11,
+  "verified": 11,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PRODUCT_VER_M02",
+  "struct": "S_MKAL",
+  "src": "MKAL",
+  "table": "/1LT/DSS4H000944",
+  "mapped": 24,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PROD_CONSUMP_M02",
+  "struct": "S_MARA",
+  "src": "MARA",
+  "table": "/1LT/DSS4H000945",
+  "mapped": 1,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PROD_EXT_2_M02",
+  "struct": "S_MARA",
+  "src": "MARA",
+  "table": "/1LT/DSS4H000948",
+  "mapped": 45,
+  "built": 11,
+  "verified": 11,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PROD_LONGTXT_M02",
+  "struct": "S_MARA",
+  "src": "MARA",
+  "table": "/1LT/DSS4H000974",
+  "mapped": 1,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PROD_SERV_M02",
+  "struct": "S_MARA",
+  "src": "MARA",
+  "table": "/1LT/DSS4H000978",
+  "mapped": 11,
+  "built": 11,
+  "verified": 11,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PSM_FMFUND_M02",
+  "struct": "S_R_FUNDCORETP",
+  "src": "R_FUNDCORETP",
+  "table": "/1LT/DSS4H000985",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_PS_CTLCYC_2_M02",
+  "struct": "S_PKHD",
+  "src": "PKHD",
+  "table": "/1LT/DSS4H000988",
+  "mapped": 2,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PS_CTL_CYC_M02",
+  "struct": "S_PKHD",
+  "src": "PKHD",
+  "table": "/1LT/DSS4H000989",
+  "mapped": 2,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PS_NETWORK_M02",
+  "struct": "S_NETWORK",
+  "src": "AUFK",
+  "table": "/1LT/DSS4H000991",
+  "mapped": 1,
+  "built": 20,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PS_PROJECT_M02",
+  "struct": "S_PROJECT_DEF",
+  "src": "PROJ",
+  "table": "/1LT/DSS4H000992",
+  "mapped": 1,
+  "built": 20,
+  "verified": 1,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PURCH_INF_V2_M02",
+  "struct": "S_EINA",
+  "src": "EINA",
+  "table": "/1LT/DSS4H000993",
+  "mapped": 25,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PUR_INF_E_V2_M02",
+  "struct": "S_EINA",
+  "src": "EINA",
+  "table": "/1LT/DSS4H000999",
+  "mapped": 4,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_PUR_ORDER_2_M02",
+  "struct": "S_EKKO",
+  "src": "EKKO",
+  "table": "/1LT/DSS4H001004",
+  "mapped": 22,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_QM_CATALOG_M02",
+  "struct": "S_QPGR",
+  "src": "QPGR",
+  "table": "/1LT/DSS4H001013",
+  "mapped": 3,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_QM_QINF_2_M02",
+  "struct": "S_QINF",
+  "src": "QINF",
+  "table": "/1LT/DSS4H001019",
+  "mapped": 14,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_RE_CONTR_2_M02",
+  "struct": "S_GENERAL_DATA",
+  "src": "GENERAL_DATA",
+  "table": "/1LT/DSS4H001021",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RE_ENBLUG_M02",
+  "struct": "S_GENERAL_DATA",
+  "src": "GENERAL_DATA",
+  "table": "/1LT/DSS4H001035",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RE_OCCUPANCY_M02",
+  "struct": "S_REINTEGRATIONOBJ",
+  "src": "REINTEGRATIONOBJ",
+  "table": "/1LT/DSS4H001042",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RE_USABLOBJ2_M02",
+  "struct": "S_R_REUSABLEOBJECTTP",
+  "src": "R_REUSABLEOBJECTTP",
+  "table": "/1LT/DSS4H001046",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RFM_ASSTMT_M02",
+  "struct": "S_ASSORTMENT_MODULE",
+  "src": "ASSORTMENT_MODULE",
+  "table": "/1LT/DSS4H001052",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RFM_MCCVR_M02",
+  "struct": "S_MRCHDSCATCVRSTRCN",
+  "src": "MRCHDSCATCVRSTRCN",
+  "table": "/1LT/DSS4H001062",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RFM_MCHNAS_M02",
+  "struct": "S_MCHIERNODEASSIGN",
+  "src": "MCHIERNODEASSIGN",
+  "table": "/1LT/DSS4H001066",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RFM_MCHNCVR_M02",
+  "struct": "S_MCHIERNODECVRSTRN",
+  "src": "MCHIERNODECVRSTRN",
+  "table": "/1LT/DSS4H001067",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RFM_MCHN_M02",
+  "struct": "S_MRCHDSCATHIERNODE",
+  "src": "MRCHDSCATHIERNODE",
+  "table": "/1LT/DSS4H001063",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RFM_MCRAAS_M02",
+  "struct": "S_MCREFARTICLE",
+  "src": "MCREFARTICLE",
+  "table": "/1LT/DSS4H001068",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_RFM_MC_M02",
+  "struct": "S_MERCHANDISECAT",
+  "src": "T023",
+  "table": "/1LT/DSS4H001059",
+  "mapped": 1,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_RFM_PROD2DC_M02",
+  "struct": "S_PRODDCLISTING",
+  "src": "PRODDCLISTING",
+  "table": "/1LT/DSS4H001069",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_ROUTING_M02",
+  "struct": "S_GROUP",
+  "src": "PLKO",
+  "table": "/1LT/DSS4H001070",
+  "mapped": 2,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SCHED_AGRMNT_M02",
+  "struct": "S_SAG_HEADER",
+  "src": "EKKO",
+  "table": "/1LT/DSS4H001084",
+  "mapped": 19,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SD_CONDITION_M02",
+  "struct": "S_CONDITIONS",
+  "src": "KONH",
+  "table": "/1LT/DSS4H001091",
+  "mapped": 4,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SD_CONTRACT_M02",
+  "struct": "S_SDCO_HEADER",
+  "src": "VBAK",
+  "table": "/1LT/DSS4H001094",
+  "mapped": 20,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SD_FRGDS_CND_M02",
+  "struct": "S_FRGDS_HEADER",
+  "src": "FRGDS_HEADER",
+  "table": "/1LT/DSS4H001102",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_SD_SCHED_AGR_M02",
+  "struct": "S_SD_SAG_HEADER",
+  "src": "VBAK",
+  "table": "/1LT/DSS4H001105",
+  "mapped": 7,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SELECTED_SET_M02",
+  "struct": "S_QPAM",
+  "src": "QPAM",
+  "table": "/1LT/DSS4H001111",
+  "mapped": 6,
+  "built": 20,
+  "verified": 13,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SELSET_CODE_M02",
+  "struct": "S_QPAC",
+  "src": "QPAC",
+  "table": "/1LT/DSS4H001112",
+  "mapped": 7,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SEPA_MANDATE_M02",
+  "struct": "SEPA_MANDATE",
+  "src": "SEPA_MANDATE",
+  "table": "/1LT/DSS4H001113",
+  "mapped": 50,
+  "built": 3,
+  "verified": 2,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SLS_ORDER_2_M02",
+  "struct": "S_VBAK",
+  "src": "VBAK",
+  "table": "/1LT/DSS4H001114",
+  "mapped": 18,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SOURCE_LIST_M02",
+  "struct": "S_EORD",
+  "src": "EORD",
+  "table": "/1LT/DSS4H001124",
+  "mapped": 13,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_SRVC_CONTR_3_M02",
+  "struct": "S_A_SERVICECONTR0001",
+  "src": "A_SERVICECONTR0001",
+  "table": "/1LT/DSS4H001125",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_SRVC_ORDER_M02",
+  "struct": "S_HEADER",
+  "src": "HEADER",
+  "table": "/1LT/DSS4H001135",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_SUBSTANCE_M02",
+  "struct": "S_EHFNDD_SUB",
+  "src": "EHFNDD_SUB",
+  "table": "/1LT/DSS4H001145",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_SW_CONSTR_M02",
+  "struct": "S_STRUCT_HEAD_SW",
+  "src": "STRUCT_HEAD_SW",
+  "table": "/1LT/DSS4H001148",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_TR_COM_PAPER_M02",
+  "struct": "S_STRUCTURE_CP",
+  "src": "STRUCTURE_CP",
+  "table": "/1LT/DSS4H001150",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_TR_DA_NOTICE_M02",
+  "struct": "S_STRUCTURE_DAN",
+  "src": "STRUCTURE_DAN",
+  "table": "/1LT/DSS4H001152",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_TR_FOREX_OPT_M02",
+  "struct": "S_STRUCTURE_COPT",
+  "src": "STRUCTURE_COPT",
+  "table": "/1LT/DSS4H001154",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_TR_FX_COLLAR_M02",
+  "struct": "S_STRUCTURE",
+  "src": "STRUCTURE",
+  "table": "/1LT/DSS4H001156",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_TR_FX_SWAP_M02",
+  "struct": "S_STRUCTURE",
+  "src": "STRUCTURE",
+  "table": "/1LT/DSS4H001157",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_TR_FX_TR_M02",
+  "struct": "S_STRUCTURE",
+  "src": "STRUCTURE",
+  "table": "/1LT/DSS4H001158",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_TR_IR_INSTR_M02",
+  "struct": "S_STRUCTURE",
+  "src": "STRUCTURE",
+  "table": "/1LT/DSS4H001162",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_TR_POSITION_M02",
+  "struct": "S_POSITION_VAL",
+  "src": "POSITION_VAL",
+  "table": "/1LT/DSS4H001170",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_VENDOR_2_M02",
+  "struct": "S_SUPPL_GEN",
+  "src": "LFA1",
+  "table": "/1LT/DSS4H001171",
+  "mapped": 39,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_VEND_EXT_3_M02",
+  "struct": "S_SUPPL_GEN",
+  "src": "LFA1",
+  "table": "/1LT/DSS4H001205",
+  "mapped": 8,
+  "built": 20,
+  "verified": 20,
+  "result": "staged"
+ },
+ {
+  "object": "Z_VEND_EXT_TH_M02",
+  "struct": "S_FITHA_PBUPL_K",
+  "src": "FITHA_PBUPL_K",
+  "table": "/1LT/DSS4H001238",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_WBS_ELEMENT_M02",
+  "struct": "S_PROJECT_DEF",
+  "src": "PROJ",
+  "table": "/1LT/DSS4H001239",
+  "mapped": 0,
+  "result": "no-automap"
+ },
+ {
+  "object": "Z_WORK_CNTR_M02",
+  "struct": "S_WORK_CNTR_HDR",
+  "src": "CRHD",
+  "table": "/1LT/DSS4H001241",
+  "mapped": 69,
+  "built": 20,
+  "verified": 19,
+  "result": "staged"
+ },
+ {
+  "object": "Z_WTY_CLAIM_M02",
+  "struct": "S_WTY_HEADER",
+  "src": "WTY_HEADER",
+  "table": "/1LT/DSS4H001248",
+  "mapped": 0,
+  "result": "no-automap"
+ }
+]
