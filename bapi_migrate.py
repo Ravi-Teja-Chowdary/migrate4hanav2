@@ -342,9 +342,41 @@ def migrate_vendor(eng, limit, commit, comp="1710", porg="1710"):
         print(f"=== Vendor created={ok} failed={fail} | RECONCILE {landed}/{len(made)} BPs readable ===")
 
 
+def migrate_equipment(eng, limit, commit, plant="1710"):
+    """Equipment via SAP official BAPI_EQUI_CREATE (support-safe). Target assigns the
+    number (internal numbering here). Real net-new on this box."""
+    import datetime
+    ecc, tgt = eng.ecc, eng.tgt
+    te = {r["EQUNR"].strip().lstrip("0") for r in eng.read_table(tgt, "EQUI", ["EQUNR"])}
+    src = eng.read_table(ecc, "EQUI", ["EQUNR", "EQTYP"])
+    desc = {r["EQUNR"].strip(): r["EQKTX"].strip()
+            for r in eng.read_table(ecc, "EQKT", ["EQUNR", "EQKTX", "SPRAS"], "SPRAS = 'E'")}
+    netnew = [r for r in src if r["EQUNR"].strip() and r["EQUNR"].strip().lstrip("0") not in te][:limit]
+    print(f"Equipment: net-new={len(netnew)}" + ("" if commit else "  [DRY]"))
+    today = datetime.date.today().strftime("%Y%m%d")
+    ok = fail = 0; made = []
+    for r in netnew:
+        eq = r["EQUNR"].strip()
+        if not commit:
+            continue
+        res = tgt.call("BAPI_EQUI_CREATE",
+                       DATA_GENERAL={"DESCRIPT": (desc.get(eq, "") or "Equipment " + eq)[:40], "MAINTPLANT": plant},
+                       DATA_SPECIFIC={"EQUICATGRY": r["EQTYP"].strip() or "M"}, VALID_DATE=today)
+        newno = (res.get("EQUIPMENT") or "").strip()
+        er = [x for x in ([res.get("RETURN")] if isinstance(res.get("RETURN"), dict) else res.get("RETURN", [])) if x.get("TYPE") in ("E", "A")]
+        if er or not newno:
+            fail += 1; tgt.call("BAPI_TRANSACTION_ROLLBACK")
+        else:
+            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1; made.append(newno)
+    if commit:
+        ta = {r["EQUNR"].strip().lstrip("0") for r in eng.read_table(tgt, "EQUI", ["EQUNR"])}
+        landed = sum(1 for m in made if m.lstrip("0") in ta)
+        print(f"=== Equipment created={ok} failed={fail} | RECONCILE {landed}/{len(made)} ===")
+
+
 HANDLERS = {"GLAccount": migrate_glaccount, "CostCenter": migrate_costcenter,
             "Characteristic": migrate_characteristic, "Class": migrate_class,
-            "ProfitCenter": migrate_profitcenter,
+            "ProfitCenter": migrate_profitcenter, "Equipment": migrate_equipment,
             "Customer": migrate_customer, "Vendor": migrate_vendor}
 
 

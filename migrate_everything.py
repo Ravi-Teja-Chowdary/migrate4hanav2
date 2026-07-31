@@ -45,6 +45,7 @@ DIRECT = {
     "Z_VENDOR_2_M02": "Vendor", "Z_VEND_EXT_3_M02": "Vendor",
     "Z_CHARACT_M02": "Characteristic", "Z_CLASS_2_M02": "Class",
     "Z_KOSTL_MASTER_M02": "CostCenter", "Z_PRCTR_MSTR2_M02": "ProfitCenter",
+    "Z_EQUIPMENT_2_M02": "Equipment",
 }
 
 
