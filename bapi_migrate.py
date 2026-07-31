@@ -213,8 +213,8 @@ def migrate_characteristic(eng, limit, commit):
         dsc = [{"LANGUAGE_INT": "E", "LANGUAGE_ISO": "EN", "DESCRIPTION": desc.get(r["ATINN"].strip(), nm)[:30]}]
         if not commit:
             continue
-        er = [x for x in [tgt.call("BAPI_CHARACT_CREATE", CHARACTDETAIL=det, CHARACTDESCR=dsc).get("RETURN", {})]
-              if x.get("TYPE") in ("E", "A")]
+        ret = tgt.call("BAPI_CHARACT_CREATE", CHARACTDETAIL=det, CHARACTDESCR=dsc).get("RETURN", [])
+        er = [x for x in (ret if isinstance(ret, list) else [ret]) if x.get("TYPE") in ("E", "A")]
         if er:
             fail += 1; tgt.call("BAPI_TRANSACTION_ROLLBACK")
         else:
@@ -269,11 +269,12 @@ def migrate_profitcenter(eng, limit, commit, src_ca="1000", tgt_ca="A000"):
                  "LONG_TEXT": (t.get("LTEXT", "").strip() or p)[:40], "PRCTR_HIER_GRP": ""}
         if not commit:
             continue
+        # TESTRUN is a structure param (BAPI0015_9) and optional — omit it for the real run.
         res = tgt.call("BAPI_PROFITCENTER_CREATE", PROFITCENTERID={"CO_AREA": tgt_ca, "PROFIT_CTR": p},
-                       BASICDATA=basic, VALIDFROM="20200101", VALIDTO="99991231", TESTRUN="")
-        r = res.get("RETURN", {})
-        if (r if isinstance(r, dict) else {}).get("TYPE") in ("E", "A"):
-            fail += 1
+                       BASICDATA=basic, VALIDFROM="20200101", VALIDTO="99991231")
+        ret = res.get("RETURN", []); rl = ret if isinstance(ret, list) else [ret]
+        if any(m.get("TYPE") in ("E", "A") for m in rl):
+            fail += 1; tgt.call("BAPI_TRANSACTION_ROLLBACK")
         else:
             tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
     if commit:
@@ -349,6 +350,9 @@ def migrate_equipment(eng, limit, commit, plant="1710"):
     import datetime
     ecc, tgt = eng.ecc, eng.tgt
     te = {r["EQUNR"].strip().lstrip("0") for r in eng.read_table(tgt, "EQUI", ["EQUNR"])}
+    # equipment categories valid on the TARGET (T370T); source EQTYP may not exist there
+    tcat = {r["EQTYP"].strip() for r in eng.read_table(tgt, "T370T", ["EQTYP"])}
+    defcat = "M" if "M" in tcat else (sorted(tcat)[0] if tcat else "M")
     src = eng.read_table(ecc, "EQUI", ["EQUNR", "EQTYP"])
     desc = {r["EQUNR"].strip(): r["EQKTX"].strip()
             for r in eng.read_table(ecc, "EQKT", ["EQUNR", "EQKTX", "SPRAS"], "SPRAS = 'E'")}
@@ -358,11 +362,12 @@ def migrate_equipment(eng, limit, commit, plant="1710"):
     ok = fail = 0; made = []
     for r in netnew:
         eq = r["EQUNR"].strip()
+        cat = r["EQTYP"].strip() if r["EQTYP"].strip() in tcat else defcat
         if not commit:
             continue
         res = tgt.call("BAPI_EQUI_CREATE",
                        DATA_GENERAL={"DESCRIPT": (desc.get(eq, "") or "Equipment " + eq)[:40], "MAINTPLANT": plant},
-                       DATA_SPECIFIC={"EQUICATGRY": r["EQTYP"].strip() or "M"}, VALID_DATE=today)
+                       DATA_SPECIFIC={"EQUICATGRY": cat}, VALID_DATE=today)
         newno = (res.get("EQUIPMENT") or "").strip()
         er = [x for x in ([res.get("RETURN")] if isinstance(res.get("RETURN"), dict) else res.get("RETURN", [])) if x.get("TYPE") in ("E", "A")]
         if er or not newno:
@@ -397,7 +402,7 @@ def migrate_fixedasset(eng, limit, commit, cmap=None):
         cc = cmap[r["BUKRS"].strip()]; cls = r["ANLKL"].strip()
         gen = {"ASSETCLASS": cls, "DESCRIPT": (r["TXT50"].strip() or "Asset " + r["ANLN1"].strip())[:50]}
         src_key = "%s/%s" % (r["BUKRS"].strip(), r["ANLN1"].strip())
-        vr = tgt.call("BAPI_FIXEDASSET_CREATE1", KEY={"COMPANYCODE": cc}, GENERALDATA=gen, TESTRUN="X").get("RETURN", {})
+        vr = tgt.call("BAPI_FIXEDASSET_CREATE1", KEY={"COMPANYCODE": cc}, GENERALDATA=gen, TESTRUN="X").get("RETURN", [])
         vl = vr if isinstance(vr, list) else [vr]
         verr = [m for m in vl if m.get("TYPE") in ("E", "A")]
         if verr:
@@ -405,8 +410,9 @@ def migrate_fixedasset(eng, limit, commit, cmap=None):
         if not commit:
             continue
         res = tgt.call("BAPI_FIXEDASSET_CREATE1", KEY={"COMPANYCODE": cc}, GENERALDATA=gen)
-        rl = res.get("RETURN", {}); rl = rl if isinstance(rl, list) else [rl]
-        newno = (res.get("ASSET", {}) or {}).get("ASSETMAINO", "").strip()
+        rl = res.get("RETURN", []); rl = rl if isinstance(rl, list) else [rl]
+        asset = res.get("ASSET", {})
+        newno = (asset.get("ASSETMAINO", "") if isinstance(asset, dict) else str(asset)).strip()
         if any(m.get("TYPE") in ("E", "A") for m in rl) or not newno:
             fail += 1; errors.append("%s: %s" % (src_key, (rl[0].get("MESSAGE", "") if rl else "no number")[:65]))
             tgt.call("BAPI_TRANSACTION_ROLLBACK")
