@@ -4,7 +4,21 @@
 No spin: an object is only ticked up a level when it has been done and verified.
 Updated every time an object moves. Companion to `DATA_MIGRATION_ROADMAP.md`.*
 
-**Last updated:** 2026-07-31 (direct-API lane: 9 master-data objects land headless)
+**Last updated:** 2026-07-31 (all 3 buckets wired into `migrate_everything.py` + proven on client 100)
+
+## 3-bucket end-to-end proof — `migrate_everything.py --commit` on client 100 (2026-07-31)
+One command migrated across **all three buckets** to the fully-configured SAP Best Practices
+client 100, headless + reconciled, support-safe (official BAPIs/OData only). **14 objects
+landed + reconciled:**
+- **Bucket 1 (master data, 9):** Bank, G/L account, Customer, Vendor, Characteristic, Class,
+  Equipment, Fixed Asset, Document — each created + reconciled (3/3).
+- **Bucket 2 (open txns, 1):** Maintenance Notification (QMEL 279→282).
+- **Bucket 3 (balances, 4):** G/L balances (**to the cent**, doc 0100000031), AR open items
+  (BSID), AP open items (BSIK), Inventory stock (mvt 561).
+- **Config-gated on client 100 (honest, not tool bugs):** Cost Center + Profit Center (CO
+  config — TKA05 / standard hierarchy), Asset value takeover (FI-AA transfer phase closed).
+Target client is selectable via `M4H_TARGET_CLIENT`; client 100 mirrors a real client's
+configured S/4, so this proof carries to real clients.
 
 ## Catalog unlock — all 230 objects are staged & addressable (2026-07-30)
 The founder created MC project **M02_FULL** (Mass Transfer **M02**) and added **all
