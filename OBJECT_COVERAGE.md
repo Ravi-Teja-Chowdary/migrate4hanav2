@@ -4,7 +4,7 @@
 No spin: an object is only ticked up a level when it has been done and verified.
 Updated every time an object moves. Companion to `DATA_MIGRATION_ROADMAP.md`.*
 
-**Last updated:** 2026-07-30 (M02_FULL catalog unlock)
+**Last updated:** 2026-07-31 (direct-API lane: 9 master-data objects land headless)
 
 ## Catalog unlock — all 230 objects are staged & addressable (2026-07-30)
 The founder created MC project **M02_FULL** (Mass Transfer **M02**) and added **all
@@ -43,8 +43,9 @@ subset. "100+" is real and if anything conservative.
 | 📥 staged via the engine (real ECC data) | **72** | full-catalog pass (`grind_all.py`) over all 230 objects: **72 staged real data** across FI/CO, MM, SD, PP, QM, PM, PS, DMS, classification, balances, open items, assets, inventory, Customer/Vendor. 8 more ran empty. `catalog/grind_all_results.json`. |
 | ⬜ no source data on this ECC | **~150** | industry objects (EHS, oil&gas PRA, JVA, treasury, real-estate, retail RFM, EWM, HCM, dangerous goods) — IDES doesn't populate them. Recipes are generatable; they stage 0 rows here, migrate on a real client that has the data. |
 | 🟨 legacy (pre-engine loaders) | **~8** | Customer, Vendor, Material-basic, Bank, Sales order, Cost center, Profit center, G/L |
-| ✅ **migrated + reconciled (headless, support-safe)** | **4** | **Bank** (`BAPI_BANK_CREATE`), **G/L account** (`GL_ACCT_MASTER_SAVE_RFC`), **Characteristic** (`BAPI_CHARACT_CREATE`, 25/25), **Class** (`BAPI_CLASS_CREATE`, 25/25) — ECC → official BAPI → commit → reconciled, zero GUI (`bapi_migrate.py`). Characteristic/Class have large real net-new (8k/2k) and created at volume. |
-| 🔧 **migrator built; blocked here by overlap or target customizing** | **4** | **Cost Center** + **Profit Center** (BAPIs ready, org-map 1000→A000; net-new=0, full IDES↔IDES overlap). **Internal Order** (`BAPI_INTERNALORDER_CREATE` ready; target has 0 order types → customizing gap). **Material-basic** (`BAPI_MATERIAL_SAVEDATA` ready; net-new blocked by custom material types + invalid UoM in source). All detected safely (TESTMODE/validation) — client-config/data dependencies, not tool gaps. |
+| ✅ **migrated + reconciled (headless, support-safe)** | **9** | ECC → official BAPI/OData → commit → reconciled, zero GUI (`bapi_migrate.py`): **Bank** (`BAPI_BANK_CREATE`) · **G/L account** (`GL_ACCT_MASTER_SAVE_RFC`) · **Customer** + **Vendor** (`API_BUSINESS_PARTNER` OData) · **Characteristic** (`BAPI_CHARACT_CREATE`) · **Class** (`BAPI_CLASS_CREATE`) · **Equipment** (`BAPI_EQUI_CREATE`, 5/5) · **Fixed Asset** (`BAPI_FIXEDASSET_CREATE1`, 4/4, org-map 1000→1010, 1,127 net-new) · **Document info record / DMS** (`BAPI_DOCUMENT_CREATE2`, 10/10, 1,917 net-new). Several have large real net-new and created at volume. |
+| 🔧 **migrator built; blocked here by overlap or target customizing** | **6** | **Cost Center** + **Profit Center** (BAPIs ready, org-map 1000→A000; net-new=0, full IDES↔IDES overlap). **Internal Order** (`BAPI_INTERNALORDER_CREATE` ready; target has 0 order types → customizing gap). **Functional Location** (`BAPI_FUNCLOC_CREATE` ready; target `T370K` has 0 structure indicators → customizing gap). **Material-basic** (`BAPI_MATERIAL_SAVEDATA` ready; net-new are special types HERS/PROD/DIEN that don't create + standard types fully overlap). **Batch** (`BAPI_BATCH_CREATE` ready; target materials not flagged batch-managed → would require modifying existing masters, disallowed). All detected safely (TESTRUN/validation) — client-config/data/overlap dependencies, not tool gaps. |
+| 🚫 **no released create BAPI (cockpit-lane only)** | — | **Activity Type**, **QM Inspection Method / Master Inspection Characteristic**, **Work Center** — SAP exposes no released create BAPI; these land via the SAP-supported cockpit staging lane, not direct-API. Honest boundary, not a defect. |
 | ⬜ recipe not yet written | **~178** | mostly industry objects (EHS, oil&gas PRA, JVA, treasury, HCM) with no ECC source data |
 
 > **What changed today:** the ceiling moved from "3 staged, ~90 not started (no
@@ -54,9 +55,17 @@ subset. "100+" is real and if anything conservative.
 > this session: DD03L field-validity, automatic wide-row splitting (RFC 512-byte
 > cap), semantic key aliases — so wide objects (CSKS, KNA1, LFA1, EKKO…) read cleanly.
 
-> Blunt truth: **zero objects are fully migrated-and-reconciled through the new engine
-> yet.** Staging is proven on 3; the actual Migrate step is app-gated and needs a
-> persistent target. Everything below ⬜ is honest work remaining.
+> Blunt truth (2026-07-31 update): **9 master-data objects now land fully headless and
+> reconciled** through the direct-API lane (`bapi_migrate.py`) — Bank, G/L, Customer,
+> Vendor, Characteristic, Class, Equipment, Fixed Asset, Document. This is the
+> support-safe path (official BAPIs/OData only, net-new only, TESTRUN-validated). The
+> remaining core master-data objects are blocked on THIS IDES↔IDES box by genuine SAP
+> realities — **no released create BAPI** (Activity Type, QM methods, Work Center),
+> **target customizing gaps** (Internal Order types, Functional Location structure
+> indicators), or **overlap / material-config** (Cost/Profit Center net-new=0; Material
+> net-new are special types; Batch materials not batch-managed). None are tool gaps: on a
+> data-rich real client with configured customizing they light up with no code changes.
+> The staging lane (72 objects with real data) covers the rest via SAP's cockpit method.
 
 ---
 
@@ -64,13 +73,13 @@ subset. "100+" is real and if anything conservative.
 | Object | Status | Mechanism / notes |
 |---|---|---|
 | Product / Material (basic+sales+tax) | 📥 staged | `recipes/product.json`; plant/valuation views still ⬜ |
-| Profit center | 📥 staged | `recipes/profit_center.json` (also 🟨 legacy) |
+| Profit center | 🔧 built (overlap) | `BAPI_PROFITCENTER_CREATE`, org-map 1000→A000; net-new=0 on IDES↔IDES (also 📥 staged) |
 | Production supply area | 📥 staged | `recipes/production_supply_area.json` |
-| Customer / Business Partner | 🟨 legacy | via OData API_BUSINESS_PARTNER; recipe ⬜ |
-| Supplier / Vendor | 🟨 legacy | recipe ⬜ |
-| Bank | 🟨 legacy | governed T005 key fix; recipe ⬜ |
-| Cost center | 🟨 legacy | recipe ⬜ |
-| G/L account | 🟨 legacy | via GL_ACCT_MASTER_SAVE_RFC; recipe ⬜ |
+| Customer / Business Partner | ✅ migrated | `API_BUSINESS_PARTNER` OData create (`bapi_migrate.migrate_customer`) |
+| Supplier / Vendor | ✅ migrated | `API_BUSINESS_PARTNER` OData create (`bapi_migrate.migrate_vendor`) |
+| Bank | ✅ migrated | `BAPI_BANK_CREATE`, net-new + reconciled (`bapi_migrate.migrate` Bank) |
+| Cost center | 🔧 built (overlap) | `BAPI_COSTCENTER_CREATEMULTIPLE`, org-map 1000→A000; net-new=0 on IDES↔IDES |
+| G/L account | ✅ migrated | `GL_ACCT_MASTER_SAVE_RFC`, account-group-gated + reconciled |
 | Cost element (primary/secondary) | ⬜ none | |
 | Activity type | 📥 staged | `recipes/activitytype.json` (CSLA→S_CSLA, tab 000669) |
 | Internal order | 📥 staged | `recipes/internalorder.json` (AUFK→S_AUFK); org-plant filter — refine |
@@ -78,7 +87,7 @@ subset. "100+" is real and if anything conservative.
 | Bank | 📥 staged | `recipes/bank.json` (BNKA→S_BNKA, tab 000120); also 🟨 legacy |
 | Source list | 📥 staged | `recipes/sourcelist.json` (EORD→S_EORD, tab 001124) |
 | Inspection method | 📥 staged | `recipes/inspmethod.json` (QMTB→S_QMTB, tab 000618) |
-| Fixed asset master | ⬜ none | Phase B |
+| Fixed asset master | ✅ migrated | `BAPI_FIXEDASSET_CREATE1`, org-map 1000→1010/3000→1710, class-on-target gated, TESTRUN-validated; 4/4 landed, 1,127 net-new (`bapi_migrate.migrate_fixedasset`) |
 | Bill of material (BOM) | ⬜ none | Phase B |
 | Routing / task list | ⬜ none | Phase B |
 | Work center | ⬜ none | Phase B |
@@ -87,12 +96,13 @@ subset. "100+" is real and if anything conservative.
 | Purchasing info record | ⬜ none | Phase B |
 | Purchasing contract / scheduling agreement | ⬜ none | |
 | Pricing conditions (SD + MM) | ⬜ none | Phase B |
-| Characteristic | ⬜ none | |
-| Class | ⬜ none | |
-| Batch master | ⬜ none | |
-| Serial number | ⬜ none | |
-| Equipment (PM) | ⬜ none | |
-| Functional location (PM) | ⬜ none | |
+| Characteristic | ✅ migrated | `BAPI_CHARACT_CREATE`, large net-new, reconciled |
+| Class | ✅ migrated | `BAPI_CLASS_CREATE`, reconciled |
+| Batch master | 🔧 built (blocked) | `BAPI_BATCH_CREATE` ready; target materials not batch-managed → would modify existing masters (disallowed) |
+| Serial number | ⬜ none | material-dependent |
+| Equipment (PM) | ✅ migrated | `BAPI_EQUI_CREATE`, 5/5 landed, 6,554 net-new (`bapi_migrate.migrate_equipment`) |
+| Functional location (PM) | 🔧 built (config gap) | `BAPI_FUNCLOC_CREATE` ready; target `T370K` has 0 structure indicators |
+| Document info record (DMS) | ✅ migrated | `BAPI_DOCUMENT_CREATE2`, self-adapting numbering, 10/10 landed, 1,917 net-new (`bapi_migrate.migrate_document`) |
 | Maintenance plan / item | ⬜ none | |
 | Exchange rates | 🟨 legacy | customizing loader; recipe ⬜ |
 | Merchandise category | ⬜ none | in the M01 project; recipe ⬜ |
