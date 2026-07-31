@@ -98,7 +98,12 @@ class Engine:
     def tgt(self):
         if self._tgt is None:
             s = self.cfg["lift_and_shift_target"]
-            self._tgt = Connection(ashost=s["target_ashost"], sysnr="00", client="200",
+            # target client: env override wins, else connections.json, else 200.
+            # Client 100 = SAP Best Practices fully-activated client (materials extended
+            # to plant+sales views, cost elements, asset config) — the "fully-configured
+            # S/4" proving ground that mirrors a real client. Client 200 = thin.
+            client = os.environ.get("M4H_TARGET_CLIENT") or s.get("target_client") or "200"
+            self._tgt = Connection(ashost=s["target_ashost"], sysnr="00", client=client,
                                    user=s["target_user"], passwd=os.environ["M4H_TARGET_PASSWD"], lang="EN")
         return self._tgt
 
