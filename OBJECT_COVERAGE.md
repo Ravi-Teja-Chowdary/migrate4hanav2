@@ -42,7 +42,7 @@ subset. "100+" is real and if anything conservative.
 | 🗂️ addressable in M02 (staging tables generated) | **230** | full standard catalog; `catalog/ds_mapping.json` |
 | 📥 staged via the engine | **52** | across **14 functional areas** (FI/CO, MM, SD, PP, QM, PM, PS, Classification, DMS, balances, open items, assets) — see `M02_GRIND_LOG.md`. ~35 have substantial maps; ~15 are thin key-only maps pending field mapping |
 | 🟨 legacy (pre-engine loaders) | **~8** | Customer, Vendor, Material-basic, Bank, Sales order, Cost center, Profit center, G/L |
-| ✅ **migrated + reconciled (headless, support-safe)** | **1** | **Bank** — ECC BNKA → `BAPI_BANK_CREATE` → commit → reconciled on target, zero GUI (`bapi_migrate.py`). First true ✅. Direct-API lane. |
+| ✅ **migrated + reconciled (headless, support-safe)** | **2** | **Bank** (`BAPI_BANK_CREATE`) + **G/L account** (`GL_ACCT_MASTER_SAVE_RFC`, chart INT) — ECC → official BAPI → commit → reconciled, zero GUI (`bapi_migrate.py`). Direct-API lane. G/L also surfaced real config gaps: 20/24 net-new blocked by account groups (SEM/ERG.) missing on target chart INT — a client customizing dependency, safely detected via TESTMODE. |
 | ⬜ recipe not yet written | **~178** | mostly industry objects (EHS, oil&gas PRA, JVA, treasury, HCM) with no ECC source data |
 
 > **What changed today:** the ceiling moved from "3 staged, ~90 not started (no
