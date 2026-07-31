@@ -1,44 +1,48 @@
 """
 migrate_everything — the one-command ECC -> S/4HANA "every damn thing" migrator.
 
-The product entry point. Point it at a source ECC + target S/4 and it migrates every
-object it can, **SAP-support-safe**: it writes to S/4 ONLY through SAP's official
-released BAPIs / OData APIs (which run SAP's own validation and keep the DB consistent).
-It never modifies SAP standard and never writes tables behind the app layer. It picks
-the right lane per object automatically, then reconciles and reports honestly.
+THE product entry point. Point it at a source ECC + a target S/4 client and it migrates
+every object it can across all THREE buckets, **SAP-support-safe**: it writes to S/4 ONLY
+through SAP's official released BAPIs / OData APIs (which run SAP's own validation and keep
+the DB consistent — every FI document must balance to zero or SAP refuses it). It never
+modifies SAP standard and never writes tables behind the app layer. It picks the right lane
+per object, then reconciles and reports honestly.
 
-Two support-safe lanes, in priority order:
-  1. direct-api — official BAPI / API_BUSINESS_PARTNER OData create. Headless: the record
-                  lands on the target and is reconciled. (Bank, G/L, Customer, Vendor,
-                  Characteristic, Class, Cost Center, Profit Center — extensible: 1 entry.)
-  2. staging    — scaffold + load the object's Migration Cockpit staging table (SAP's
-                  supported staging method); the cockpit run completes the landing.
+Three buckets, in migration order:
+  1. Master data      (bapi_migrate.py) — Bank, G/L, Customer, Vendor, Characteristic,
+                        Class, Equipment, Fixed Asset, Document + cockpit staging for the rest.
+  2. Open transactions (bucket2_migrate.py) — Maintenance Notification + the open-doc lane
+                        (PO/PR/SO/production order gated by target master-data completeness).
+  3. Balances          (bucket3_migrate.py) — G/L balances, AR / AP open items, inventory
+                        stock, asset values — posted + reconciled to the cent.
 
-Modes:
-  (default) plan  — assess every catalog object, write NOTHING. Shows the chosen lane and
-                    how much data each object has. Safe to run anytime.
-  --commit        — execute: direct-api objects are created + reconciled on the target;
-                    staging objects are loaded into their staging tables.
+Target client: set M4H_TARGET_CLIENT (env). Client 100 = SAP Best Practices fully-activated
+client (plant+sales-extended materials + full FI/CO config) — the proving ground that
+mirrors a real client. Client 200 = thin. Default 200.
 
-    py -3.7 migrate_everything.py                 # plan / assessment (no writes)
-    py -3.7 migrate_everything.py --commit        # execute
-    py -3.7 migrate_everything.py --commit --limit 50
+    M4H_TARGET_CLIENT=100 py -3.7 migrate_everything.py                 # plan (no writes)
+    M4H_TARGET_CLIENT=100 py -3.7 migrate_everything.py --commit        # execute all 3 buckets
+    M4H_TARGET_CLIENT=100 py -3.7 migrate_everything.py --commit --limit 5
+    py -3.7 migrate_everything.py --commit --staging                    # also run the ~220
+                                                                        # cockpit-staging objects
 
-Honest by design: every object ends in one bucket — migrated / staged / needs-config /
-no-source — nothing is hidden, and bad data is refused by SAP validation, never forced.
+Honest by design: every object ends in exactly one bucket — migrated / staged / needs-config
+/ no-source — nothing is hidden, and bad data is refused by SAP validation, never forced.
 """
-import os, sys, json, argparse, datetime
+import os, sys, json, argparse, datetime, traceback
 os.environ.setdefault("SAPNWRFC_HOME", os.path.join(os.getcwd(), "sapnwrfc"))
 sys.path.insert(0, os.getcwd()); sys.path.insert(0, os.path.join(os.getcwd(), "lambda", "utils"))
 from migration_engine import Engine
 from object_catalog import Catalog
 import scaffold_recipe as scf
 import bapi_migrate as bm
+import bucket2_migrate as b2
+import bucket3_migrate as b3
 import grind_all as ga
 
 MT = "M02"
 
-# catalog object ident -> direct-api lane (official BAPI/OData create, support-safe)
+# -- Bucket 1: master-data direct-api handlers (catalog object ident -> handler name) --
 DIRECT = {
     "Z_BANK_2_M02": "Bank", "Z_GL_ACCOUNT_3_M02": "GLAccount",
     "Z_CUSTOMER_2_M02": "Customer", "Z_CUST_EXT_3_M02": "Customer",
@@ -51,75 +55,99 @@ DIRECT = {
 
 
 def run_direct(eng, handler, limit, commit):
-    """Dispatch to the proven support-safe handler in bapi_migrate."""
+    """Dispatch to the proven support-safe master-data handler in bapi_migrate."""
     if handler in bm.HANDLERS:
         bm.HANDLERS[handler](eng, limit, commit)
     elif handler in bm.OBJECTS:
         bm.migrate(eng, handler, limit, commit)
 
 
+def run_handlers(eng, handlers, limit, commit, report, bucket):
+    """Run a {name: fn(eng, limit, commit)} map, recording one honest row per object."""
+    for name, fn in sorted(handlers.items()):
+        try:
+            fn(eng, limit, commit)
+            report.append({"bucket": bucket, "object": name, "result": "migrated" if commit else "ready"})
+        except Exception as e:
+            report.append({"bucket": bucket, "object": name, "result": "error", "err": str(e)[:90]})
+            print(f"  ERROR {name}: {str(e)[:90]}", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--commit", action="store_true", help="execute (default: plan, no writes)")
-    ap.add_argument("--limit", type=int, default=25)
+    ap.add_argument("--limit", type=int, default=5)
+    ap.add_argument("--staging", action="store_true", help="also run the ~220 cockpit-staging objects (slow)")
     args = ap.parse_args()
 
+    client = os.environ.get("M4H_TARGET_CLIENT", "200")
     eng = Engine(allow_proposed=True)
     cat = Catalog(eng)
     objs = sorted(cat.objects(MT))
-    print(f"=== migrate_everything | {len(objs)} objects | "
-          f"{'EXECUTE' if args.commit else 'PLAN (no writes)'} | support-safe ===\n", flush=True)
-
+    print(f"=== migrate_everything | target client {client} | "
+          f"{'EXECUTE' if args.commit else 'PLAN (no writes)'} | support-safe, 3 buckets ===\n", flush=True)
     report = []
-    # ── lane 1: direct-api (official BAPI/OData, lands on target) ────────────────
-    print("── Lane 1: direct-API (official BAPI/OData create, support-safe) ──", flush=True)
-    seen_handlers = set()
+
+    # == Bucket 1 — Master data (direct-API, official BAPI/OData) ====================
+    print("-- Bucket 1: MASTER DATA (direct-API, official BAPI/OData) --", flush=True)
+    seen = set()
     for obj in objs:
         h = DIRECT.get(obj)
-        if not h or h in seen_handlers:
+        if not h or h in seen:
             continue
-        seen_handlers.add(h)
+        seen.add(h)
         try:
             run_direct(eng, h, args.limit, args.commit)
-            report.append({"object": obj, "lane": "direct-api", "handler": h, "result": "migrated" if args.commit else "ready"})
+            report.append({"bucket": "1-master", "object": h, "result": "migrated" if args.commit else "ready"})
         except Exception as e:
-            report.append({"object": obj, "lane": "direct-api", "handler": h, "result": "error", "err": str(e)[:80]})
-            print(f"  ERROR {h}: {str(e)[:80]}", flush=True)
+            report.append({"bucket": "1-master", "object": h, "result": "error", "err": str(e)[:90]})
+            print(f"  ERROR {h}: {str(e)[:90]}", flush=True)
 
-    # ── lane 2: staging (SAP-supported cockpit staging method) ───────────────────
-    print("\n── Lane 2: cockpit staging (SAP-supported staging method) ──", flush=True)
-    for obj in objs:
-        if obj in DIRECT:
-            continue
-        struct, table = cat.primary(MT, obj)
-        src = ga.source_for(struct)
-        row = {"object": obj, "lane": "staging", "src": src}
-        try:
-            recipe = scf.scaffold(eng, table, src, "master", obj)
-            if len(recipe["structures"][0]["map"]) == 0:
-                row["result"] = "no-source"   # no mappable source on this ECC
-            elif args.commit:
-                info = eng.run(recipe)[0]
-                row["result"] = "staged" if (info.get("verified_rows") or 0) > 0 else "no-data"
-                row["rows"] = info.get("verified_rows")
-            else:
-                row["result"] = "mappable"
-        except Exception:
-            row["result"] = "no-source"
-        report.append(row)
+    # == Bucket 2 — Open transactions (direct-API) ==================================
+    print("\n-- Bucket 2: OPEN TRANSACTIONS (direct-API) --", flush=True)
+    run_handlers(eng, b2.HANDLERS, args.limit, args.commit, report, "2-open")
+
+    # == Bucket 3 — Balances (post + reconcile to the cent) =========================
+    print("\n-- Bucket 3: BALANCES (post + reconcile) --", flush=True)
+    run_handlers(eng, b3.HANDLERS, args.limit, args.commit, report, "3-balances")
+
+    # == Bucket 1 (cont.) — cockpit staging for the long tail (optional) ============
+    if args.staging:
+        print("\n-- Bucket 1 (cont.): cockpit staging (SAP-supported staging method) --", flush=True)
+        for obj in objs:
+            if obj in DIRECT:
+                continue
+            struct, table = cat.primary(MT, obj)
+            src = ga.source_for(struct)
+            row = {"bucket": "1-staging", "object": obj, "src": src}
+            try:
+                recipe = scf.scaffold(eng, table, src, "master", obj)
+                if len(recipe["structures"][0]["map"]) == 0:
+                    row["result"] = "no-source"
+                elif args.commit:
+                    info = eng.run(recipe)[0]
+                    row["result"] = "staged" if (info.get("verified_rows") or 0) > 0 else "no-data"
+                else:
+                    row["result"] = "mappable"
+            except Exception:
+                row["result"] = "no-source"
+            report.append(row)
 
     eng.close()
-    # ── report ───────────────────────────────────────────────────────────────────
+
+    # -- report ---------------------------------------------------------------------
     from collections import Counter
-    c = Counter(r["result"] for r in report)
     os.makedirs("catalog", exist_ok=True)
     json.dump(report, open(os.path.join("catalog", "migration_report.json"), "w"), indent=1)
-    print("\n================= MIGRATION REPORT =================")
-    print(f"  date: {datetime.date.today()}   objects: {len(report)}   mode: {'EXECUTE' if args.commit else 'PLAN'}")
-    for k, v in c.most_common():
-        print(f"    {k:<12} {v}")
-    direct = [r for r in report if r["lane"] == "direct-api"]
-    print(f"  direct-API (lands on target, support-safe): {len(direct)} objects")
+    print("\n================= MIGRATION REPORT (3 buckets) =================")
+    print(f"  date: {datetime.date.today()}   target client: {client}   "
+          f"mode: {'EXECUTE' if args.commit else 'PLAN'}")
+    for bucket in ("1-master", "2-open", "3-balances", "1-staging"):
+        rows = [r for r in report if r["bucket"] == bucket]
+        if not rows:
+            continue
+        c = Counter(r["result"] for r in rows)
+        print(f"  {bucket:<12} {len(rows):>3} objects   " + "  ".join("%s=%d" % kv for kv in c.most_common()))
     print("  wrote catalog/migration_report.json")
 
 

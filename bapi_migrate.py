@@ -284,8 +284,9 @@ def _odata(eng):
     import json as _j
     from odata_client import ODataClient
     t = _j.load(open("connections.json"))["lift_and_shift_target"]
+    client = os.environ.get("M4H_TARGET_CLIENT") or t.get("target_client") or "200"
     return ODataClient(host=t["target_public_ip"], user=t["target_user"],
-                       passwd=os.environ["M4H_TARGET_PASSWD"], client="200", port=44300, timeout=60)
+                       passwd=os.environ["M4H_TARGET_PASSWD"], client=client, port=44300, timeout=60)
 
 
 def _bp_recon(eng, table, comp):
