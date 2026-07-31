@@ -145,15 +145,14 @@ operational chart (YCOA) — a governed step like org-mapping; identity+automati
 
 | Object | Status | Mechanism / notes |
 |---|---|---|
-| G/L account balances | ✅ engine proven | `BAPI_ACC_DOCUMENT_POST`; reads ECC GLT0 net balances, posts balance-sheet accounts vs a takeover clearing account, **reconciled 6/6 to the cent** (doc 0100000004/2026, cocode 1010). Faithful full run needs a governed INT→YCOA account map. |
-| G/L / AR open items | ⬜ none | Phase D2 |
-| AP open items | ⬜ none | Phase D2 |
-| Inventory / material stock (qty+value) | ⬜ none | Phase D3 — BAPI_GOODSMVT_CREATE mvt 561 |
-| Fixed asset values (takeover) | ⬜ none | Phase D4 |
-| WIP / order balances | ⬜ none | |
-| CO / cost center actuals | ⬜ none | |
-| Special ledger balances | ⬜ none | |
-| *(+ more balance objects)* | ⬜ none | needs the reconcile-to-the-cent gate |
+| G/L account balances | ✅ proven | `BAPI_ACC_DOCUMENT_POST`; reads ECC GLT0 net balances, posts balance-sheet accounts vs a takeover clearing account, **reconciled 6/6 to the cent** (doc 0100000004/2026, cocode 1010). Faithful full run needs a governed INT→YCOA account map. |
+| AR open items | ✅ proven | `BAPI_ACC_DOCUMENT_POST` (doc type SA → unspecified txn so splitting allows customer+clearing); DR customer / CR clearing, **BSID reconciled** (`migrate_ar_open_items`) |
+| AP open items | ✅ proven | `BAPI_ACC_DOCUMENT_POST`; DR clearing / CR vendor, **BSIK reconciled** (`migrate_ap_open_items`) |
+| Inventory / material stock (qty+value) | ✅ proven | `BAPI_GOODSMVT_CREATE` mvt 561; opening qty for priced materials on target plant, value from material price, **MARD reconciled**; auto-derives open MM period + valid storage location (`migrate_inventory_balances`) |
+| Fixed asset values (takeover) | 🔧 built (config gate) | `BAPI_FIXEDASSET_OVRTAKE_CREATE` (master + cumulated acq/dep values); needs the company code in an OPEN FI-AA legacy-transfer phase — closed on client 100 (1710 completed / 1010 not initialized). Works mid-migration on a real client. Asset MASTER lander is live (Bucket 1). |
+| WIP / order balances | 📝 recipe | derived from order postings; low priority (follows production orders) |
+| CO / cost center actuals | 📝 recipe | in S/4 primary CO actuals flow from FI postings (universal journal) — largely covered by G/L + cost-center account assignment |
+| Special ledger balances | ⬜ none | niche; needs the reconcile-to-the-cent gate |
 
 ---
 
