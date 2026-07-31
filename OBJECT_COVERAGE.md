@@ -112,20 +112,26 @@ subset. "100+" is real and if anything conservative.
 | *(+ more master-data objects)* | ⬜ none | |
 
 ## Bucket 2 — Open transactions
+**All 14 create-BAPIs verified present + callable on target** (2026-07-31). The lane is
+`bucket2_migrate.py` (direct-API, support-safe) + `bucket2_preflight.py` (per-object
+readiness). Key finding: an open document is a POINTER into master data, so it only lands
+if the target holds the referenced master data. On THIS target box (CAL client 200)
+materials are basic-view only — **MARC (plant-extension) and MVKE (sales-view) are empty**
+— which blocks logistics/SD open docs *here*; those BAPIs work at volume on a real client
+whose S/4 has materials fully extended. Blocked-here = target data gap, NOT a tool gap.
+
 | Object | Status | Mechanism / notes |
 |---|---|---|
-| Open sales order | 🟨 legacy | header-level demo only; recipe ⬜ |
-| Open purchase order | ⬜ none | Phase C |
-| Open purchase requisition | ⬜ none | Phase C |
-| Open delivery (inbound/outbound) | ⬜ none | Phase C |
-| Open contract / scheduling agreement | ⬜ none | |
-| Open production / process order | ⬜ none | |
-| Open maintenance order | ⬜ none | |
-| Open quality / service notification | ⬜ none | |
-| Open billing (AR invoice) | ⬜ none | |
-| Open AP invoice | ⬜ none | |
-| Open reservation | ⬜ none | |
-| *(+ more open-item objects)* | ⬜ none | |
+| Maintenance notification (PM) | ✅ migrated | `BAPI_ALM_NOTIF_CREATE` + `BAPI_ALM_NOTIF_SAVE`, 8/8 landed + reconciled (QMEL 0→8), 699 net-new (`bucket2_migrate.migrate_maintenance_notification`) |
+| Quality / service notification | 🔧 built (partners) | `BAPI_QUALNOT_CREATE`/`BAPI_SERVNOT_CREATE` callable; types need partner determination (KU/LF/AG) per type — routable |
+| Open sales order | 🔧 built (target data) | `BAPI_SALESORDER_CREATEFROMDAT2` + `sales_order_spine.py`; customers migrate via OData; blocked here — target MVKE empty (no sales-view materials). 45 orders landed on a prior target state. |
+| Open purchase order | 🔧 built (target data) | `BAPI_PO_CREATE1` (`purchase_order_spine.py`); 28,448 open src; blocked here — target MARC empty (no plant-extended materials) + vendor key-map |
+| Open purchase requisition | 🔧 built (target data) | `BAPI_PR_CREATE` proven callable (header/type/account validated); stock PRs need MARC; cost-center PRs hit S/4 cost-element-category determination |
+| Open production / process order | 🔧 built (target data) | `BAPI_PRODORD_CREATE`; needs plant-extended materials + routings/BOM |
+| Open reservation | 🔧 built (target data) | `BAPI_RESERVATION_CREATE1`; needs plant-extended materials (MARC) |
+| Open contract / scheduling agreement | 📝 recipe | `BAPI_CONTRACT_CREATE`/`BAPI_SCHEDULE_MAINTAIN` present; `schedule_agreement_sd_spine.py` |
+| Open billing (AR) / AP invoice | 📝 recipe | `BAPI_ACC_DOCUMENT_POST` / `BAPI_INCOMINGINVOICE_CREATE` present; FI-based, low material dependency |
+| Open delivery (inbound/outbound) | ⬜ none | `BAPI_OUTB_DELIVERY_CREATE_SLS` present; follows sales order |
 
 ## Bucket 3 — Balances (the high-stakes core)
 | Object | Status | Mechanism / notes |
