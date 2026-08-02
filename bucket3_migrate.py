@@ -255,13 +255,19 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
     # SCALE (P1-1): read ONLY the open items for the migrated partners (filtered per partner),
     # not the whole ~176k-row open-item table. This is both the correct scope and what makes
     # the lane scale — extraction cost is proportional to migrated volume, not total table size.
-    cols = ["BUKRS", src_key, "BELNR", "DMBTR", "SHKZG", "WAERS"]
+    cols = ["BUKRS", src_key, "BELNR", "DMBTR", "SHKZG", "UMSKZ", "WAERS"]
     if kmap:
         src = []
         for legacy in kmap:
             src += eng.read_table(ecc, stab, cols, "%s = '%s'" % (src_key, legacy))
     else:
         src = eng.read_table(ecc, stab, cols)   # positional-demo fallback reads broadly
+
+    def signed_open(r):
+        """True open amount with sign (P1-2): DMBTR is unsigned; SHKZG H=credit -> negative,
+        S=debit -> positive. So invoices, credit memos and payments-on-account each net with
+        the correct sign at the partner level (a credit memo reduces the receivable)."""
+        return round(_amt(r["DMBTR"]) * (-1.0 if r["SHKZG"].strip() == "H" else 1.0), 2)
 
     # normalize partner numbers (OData BP is unpadded; KNB1/LFB1 stores 10-char zero-padded)
     tgt_by_norm = {p.lstrip("0"): p for p in tgt_parts}
@@ -272,15 +278,17 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
     def ikey(r):
         return "%s/%s/%s" % (r["BUKRS"].strip(), r["BELNR"].strip(), r[src_key].strip())
 
-    # build (target BP, source amount, source-item-key) using the governed key-map (faithful)
-    pairs = []; already = 0
+    # build (target BP, signed open amount, source-item-key) using the governed key-map (faithful)
+    pairs = []; already = 0; special = 0
     if kmap:
-        mapmode = "positional-demo" if False else "governed"
+        mapmode = "governed"
         for r in src:
-            amt = round(_amt(r["DMBTR"]), 2)
+            if r["UMSKZ"].strip():   # special G/L (down payment, guarantee, ...) -> separate lane
+                special += 1; continue
+            amt = signed_open(r)
             bp = kmap.get(r[src_key].strip())
             tp = tgt_by_norm.get((bp or "").lstrip("0")) if bp else None
-            if not (tp and amt > 0):
+            if not (tp and amt != 0):
                 continue
             if led.seen(lobj, ikey(r)):
                 already += 1; continue
@@ -290,16 +298,16 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
     else:
         # last-resort positional demo (engine proof only; run Customer/Vendor first for a faithful run)
         mapmode = "positional-demo"
-        cand = [r for r in src if round(_amt(r["DMBTR"]), 2) > 0 and not led.seen(lobj, ikey(r))]
+        cand = [r for r in src if not r["UMSKZ"].strip() and signed_open(r) != 0 and not led.seen(lobj, ikey(r))]
         tp_list = sorted(tgt_parts)
         for i, r in enumerate(cand[:limit]):
             if i < len(tp_list):
-                pairs.append((tp_list[i], round(_amt(r["DMBTR"]), 2), ikey(r)))
+                pairs.append((tp_list[i], signed_open(r), ikey(r)))
     clearing = _postable_clearing(eng, tgt_cc)
     pdate = os.environ.get("M4H_TAKEOVER_DATE") or datetime.date.today().strftime("%Y%m%d")
     print(f"{kind}OpenItems -> {tgt_cc} (map={mapmode}): key-map {part_lbl}s={len(kmap)} "
-          f"source-open-items={len(src)} already-migrated={already} clearing={clearing} "
-          f"processing={len(pairs)}" + ("" if commit else "  [DRY]"))
+          f"source-open-items={len(src)} already-migrated={already} special-GL(down-payments etc.)={special} "
+          f"clearing={clearing} processing={len(pairs)}" + ("" if commit else "  [DRY]"))
     if mapmode == "positional-demo":
         print(f"  NOTE: no {dim} key-map yet (run Customer/Vendor migration first) — using a "
               "labelled POSITIONAL demo to prove the engine, NOT a faithful partner mapping.")
@@ -311,16 +319,17 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
         hdr = {"USERNAME": "MIGRATE", "COMP_CODE": tgt_cc, "DOC_DATE": pdate, "PSTNG_DATE": pdate,
                "DOC_TYPE": dt, "REF_DOC_NO": ("M4H-%s-OI" % kind)[:16], "HEADER_TXT": "%s open item takeover" % kind}
         pln = "0000000001"; cln = "0000000002"
+        # amt is the SIGNED open amount (P1-2): the BAPI derives the posting key (debit vs
+        # credit) from the sign + the partner type, so an invoice, a credit memo and a
+        # payment-on-account each land on the correct side. Clearing takes the opposite sign.
         if kind == "AR":
             party = [{"ITEMNO_ACC": pln, "CUSTOMER": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": pdate}]
-            amounts = [{"ITEMNO_ACC": pln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % amt},
-                       {"ITEMNO_ACC": cln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % (-amt)}]
             kw = {"ACCOUNTRECEIVABLE": party}
         else:
             party = [{"ITEMNO_ACC": pln, "VENDOR_NO": partner, "COMP_CODE": tgt_cc}]
-            amounts = [{"ITEMNO_ACC": pln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % (-amt)},
-                       {"ITEMNO_ACC": cln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % amt}]
             kw = {"ACCOUNTPAYABLE": party}
+        amounts = [{"ITEMNO_ACC": pln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % amt},
+                   {"ITEMNO_ACC": cln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % (-amt)}]
         glc = [{"ITEMNO_ACC": cln, "GL_ACCOUNT": clearing, "ITEM_TEXT": "%s takeover clearing" % kind}]
         if not commit:
             continue
