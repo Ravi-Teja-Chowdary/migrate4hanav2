@@ -161,14 +161,23 @@ HANA staging schema — our engine acts as the ETL tool.
 
 ## PHASE MC-2 — Programmatic execution sequence + queue control (prompt req 2)
 
-- [ ] **MC-2.1 — MC OData client.**
-  *What:* thin client over the CA_DATA_MIGRATION / api_migrationcockpit services with
-  CSRF-token fetch, session cookies, and typed calls for: CreateProject(method=staging),
-  PrepareStagingTables, ProcessMappingTasks, Simulate, Migrate, GetStatus.
-  *Files:* new `lambda/utils/mc_odata_client.py` (reuse the `requests`/urllib pattern already in
-  `mc_job_trigger.py`; honor `verify=False` only for the CAL, configurable for prod TLS).
-  *Done-when:* each call returns parsed status against the live MC service; endpoint names that were
-  marked **(discover)** are pinned from the live `$metadata`.
+> **LIVE DISCOVERY 2026-07-18 (S/4 2020, rel 816):** the classic MC OData service
+> `CA_DATA_MIGRATION_SRV` is **NOT activated** ("No service found ... version '0001'"), and the
+> IWFND catalog has no LTMC/DMC/staging OData service. BUT: LTMC + LTMOM transactions exist, the
+> DMC framework is installed (incl. `DMC_S_AIF_DATA_MIGR_PROJ_STGG` → staging-table method is
+> supported), and **HANA direct staging works** (MC-1.1). So the OData-first plan needs one of:
+> (a) activate the MC OData service, or (b) accept that **project + staging-table creation is a
+> one-time LTMC GUI step**, after which ingestion (MC-1.3) + trigger + results are programmatic.
+> Decision pending with the user; MC-2.1 approach adjusts accordingly.
+
+- [ ] **MC-2.1 — MC execution client (approach TBD per the discovery above).**
+  *What:* typed client for the project lifecycle: CreateProject(method=staging) / Prepare /
+  ProcessMappingTasks / Simulate / Migrate / GetStatus. Backend is EITHER the MC OData service
+  (if activated) OR the DMC/RFC + background-job path (mc_job_trigger already has xbp_job/ltmc
+  strategies), with project+staging-table creation done once in LTMC.
+  *Files:* new `lambda/utils/mc_odata_client.py` (and/or extend `mc_job_trigger.py`).
+  *Done-when:* against a live project with staging tables, we can trigger simulate + migrate and
+  read status — no Fiori login.
 
 - [ ] **MC-2.2 — Concurrency-aware queue manager.**
   *What:* submit objects respecting SAP's default **8 concurrent migration jobs**; keep a small

@@ -6,11 +6,54 @@ limitation named, every gap honestly graded. Written to be read end-to-end by
 a Big-4-class peer reviewer, an SAP functional lead, and a cloud-security
 architect in parallel.*
 
-**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass landed (F1-F6); 2026-06-15 fire-and-forget loop closed; 2026-07-03 enterprise-hardening pass landed**
+**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass landed (F1-F6); 2026-06-15 fire-and-forget loop closed; 2026-07-03 enterprise-hardening pass landed; 2026-08-02 three-bucket direct-API product proven end-to-end on client 100 (see the top update section)**
 **Branch:** `aws-lift-and-shift`
 **Latest commit covered:** enterprise-hardening pass — mc-project-provisioner + salesforce upsert + snowpipe + extended catalogs/DAG + dry-run transport
 **Repo:** GitHub `Ravi-Teja-Chowdary/migrate4hanav2`
 **Stack maturity:** prototype, AWS prod stack applies/destroys cleanly (174 resource blocks; ~200 after `count`/`for_each` expansion), in-AWS-only execution verified; **live ECC↔AWS connectivity proven via ngrok bridge 2026-06-02** (19,575 customer rows extracted from local IDES via Lambda); **six production-grade foundations shipped 2026-06-07** with 98/98 unit tests green (see §25). **As of 2026-06-15 (night) the only human touchpoints in the lifecycle are: (a) one-time `terraform apply` + `scripts/deploy-ui-aws.ps1`, (b) the 3 HMAC-signed SAP governance gates (post_assess / post_data_prep / post_validate).** Everything between is fire-and-forget.
+
+---
+
+## 2026-08-02  Three-bucket "every damn thing" direct-API product — Master Data + Open Transactions + Balances in ONE command, proven end-to-end on client 100
+
+**Headline:** a single support-safe **direct-API** product now spans all three data buckets and runs from one command (`migrate_everything.py`), proven end-to-end on the fully-configured SAP Best Practices client 100. All writes go **only** through official released BAPIs / OData APIs (SAP's own validation; every FI document must balance to zero or SAP refuses it) — never table-injected, never modifying SAP standard. This is the direct-API lane maturing into a product; it is a **parallel, support-safe path to the Migration-Cockpit epic** in `UNIFIED_PLAN.md` (see status mapping at the end).
+
+### What shipped (files + mechanism)
+| Bucket | File | Objects that LAND headless + reconciled | Mechanism |
+|---|---|---|---|
+| 1 — Master data | `bapi_migrate.py` | Bank · G/L account · Customer · Vendor · Characteristic · Class · Equipment · Fixed Asset (master) · Document/DMS | `BAPI_BANK_CREATE`, `GL_ACCT_MASTER_SAVE_RFC`, `API_BUSINESS_PARTNER` (OData), `BAPI_CHARACT_CREATE`, `BAPI_CLASS_CREATE`, `BAPI_EQUI_CREATE`, `BAPI_FIXEDASSET_CREATE1`, `BAPI_DOCUMENT_CREATE2` |
+| 2 — Open transactions | `bucket2_migrate.py` + `bucket2_preflight.py` | Maintenance Notification | `BAPI_ALM_NOTIF_CREATE` + `BAPI_ALM_NOTIF_SAVE` (two-step: CREATE returns a temp %-number, SAVE persists). Preflight: all 14 open-doc BAPIs verified callable; per-object readiness matrix |
+| 3 — Balances | `bucket3_migrate.py` | G/L balances (to the cent) · AR open items · AP open items · Inventory stock | `BAPI_ACC_DOCUMENT_POST` (GL/AR/AP), `BAPI_GOODSMVT_CREATE` mvt 561 (stock). Asset value takeover via `BAPI_FIXEDASSET_OVRTAKE_CREATE` built, FI-AA-phase-gated |
+
+`migrate_everything.py` orchestrates all three buckets with a per-bucket honest report to `catalog/migration_report.json`; **`M4H_TARGET_CLIENT`** selects the target client (client 100 = fully-configured, the free fix for "blocked by the box"; `migration_engine.py` + `bapi_migrate._odata` both honour it).
+
+### End-to-end proof (client 100, `--commit --limit 10`)
+≈**145 records created + reconciled across 14 object types in one command.** Per object (created/cap): Bank 9/10 (1 refused by SAP's bank-key-length check — the support-safe guarantee in action), Characteristic 10, Class 10, Customer 10, Vendor 10, Document 10 (DRAW 714→724), Equipment 10, Fixed Asset 10, G/L account 10; Maintenance Notification 10 (QMEL 282→292); AR 10 (BSID 66→76), AP 10 (BSIK 27→37), G/L balances 6/6 **to the cent** (doc 0100000052), Inventory 10. **Config-gated (client-side, not tool bugs):** Cost Center + Profit Center (CO config — TKA05 / `PRCTR_HIER_GRP` standard hierarchy), Asset value takeover (FI-AA transfer phase closed on 100).
+
+### Real SAP walls solved this cycle (reusable lessons)
+- **Document splitting** — S/4 rejects accounts/line-mixes not classified for splitting; the GL-balance engine self-adapts with a CHECK→drop→re-check loop; AR/AP use doc type **SA** (unspecified business transaction) because DR/KR map to invoice transactions that forbid a customer/vendor+clearing mix.
+- **Two period systems** — FI postings use the go-live date; MM stock postings use the material-ledger period (derived from `MARV`).
+- **Client-100 robustness** — real config returns **list-shaped** BAPI RETURN + stricter validation vs the thin client 200; normalized RETURN handling everywhere and validate source codes against target config (e.g. equipment `EQTYP` vs `T370T`). Fixed 3 latent bugs (Characteristic/FixedAsset RETURN shape; ProfitCenter `TESTRUN` is a structure param, not a flag).
+- **`RFC_READ_TABLE` gotcha** — a WHERE referencing a non-existent column (e.g. `XLOEV` on S/4 `SKB1`) raises the misleading `TABLE_WITHOUT_DATA`, not `FIELD_NOT_VALID`.
+
+### Honest road-to-production gaps (ranked by go-live risk)
+1. **Code-translation dictionaries are still demo/positional (correctness, #1).** Faithful runs need the real **chart-of-accounts map (INT→YCOA)**, **customer/vendor→BP key-map**, and **material map**. Today, where source and target charts differ, GL balances use a clearly-labelled POSITIONAL demo map to prove the post+reconcile engine — not a faithful account assignment. This is a governed business-mapping step (like `org_mapper`), not yet built for balances/open-items.
+2. **No whole-company reconciliation gate.** Objects reconcile individually and GL balances tie "to the cent" per posted line, but there is no full **trial-balance / AR-aging / stock-value** tie-out to the source that a go-live sign-off requires.
+3. **Idempotency incomplete for balances/transactions.** Master data is net-new-guarded; balances/open-items can **double-post** on re-run (the `M4H-GLBAL` marker only warns, doesn't skip).
+4. **Scale unproven.** Cap 10 only; no millions-of-rows run, no resume-from-checkpoint / job-ledger.
+5. **Open-item determination is basic** — partial clearing, credit memos, down payments not modelled → wrong open amounts risk.
+6. **No upfront data-health preflight** — dirty source caught reactively (the refused bank), not delivered as a pre-run fix list.
+7. **No-BAPI tail** (Activity Type, some QM/PM master data) still needs the cockpit lane; its headless "run" step isn't fully automated.
+8. **Cutover choreography** (historical + delta + freeze/switch) is single-shot only.
+
+### Status mapping to `UNIFIED_PLAN.md`
+- **H0 (safety rails):** done (JWT fail-closed, scoped-role probe, RFC auto-reconnect, cumulative ledger) — unchanged.
+- **MC-1…MC-4 (Migration-Cockpit direct-staging automation):** largely open, and the classic MC OData service is **not activated** on this target. **However**, the three-bucket direct-API product delivers headless migration for everything with an official BAPI/OData, so the cockpit is now the **fallback for the no-BAPI tail** rather than the primary path. The plan's "biggest value-add" (headless execution) is substantially achieved by a different, support-safe route.
+- **H-VER (ECC EHP0–8 → S/4 2020–2025, 54-cell grid):** open — proven on one pair only (ECC EHP8 → S/4 2020, client 100).
+- **H1 (real-volume, code-egress control, consent ledger):** open — maps directly to road-to-production gaps 4 and 6.
+- **H2 (breadth + cutover rollback):** breadth substantially grown; cutover rollback (gap 8) open.
+
+Files: `bapi_migrate.py`, `bucket2_migrate.py`, `bucket2_preflight.py`, `bucket3_migrate.py`, `migrate_everything.py`, `migration_engine.py`, `OBJECT_COVERAGE.md`.
 
 ---
 
