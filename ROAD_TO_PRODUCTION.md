@@ -158,6 +158,18 @@ finish the code-egress control and the signed-consent audit ledger (H1.1, H1.4).
 
 ---
 
+## GUARDED END-TO-END RUN (2026-08-02) — the single-command go-live behavior
+`migrate_everything.py --guarded` now chains **consent → preflight → governed-mappings-only →
+migrate (FI slice, idempotent) → whole-company reconcile → GO/NO-GO** in one command, each gate
+able to halt. The enterprise reconciler (`reconcile_company.py`) now covers G/L trial balance +
+AR/AP open totals + **AR/AP aging** + **inventory value**; AR/AP now preserve the original
+baseline date so aging ties out. Proven end-to-end on client 100: all gates fire in order,
+positional mapping is refused, down-payments are separated — verdict = honest **NO-GO** on the
+accumulated demo target (a clean company code / reversed test data is required to reach GREEN;
+the gate correctly refuses to bless a dirty target). **Remaining to fully close #4/#5/#6/#7 and
+turn the verdict GREEN — see the per-item notes; a data-rich system + a clean slice + the one-time
+cockpit activation are the external pieces.**
+
 ## STATUS (2026-08-02): all 9 items addressed tool-side ✅
 Every P0/P1/P2 item now has its engineering built and proven on client 100. What remains are
 **external prerequisites, not tool gaps**, each named honestly above:
