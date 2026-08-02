@@ -247,14 +247,21 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
     ecc, tgt = eng.ecc, eng.tgt
     dim = "customer" if kind == "AR" else "vendor"
     kmap = KeyMap().resolved_map(dim)   # legacy partner -> migrated BP
-    if kind == "AR":
-        src = eng.read_table(ecc, "BSID", ["BUKRS", "KUNNR", "BELNR", "DMBTR", "SHKZG", "WAERS"])
-        src_key = "KUNNR"; recon_tab, part_lbl, dt = "BSID", "customer", (doc_type or "SA")
-        tgt_parts = {r["KUNNR"].strip() for r in eng.read_table(tgt, "KNB1", ["KUNNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc}
+    stab = "BSID" if kind == "AR" else "BSIK"
+    src_key = "KUNNR" if kind == "AR" else "LIFNR"
+    recon_tab, part_lbl, dt = stab, dim, (doc_type or "SA")
+    ptab = "KNB1" if kind == "AR" else "LFB1"
+    tgt_parts = {r[src_key].strip() for r in eng.read_table(tgt, ptab, [src_key, "BUKRS"]) if r["BUKRS"].strip() == tgt_cc}
+    # SCALE (P1-1): read ONLY the open items for the migrated partners (filtered per partner),
+    # not the whole ~176k-row open-item table. This is both the correct scope and what makes
+    # the lane scale — extraction cost is proportional to migrated volume, not total table size.
+    cols = ["BUKRS", src_key, "BELNR", "DMBTR", "SHKZG", "WAERS"]
+    if kmap:
+        src = []
+        for legacy in kmap:
+            src += eng.read_table(ecc, stab, cols, "%s = '%s'" % (src_key, legacy))
     else:
-        src = eng.read_table(ecc, "BSIK", ["BUKRS", "LIFNR", "BELNR", "DMBTR", "SHKZG", "WAERS"])
-        src_key = "LIFNR"; recon_tab, part_lbl, dt = "BSIK", "vendor", (doc_type or "SA")
-        tgt_parts = {r["LIFNR"].strip() for r in eng.read_table(tgt, "LFB1", ["LIFNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc}
+        src = eng.read_table(ecc, stab, cols)   # positional-demo fallback reads broadly
 
     # normalize partner numbers (OData BP is unpadded; KNB1/LFB1 stores 10-char zero-padded)
     tgt_by_norm = {p.lstrip("0"): p for p in tgt_parts}
@@ -324,9 +331,13 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
             tgt.call("BAPI_TRANSACTION_ROLLBACK")
         else:
             tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
-            posted_keys[item_key] = (res.get("OBJ_KEY", "") or "")[:10]   # P0-3: mark migrated
+            # P0-3 mark migrated + P1-1 incremental checkpoint (crash-safe resume): flush the
+            # ledger every 25 records so a mid-run failure resumes from the last checkpoint.
+            led.record(lobj, item_key, (res.get("OBJ_KEY", "") or "")[:10])
+            if ok % 25 == 0:
+                led.save()
     if commit:
-        led.record_all(lobj, posted_keys)
+        led.save()
         print(f"=== {kind}OpenItems created={ok} failed={fail} ===")
         for x in errs[:8]:
             print("   ERR", x)
@@ -403,9 +414,11 @@ def migrate_inventory_balances(eng, limit, commit, plant="1010", sloc=None):
             tgt.call("BAPI_TRANSACTION_ROLLBACK")
         else:
             tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
-            posted_mats[mat] = (res.get("MATERIALDOCUMENT") or "").strip()   # P0-3
+            led.record(lobj, mat, (res.get("MATERIALDOCUMENT") or "").strip())   # P0-3 + P1-1 checkpoint
+            if ok % 25 == 0:
+                led.save()
     if commit:
-        led.record_all(lobj, posted_mats)
+        led.save()
         print(f"=== InventoryBalances created={ok} failed={fail} ===")
         for x in errs[:8]:
             print("   ERR", x)

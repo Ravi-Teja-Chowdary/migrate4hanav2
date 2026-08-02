@@ -72,9 +72,11 @@ def migrate_maintenance_notification(eng, limit, commit):
                         next((m["MESSAGE"][:60] for m in sl if m.get("TYPE") in ("E", "A")), "save failed")))
             tgt.call("BAPI_TRANSACTION_ROLLBACK"); continue
         tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1; made.append(realno)
-        posted[r["QMNUM"].strip()] = realno   # P0-3
+        led.record(lobj, r["QMNUM"].strip(), realno)   # P0-3 + P1-1 checkpoint
+        if ok % 25 == 0:
+            led.save()
     if commit:
-        led.record_all(lobj, posted)
+        led.save()
         print(f"=== MaintenanceNotification created={ok} failed={fail} ===")
         for e2 in errors[:8]:
             print("   ERR", e2)
