@@ -41,12 +41,17 @@ def migrate_maintenance_notification(eng, limit, commit):
     src = eng.read_table(ecc, "QMEL", ["QMNUM", "QMART", "QMTXT"])
     netnew = [r for r in src if cat.get(r["QMART"].strip()) == "01"]
     other = [r for r in src if r["QMART"].strip() in cat and cat[r["QMART"].strip()] != "01"]
+    # run-twice safety (P0-3): skip source notifications already migrated
+    from migration_ledger import Ledger
+    led = Ledger(); lobj = "maint_notif"
+    already = sum(1 for r in netnew if led.seen(lobj, r["QMNUM"].strip()))
+    netnew = led.new_only(lobj, netnew, keyfn=lambda r: r["QMNUM"].strip())
     proc = netnew[:limit]
-    print(f"MaintenanceNotification: maint-type-on-target={len(netnew)} "
+    print(f"MaintenanceNotification: maint-type-on-target={len(netnew)} already-migrated={already} "
           f"other-category(needs own BAPI/partners)={len(other)} processing={len(proc)}"
           + ("" if commit else "  [DRY]"))
     before = len(eng.read_table(tgt, "QMEL", ["QMNUM"]))
-    ok = fail = 0; errors = []; made = []
+    ok = fail = 0; errors = []; made = []; posted = {}
     for r in proc:
         qt = r["QMART"].strip()
         txt = (r["QMTXT"].strip() or "Maintenance notification " + r["QMNUM"].strip())[:40]
@@ -67,7 +72,9 @@ def migrate_maintenance_notification(eng, limit, commit):
                         next((m["MESSAGE"][:60] for m in sl if m.get("TYPE") in ("E", "A")), "save failed")))
             tgt.call("BAPI_TRANSACTION_ROLLBACK"); continue
         tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1; made.append(realno)
+        posted[r["QMNUM"].strip()] = realno   # P0-3
     if commit:
+        led.record_all(lobj, posted)
         print(f"=== MaintenanceNotification created={ok} failed={fail} ===")
         for e2 in errors[:8]:
             print("   ERR", e2)

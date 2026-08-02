@@ -107,3 +107,4 @@ terraform/modules/ws4/.terraform/
 
 # contains the CAL master password (dev convenience) — never commit
 scripts/configure-new-appliance.ps1
+migration_ledger.json

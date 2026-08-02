@@ -111,12 +111,18 @@ def migrate_gl_balances(eng, limit, commit, src_cc="1000", tgt_cc="1010", coa="Y
         clearing = next((a for a in sorted(bs_ok) if a not in used), "")
     pairs = [(s, coa_map[s], v) for s, v in sorted(src_bal.items())
              if s in coa_map and coa_map[s] != clearing]
+    # run-twice safety (P0-3): skip accounts already taken over into this company code
+    from migration_ledger import Ledger
+    led = Ledger()
+    lobj = "gl_balance:" + tgt_cc
+    already = sum(1 for _, t, _ in pairs if led.seen(lobj, t))
+    pairs = led.new_only(lobj, pairs, keyfn=lambda p: p[1])
     items = pairs[:limit]
 
     print(f"GLBalances {src_cc}->{tgt_cc} (chart {coa}, year {year}, map={mapmode}): "
           f"source-nonzero={len(src_bal)} identity-overlap={len(identity)} "
-          f"bs-postable-on-target={len(bs_ok)} clearing={clearing} processing={len(items)}"
-          + ("" if commit else "  [DRY]"))
+          f"bs-postable-on-target={len(bs_ok)} clearing={clearing} already-migrated={already} "
+          f"processing={len(items)}" + ("" if commit else "  [DRY]"))
     if mapmode == "governed":
         print(f"  MAP: governed key_mapper.py chart-of-accounts map ({len(coa_map)} confirmed "
               "source->target account pairs) — faithful, not a guess.")
@@ -188,6 +194,8 @@ def migrate_gl_balances(eng, limit, commit, src_cc="1000", tgt_cc="1010", coa="Y
             print("    POST-ERR", m.get("MESSAGE", "")[:90])
         return
     tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+    led.record_all(lobj, {t: belnr_key for (_, t, _), belnr_key in
+                          [(it, (res.get("OBJ_KEY", "")[:10])) for it in items]})   # P0-3: mark migrated
     key = res.get("OBJ_KEY", ""); belnr, gjahr = key[:10], key[14:18]
     print(f"  POSTED doc {belnr}/{gjahr} in {tgt_cc}  (marker {hdr['REF_DOC_NO']})")
 
@@ -250,36 +258,49 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
 
     # normalize partner numbers (OData BP is unpadded; KNB1/LFB1 stores 10-char zero-padded)
     tgt_by_norm = {p.lstrip("0"): p for p in tgt_parts}
-    # build (target BP, source open amount) using the governed key-map (faithful)
-    pairs = []
+    # run-twice safety (P0-3): each source open item has a durable identity so re-runs skip it
+    from migration_ledger import Ledger
+    led = Ledger(); lobj = "%s_open:%s" % (kind, tgt_cc)
+
+    def ikey(r):
+        return "%s/%s/%s" % (r["BUKRS"].strip(), r["BELNR"].strip(), r[src_key].strip())
+
+    # build (target BP, source amount, source-item-key) using the governed key-map (faithful)
+    pairs = []; already = 0
     if kmap:
-        mapmode = "governed"
+        mapmode = "positional-demo" if False else "governed"
         for r in src:
             amt = round(_amt(r["DMBTR"]), 2)
             bp = kmap.get(r[src_key].strip())
             tp = tgt_by_norm.get((bp or "").lstrip("0")) if bp else None
-            if tp and amt > 0:
-                pairs.append((tp, amt))
+            if not (tp and amt > 0):
+                continue
+            if led.seen(lobj, ikey(r)):
+                already += 1; continue
+            pairs.append((tp, amt, ikey(r)))
             if len(pairs) >= limit:
                 break
     else:
         # last-resort positional demo (engine proof only; run Customer/Vendor first for a faithful run)
         mapmode = "positional-demo"
-        amts_src = [round(_amt(r["DMBTR"]), 2) for r in src if round(_amt(r["DMBTR"]), 2) > 0][:limit]
-        pairs = list(zip(sorted(tgt_parts), amts_src))[:limit]
+        cand = [r for r in src if round(_amt(r["DMBTR"]), 2) > 0 and not led.seen(lobj, ikey(r))]
+        tp_list = sorted(tgt_parts)
+        for i, r in enumerate(cand[:limit]):
+            if i < len(tp_list):
+                pairs.append((tp_list[i], round(_amt(r["DMBTR"]), 2), ikey(r)))
     clearing = _postable_clearing(eng, tgt_cc)
     pdate = os.environ.get("M4H_TAKEOVER_DATE") or datetime.date.today().strftime("%Y%m%d")
     print(f"{kind}OpenItems -> {tgt_cc} (map={mapmode}): key-map {part_lbl}s={len(kmap)} "
-          f"source-open-items={len(src)} clearing={clearing} processing={len(pairs)}"
-          + ("" if commit else "  [DRY]"))
+          f"source-open-items={len(src)} already-migrated={already} clearing={clearing} "
+          f"processing={len(pairs)}" + ("" if commit else "  [DRY]"))
     if mapmode == "positional-demo":
         print(f"  NOTE: no {dim} key-map yet (run Customer/Vendor migration first) — using a "
               "labelled POSITIONAL demo to prove the engine, NOT a faithful partner mapping.")
     if not pairs or not clearing:
         print("  nothing to post (no mapped partners or clearing)."); return
     before = len([r for r in eng.read_table(tgt, recon_tab, ["BELNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc])
-    ok = fail = 0; errs = []
-    for i, (partner, amt) in enumerate(pairs, start=1):
+    ok = fail = 0; errs = []; posted_keys = {}
+    for i, (partner, amt, item_key) in enumerate(pairs, start=1):
         hdr = {"USERNAME": "MIGRATE", "COMP_CODE": tgt_cc, "DOC_DATE": pdate, "PSTNG_DATE": pdate,
                "DOC_TYPE": dt, "REF_DOC_NO": ("M4H-%s-OI" % kind)[:16], "HEADER_TXT": "%s open item takeover" % kind}
         pln = "0000000001"; cln = "0000000002"
@@ -303,7 +324,9 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
             tgt.call("BAPI_TRANSACTION_ROLLBACK")
         else:
             tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
+            posted_keys[item_key] = (res.get("OBJ_KEY", "") or "")[:10]   # P0-3: mark migrated
     if commit:
+        led.record_all(lobj, posted_keys)
         print(f"=== {kind}OpenItems created={ok} failed={fail} ===")
         for x in errs[:8]:
             print("   ERR", x)
@@ -354,13 +377,18 @@ def migrate_inventory_balances(eng, limit, commit, plant="1010", sloc=None):
     # MM postings use the material-ledger open period (MARV), which differs from the FI
     # period; derive the open MM period from the company code and post on its last day.
     pdate = os.environ.get("M4H_INV_DATE") or _mm_open_date(eng, "1010")
+    # run-twice safety (P0-3): skip material/plant stock already brought over
+    from migration_ledger import Ledger
+    led = Ledger(); lobj = "stock:" + plant
+    already = sum(1 for m, _ in pairs if led.seen(lobj, m))
+    pairs = led.new_only(lobj, pairs, keyfn=lambda p: p[0])
     print(f"InventoryBalances plant {plant}/{sloc}: priced-materials-on-plant={len(mats)} "
-          f"processing={len(pairs)}" + ("" if commit else "  [DRY]"))
+          f"already-migrated={already} processing={len(pairs)}" + ("" if commit else "  [DRY]"))
     if not pairs or not sloc:
         print("  nothing to post (no materials/storage loc)."); return
     before = len([r for r in eng.read_table(tgt, "MARD", ["MATNR", "WERKS", "LABST"])
                   if r["WERKS"].strip() == plant and _amt(r["LABST"]) > 0])
-    ok = fail = 0; errs = []
+    ok = fail = 0; errs = []; posted_mats = {}
     for mat, qty in pairs:
         if not commit:
             continue
@@ -375,7 +403,9 @@ def migrate_inventory_balances(eng, limit, commit, plant="1010", sloc=None):
             tgt.call("BAPI_TRANSACTION_ROLLBACK")
         else:
             tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
+            posted_mats[mat] = (res.get("MATERIALDOCUMENT") or "").strip()   # P0-3
     if commit:
+        led.record_all(lobj, posted_mats)
         print(f"=== InventoryBalances created={ok} failed={fail} ===")
         for x in errs[:8]:
             print("   ERR", x)
