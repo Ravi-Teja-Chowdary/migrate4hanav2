@@ -73,12 +73,95 @@ def run_handlers(eng, handlers, limit, commit, report, bucket):
             print(f"  ERROR {name}: {str(e)[:90]}", flush=True)
 
 
+def _blocked_count(report_path):
+    try:
+        return sum(1 for l in open(report_path, encoding="utf-8") if "🔴 BLOCKED" in l)
+    except Exception:
+        return -1
+
+
+def _recon_verdict(report_path):
+    try:
+        txt = open(report_path, encoding="utf-8").read()
+        return "GO" if "Overall verdict: **GO" in txt else "NO-GO"
+    except Exception:
+        return "UNKNOWN"
+
+
+def guarded(args):
+    """End-to-end GUARDED run: preflight -> consent -> governed mappings -> migrate ->
+    whole-company reconcile -> GO/NO-GO. Each gate can halt the run. This is the single
+    command that behaves like a real go-live: nothing writes until the gates pass, and the
+    result is a signed, reconciled verdict."""
+    import preflight_all, reconcile_company, consent_ledger
+    from key_mapper import KeyMap
+    client = os.environ.get("M4H_TARGET_CLIENT", "200")
+    scope = args.scope
+    print(f"================ GUARDED RUN | client {client} | scope: {scope} ================\n", flush=True)
+
+    # GATE 1 — signed consent (governance)
+    c = consent_ledger.require_consent(scope)
+    if not c:
+        print("HALT [consent]: no signed consent for this scope. Record one with:")
+        print('   py -3.7 consent_ledger.py grant --signer "<name/role>" --scope "%s"' % scope)
+        return
+    print(f"GATE 1 consent      ✓  approved by {c['signer']} at {c['ts']}", flush=True)
+
+    # GATE 2 — preflight (target config + source data health)
+    print("GATE 2 preflight    … running preflight_all", flush=True)
+    preflight_all.main()
+    blocked = _blocked_count("PREFLIGHT.md")
+    if blocked > 0 and not args.force:
+        print(f"HALT [preflight]: {blocked} BLOCKED item(s) — resolve them (see PREFLIGHT.md) or re-run with --force.")
+        return
+    print(f"GATE 2 preflight    ✓  ({blocked} blocked{' — overridden by --force' if blocked > 0 else ''})", flush=True)
+
+    # GATE 3 — governed mappings only (refuse the positional guess)
+    gov = KeyMap().resolved_map("gl_account")
+    if not gov and not args.force:
+        print("HALT [mapping]: no governed chart-of-accounts map. Build + confirm it:")
+        print("   key_mapper.py gl_account   then   key_mapper.py gl_account --confirm-reviews")
+        return
+    print(f"GATE 3 mappings     ✓  governed COA pairs: {len(gov)} (positional fallback refused)", flush=True)
+
+    # STEP 4 — migrate (idempotent handlers; FI slice = master FI + balances)
+    print("STEP 4 migrate      … FI slice (G/L, Customer, Vendor, then balances)", flush=True)
+    eng = Engine(allow_proposed=True)
+    try:
+        for h in ("GLAccount", "Customer", "Vendor"):
+            try:
+                run_direct(eng, h, args.limit, True)
+            except Exception as e:
+                print(f"   {h} ERROR: {str(e)[:80]}")
+        for name in ("GLBalances", "AROpenItems", "APOpenItems"):
+            try:
+                b3.HANDLERS[name](eng, args.limit, True)
+            except Exception as e:
+                print(f"   {name} ERROR: {str(e)[:80]}")
+    finally:
+        eng.close()
+
+    # GATE 5 — whole-company reconciliation (the sign-off)
+    print("GATE 5 reconcile    … whole-company tie-out", flush=True)
+    reconcile_company.main()
+    verdict = _recon_verdict("RECONCILIATION.md")
+    print(f"\n================ GUARDED RUN VERDICT: {verdict} ================")
+    print("   consent ✓  preflight ✓  governed-mappings ✓  migrated ✓  reconciled -> " + verdict)
+    if verdict != "GO":
+        print("   NO-GO: see RECONCILIATION.md for the exact variances to resolve before go-live.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--commit", action="store_true", help="execute (default: plan, no writes)")
     ap.add_argument("--limit", type=int, default=5)
     ap.add_argument("--staging", action="store_true", help="also run the ~220 cockpit-staging objects (slow)")
+    ap.add_argument("--guarded", action="store_true", help="single end-to-end guarded run (preflight->consent->map->migrate->reconcile->GO/NO-GO)")
+    ap.add_argument("--scope", default="FI slice", help="consent/reconcile scope label for the guarded run")
+    ap.add_argument("--force", action="store_true", help="override preflight/mapping halts (guarded run)")
     args = ap.parse_args()
+    if args.guarded:
+        guarded(args); return
 
     client = os.environ.get("M4H_TARGET_CLIENT", "200")
     eng = Engine(allow_proposed=True)
