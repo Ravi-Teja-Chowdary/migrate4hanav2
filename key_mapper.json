@@ -15407,7 +15407,171 @@
     "alternatives": [],
     "confirmed": false
    }
+  },
+  "customer": {
+   "0000000001": {
+    "target": "1000649",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000000002": {
+    "target": "1000650",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000000003": {
+    "target": "1000651",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000000010": {
+    "target": "1000652",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000000011": {
+    "target": "1000653",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000000012": {
+    "target": "1000654",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000000013": {
+    "target": "1000655",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000000049": {
+    "target": "1000656",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000000600": {
+    "target": "1000657",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000001000": {
+    "target": "1000658",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000001170": {
+    "target": "1000659",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000003029": {
+    "target": "1000660",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000003032": {
+    "target": "1000661",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000003040": {
+    "target": "1000662",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   }
+  },
+  "vendor": {
+   "0000000100": {
+    "target": "1000663",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000001000": {
+    "target": "1000664",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000001002": {
+    "target": "1000665",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000001004": {
+    "target": "1000666",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000001005": {
+    "target": "1000667",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   },
+   "0000001012": {
+    "target": "1000668",
+    "confidence": "auto",
+    "rationale": "recorded at migration (created by loader)",
+    "source_count": 1,
+    "alternatives": [],
+    "confirmed": true
+   }
   }
  },
- "generated": "2026-08-02T12:50:31"
+ "generated": "2026-08-02T13:39:23"
 }

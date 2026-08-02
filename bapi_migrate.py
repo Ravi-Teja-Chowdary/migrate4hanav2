@@ -296,15 +296,20 @@ def _bp_recon(eng, table, comp):
     return a.most_common(1)[0][0] if a else ""
 
 
-def migrate_customer(eng, limit, commit, comp="1710", sorg="1710"):
+def migrate_customer(eng, limit, commit, comp="1710", sorg="1710", only=None):
     """Customers via SAP official API_BUSINESS_PARTNER OData (BP/CVI-led, support-safe).
-    NOTE: external CVI numbering assigns a new BP each run — production needs a key-map
-    (ECC KUNNR -> BP) to dedupe; this migrates the first `limit` ECC customers."""
+    Records the legacy KUNNR -> new BP key-map at creation (key_mapper 'customer') so AR
+    open items land on the right partner. `only` = optional set of KUNNRs to migrate a
+    specific subset (e.g. exactly the customers that have open items)."""
     import bp_odata
     oc = _odata(eng); recon = _bp_recon(eng, "KNB1", comp)
-    src = eng.read_table(eng.ecc, "KNA1", ["KUNNR", "NAME1", "ORT01", "STRAS"])[:limit]
+    src = eng.read_table(eng.ecc, "KNA1", ["KUNNR", "NAME1", "ORT01", "STRAS"])
+    if only:
+        only = {str(x).strip().lstrip("0") for x in only}
+        src = [r for r in src if r["KUNNR"].strip().lstrip("0") in only]
+    src = src[:limit]
     print(f"Customer: creating {len(src)} (company {comp} recon {recon})" + ("" if commit else "  [DRY]"))
-    ok = fail = 0; made = []
+    ok = fail = 0; made = []; keymap = {}
     for r in src:
         if not commit:
             continue
@@ -313,21 +318,29 @@ def migrate_customer(eng, limit, commit, comp="1710", sorg="1710"):
                 division="00", currency="USD", country="US", city=r["ORT01"].strip()[:35] or "New York",
                 postal_code="10001", street=r["STRAS"].strip()[:35] or "1 Way", language="EN")
         if res.get("status") == "created" and res.get("partner"):
-            ok += 1; made.append(res["partner"])
+            ok += 1; made.append(res["partner"]); keymap[r["KUNNR"].strip()] = res["partner"]
         else:
             fail += 1
     if commit:
+        # capture the legacy KUNNR -> new BP key-map so AR open items land on the right partner
+        import key_mapper; key_mapper.record_bulk("customer", keymap)
         landed = sum(1 for bp in made if oc.get("API_BUSINESS_PARTNER", "A_BusinessPartner('%s')" % bp, {}).status_code == 200)
-        print(f"=== Customer created={ok} failed={fail} | RECONCILE {landed}/{len(made)} BPs readable ===")
+        print(f"=== Customer created={ok} failed={fail} | RECONCILE {landed}/{len(made)} BPs readable "
+              f"| key-map: {len(keymap)} KUNNR->BP recorded ===")
 
 
-def migrate_vendor(eng, limit, commit, comp="1710", porg="1710"):
-    """Suppliers via SAP official API_BUSINESS_PARTNER OData (support-safe). See customer note."""
+def migrate_vendor(eng, limit, commit, comp="1710", porg="1710", only=None):
+    """Suppliers via SAP official API_BUSINESS_PARTNER OData (support-safe). Records the
+    legacy LIFNR -> new BP key-map at creation. `only` = optional subset of LIFNRs."""
     import bp_odata
     oc = _odata(eng); recon = _bp_recon(eng, "LFB1", comp)
-    src = eng.read_table(eng.ecc, "LFA1", ["LIFNR", "NAME1", "ORT01", "STRAS"])[:limit]
+    src = eng.read_table(eng.ecc, "LFA1", ["LIFNR", "NAME1", "ORT01", "STRAS"])
+    if only:
+        only = {str(x).strip().lstrip("0") for x in only}
+        src = [r for r in src if r["LIFNR"].strip().lstrip("0") in only]
+    src = src[:limit]
     print(f"Vendor: creating {len(src)} (company {comp} recon {recon})" + ("" if commit else "  [DRY]"))
-    ok = fail = 0; made = []
+    ok = fail = 0; made = []; keymap = {}
     for r in src:
         if not commit:
             continue
@@ -336,12 +349,14 @@ def migrate_vendor(eng, limit, commit, comp="1710", porg="1710"):
                 city=r["ORT01"].strip()[:35] or "New York", postal_code="10001",
                 street=r["STRAS"].strip()[:35] or "1 Way", language="EN")
         if res.get("status") == "created" and res.get("partner"):
-            ok += 1; made.append(res["partner"])
+            ok += 1; made.append(res["partner"]); keymap[r["LIFNR"].strip()] = res["partner"]
         else:
             fail += 1
     if commit:
+        import key_mapper; key_mapper.record_bulk("vendor", keymap)
         landed = sum(1 for bp in made if oc.get("API_BUSINESS_PARTNER", "A_BusinessPartner('%s')" % bp, {}).status_code == 200)
-        print(f"=== Vendor created={ok} failed={fail} | RECONCILE {landed}/{len(made)} BPs readable ===")
+        print(f"=== Vendor created={ok} failed={fail} | RECONCILE {landed}/{len(made)} BPs readable "
+              f"| key-map: {len(keymap)} LIFNR->BP recorded ===")
 
 
 def migrate_equipment(eng, limit, commit, plant="1710"):

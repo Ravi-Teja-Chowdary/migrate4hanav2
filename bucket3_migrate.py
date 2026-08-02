@@ -224,33 +224,59 @@ def _postable_clearing(eng, tgt_cc, coa="YCOA"):
     return bs[0] if bs else ""
 
 
-def _open_items(eng, kind, limit, commit, tgt_cc="1010", doc_type=None):
+def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
     """Shared AR/AP open-item takeover. kind='AR'(customer) or 'AP'(vendor).
     Recreates each open receivable/payable on the target via BAPI_ACC_DOCUMENT_POST:
     DR customer / CR clearing (AR) or DR clearing / CR vendor (AP), preserving the source
     amount, so the open item lands with its balance. Reconciled against target BSID/BSIK.
-    NOTE: a faithful run maps each source partner (ECC KUNNR/LIFNR) to its target BP; source
-    partners here don't share numbers with target BPs (CVI), so this posts source open-item
-    AMOUNTS onto existing target partners (positional demo) purely to prove the engine."""
+    FAITHFUL PARTNER: each source open item is posted onto the migrated Business Partner via
+    the governed key_mapper map (legacy KUNNR/LIFNR -> new BP, recorded at BP creation) — the
+    receivable/payable lands on the RIGHT partner. Only open items whose partner was migrated
+    are posted; the rest wait for their partner. Falls back to a labelled positional demo only
+    if no key-map exists at all."""
     import datetime, collections
+    from key_mapper import KeyMap
     ecc, tgt = eng.ecc, eng.tgt
+    dim = "customer" if kind == "AR" else "vendor"
+    kmap = KeyMap().resolved_map(dim)   # legacy partner -> migrated BP
     if kind == "AR":
-        parts = [(r["KUNNR"].strip()) for r in eng.read_table(tgt, "KNB1", ["KUNNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc]
         src = eng.read_table(ecc, "BSID", ["BUKRS", "KUNNR", "BELNR", "DMBTR", "SHKZG", "WAERS"])
-        recon_tab, part_lbl, dt = "BSID", "customer", (doc_type or "SA")
+        src_key = "KUNNR"; recon_tab, part_lbl, dt = "BSID", "customer", (doc_type or "SA")
+        tgt_parts = {r["KUNNR"].strip() for r in eng.read_table(tgt, "KNB1", ["KUNNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc}
     else:
-        parts = [(r["LIFNR"].strip()) for r in eng.read_table(tgt, "LFB1", ["LIFNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc]
         src = eng.read_table(ecc, "BSIK", ["BUKRS", "LIFNR", "BELNR", "DMBTR", "SHKZG", "WAERS"])
-        recon_tab, part_lbl, dt = "BSIK", "vendor", (doc_type or "SA")
-    parts = sorted(set(parts))
-    amts_src = [round(_amt(r["DMBTR"]), 2) for r in src if round(_amt(r["DMBTR"]), 2) > 0][:limit]
-    pairs = list(zip(parts, amts_src))[:limit]   # (target partner, source open amount)
+        src_key = "LIFNR"; recon_tab, part_lbl, dt = "BSIK", "vendor", (doc_type or "SA")
+        tgt_parts = {r["LIFNR"].strip() for r in eng.read_table(tgt, "LFB1", ["LIFNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc}
+
+    # normalize partner numbers (OData BP is unpadded; KNB1/LFB1 stores 10-char zero-padded)
+    tgt_by_norm = {p.lstrip("0"): p for p in tgt_parts}
+    # build (target BP, source open amount) using the governed key-map (faithful)
+    pairs = []
+    if kmap:
+        mapmode = "governed"
+        for r in src:
+            amt = round(_amt(r["DMBTR"]), 2)
+            bp = kmap.get(r[src_key].strip())
+            tp = tgt_by_norm.get((bp or "").lstrip("0")) if bp else None
+            if tp and amt > 0:
+                pairs.append((tp, amt))
+            if len(pairs) >= limit:
+                break
+    else:
+        # last-resort positional demo (engine proof only; run Customer/Vendor first for a faithful run)
+        mapmode = "positional-demo"
+        amts_src = [round(_amt(r["DMBTR"]), 2) for r in src if round(_amt(r["DMBTR"]), 2) > 0][:limit]
+        pairs = list(zip(sorted(tgt_parts), amts_src))[:limit]
     clearing = _postable_clearing(eng, tgt_cc)
     pdate = os.environ.get("M4H_TAKEOVER_DATE") or datetime.date.today().strftime("%Y%m%d")
-    print(f"{kind}OpenItems -> {tgt_cc}: target {part_lbl}s={len(parts)} source-open-items={len(src)} "
-          f"clearing={clearing} processing={len(pairs)}" + ("" if commit else "  [DRY]"))
+    print(f"{kind}OpenItems -> {tgt_cc} (map={mapmode}): key-map {part_lbl}s={len(kmap)} "
+          f"source-open-items={len(src)} clearing={clearing} processing={len(pairs)}"
+          + ("" if commit else "  [DRY]"))
+    if mapmode == "positional-demo":
+        print(f"  NOTE: no {dim} key-map yet (run Customer/Vendor migration first) — using a "
+              "labelled POSITIONAL demo to prove the engine, NOT a faithful partner mapping.")
     if not pairs or not clearing:
-        print("  nothing to post (no partners or clearing)."); return
+        print("  nothing to post (no mapped partners or clearing)."); return
     before = len([r for r in eng.read_table(tgt, recon_tab, ["BELNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc])
     ok = fail = 0; errs = []
     for i, (partner, amt) in enumerate(pairs, start=1):

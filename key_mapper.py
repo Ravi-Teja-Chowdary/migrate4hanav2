@@ -119,16 +119,36 @@ def detect_gl_account(eng, src_chart, tgt_chart):
     return read(ecc, src_chart), read(tgt, tgt_chart)
 
 
+def detect_material(eng, **_):
+    """Material key map: source MATNR -> target MATNR. Identity where the number exists on
+    the target (the common case — materials usually keep their number), else by description."""
+    ecc, tgt = eng.ecc, eng.tgt
+
+    def read(conn):
+        m = {r["MATNR"].strip(): {"group": r["MTART"].strip(), "bs": "", "desc": ""}
+             for r in eng.read_table(conn, "MARA", ["MATNR", "MTART"])}
+        for r in eng.read_table(conn, "MAKT", ["MATNR", "MAKTX", "SPRAS"], "SPRAS = 'E'"):
+            a = r["MATNR"].strip()
+            if a in m and not m[a]["desc"]:
+                m[a]["desc"] = r["MAKTX"].strip()
+        return m
+
+    return read(ecc), read(tgt)
+
+
 DIMS = {
     "gl_account": {
         "title": "G/L account (chart of accounts conversion)",
         "detect": detect_gl_account,
         "params": {"src_chart": "INT", "tgt_chart": "YCOA"},
     },
-    # scaffolded, wire next:
-    # "customer": {...KNA1 legacy KUNNR -> target BP...},
-    # "vendor":   {...LFA1 legacy LIFNR -> target BP...},
-    # "material": {...MARA legacy MATNR -> target MATNR...},
+    "material": {
+        "title": "Material (MATNR)",
+        "detect": detect_material,
+        "params": {},
+    },
+    # customer / vendor are LOADER-POPULATED dims (recorded at BP creation via record_bulk),
+    # not detect-based, because S/4 assigns a NEW Business Partner number per created partner.
 }
 
 
@@ -154,6 +174,24 @@ def merge(existing, dim, fresh):
 
 def save(m):
     json.dump(m, open(MAPFILE, "w"), indent=1)
+
+
+def record_bulk(dim, pairs):
+    """Loaders call this to persist source->target mappings they CREATED (e.g. the
+    customer/vendor spine records legacy KUNNR/LIFNR -> the new S/4 Business Partner as
+    it creates each one). These are authoritative (confirmed), because the loader knows
+    the exact target it just made — no proposal/guess involved. Idempotent upsert."""
+    if not pairs:
+        return
+    m = load()
+    d = m.setdefault("dimensions", {}).setdefault(dim, {})
+    for s, t in pairs.items():
+        s = str(s).strip(); t = str(t).strip()
+        if not s or not t:
+            continue
+        d[s] = _entry(t, "auto", "recorded at migration (created by loader)", count=1)
+    m["generated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    save(m)
 
 
 # ── resolver (loaders use this) ─────────────────────────────────────────────────
