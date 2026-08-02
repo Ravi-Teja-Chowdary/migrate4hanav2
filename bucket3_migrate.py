@@ -234,7 +234,7 @@ def _postable_clearing(eng, tgt_cc, coa="YCOA"):
     return bs[0] if bs else ""
 
 
-def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
+def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None, special="off"):
     """Shared AR/AP open-item takeover. kind='AR'(customer) or 'AP'(vendor).
     Recreates each open receivable/payable on the target via BAPI_ACC_DOCUMENT_POST:
     DR customer / CR clearing (AR) or DR clearing / CR vendor (AP), preserving the source
@@ -285,8 +285,11 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
     if kmap:
         mapmode = "governed"
         for r in src:
-            if r["UMSKZ"].strip():   # special G/L (down payment, guarantee, ...) -> separate lane
+            is_sp = bool(r["UMSKZ"].strip())     # special G/L: down payment, guarantee, ...
+            if special == "off" and is_sp:       # normal lane skips special-G/L (counted)
                 special += 1; continue
+            if special == "only" and not is_sp:  # down-payment lane takes ONLY special-G/L
+                continue
             amt = signed_open(r)
             bp = kmap.get(r[src_key].strip())
             tp = tgt_by_norm.get((bp or "").lstrip("0")) if bp else None
@@ -294,7 +297,7 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
                 continue
             if led.seen(lobj, ikey(r)):
                 already += 1; continue
-            pairs.append((tp, amt, ikey(r), r["ZFBDT"].strip()))   # carry original baseline date (aging)
+            pairs.append((tp, amt, ikey(r), r["ZFBDT"].strip(), r["UMSKZ"].strip()))
             if len(pairs) >= limit:
                 break
     else:
@@ -304,7 +307,7 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
         tp_list = sorted(tgt_parts)
         for i, r in enumerate(cand[:limit]):
             if i < len(tp_list):
-                pairs.append((tp_list[i], signed_open(r), ikey(r), r["ZFBDT"].strip()))
+                pairs.append((tp_list[i], signed_open(r), ikey(r), r["ZFBDT"].strip(), ""))
     clearing = _postable_clearing(eng, tgt_cc)
     pdate = os.environ.get("M4H_TAKEOVER_DATE") or datetime.date.today().strftime("%Y%m%d")
     print(f"{kind}OpenItems -> {tgt_cc} (map={mapmode}): key-map {part_lbl}s={len(kmap)} "
@@ -318,7 +321,7 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
         return {"object": kind + "OpenItems", "posted": 0, "reconciled": 0, "failed": 0}
     before = len([r for r in eng.read_table(tgt, recon_tab, ["BELNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc])
     ok = fail = 0; errs = []; posted_keys = {}
-    for i, (partner, amt, item_key, bline) in enumerate(pairs, start=1):
+    for i, (partner, amt, item_key, bline, sp_gl) in enumerate(pairs, start=1):
         bline = bline or pdate   # preserve original baseline date so AR/AP aging ties out
         hdr = {"USERNAME": "MIGRATE", "COMP_CODE": tgt_cc, "DOC_DATE": pdate, "PSTNG_DATE": pdate,
                "DOC_TYPE": dt, "REF_DOC_NO": ("M4H-%s-OI" % kind)[:16], "HEADER_TXT": "%s open item takeover" % kind}
@@ -327,11 +330,15 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
         # credit) from the sign + the partner type, so an invoice, a credit memo and a
         # payment-on-account each land on the correct side. Clearing takes the opposite sign.
         if kind == "AR":
-            party = [{"ITEMNO_ACC": pln, "CUSTOMER": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": bline}]
-            kw = {"ACCOUNTRECEIVABLE": party}
+            pl_line = {"ITEMNO_ACC": pln, "CUSTOMER": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": bline}
+            if sp_gl:
+                pl_line["SP_GL_IND"] = sp_gl   # #5: post the down payment as special G/L
+            kw = {"ACCOUNTRECEIVABLE": [pl_line]}
         else:
-            party = [{"ITEMNO_ACC": pln, "VENDOR_NO": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": bline}]
-            kw = {"ACCOUNTPAYABLE": party}
+            pl_line = {"ITEMNO_ACC": pln, "VENDOR_NO": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": bline}
+            if sp_gl:
+                pl_line["SP_GL_IND"] = sp_gl
+            kw = {"ACCOUNTPAYABLE": [pl_line]}
         amounts = [{"ITEMNO_ACC": pln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % amt},
                    {"ITEMNO_ACC": cln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % (-amt)}]
         glc = [{"ITEMNO_ACC": cln, "GL_ACCOUNT": clearing, "ITEM_TEXT": "%s takeover clearing" % kind}]
@@ -492,15 +499,25 @@ def migrate_asset_values(eng, limit, commit, tgt_cc="1710", curr="USD"):
 
 
 def migrate_ar_open_items(eng, limit, commit):
-    _open_items(eng, "AR", limit, commit)
+    return _open_items(eng, "AR", limit, commit)
 
 
 def migrate_ap_open_items(eng, limit, commit):
-    _open_items(eng, "AP", limit, commit)
+    return _open_items(eng, "AP", limit, commit)
+
+
+def migrate_ar_down_payments(eng, limit, commit):
+    """#5: migrate AR customer down payments as special-G/L items (SP_GL_IND), not just flag them."""
+    return _open_items(eng, "AR", limit, commit, special="only")
+
+
+def migrate_ap_down_payments(eng, limit, commit):
+    return _open_items(eng, "AP", limit, commit, special="only")
 
 
 HANDLERS = {"GLBalances": migrate_gl_balances,
             "AROpenItems": migrate_ar_open_items, "APOpenItems": migrate_ap_open_items,
+            "ARDownPayments": migrate_ar_down_payments, "APDownPayments": migrate_ap_down_payments,
             "InventoryBalances": migrate_inventory_balances,
             "AssetValues": migrate_asset_values}
 
