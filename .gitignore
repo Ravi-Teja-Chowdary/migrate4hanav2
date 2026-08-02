@@ -110,3 +110,4 @@ scripts/configure-new-appliance.ps1
 migration_ledger.json
 ROLLBACK_WORKLIST.md
 consent_ledger.jsonl
+cutover_state.json
