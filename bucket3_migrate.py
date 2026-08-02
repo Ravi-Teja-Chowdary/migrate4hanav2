@@ -255,7 +255,7 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
     # SCALE (P1-1): read ONLY the open items for the migrated partners (filtered per partner),
     # not the whole ~176k-row open-item table. This is both the correct scope and what makes
     # the lane scale — extraction cost is proportional to migrated volume, not total table size.
-    cols = ["BUKRS", src_key, "BELNR", "DMBTR", "SHKZG", "UMSKZ", "WAERS"]
+    cols = ["BUKRS", src_key, "BELNR", "DMBTR", "SHKZG", "UMSKZ", "ZFBDT", "WAERS"]
     if kmap:
         src = []
         for legacy in kmap:
@@ -292,7 +292,7 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
                 continue
             if led.seen(lobj, ikey(r)):
                 already += 1; continue
-            pairs.append((tp, amt, ikey(r)))
+            pairs.append((tp, amt, ikey(r), r["ZFBDT"].strip()))   # carry original baseline date (aging)
             if len(pairs) >= limit:
                 break
     else:
@@ -302,7 +302,7 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
         tp_list = sorted(tgt_parts)
         for i, r in enumerate(cand[:limit]):
             if i < len(tp_list):
-                pairs.append((tp_list[i], signed_open(r), ikey(r)))
+                pairs.append((tp_list[i], signed_open(r), ikey(r), r["ZFBDT"].strip()))
     clearing = _postable_clearing(eng, tgt_cc)
     pdate = os.environ.get("M4H_TAKEOVER_DATE") or datetime.date.today().strftime("%Y%m%d")
     print(f"{kind}OpenItems -> {tgt_cc} (map={mapmode}): key-map {part_lbl}s={len(kmap)} "
@@ -315,7 +315,8 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
         print("  nothing to post (no mapped partners or clearing)."); return
     before = len([r for r in eng.read_table(tgt, recon_tab, ["BELNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc])
     ok = fail = 0; errs = []; posted_keys = {}
-    for i, (partner, amt, item_key) in enumerate(pairs, start=1):
+    for i, (partner, amt, item_key, bline) in enumerate(pairs, start=1):
+        bline = bline or pdate   # preserve original baseline date so AR/AP aging ties out
         hdr = {"USERNAME": "MIGRATE", "COMP_CODE": tgt_cc, "DOC_DATE": pdate, "PSTNG_DATE": pdate,
                "DOC_TYPE": dt, "REF_DOC_NO": ("M4H-%s-OI" % kind)[:16], "HEADER_TXT": "%s open item takeover" % kind}
         pln = "0000000001"; cln = "0000000002"
@@ -323,10 +324,10 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
         # credit) from the sign + the partner type, so an invoice, a credit memo and a
         # payment-on-account each land on the correct side. Clearing takes the opposite sign.
         if kind == "AR":
-            party = [{"ITEMNO_ACC": pln, "CUSTOMER": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": pdate}]
+            party = [{"ITEMNO_ACC": pln, "CUSTOMER": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": bline}]
             kw = {"ACCOUNTRECEIVABLE": party}
         else:
-            party = [{"ITEMNO_ACC": pln, "VENDOR_NO": partner, "COMP_CODE": tgt_cc}]
+            party = [{"ITEMNO_ACC": pln, "VENDOR_NO": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": bline}]
             kw = {"ACCOUNTPAYABLE": party}
         amounts = [{"ITEMNO_ACC": pln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % amt},
                    {"ITEMNO_ACC": cln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % (-amt)}]

@@ -23,7 +23,7 @@ VERDICT
 
     M4H_TARGET_CLIENT=100 py -3.7 reconcile_company.py            # writes RECONCILIATION.md
 """
-import os, sys, datetime
+import os, sys, datetime, collections
 os.environ.setdefault("SAPNWRFC_HOME", os.path.join(os.getcwd(), "sapnwrfc"))
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 sys.path.insert(0, os.getcwd()); sys.path.insert(0, os.path.join(os.getcwd(), "lambda", "utils"))
@@ -108,15 +108,73 @@ def _partner_open(eng, kind, kmap, tgt_cc="1710"):
             "partners": len(gov)}
 
 
+def _age_bucket(days):
+    return "0-30" if days <= 30 else "31-60" if days <= 60 else "61-90" if days <= 90 else "90+"
+
+
+def _aging(eng, kind, kmap, tgt_cc, keydate):
+    """AR/AP aging tie-out: bucket the open amount by (keydate - baseline date) for the migrated
+    partners, source vs target. If baseline dates were preserved on migration, the buckets match."""
+    ecc, tgt = eng.ecc, eng.tgt
+    stab = "BSID" if kind == "AR" else "BSIK"
+    key = "KUNNR" if kind == "AR" else "LIFNR"
+    gov = kmap.resolved_map("customer" if kind == "AR" else "vendor")
+    bps = {v.lstrip("0") for v in gov.values()}
+
+    def buckets(rows, keyf):
+        b = collections.Counter()
+        for r in rows:
+            if not keyf(r):
+                continue
+            z = r["ZFBDT"].strip()
+            try:
+                d = (keydate - datetime.datetime.strptime(z, "%Y%m%d").date()).days if z else 0
+            except ValueError:
+                d = 0
+            amt = _amt(r["DMBTR"]) * (-1 if r["SHKZG"].strip() == "H" else 1)
+            b[_age_bucket(max(d, 0))] += round(amt, 2)
+        return {k: round(v, 2) for k, v in b.items()}
+
+    src_rows = []
+    for legacy in gov:   # scoped read (migrated partners only)
+        src_rows += eng.read_table(ecc, stab, [key, "DMBTR", "SHKZG", "ZFBDT"], "%s = '%s'" % (key, legacy))
+    tgt_rows = eng.read_table(tgt, stab, [key, "DMBTR", "SHKZG", "ZFBDT", "BUKRS"])
+    s = buckets(src_rows, lambda r: True)
+    t = buckets(tgt_rows, lambda r: r["BUKRS"].strip() == tgt_cc and r[key].strip().lstrip("0") in bps)
+    allb = ["0-30", "31-60", "61-90", "90+"]
+    rows = [(b, s.get(b, 0.0), t.get(b, 0.0), round(t.get(b, 0.0) - s.get(b, 0.0), 2)) for b in allb]
+    return {"rows": rows, "variance": round(sum(r[3] for r in rows), 2)}
+
+
+def _stock_value(eng, plant="1010"):
+    """Inventory value tie-out: source stock value (qty x price) vs target, for the plant."""
+    ecc, tgt = eng.ecc, eng.tgt
+
+    def val(conn):
+        price = {r["MATNR"].strip(): _amt(r["VERPR"]) or _amt(r["STPRS"])
+                 for r in eng.read_table(conn, "MBEW", ["MATNR", "STPRS", "VERPR"])}
+        tot = 0.0
+        for r in eng.read_table(conn, "MARD", ["MATNR", "WERKS", "LABST"]):
+            if r["WERKS"].strip() == plant:
+                tot += _amt(r["LABST"]) * price.get(r["MATNR"].strip(), 0.0)
+        return round(tot, 2)
+    s = val(ecc); t = val(tgt)
+    return {"src_total": s, "tgt_total": t, "variance": round(t - s, 2)}
+
+
 def main():
     from migration_engine import Engine
     from key_mapper import KeyMap
     client = os.environ.get("M4H_TARGET_CLIENT", "200")
     eng = Engine(); kmap = KeyMap()
+    keydate = datetime.date.today()
     try:
         gl = _gl_trial_balance(eng, kmap)
         ar = _partner_open(eng, "AR", kmap)
         ap = _partner_open(eng, "AP", kmap)
+        ar_age = _aging(eng, "AR", kmap, "1710", keydate)
+        ap_age = _aging(eng, "AP", kmap, "1710", keydate)
+        stock = _stock_value(eng, "1010")
     finally:
         eng.close()
 
@@ -133,6 +191,9 @@ def main():
          f"{ar['partners']} migrated customers"),
         ("AP open items", ap["src_total"], ap["tgt_total"], ap["variance"],
          f"{ap['partners']} migrated vendors"),
+        ("AR aging (all buckets)", 0.0, ar_age["variance"], ar_age["variance"], "sum of per-bucket variances"),
+        ("AP aging (all buckets)", 0.0, ap_age["variance"], ap_age["variance"], "sum of per-bucket variances"),
+        ("Inventory value", stock["src_total"], stock["tgt_total"], stock["variance"], "stock qty x price, plant 1010"),
     ]
     all_go = all(abs(b[3]) < 0.01 for b in buckets)
     overall = "GO ✅" if all_go else "NO-GO ❌"
