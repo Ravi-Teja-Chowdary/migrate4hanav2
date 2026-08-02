@@ -86,10 +86,22 @@ def migrate_gl_balances(eng, limit, commit, src_cc="1000", tgt_cc="1010", coa="Y
     identity = {a for a in src_bal if a in bs_ok}
     mapmode = "identity"
     if coa_map is None:
-        if identity:
+        # 1) GOVERNED map first (key_mapper.py): the faithful chart-of-accounts conversion —
+        #    only 'auto'/'confirmed' rows, never a guess. This is the production-correct path.
+        gov = {}
+        try:
+            from key_mapper import KeyMap
+            gov = {s: t for s, t in KeyMap().resolved_map("gl_account").items() if s in src_bal}
+        except Exception:
+            gov = {}
+        if gov:
+            coa_map = gov; mapmode = "governed"
+        elif identity:
+            # 2) same-chart migration → identity is faithful + fully automatic
             coa_map = {a: a for a in identity}
         else:
-            # positional demo map onto target splitting-classified BS accounts (engine proof)
+            # 3) last resort: positional demo map (proves the post+reconcile ENGINE only,
+            #    clearly labelled — NOT a faithful migration; supply a governed map instead)
             mapmode = "positional-demo"
             targets = sorted(bs_ok)
             coa_map = {a: targets[i] for i, a in enumerate(sorted(src_bal)) if i < len(targets)}
@@ -105,10 +117,13 @@ def migrate_gl_balances(eng, limit, commit, src_cc="1000", tgt_cc="1010", coa="Y
           f"source-nonzero={len(src_bal)} identity-overlap={len(identity)} "
           f"bs-postable-on-target={len(bs_ok)} clearing={clearing} processing={len(items)}"
           + ("" if commit else "  [DRY]"))
-    if mapmode == "positional-demo":
-        print("  NOTE: source chart INT has no identity overlap with target chart "
-              f"{coa}; using a POSITIONAL demo map to prove the post+reconcile engine. "
-              "A faithful run supplies a governed INT->%s account map." % coa)
+    if mapmode == "governed":
+        print(f"  MAP: governed key_mapper.py chart-of-accounts map ({len(coa_map)} confirmed "
+              "source->target account pairs) — faithful, not a guess.")
+    elif mapmode == "positional-demo":
+        print("  NOTE: no governed map found (run key_mapper.py gl_account + confirm) and source "
+              f"chart has no identity overlap with {coa}; using a POSITIONAL demo map to prove the "
+              "post+reconcile engine only — NOT a faithful migration.")
     if not items or not clearing:
         print("  nothing to take over (or no clearing account)."); return
 
