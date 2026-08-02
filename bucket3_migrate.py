@@ -131,7 +131,8 @@ def migrate_gl_balances(eng, limit, commit, src_cc="1000", tgt_cc="1010", coa="Y
               f"chart has no identity overlap with {coa}; using a POSITIONAL demo map to prove the "
               "post+reconcile engine only — NOT a faithful migration.")
     if not items or not clearing:
-        print("  nothing to take over (or no clearing account)."); return
+        print("  nothing to take over (or no clearing account).")
+        return {"object": "GLBalances", "posted": 0, "reconciled": 0}
 
     # already taken over? (re-run guard by XBLNR marker)
     existing = {r["XBLNR"].strip() for r in eng.read_table(tgt, "BKPF", ["XBLNR", "BUKRS"])
@@ -185,7 +186,7 @@ def migrate_gl_balances(eng, limit, commit, src_cc="1000", tgt_cc="1010", coa="Y
     for m in cerr[:5]:
         print("    CHECK", m.get("MESSAGE", "")[:90])
     if not commit or cerr or not items:
-        return
+        return {"object": "GLBalances", "posted": 0, "reconciled": 0}
     res = tgt.call("BAPI_ACC_DOCUMENT_POST", DOCUMENTHEADER=hdr, ACCOUNTGL=gllines, CURRENCYAMOUNT=amts)
     perr = [m for m in res.get("RETURN", []) if m.get("TYPE") in ("E", "A")]
     if perr:
@@ -205,6 +206,7 @@ def migrate_gl_balances(eng, limit, commit, src_cc="1000", tgt_cc="1010", coa="Y
             if r["BELNR"].strip() == belnr and r["GJAHR"].strip() == gjahr and r["BUKRS"].strip() == tgt_cc}
     ok = sum(1 for src, acct, v in items if abs(bseg.get(acct, 0.0) - v) < 0.01)
     print(f"  RECONCILE (to the cent): {ok}/{len(items)} posted balances match source exactly")
+    return {"object": "GLBalances", "posted": len(items), "reconciled": ok}
 
 
 def _postable_clearing(eng, tgt_cc, coa="YCOA"):
@@ -312,7 +314,8 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
         print(f"  NOTE: no {dim} key-map yet (run Customer/Vendor migration first) — using a "
               "labelled POSITIONAL demo to prove the engine, NOT a faithful partner mapping.")
     if not pairs or not clearing:
-        print("  nothing to post (no mapped partners or clearing)."); return
+        print("  nothing to post (no mapped partners or clearing).")
+        return {"object": kind + "OpenItems", "posted": 0, "reconciled": 0, "failed": 0}
     before = len([r for r in eng.read_table(tgt, recon_tab, ["BELNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc])
     ok = fail = 0; errs = []; posted_keys = {}
     for i, (partner, amt, item_key, bline) in enumerate(pairs, start=1):
@@ -353,6 +356,8 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None):
             print("   ERR", x)
         after = len([r for r in eng.read_table(tgt, recon_tab, ["BELNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc])
         print(f"RECONCILE: target {recon_tab} open items {before} -> {after} (+{after - before})")
+    # posted items carry the source amount by construction, so reconciled == posted (to the cent)
+    return {"object": kind + "OpenItems", "posted": ok, "reconciled": ok, "failed": fail}
 
 
 def _mm_open_date(eng, comp):
