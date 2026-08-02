@@ -25,7 +25,14 @@ three are the top of this list.
 *If any of these is missing, a real migration produces **wrong data**. This is the gate to a
 first real customer.*
 
-### P0-1 · The "translation dictionary" (mapping framework) — **~4–6 weeks**
+### P0-1 · The "translation dictionary" (mapping framework) — **~4–6 weeks** · 🟡 STARTED 2026-08-02
+**Progress:** `key_mapper.py` built — the governed detect→propose→confirm→resolve framework for
+master-data keys (sibling of `org_mapper.py`). The **chart-of-accounts** dimension is done and
+**wired into GL balances**: on client 100 it produced an honest INT→YCOA map (1 auto + 47
+confirmed description-matches + 1,677 decisions), and `bucket3_migrate` now posts balances to the
+**correct** mapped accounts (`mapmode=governed`, reconciled to the cent) instead of the positional
+guess. **Remaining:** customer→BP and vendor→BP key-maps (best captured at BP-creation time, then
+consumed by AR/AP open items), and material→material — then retire the positional fallback entirely.
 **What:** Old and new systems use different codes for the same thing (account `113100` →
 `0022544100`; old customer number → new business-partner number; old material → new material;
 old plant/company-code → new). Build the governed **mapping layer** that says "old X = new Y"
