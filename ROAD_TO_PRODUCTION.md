@@ -80,7 +80,11 @@ GL "marker warning" into an actual skip.
 ## P1 — Reliability at real volume
 *Without these it may **fail or be too slow** on a real dataset, even if the data would be correct.*
 
-### P1-1 · Scale + resume-from-failure — **~3–4 weeks**
+### P1-1 · Scale + resume-from-failure — ✅ DONE (tool-side) 2026-08-02
+Incremental ledger checkpointing (flush every 25 → crash-safe resume) + **scoped extraction**:
+AR/AP now read only the migrated partners' open items, cutting a timed AP run from 85s (176,811
+rows) to 19.5s (50 rows) — cost proportional to migrated volume. *Remaining: a true million-row
+run needs a data-rich system (UNIFIED_PLAN H1.3); master-data whole-table reads not yet paged.*
 **What:** We tested at 10 records/object. Real clients have **millions**. Prove throughput,
 add **chunking**, and make a run **resume from where it stopped** if it crashes at record
 700,000 (checkpoint ledger + job status), within SAP's concurrency limits.
@@ -90,14 +94,20 @@ hiccup, isn't usable.
 job limits; one real large-volume run to find the true speed and failure modes (this is
 `UNIFIED_PLAN.md` H1.3).
 
-### P1-2 · "Truly open" item logic — **~2–3 weeks**
+### P1-2 · "Truly open" item logic — ✅ DONE 2026-08-02
+AR/AP now compute the **signed** open amount from `SHKZG` (invoices/credit-memos/payments net
+correctly) and **separate special-G/L items** (down payments, guarantees via `UMSKZ`) into their
+own lane instead of mis-posting them. Fixed a real bug (everything was posted as a plain debit).
 **What:** An unpaid invoice may be *partly* paid, have a credit note, or a down payment. The
 **exact remaining amount** is subtle; today's open-item logic is basic.
 **Why:** get it wrong and the new system shows the wrong amount owed to/by the company.
 **How:** compute the net open amount from the full clearing history, not just the invoice line;
 validate against the source open-item report.
 
-### P1-3 · Upfront data-health preflight — **~2 weeks**
+### P1-3 · Upfront data-health preflight — ✅ DONE 2026-08-02
+`preflight_all.py` → `PREFLIGHT.md`: one read-only pre-run scan of target config + source data
+health + mapping readiness, each READY/WARN/BLOCKED with a fix. On client 100: 10 ready, 3 warn,
+1 blocked (17k bank keys flagged before they'd fail mid-run). Turns reactive errors into a checklist.
 **What:** Today bad data is caught *during* the run, one error at a time (you saw a bank rejected
 for a bad key length). Build a **pre-run scan** that finds all the bad/missing data first and
 hands the client a fix-it list — plus a full target-config readiness check (posting periods,
