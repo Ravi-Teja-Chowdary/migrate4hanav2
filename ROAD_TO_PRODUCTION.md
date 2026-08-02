@@ -25,14 +25,18 @@ three are the top of this list.
 *If any of these is missing, a real migration produces **wrong data**. This is the gate to a
 first real customer.*
 
-### P0-1 · The "translation dictionary" (mapping framework) — **~4–6 weeks** · 🟡 STARTED 2026-08-02
-**Progress:** `key_mapper.py` built — the governed detect→propose→confirm→resolve framework for
-master-data keys (sibling of `org_mapper.py`). The **chart-of-accounts** dimension is done and
-**wired into GL balances**: on client 100 it produced an honest INT→YCOA map (1 auto + 47
-confirmed description-matches + 1,677 decisions), and `bucket3_migrate` now posts balances to the
-**correct** mapped accounts (`mapmode=governed`, reconciled to the cent) instead of the positional
-guess. **Remaining:** customer→BP and vendor→BP key-maps (best captured at BP-creation time, then
-consumed by AR/AP open items), and material→material — then retire the positional fallback entirely.
+### P0-1 · The "translation dictionary" (mapping framework) — ✅ DONE (tool-side) 2026-08-02
+`key_mapper.py` — governed detect→propose→confirm→resolve for master-data keys (sibling of
+`org_mapper.py`). All four key types covered:
+- **Chart of accounts** — proposes by identity → identical description → account-group/BS-PL;
+  wired into GL balances (`mapmode=governed`, reconciled to the cent on client 100).
+- **Customer→BP / Vendor→BP** — captured **at BP-creation time** (`record_bulk`), then consumed
+  by AR/AP so each open item lands on the **right** partner. Proven: AR 10/10, AP 10/10 posted to
+  the migrated BPs on client 100.
+- **Material→material** — identity → description.
+The positional guess is now a labelled last-resort fallback only. *(Remaining for a real client:
+the human confirms the review proposals / supplies the business COA map — that's the governed
+decision step, which is their input, not a tool gap.)*
 **What:** Old and new systems use different codes for the same thing (account `113100` →
 `0022544100`; old customer number → new business-partner number; old material → new material;
 old plant/company-code → new). Build the governed **mapping layer** that says "old X = new Y"
@@ -45,7 +49,12 @@ accounts/partners/materials; store the confirmed dictionary; make `bucket3_migra
 `bucket2_migrate` consume it instead of the demo map. Much is a governed *business decision*
 step (the client confirms the mapping) — the tool's job is to detect, propose, and apply.
 
-### P0-2 · Whole-company reconciliation gate — **~3–4 weeks**
+### P0-2 · Whole-company reconciliation gate — ✅ DONE (tool-side) 2026-08-02
+`reconcile_company.py` — read-only tie-out of source vs target totals across G/L trial balance,
+AR/AP open items (extensible to stock), with an overall GO/NO-GO verdict + `RECONCILIATION.md`.
+Proven on client 100: correctly reports NO-GO with the exact per-account/per-bucket variances —
+it caught both partial-scope demo migrations and the double-posting from repeated runs. On a clean
+full single run it ties to the cent = the finance sign-off artifact. *(Original estimate below.)*
 **What:** Today we reconcile object-by-object ("these 6 balances match to the cent"). Production
 needs the **grand total** proof: the new system's trial balance equals the old system's, AR/AP
 aging matches, and stock quantity **and value** tie out — all to the penny — before go-live.
@@ -54,7 +63,11 @@ aging matches, and stock quantity **and value** tie out — all to the penny —
 stock valuation) and target totals and shows the variance = 0, with a per-account breakdown of
 any difference. Build on the existing `reconciler.py`.
 
-### P0-3 · Run-it-twice safety (idempotency for balances & transactions) — **~2 weeks**
+### P0-3 · Run-it-twice safety (idempotency for balances & transactions) — ✅ DONE 2026-08-02
+`migration_ledger.py` — durable (object, source-key)→target ledger; check-before-post wired into
+GL balances, AR/AP open items, inventory stock, and maintenance notifications. Proven on client 100:
+AR drained 76 remaining items, then a re-run posted **0** ("nothing to post"). Removes the
+double-posting the P0-2 gate flagged. *(Original estimate below.)*
 **What:** Master data already skips what exists. **Balances and open items don't** — re-running
 double-posts the money. Make every posting check a durable "already migrated?" ledger and skip.
 **Why:** real migrations are run many times (test → dry-run → real). Double-posting = corrupt books.
