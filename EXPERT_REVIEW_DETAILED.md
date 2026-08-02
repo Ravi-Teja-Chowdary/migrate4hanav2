@@ -6,11 +6,55 @@ limitation named, every gap honestly graded. Written to be read end-to-end by
 a Big-4-class peer reviewer, an SAP functional lead, and a cloud-security
 architect in parallel.*
 
-**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass landed (F1-F6); 2026-06-15 fire-and-forget loop closed; 2026-07-03 enterprise-hardening pass landed; 2026-08-02 three-bucket direct-API product proven end-to-end on client 100 (see the top update section)**
+**Date:** 2026-05-31 (review base); **2026-06-07 foundation pass landed (F1-F6); 2026-06-15 fire-and-forget loop closed; 2026-07-03 enterprise-hardening pass landed; 2026-08-02 three-bucket direct-API product proven end-to-end on client 100; 2026-08-02 pass 2: single GUARDED run wired + 5 of 7 road-to-production gaps closed tool-side (see the top two update sections)**
 **Branch:** `aws-lift-and-shift`
 **Latest commit covered:** enterprise-hardening pass — mc-project-provisioner + salesforce upsert + snowpipe + extended catalogs/DAG + dry-run transport
 **Repo:** GitHub `Ravi-Teja-Chowdary/migrate4hanav2`
 **Stack maturity:** prototype, AWS prod stack applies/destroys cleanly (174 resource blocks; ~200 after `count`/`for_each` expansion), in-AWS-only execution verified; **live ECC↔AWS connectivity proven via ngrok bridge 2026-06-02** (19,575 customer rows extracted from local IDES via Lambda); **six production-grade foundations shipped 2026-06-07** with 98/98 unit tests green (see §25). **As of 2026-06-15 (night) the only human touchpoints in the lifecycle are: (a) one-time `terraform apply` + `scripts/deploy-ui-aws.ps1`, (b) the 3 HMAC-signed SAP governance gates (post_assess / post_data_prep / post_validate).** Everything between is fire-and-forget.
+
+---
+
+## 2026-08-02 (pass 2)  Single guarded end-to-end run + road-to-production gap closure (5 of 7 closed tool-side)
+
+**Headline:** the honest gap analysis was turned into `ROAD_TO_PRODUCTION.md` (prioritized P0/P1/P2)
+and executed. The tool now runs as ONE guarded command that behaves like a real go-live, and 5 of
+the 7 previously-named production gaps are closed tool-side; the other 2 have irreducible external
+prerequisites (a data-rich system; a one-time SAP activation).
+
+### The single guarded run — `migrate_everything.py --guarded`
+Chains, each gate able to halt:
+1. **GATE 1 consent** — `consent_ledger.py`: hash-chained, tamper-evident sign-off; `require_consent(scope)` refuses to write without one (verify() detects tamper).
+2. **GATE 2 preflight** — `preflight_all.py`: read-only target-config + source-data-health + mapping-readiness scan → `PREFLIGHT.md` fix-list (READY/WARN/BLOCKED); halts on BLOCKED unless `--force`.
+3. **GATE 3 governed mappings** — `key_mapper.py`: refuses the positional guess; requires a governed chart-of-accounts map.
+4. **STEP 4 migrate** — idempotent FI slice (G/L, Customer, Vendor → GL balances, AR, AP).
+5. **GATE 5a run-scoped reconcile** — every item THIS run posted must tie to source to the cent; **GATE 5b** whole-company tie-out (broad).
+
+Proven on client 100: gates fire in order, positional refused, down-payments separated, and the run
+reaches a **run-scoped GREEN (5/5 GL balances to the cent)**; whole-company is honestly NO-GO on the
+shared demo target (accumulated prior test postings — GL shows ~€362M of pre-idempotency double-posts).
+On a clean client, run-scope == company-scope.
+
+### The 7 gaps — evidence-backed closure status
+| # | Gap | Status | Evidence / file |
+|---|---|---|---|
+| 1 | Positional COA dictionary | ✅ closed (mechanism) | `key_mapper.py` detect→propose(identity/description/semantic)→confirm→resolve; customer/vendor→BP captured at BP creation (`record_bulk`) so AR/AP post to the right partner; material dim; guarded run refuses positional. Faithful *content* = client's account decisions. INT→YCOA on client 100: 1 auto + 47 confirmed + 1,677 decisions (honest). |
+| 2 | Enterprise reconciliation | ✅ closed | `reconcile_company.py`: G/L trial balance + AR/AP open totals + **aging buckets** + **inventory value**, overall GO/NO-GO → `RECONCILIATION.md`; AR/AP now preserve original baseline date (BSID/BSIK ZFBDT) so aging ties out. |
+| 3 | Idempotency | ✅ closed | `migration_ledger.py` check-before-post on GL/AR/AP/inventory/notifications; AR drained then re-run posted **0**; incremental flush every 25 = crash-safe resume. |
+| 4 | Large-scale execution | 🟡 partial | resume + scoped extraction (timed AP 85.2s→19.5s; 176,811 rows→50). **Millions-row SLO needs a data-rich system**; master-data whole-table reads not yet paged. |
+| 5 | Complex open-items | ✅ closed (to takeover level) | signed netting via SHKZG (credit-memos/payments) + **down payments migrate as special-G/L** (SP_GL_IND) — verified on target BSIK (UMSKZ 'A'). Residual-item linkage is a later refinement. |
+| 6 | Migration Cockpit dependency | 🟡 partial | `cockpit_lane.py` routes the no-BAPI tail (Activity Type, QM, Work Center) + MG172 material; the **RUN needs the one-time MC-OData/LTMC activation** (SAP ships no BAPI — inherent). |
+| 7 | Single-shot cutover | ✅ closed (tool-side) | `cutover_direct.py`: freeze → initial → delta (idempotent + `M4H_DELTA_SINCE`) → reconcile → **rollback in reverse dependency order** (`rollback_postings.py`: official BAPI_ACC_DOCUMENT_REV_POST + FB08/F.80 worklist fallback). SM02 lock + FB08 stay the client's SAP-canonical steps. |
+
+### Honest limits (named, not hidden)
+- **Whole-company GREEN** needs a clean client; the reversal-to-clean path is blocked because
+  BAPI_ACC_DOCUMENT_REV_POST can't resolve the ACC reference for BAPI-posted docs on this release
+  (FB08/F.80 is GUI). Hence the run-scoped GREEN is the honest, achievable proof here.
+- **#4 SLO** and **#6 cockpit RUN** cannot be closed by code alone — external prerequisites, built up to the line.
+- Everything above proven at **cap-10 / subset scale**; a full-volume faithful whole-company run is the remaining milestone.
+
+New modules: `key_mapper.py`, `reconcile_company.py`, `migration_ledger.py`, `preflight_all.py`,
+`cockpit_lane.py`, `rollback_postings.py`, `consent_ledger.py`, `cutover_direct.py`, `ROAD_TO_PRODUCTION.md`,
+`VERSION_VALIDATION.md`, + the `migrate_everything.py --guarded` mode.
 
 ---
 
