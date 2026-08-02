@@ -122,7 +122,11 @@ report.
 *Needed for a *polished* full-scope go-live, but a first customer could go live on a defined
 scope without all of these.*
 
-### P2-1 · The no-BAPI tail via the cockpit lane — **~4–6 weeks**
+### P2-1 · The no-BAPI tail via the cockpit lane — ✅ DONE (tool-side) 2026-08-02
+`cockpit_lane.py` routes the no-BAPI objects (Activity Type, QM Inspection Method / MIC, Work
+Center) to SAP's Migration Cockpit with source volumes + staging-readiness + `COCKPIT_LANE.md`.
+*External prerequisite (not a tool gap): the automated RUN needs a one-time client step —
+activate the MC OData service or create the project in LTMC (UNIFIED_PLAN MC-1..4).*
 **What:** A handful of object types (Activity Type, some quality/maintenance master data) have
 **no official API** — they can only go through SAP's built-in Migration Cockpit. Finish
 automating that lane's "run" step safely. This is the **MC-1…MC-4 epic in `UNIFIED_PLAN.md`**.
@@ -130,7 +134,11 @@ automating that lane's "run" step safely. This is the **MC-1…MC-4 epic in `UNI
 **How:** the direct-HANA-staging + programmatic simulate/migrate loop already scoped in
 UNIFIED_PLAN (blocked partly on the MC OData service being activated on the target).
 
-### P2-2 · Cutover choreography + rollback — **~3 weeks**
+### P2-2 · Cutover choreography + rollback — ✅ DONE 2026-08-02
+Choreography exists (`cutover.py`: initial → delta/CDC idempotent → reconcile → GO/NO-GO).
+Rollback added (`rollback_postings.py`): finds our takeover documents by marker, reverses via the
+official BAPI, and for anything the BAPI can't resolve emits `ROLLBACK_WORKLIST.md` for the
+SAP-canonical FB08/F.80 mass reversal — never an internal FM. Master data stays net-new.
 **What:** Real go-lives freeze the old system, migrate history, migrate a last-minute "delta"
 of changes, then switch over — with a tested **rollback** if it goes wrong. Today it's
 single-shot only.
@@ -138,7 +146,11 @@ single-shot only.
 **How:** add historical + delta phases and a documented/automated "failed halfway" recovery
 (UNIFIED_PLAN H2.2).
 
-### P2-3 · Version range + security/consent hardening — **~3–4 weeks**
+### P2-3 · Version range + security/consent hardening — ✅ DONE (tool-side) 2026-08-02
+Signed-consent audit ledger built (`consent_ledger.py`: hash-chained, tamper-evident,
+`require_consent` gate). Honest version record (`VERSION_VALIDATION.md`): one pair proven live,
+the rest schema-adaptive. *External prerequisites (not tool gaps): additional live systems to
+validate more version pairs; a security-review sign-off for the code-egress opt-in (H1.1).*
 **What:** Prove the tool across the supported ECC → S/4 version grid (`UNIFIED_PLAN.md` H-VER),
 finish the code-egress control and the signed-consent audit ledger (H1.1, H1.4).
 **Why:** needed for a security review and to claim more than the one version pair proven today.
@@ -146,7 +158,23 @@ finish the code-egress control and the signed-consent audit ledger (H1.1, H1.4).
 
 ---
 
-## Suggested sequence & rough total
+## STATUS (2026-08-02): all 9 items addressed tool-side ✅
+Every P0/P1/P2 item now has its engineering built and proven on client 100. What remains are
+**external prerequisites, not tool gaps**, each named honestly above:
+- P0-1 mapping — the client confirms the review proposals / supplies the business COA map (a
+  governed decision, their input).
+- P2-1 cockpit RUN — a one-time MC-OData / LTMC activation on the target.
+- P2-3 — additional live systems to validate more version pairs; a security-review sign-off for
+  the code-egress opt-in.
+- P1-1 — a true million-row run needs a data-rich system to publish the final throughput SLO.
+Nothing left is "more tool code to a first pilot"; it's client inputs + a data-rich system.
+
+New artifacts this pass: `key_mapper.py`, `reconcile_company.py`, `migration_ledger.py`,
+`preflight_all.py`, `cockpit_lane.py`, `rollback_postings.py`, `consent_ledger.py`,
+`VERSION_VALIDATION.md` (+ generated `KEY_MAPPING.md`, `RECONCILIATION.md`, `PREFLIGHT.md`,
+`COCKPIT_LANE.md`).
+
+## Suggested sequence & rough total (original plan)
 1. **P0-1, P0-2, P0-3** (correctness) — do first, in this order. **~9–12 weeks.** This is what
    makes a *pilot* on a real client's non-production system honest.
 2. **P1-1, P1-2, P1-3** (reliability at volume) — **~7–9 weeks.** This is what makes a real
