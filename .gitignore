@@ -109,3 +109,4 @@ terraform/modules/ws4/.terraform/
 scripts/configure-new-appliance.ps1
 migration_ledger.json
 ROLLBACK_WORKLIST.md
+consent_ledger.jsonl
