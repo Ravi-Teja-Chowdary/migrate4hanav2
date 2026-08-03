@@ -164,7 +164,7 @@ finish the code-egress control and the signed-consent audit ledger (H1.1, H1.4).
 | 1 | Positional COA dictionary | ✅ mechanism closed; guarded run **refuses positional**, uses governed map. Faithful *content* = client's account decisions. |
 | 2 | Enterprise reconciliation | ✅ trial balance + AR/AP totals + **aging** + **stock value**, GO/NO-GO; baseline dates preserved. |
 | 3 | Idempotency | ✅ closed (re-run posts 0). |
-| 4 | Large-scale execution | 🟡 resume + scoped extraction done; **paging/job-ledger for millions + the true SLO** need a data-rich system (open). |
+| 4 | Large-scale execution | ✅ **parallel engine built + integrated + proven** (`bulk_runner.py`: N-worker pool, thread-safe ledger, resume) — ~5.8× on client 100 (1.31→7.64 docs/s); wired into AR/AP via `M4H_BULK_WORKERS`. The true 100k-in-X-hours **SLO** still needs a data-rich system. |
 | 5 | Complex open-items | ✅ signed netting (credit-memo/payment) + **down payments migrate as special-G/L**; residual-item linkage is a later refinement. |
 | 6 | Migration Cockpit dependency | 🟡 routing done; cockpit **staging+trigger automation + one-time MC-OData/LTMC activation** remain (inherent SAP dependency). |
 | 7 | Single-shot cutover | ✅ `cutover_direct.py`: freeze → initial → delta (idempotent + changed-since) → reconcile → rollback-sequence. SM02 lock + FB08 reversal are the client's SAP-canonical steps. |
