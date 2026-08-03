@@ -320,42 +320,55 @@ def _open_items(eng, kind, limit, commit, tgt_cc="1710", doc_type=None, special=
         print("  nothing to post (no mapped partners or clearing).")
         return {"object": kind + "OpenItems", "posted": 0, "reconciled": 0, "failed": 0}
     before = len([r for r in eng.read_table(tgt, recon_tab, ["BELNR", "BUKRS"]) if r["BUKRS"].strip() == tgt_cc])
-    ok = fail = 0; errs = []; posted_keys = {}
-    for i, (partner, amt, item_key, bline, sp_gl) in enumerate(pairs, start=1):
+    pln = "0000000001"; cln = "0000000002"
+
+    def _post_one(conn, p):
+        """Post one open item onto its partner (thread-safe: uses the passed connection).
+        amt is the SIGNED open amount (P1-2) — the BAPI derives debit/credit from sign+partner."""
+        partner, amt, item_key, bline, sp_gl = p
         bline = bline or pdate   # preserve original baseline date so AR/AP aging ties out
         hdr = {"USERNAME": "MIGRATE", "COMP_CODE": tgt_cc, "DOC_DATE": pdate, "PSTNG_DATE": pdate,
                "DOC_TYPE": dt, "REF_DOC_NO": ("M4H-%s-OI" % kind)[:16], "HEADER_TXT": "%s open item takeover" % kind}
-        pln = "0000000001"; cln = "0000000002"
-        # amt is the SIGNED open amount (P1-2): the BAPI derives the posting key (debit vs
-        # credit) from the sign + the partner type, so an invoice, a credit memo and a
-        # payment-on-account each land on the correct side. Clearing takes the opposite sign.
+        pl_line = {"ITEMNO_ACC": pln, "COMP_CODE": tgt_cc, "BLINE_DATE": bline}
         if kind == "AR":
-            pl_line = {"ITEMNO_ACC": pln, "CUSTOMER": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": bline}
-            if sp_gl:
-                pl_line["SP_GL_IND"] = sp_gl   # #5: post the down payment as special G/L
-            kw = {"ACCOUNTRECEIVABLE": [pl_line]}
+            pl_line["CUSTOMER"] = partner
         else:
-            pl_line = {"ITEMNO_ACC": pln, "VENDOR_NO": partner, "COMP_CODE": tgt_cc, "BLINE_DATE": bline}
-            if sp_gl:
-                pl_line["SP_GL_IND"] = sp_gl
-            kw = {"ACCOUNTPAYABLE": [pl_line]}
+            pl_line["VENDOR_NO"] = partner
+        if sp_gl:
+            pl_line["SP_GL_IND"] = sp_gl   # #5: post the down payment as special G/L
+        kw = {"ACCOUNTRECEIVABLE" if kind == "AR" else "ACCOUNTPAYABLE": [pl_line]}
         amounts = [{"ITEMNO_ACC": pln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % amt},
                    {"ITEMNO_ACC": cln, "CURR_TYPE": "00", "CURRENCY": "EUR", "AMT_DOCCUR": "%.2f" % (-amt)}]
         glc = [{"ITEMNO_ACC": cln, "GL_ACCOUNT": clearing, "ITEM_TEXT": "%s takeover clearing" % kind}]
-        if not commit:
-            continue
-        res = tgt.call("BAPI_ACC_DOCUMENT_POST", DOCUMENTHEADER=hdr, ACCOUNTGL=glc, CURRENCYAMOUNT=amounts, **kw)
-        perr = [m for m in res.get("RETURN", []) if m.get("TYPE") in ("E", "A")]
-        if perr:
-            fail += 1; errs.append("%s %s: %s" % (part_lbl, partner, perr[0].get("MESSAGE", "")[:60]))
-            tgt.call("BAPI_TRANSACTION_ROLLBACK")
-        else:
-            tgt.call("BAPI_TRANSACTION_COMMIT", WAIT="X"); ok += 1
-            # P0-3 mark migrated + P1-1 incremental checkpoint (crash-safe resume): flush the
-            # ledger every 25 records so a mid-run failure resumes from the last checkpoint.
-            led.record(lobj, item_key, (res.get("OBJ_KEY", "") or "")[:10])
-            if ok % 25 == 0:
-                led.save()
+        res = conn.call("BAPI_ACC_DOCUMENT_POST", DOCUMENTHEADER=hdr, ACCOUNTGL=glc, CURRENCYAMOUNT=amounts, **kw)
+        if [m for m in res.get("RETURN", []) if m.get("TYPE") in ("E", "A")]:
+            conn.call("BAPI_TRANSACTION_ROLLBACK"); return None
+        conn.call("BAPI_TRANSACTION_COMMIT", WAIT="X")
+        return (res.get("OBJ_KEY", "") or "")[:10]
+
+    ok = fail = 0; errs = []
+    _lock = None
+    def _record(p, ref):
+        led.record(lobj, p[2], ref)
+
+    workers = int(os.environ.get("M4H_BULK_WORKERS", "1") or "1")
+    if not commit:
+        pass
+    elif workers > 1:
+        # #4 HIGH-VOLUME: post in parallel across `workers` connections (support-safe — same API)
+        from bulk_runner import BulkPoster
+        print(f"  [bulk] posting with {workers} parallel workers", flush=True)
+        r = BulkPoster(workers=workers).run(pairs, _post_one, _record)
+        ok, fail, errs = r["ok"], r["fail"], r["errors"]; led.save()
+    else:
+        for p in pairs:
+            ref = _post_one(tgt, p)
+            if ref:
+                ok += 1; _record(p, ref)
+                if ok % 25 == 0:
+                    led.save()   # P1-1 incremental checkpoint (crash-safe resume)
+            else:
+                fail += 1
     if commit:
         led.save()
         print(f"=== {kind}OpenItems created={ok} failed={fail} ===")
